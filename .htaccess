@@ -1,0 +1,23 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. If static file exists directly in dist/, rewrite to it
+  RewriteCond %{REQUEST_URI} !^/dist/
+  RewriteCond %{DOCUMENT_ROOT}/dist%{REQUEST_URI} -f
+  RewriteRule ^(.*)$ dist/$1 [L]
+
+  # 2. Direct root request to dist/index.html
+  RewriteCond %{REQUEST_URI} ^/?$
+  RewriteRule ^$ dist/index.html [L]
+
+  # 3. SPA Fallback: send non-existing routes to dist/index.html
+  RewriteCond %{REQUEST_URI} !^/dist/
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . dist/index.html [L]
+</IfModule>
+
+# Ensure proper MIME types for JS modules and assets
+AddType application/javascript .js .mjs
+AddType text/css .css
