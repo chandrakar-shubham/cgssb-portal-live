@@ -53,6 +53,7 @@ export interface Question {
   questionText: string;
   text?: string; // alias for compatibility
   questionHindi?: string;
+  questionEnglish?: string;
   textHindi?: string; // alias for compatibility
   options: QuestionOption[];
   correctOption: 'A' | 'B' | 'C' | 'D';
@@ -69,6 +70,7 @@ export interface Question {
   moduleId?: string;
   chapterId?: string;
   chapterName?: string;
+  chapter?: string; // Chapter property for curriculum organization (e.g. 'History of Chhattisgarh')
   keyFactHindi?: string;
   category: ExamCategory;
   year?: number;

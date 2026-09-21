@@ -166,7 +166,12 @@ async function startServer() {
   // 5. Mock Tests CRUD
   app.get('/api/tests', (req, res) => {
     const { category } = req.query;
-    let list = [...mockTests];
+    const seen = new Set<string>();
+    let list = mockTests.filter(t => {
+      if (!t || !t.id || seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
     if (category) {
       list = list.filter(t => t.category === category);
     }
@@ -410,7 +415,12 @@ async function startServer() {
   // 8. Previous Year Papers (PYP)
   app.get('/api/pyp', (req, res) => {
     const { category } = req.query;
-    let list = [...pypPapers];
+    const seen = new Set<string>();
+    let list = pypPapers.filter(p => {
+      if (!p || !p.id || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
     if (category) {
       list = list.filter(p => p.examCategory === category);
     }
@@ -733,6 +743,7 @@ async function startServer() {
           subject: assignedSubject,
           topic: assignedTopic,
           subtopic: assignedSubtopic,
+          chapter: assignedChapterName,
           chapterName: assignedChapterName,
           chapterId: assignedChapterName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
           difficulty: 'Medium',

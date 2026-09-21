@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
 import { PreviousYearPaper, ExamCategory, BulkImportQuestion, MockTest, Question } from '../types';
 import {
@@ -23,6 +23,7 @@ import {
 import { ManualGridBuilder } from './ManualGridBuilder';
 import { AIPYPExtractorModal } from './AIPYPExtractorModal';
 import { BulkImportPreviewModal } from './BulkImportPreviewModal';
+import { processBulkImportClientSide } from '../utils/pypEngine';
 
 const REQUIRED_BULK_KEYS = [
   'S.No.',
@@ -72,6 +73,15 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     mockTest?: MockTest;
     count: number;
   } | null>(null);
+
+  const uniquePapers = useMemo(() => {
+    const seen = new Set<string>();
+    return pypPapers.filter(p => {
+      if (!p || !p.id || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [pypPapers]);
 
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
@@ -214,6 +224,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   };
 
   // Confirm Import & Send to Backend API with custom configuration & Mock Test generation
+  // Resilient to both full-stack Node environments and static hosting (e.g. Hostinger, cPanel, Vercel static)
   const handleConfirmImport = async (
     paperConfig: {
       title: string;
@@ -230,49 +241,78 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     if (finalQuestions.length === 0) return;
     setIsImporting(true);
     try {
-      const res = await fetch('/api/pyp/bulk-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      let publishedPaper: PreviousYearPaper | null = null;
+      let publishedMockTest: MockTest | null = null;
+      let publishedQuestions: Question[] = [];
+
+      // 1. Attempt backend API ingestion if server is reachable and active
+      try {
+        const res = await fetch('/api/pyp/bulk-import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            questions: finalQuestions,
+            paperConfig,
+            createMockTest: true,
+          }),
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+        // Only parse as JSON if response is OK and header confirms application/json
+        // (Prevents "Unexpected token '<' in <!doctype html>" on static hosts like Hostinger)
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && data.success) {
+            publishedPaper = data.paper;
+            publishedMockTest = data.mockTest;
+            publishedQuestions = data.questions || [];
+          }
+        }
+      } catch (networkErr) {
+        console.warn('Backend API unavailable or static environment detected. Falling back to client-side engine:', networkErr);
+      }
+
+      // 2. If backend did not return JSON (e.g. Hostinger static build or offline mode),
+      // perform high-performance client-side ingestion instantly
+      if (!publishedPaper) {
+        const clientResult = processBulkImportClientSide({
           questions: finalQuestions,
           paperConfig,
-          createMockTest: true,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setIsPreviewModalOpen(false);
-
-        // Update local state with the returned objects
-        if (data.paper) {
-          onAddPYP(data.paper);
-        }
-        if (data.mockTest && onTestAdded) {
-          onTestAdded(data.mockTest);
-        }
-        if (data.questions && onQuestionsAdded) {
-          onQuestionsAdded(data.questions);
-        }
-
-        setImportToast({
-          message: `✅ Ingested ${finalQuestions.length} questions into "${paperConfig.title}"! Live mock test created.`,
-          type: 'success',
         });
-        setTimeout(() => setImportToast(null), 5000);
-
-        // Open Celebration & Live Test Trigger Dialog
-        setPublishedSuccess({
-          paper: data.paper,
-          mockTest: data.mockTest,
-          count: finalQuestions.length,
-        });
-      } else {
-        throw new Error(data.error || 'Server rejected the import payload.');
+        publishedPaper = clientResult.paper;
+        publishedMockTest = clientResult.mockTest;
+        publishedQuestions = clientResult.questions;
       }
-    } catch (err: any) {
+
+      // 3. Update application state and auto-persist to localStorage
+      if (publishedPaper) {
+        onAddPYP(publishedPaper);
+      }
+      if (publishedMockTest && onTestAdded) {
+        onTestAdded(publishedMockTest);
+      }
+      if (publishedQuestions.length > 0 && onQuestionsAdded) {
+        onQuestionsAdded(publishedQuestions);
+      }
+
+      setIsPreviewModalOpen(false);
+
       setImportToast({
-        message: `❌ Import Failed: ${err.message}`,
+        message: `✅ Published "${paperConfig.title}" with ${finalQuestions.length} questions! Live mock test created.`,
+        type: 'success',
+      });
+      setTimeout(() => setImportToast(null), 5000);
+
+      // Open Celebration & Live Test Trigger Dialog
+      setPublishedSuccess({
+        paper: publishedPaper,
+        mockTest: publishedMockTest || undefined,
+        count: finalQuestions.length,
+      });
+    } catch (err: any) {
+      console.error('Publishing failed:', err);
+      setImportToast({
+        message: `❌ Import Failed: ${err.message || 'Error occurred while saving paper.'}`,
         type: 'error',
       });
       setTimeout(() => setImportToast(null), 6000);
@@ -465,7 +505,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
 
       {/* Papers Listing */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {pypPapers.map(paper => (
+        {uniquePapers.map(paper => (
           <div
             key={paper.id}
             className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4"

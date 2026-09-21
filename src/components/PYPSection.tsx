@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PreviousYearPaper, ExamCategory, MockTest } from '../types';
 import {
   FileText,
@@ -36,9 +36,15 @@ export const PYPSection: React.FC<PYPSectionProps> = ({
   const [activePaperForAnalysis, setActivePaperForAnalysis] = useState<PreviousYearPaper | null>(null);
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
 
-  const filteredPapers = pypPapers.filter(paper => {
-    return selectedCategory === 'ALL' || paper.examCategory === selectedCategory;
-  });
+  const filteredPapers = useMemo(() => {
+    const seen = new Set<string>();
+    return pypPapers.filter(paper => {
+      if (!paper || !paper.id) return false;
+      if (seen.has(paper.id)) return false;
+      seen.add(paper.id);
+      return selectedCategory === 'ALL' || paper.examCategory === selectedCategory;
+    });
+  }, [pypPapers, selectedCategory]);
 
   const handleDownload = (paper: PreviousYearPaper) => {
     // Generate text/pdf simulation download

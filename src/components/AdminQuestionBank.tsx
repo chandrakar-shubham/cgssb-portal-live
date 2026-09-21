@@ -70,6 +70,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   const [selectedSubject, setSelectedSubject] = useState<string>('ALL');
   const [selectedTopic, setSelectedTopic] = useState<string>('ALL');
   const [selectedSubtopic, setSelectedSubtopic] = useState<string>('ALL');
+  const [selectedChapter, setSelectedChapter] = useState<string>('ALL');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [pyqFilter, setPyqFilter] = useState<'ALL' | 'REPEATED' | 'SINGLE_PYQ' | 'PRACTICE'>('ALL');
@@ -87,6 +88,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   // Form State
   const [formData, setFormData] = useState<{
     id: string;
+    chapter: string;
     subject: string;
     topic: string;
     subtopic: string;
@@ -103,6 +105,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     pypAppearances: PYQAppearance[];
   }>({
     id: '',
+    chapter: '',
     subject: HIERARCHY_TREE[0].subject,
     topic: HIERARCHY_TREE[0].topics[0].name,
     subtopic: HIERARCHY_TREE[0].topics[0].subtopics[0],
@@ -145,6 +148,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     setEditingQuestionId(null);
     setFormData({
       id: generateUniqueId('q-cg'),
+      chapter: '',
       subject: HIERARCHY_TREE[0].subject,
       topic: HIERARCHY_TREE[0].topics[0].name,
       subtopic: HIERARCHY_TREE[0].topics[0].subtopics[0],
@@ -188,6 +192,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
 
     setFormData({
       id: q.id,
+      chapter: q.chapter || q.chapterName || '',
       subject: q.subject,
       topic: q.topic,
       subtopic: q.subtopic,
@@ -227,9 +232,12 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     e.preventDefault();
     if (!formData.questionText.trim()) return;
 
+    const trimmedChapter = formData.chapter.trim();
     const payload = {
       ...formData,
       id: formData.id.trim() || generateUniqueId('q-cg'),
+      chapter: trimmedChapter || undefined,
+      chapterName: trimmedChapter || undefined,
       // Keep pypSource backwards compatible with first appearance if present
       pypSource: formData.pypAppearances.length > 0
         ? `${formData.pypAppearances[0].examName} ${formData.pypAppearances[0].year}`
@@ -295,12 +303,31 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     return { total, repeatedPyqCount, singlePyqCount, practiceCount };
   }, [questions]);
 
+  // Extract all existing unique chapters for datalist suggestions & filtering
+  const existingChapters = useMemo(() => {
+    const set = new Set<string>();
+    questions.forEach(q => {
+      const ch = (q.chapter || q.chapterName)?.trim();
+      if (ch) set.add(ch);
+    });
+    return Array.from(set).sort();
+  }, [questions]);
+
   // Filter questions
   const filteredQuestions = useMemo(() => {
+    const seen = new Set<string>();
     return questions.filter(q => {
+      if (!q || !q.id || seen.has(q.id)) return false;
+      seen.add(q.id);
+
       const matchSubject = selectedSubject === 'ALL' || q.subject === selectedSubject;
       const matchTopic = selectedTopic === 'ALL' || q.topic === selectedTopic;
       const matchSubtopic = selectedSubtopic === 'ALL' || q.subtopic === selectedSubtopic;
+      const matchChapter =
+        selectedChapter === 'ALL' ||
+        (selectedChapter === '__NO_CHAPTER__'
+          ? !q.chapter && !q.chapterName
+          : (q.chapter || q.chapterName) === selectedChapter);
       const matchDifficulty = selectedDifficulty === 'ALL' || q.difficulty === selectedDifficulty;
       const matchCategory = selectedCategory === 'ALL' || q.category === selectedCategory;
 
@@ -311,11 +338,13 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       else if (pyqFilter === 'SINGLE_PYQ') matchPyq = appCount === 1;
       else if (pyqFilter === 'PRACTICE') matchPyq = appCount === 0;
 
-      // Search matching text, unique ID, Hindi, topic, subtopic, or any exam/year appearance
+      // Search matching text, unique ID, Hindi, chapter, topic, subtopic, or any exam/year appearance
       const s = search.toLowerCase().trim();
       const matchSearch =
         !s ||
         q.id.toLowerCase().includes(s) ||
+        (q.chapter && q.chapter.toLowerCase().includes(s)) ||
+        (q.chapterName && q.chapterName.toLowerCase().includes(s)) ||
         q.questionText.toLowerCase().includes(s) ||
         (q.questionHindi && q.questionHindi.toLowerCase().includes(s)) ||
         q.topic.toLowerCase().includes(s) ||
@@ -329,9 +358,9 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
               (app.shift && app.shift.toLowerCase().includes(s))
           ));
 
-      return matchSubject && matchTopic && matchSubtopic && matchDifficulty && matchCategory && matchPyq && matchSearch;
+      return matchSubject && matchTopic && matchSubtopic && matchChapter && matchDifficulty && matchCategory && matchPyq && matchSearch;
     });
-  }, [questions, selectedSubject, selectedTopic, selectedSubtopic, selectedDifficulty, selectedCategory, pyqFilter, search]);
+  }, [questions, selectedSubject, selectedTopic, selectedSubtopic, selectedChapter, selectedDifficulty, selectedCategory, pyqFilter, search]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -569,13 +598,13 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
 
       {/* FILTER TOOLBAR */}
       <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3 text-xs shadow-lg">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {/* Search by ID, Topic, Text, Exam, Year */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          {/* Search by ID, Topic, Text, Exam, Year, Chapter */}
           <div className="relative lg:col-span-2">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by Unique ID (e.g. q-cg-01), question text, exam, or year..."
+              placeholder="Search by ID, text, chapter, exam, or year..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
@@ -607,6 +636,23 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
                   {s.subject}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Chapter Filter */}
+          <div>
+            <select
+              value={selectedChapter}
+              onChange={e => setSelectedChapter(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-purple-200 focus:outline-none focus:border-purple-500 truncate"
+            >
+              <option value="ALL">All Chapters ({existingChapters.length})</option>
+              {existingChapters.map(ch => (
+                <option key={ch} value={ch}>
+                  अध्याय: {ch}
+                </option>
+              ))}
+              <option value="__NO_CHAPTER__">No Chapter Tagged</option>
             </select>
           </div>
 
@@ -711,6 +757,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
                 setSelectedSubject('ALL');
                 setSelectedTopic('ALL');
                 setSelectedSubtopic('ALL');
+                setSelectedChapter('ALL');
                 setSelectedDifficulty('ALL');
                 setSelectedCategory('ALL');
                 setPyqFilter('ALL');
@@ -752,10 +799,11 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
 
                     {/* Taxonomic Breadcrumb */}
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                      {q.chapterName && (
+                      {(q.chapter || q.chapterName) && (
                         <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-bold flex items-center space-x-1">
+                          <BookOpen className="w-3 h-3 text-purple-400 mr-0.5" />
                           <span className="text-[10px] text-purple-400">अध्याय:</span>
-                          <span>{q.chapterName}</span>
+                          <span>{q.chapter || q.chapterName}</span>
                         </span>
                       )}
                       <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
@@ -1069,6 +1117,48 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
                     </select>
                   </div>
                 </div>
+              </div>
+
+              {/* Curriculum Chapter Field */}
+              <div className="bg-slate-850 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-300 font-bold flex items-center space-x-1.5">
+                    <BookOpen className="w-4 h-4 text-purple-400" />
+                    <span>Curriculum Chapter (पाठ्यक्रम अध्याय)</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-normal">Optional curriculum grouping</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="chapter-suggestions-list"
+                    value={formData.chapter}
+                    onChange={e => setFormData({ ...formData, chapter: e.target.value })}
+                    placeholder="e.g. अध्याय 1: छत्तीसगढ़ का सामान्य परिचय, Chapter 3: Ancient Dynasties..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-purple-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 text-xs"
+                  />
+                  <datalist id="chapter-suggestions-list">
+                    {existingChapters.map(ch => (
+                      <option key={ch} value={ch} />
+                    ))}
+                  </datalist>
+                </div>
+                {existingChapters.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-slate-500 font-medium">Existing Chapters:</span>
+                    {existingChapters.slice(0, 5).map(ch => (
+                      <button
+                        type="button"
+                        key={ch}
+                        onClick={() => setFormData({ ...formData, chapter: ch })}
+                        className="px-2 py-0.5 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[10px] font-semibold transition truncate max-w-[200px]"
+                        title={ch}
+                      >
+                        {ch}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Difficulty & Marking Scheme */}

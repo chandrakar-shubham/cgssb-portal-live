@@ -46,11 +46,24 @@ function MainApp() {
   const [activeExamTest, setActiveExamTest] = useState<MockTest | null>(null);
   const [activeAttemptReview, setActiveAttemptReview] = useState<TestAttempt | null>(null);
 
+  // Helper to deduplicate objects with an 'id' attribute
+  function dedupeById<T extends { id: string }>(items: T[]): T[] {
+    const seen = new Set<string>();
+    const result: T[] = [];
+    for (const item of items) {
+      if (item && item.id && !seen.has(item.id)) {
+        seen.add(item.id);
+        result.push(item);
+      }
+    }
+    return result;
+  }
+
   // App Data State (Synced with localStorage and backend endpoints)
   const [tests, setTests] = useState<MockTest[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_tests');
-      if (saved) return JSON.parse(saved);
+      if (saved) return dedupeById(JSON.parse(saved));
     } catch {}
     return INITIAL_MOCK_TESTS;
   });
@@ -58,7 +71,7 @@ function MainApp() {
   const [questions, setQuestions] = useState<Question[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_questions');
-      if (saved) return JSON.parse(saved);
+      if (saved) return dedupeById(JSON.parse(saved));
     } catch {}
     return INITIAL_QUESTIONS;
   });
@@ -66,7 +79,7 @@ function MainApp() {
   const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_pyp');
-      if (saved) return JSON.parse(saved);
+      if (saved) return dedupeById(JSON.parse(saved));
     } catch {}
     return INITIAL_PYP_PAPERS;
   });
@@ -74,7 +87,7 @@ function MainApp() {
   const [attempts, setAttempts] = useState<TestAttempt[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_attempts');
-      if (saved) return JSON.parse(saved);
+      if (saved) return dedupeById(JSON.parse(saved));
     } catch {}
     return INITIAL_ATTEMPTS;
   });
@@ -108,18 +121,18 @@ function MainApp() {
 
         if (testsRes && testsRes.ok) {
           const t = await testsRes.json();
-          if (Array.isArray(t) && t.length > 0) setTests(t);
-          else if (t && Array.isArray(t.tests) && t.tests.length > 0) setTests(t.tests);
+          const list = Array.isArray(t) ? t : (t?.tests || []);
+          if (list.length > 0) setTests(prev => dedupeById([...list, ...prev]));
         }
         if (pypRes && pypRes.ok) {
           const p = await pypRes.json();
-          if (Array.isArray(p) && p.length > 0) setPypPapers(p);
-          else if (p && Array.isArray(p.papers) && p.papers.length > 0) setPypPapers(p.papers);
+          const list = Array.isArray(p) ? p : (p?.papers || []);
+          if (list.length > 0) setPypPapers(prev => dedupeById([...list, ...prev]));
         }
         if (qRes && qRes.ok) {
           const q = await qRes.json();
-          if (Array.isArray(q) && q.length > 0) setQuestions(q);
-          else if (q && Array.isArray(q.questions) && q.questions.length > 0) setQuestions(q.questions);
+          const list = Array.isArray(q) ? q : (q?.questions || []);
+          if (list.length > 0) setQuestions(prev => dedupeById([...list, ...prev]));
         }
       } catch {
         // Fallback to local data
@@ -344,8 +357,9 @@ function MainApp() {
 
   // ADMIN PYP ACTIONS
   const handleAddPYP = (pypData: Partial<PreviousYearPaper>) => {
+    const paperId = pypData.id || `pyp-${Date.now()}`;
     const newPaper: PreviousYearPaper = {
-      id: `pyp-${Date.now()}`,
+      id: paperId,
       title: pypData.title || 'Official Exam Paper',
       examCategory: pypData.examCategory || 'CGSSB',
       year: pypData.year || 2024,
@@ -357,8 +371,10 @@ function MainApp() {
       subjectsWeightage: pypData.subjectsWeightage || [],
       isOfficialPaper: true,
       downloadFileName: pypData.downloadFileName,
+      linkedMockTestId: pypData.linkedMockTestId,
+      linkedQuestionIds: pypData.linkedQuestionIds,
     };
-    setPypPapers(prev => [newPaper, ...prev]);
+    setPypPapers(prev => dedupeById([newPaper, ...prev]));
   };
 
   const handleDeletePYP = (id: string) => {
@@ -366,8 +382,9 @@ function MainApp() {
   };
 
   const handleConvertPYPToMockTest = (pyp: PreviousYearPaper) => {
+    const testId = pyp.linkedMockTestId || `test-from-${pyp.id}`;
     const newTest: MockTest = {
-      id: `test-from-${pyp.id}`,
+      id: testId,
       title: `${pyp.title} (Official Mock Test)`,
       category: pyp.examCategory,
       description: `Official past paper simulation. Converted from archived examination ${pyp.year}.`,
@@ -387,7 +404,7 @@ function MainApp() {
       createdAt: new Date().toISOString(),
     };
 
-    setTests(prev => [newTest, ...prev]);
+    setTests(prev => dedupeById([newTest, ...prev]));
     setPypPapers(prev =>
       prev.map(p => (p.id === pyp.id ? { ...p, linkedMockTestId: newTest.id } : p))
     );
@@ -395,8 +412,8 @@ function MainApp() {
 
   // ADMIN AI TEST CREATOR PUBLISH ACTION
   const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
-    setQuestions(prev => [...newQuestions, ...prev]);
-    setTests(prev => [newTest, ...prev]);
+    setQuestions(prev => dedupeById([...newQuestions, ...prev]));
+    setTests(prev => dedupeById([newTest, ...prev]));
   };
 
   // 1. IF ACTIVE EXAM RUNNING -> RENDER DEDICATED FULLSCREEN EXAM ENGINE
@@ -507,8 +524,8 @@ function MainApp() {
             onDeletePYP={handleDeletePYP}
             onConvertPYPToMockTest={handleConvertPYPToMockTest}
             onStartTest={handleStartTest}
-            onQuestionsAdded={(newQs) => setQuestions(prev => [...newQs, ...prev])}
-            onTestAdded={(newTest) => setTests(prev => [newTest, ...prev])}
+            onQuestionsAdded={(newQs) => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+            onTestAdded={(newTest) => setTests(prev => dedupeById([newTest, ...prev]))}
           />
         )}
 

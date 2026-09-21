@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ExamCategory, MockTest } from '../types';
 import { EXAM_PATTERNS } from '../mockData';
@@ -43,13 +43,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     { id: 'CENTRAL_EXAMS', label: 'Central (Rail, SSC, Bank)', badge: 'Coming Soon' },
   ];
 
-  const filteredTests = tests.filter(test => {
-    const matchesCategory = selectedCategory === 'ALL' || test.category === selectedCategory;
-    const matchesSearch =
-      test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      test.description.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredTests = useMemo(() => {
+    const seen = new Set<string>();
+    return tests.filter(test => {
+      if (!test || !test.id) return false;
+      if (seen.has(test.id)) return false;
+      seen.add(test.id);
+
+      const matchesCategory = selectedCategory === 'ALL' || test.category === selectedCategory;
+      const matchesSearch =
+        test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        test.description.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [tests, selectedCategory, searchTerm]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
