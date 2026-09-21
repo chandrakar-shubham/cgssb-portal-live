@@ -752,6 +752,12 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
 
                     {/* Taxonomic Breadcrumb */}
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      {q.chapterName && (
+                        <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-bold flex items-center space-x-1">
+                          <span className="text-[10px] text-purple-400">अध्याय:</span>
+                          <span>{q.chapterName}</span>
+                        </span>
+                      )}
                       <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
                         {q.subject}
                       </span>

@@ -506,6 +506,9 @@ function MainApp() {
             onAddPYP={handleAddPYP}
             onDeletePYP={handleDeletePYP}
             onConvertPYPToMockTest={handleConvertPYPToMockTest}
+            onStartTest={handleStartTest}
+            onQuestionsAdded={(newQs) => setQuestions(prev => [...newQs, ...prev])}
+            onTestAdded={(newTest) => setTests(prev => [newTest, ...prev])}
           />
         )}
 

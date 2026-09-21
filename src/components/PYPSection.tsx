@@ -123,17 +123,25 @@ Visit https://cgssbtest.com for online mock test simulation.
 
       {/* Category Pills */}
       <div className="flex flex-wrap gap-1.5 sm:gap-2">
-        {(['ALL', 'CGSSB', 'CGPSC', 'SWAMI_ATMANAND'] as const).map(cat => (
+        {(['ALL', 'CGSSB', 'CGPSC', 'CENTRAL_EXAMS', 'SWAMI_ATMANAND'] as const).map(cat => (
           <button
             key={cat}
             onClick={() => onSelectCategory(cat)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               selectedCategory === cat
                 ? 'bg-emerald-500 text-slate-950 shadow-md'
                 : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
             }`}
           >
-            {cat === 'ALL' ? 'All Previous Papers' : cat === 'CGSSB' ? 'CGSSB / Vyapam' : cat === 'CGPSC' ? 'CGPSC SSE' : 'Swami Atmanand'}
+            {cat === 'ALL'
+              ? 'All Previous Papers'
+              : cat === 'CGSSB'
+              ? 'CGSSB / Vyapam'
+              : cat === 'CGPSC'
+              ? 'CGPSC SSE'
+              : cat === 'CENTRAL_EXAMS'
+              ? 'Central Exams'
+              : 'Swami Atmanand'}
           </button>
         ))}
       </div>

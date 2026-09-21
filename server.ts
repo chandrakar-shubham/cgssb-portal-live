@@ -18,7 +18,8 @@ import {
   PreviousYearPaper,
   TestAttempt,
   SectorAnalysis,
-  ExamCategory
+  ExamCategory,
+  PYQAppearance
 } from './src/types';
 
 dotenv.config();
@@ -442,6 +443,438 @@ async function startServer() {
       res.status(201).json({ success: true, pyp: newPyp });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  // Helper: Classify a question into Subject, Topic (Chapter), and Subtopic based on text content & taxonomy
+  function autoClassifyChapter(text: string, defaultSubject: string, defaultTopic: string) {
+    const lower = text.toLowerCase();
+
+    // 1. History of Chhattisgarh (इतिहास)
+    if (
+      lower.includes('कलचुरी') || lower.includes('kalchuri') ||
+      lower.includes('रतनपुर') || lower.includes('ratanpur') ||
+      lower.includes('तुम्माण') || lower.includes('tumman') ||
+      lower.includes('मराठा') || lower.includes('maratha') ||
+      lower.includes('विद्रोह') || lower.includes('revolt') ||
+      lower.includes('भूमकाल') || lower.includes('bhumkal') ||
+      lower.includes('काकतीय') || lower.includes('kakatiya') ||
+      lower.includes('गठन') || lower.includes('formation') ||
+      lower.includes('राज्य') && (lower.includes('वर्ष') || lower.includes('स्थापना'))
+    ) {
+      return {
+        subject: 'Chhattisgarh Special Knowledge',
+        topic: 'History of Chhattisgarh',
+        chapterName: 'History of Chhattisgarh (छत्तीसगढ़ का इतिहास)',
+        subtopic: lower.includes('कलचुरी') || lower.includes('kalchuri')
+          ? 'Kalchuri Dynasty'
+          : lower.includes('विद्रोह') || lower.includes('revolt')
+          ? 'Tribal Revolts & Freedom Struggle'
+          : 'Modern State Formation (2000)'
+      };
+    }
+
+    // 2. Geography, Rivers, Waterfalls & Minerals (भूगोल एवं प्राकृतिक संसाधन)
+    if (
+      lower.includes('जलप्रपात') || lower.includes('waterfall') ||
+      lower.includes('नदी') || lower.includes('river') ||
+      lower.includes('महानदी') || lower.includes('mahanadi') ||
+      lower.includes('इंद्रावती') || lower.includes('indravati') ||
+      lower.includes('चित्रकोट') || lower.includes('chitrakote') ||
+      lower.includes('तीरथगढ़') || lower.includes('खनिज') ||
+      lower.includes('mineral') || lower.includes('अभयारण्य') ||
+      lower.includes('राष्ट्रीय उद्यान') || lower.includes('national park')
+    ) {
+      return {
+        subject: 'Chhattisgarh Special Knowledge',
+        topic: 'Geography & Natural Resources',
+        chapterName: 'Geography & Natural Resources (भूगोल एवं नदियाँ)',
+        subtopic: lower.includes('जलप्रपात') || lower.includes('नदी') || lower.includes('waterfall') || lower.includes('river')
+          ? 'River Basins (Mahanadi, Indravati)'
+          : lower.includes('खनिज') || lower.includes('mineral')
+          ? 'Minerals & Industrial Zones'
+          : 'Forests & National Parks'
+      };
+    }
+
+    // 3. Culture, Tribes, Folk Dances & Tourism (संस्कृति, जनजातियां एवं पर्यटन)
+    if (
+      lower.includes('जनजाति') || lower.includes('tribe') ||
+      lower.includes('गोंड') || lower.includes('बैगा') || lower.includes('माड़िया') ||
+      lower.includes('दशहरा') || lower.includes('dussehra') ||
+      lower.includes('बस्तर') || lower.includes('bastar') ||
+      lower.includes('नृत्य') || lower.includes('dance') ||
+      lower.includes('करमा') || lower.includes('पंथ') || lower.includes('राउत') ||
+      lower.includes('दंतेश्वरी') || lower.includes('मड़ई') || lower.includes('मेला')
+    ) {
+      return {
+        subject: 'Chhattisgarh Special Knowledge',
+        topic: 'Culture, Tribes & Tourism',
+        chapterName: 'Culture, Tribes & Tourism (संस्कृति एवं जनजातियाँ)',
+        subtopic: lower.includes('दशहरा') || lower.includes('dussehra') || lower.includes('मेला')
+          ? 'Bastar Dussehra & Madai Mela'
+          : lower.includes('नृत्य') || lower.includes('dance')
+          ? 'Folk Dances (Karma, Raut Nacha, Panthi)'
+          : 'Tribal Traditions (Gond, Baiga, Maria)'
+      };
+    }
+
+    // 4. Administration & Economy (प्रशासन, पंचायती राज एवं अर्थव्यवस्था)
+    if (
+      lower.includes('पंचायत') || lower.includes('panchayat') ||
+      lower.includes('विधानसभा') || lower.includes('legislature') ||
+      lower.includes('बजट') || lower.includes('budget') ||
+      lower.includes('योजना') || lower.includes('scheme') ||
+      lower.includes('जिला') || lower.includes('district')
+    ) {
+      return {
+        subject: 'Chhattisgarh Special Knowledge',
+        topic: 'Administration & Economy',
+        chapterName: 'Administration & Economy (प्रशासन एवं अर्थव्यवस्था)',
+        subtopic: lower.includes('पंचायत') || lower.includes('panchayat')
+          ? 'Panchayati Raj & Urban Local Bodies'
+          : 'State Budget & Welfare Schemes'
+      };
+    }
+
+    // 5. Computer Knowledge (कंप्यूटर ज्ञान)
+    if (
+      lower.includes('computer') || lower.includes('कंप्यूटर') ||
+      lower.includes('internet') || lower.includes('इंटरनेट') ||
+      lower.includes('ram') || lower.includes('rom') || lower.includes('cpu') ||
+      lower.includes('ms word') || lower.includes('excel') || lower.includes('software') ||
+      lower.includes('hardware') || lower.includes('operating system')
+    ) {
+      return {
+        subject: 'General Science & Computer Knowledge',
+        topic: 'Computer Fundamentals (Vyapam)',
+        chapterName: 'Computer Fundamentals (कंप्यूटर सामान्य ज्ञान)',
+        subtopic: 'MS Office & Operating Systems'
+      };
+    }
+
+    // 6. Language: Chhattisgarhi & Hindi (छत्तीसगढ़ी भाषा एवं व्याकरण)
+    if (
+      lower.includes('हाना') || lower.includes('कहावत') || lower.includes('मुहावरे') ||
+      lower.includes('छत्तीसगढ़ी') || lower.includes('chhattisgarhi') ||
+      lower.includes('संधि') || lower.includes('समास') || lower.includes('पर्यायवाची') ||
+      lower.includes('विलोम') || lower.includes('वर्तनी')
+    ) {
+      return {
+        subject: 'General Hindi & Chhattisgarhi Language',
+        topic: lower.includes('छत्तीसगढ़ी') ? 'Chhattisgarhi Bhasha & Vyakaran' : 'Samanya Hindi',
+        chapterName: lower.includes('छत्तीसगढ़ी') ? 'Chhattisgarhi Language (छत्तीसगढ़ी भाषा)' : 'General Hindi (सामान्य हिन्दी)',
+        subtopic: lower.includes('हाना') ? 'Idioms & Proverbs (Hana)' : 'Sandhi & Samas'
+      };
+    }
+
+    // 7. Reasoning & Quantitative Aptitude (तर्कशक्ति एवं गणित)
+    if (
+      lower.includes('प्रतिशत') || lower.includes('percentage') ||
+      lower.includes('अनुपात') || lower.includes('ratio') ||
+      lower.includes('लाभ') || lower.includes('हानि') || lower.includes('profit') ||
+      lower.includes('रीजनिंग') || lower.includes('reasoning') ||
+      lower.includes('coding') || lower.includes('रक्त संबंध') || lower.includes('blood relation')
+    ) {
+      return {
+        subject: 'General Mental Ability & Reasoning',
+        topic: lower.includes('प्रतिशत') || lower.includes('ratio') ? 'Quantitative Aptitude' : 'Analytical Reasoning',
+        chapterName: 'Mental Ability & Mathematics (मानसिक योग्यता एवं गणित)',
+        subtopic: 'Percentages & Profit-Loss'
+      };
+    }
+
+    // Default fallback
+    return {
+      subject: defaultSubject,
+      topic: defaultTopic,
+      chapterName: defaultTopic,
+      subtopic: 'General Topic'
+    };
+  }
+
+  // Helper: Check for repetition against existing repository questions
+  function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Question[], currentId: string) {
+    if (!newText || newText.length < 15) return null;
+    const clean = (s: string) => s.replace(/[^\w\u0900-\u097F]/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim();
+    const target = clean(newText);
+    const targetWords = new Set(target.split(' ').filter(w => w.length > 3));
+
+    if (targetWords.size < 3) return null;
+
+    for (const q of currentQuestions) {
+      if (q.id === currentId) continue;
+      const compText = clean(q.questionHindi || q.questionText || '');
+      if (!compText) continue;
+
+      // Exact substring or near-exact match
+      if (target.includes(compText) || compText.includes(target)) {
+        return q;
+      }
+
+      // Overlap of key keywords > 75%
+      const compWords = compText.split(' ').filter(w => w.length > 3);
+      let matchCount = 0;
+      for (const cw of compWords) {
+        if (targetWords.has(cw)) matchCount++;
+      }
+      const similarity = matchCount / Math.max(targetWords.size, compWords.length);
+      if (similarity >= 0.70) {
+        return q;
+      }
+    }
+    return null;
+  }
+
+  // 8b. PYP Bulk Ingestion (JSON & CSV Bulk Import)
+  // Accepts { questions: [...], paperConfig?: {...}, createMockTest?: boolean }
+  // Auto-generates unique question IDs, performs deduplication with upsert,
+  // creates or updates the PYP catalog paper, and generates an official playable Mock Test.
+  app.post('/api/pyp/bulk-import', (req, res) => {
+    try {
+      const { questions: incomingList, paperConfig, createMockTest = true } = req.body;
+      if (!Array.isArray(incomingList) || incomingList.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing or empty "questions" array in request body.'
+        });
+      }
+
+      let inserted = 0;
+      let updated = 0;
+      const processedQuestions: Question[] = [];
+
+      // Determine default category & paper meta
+      const defaultExamName = paperConfig?.title || incomingList[0]?.Examname || 'CG Exam';
+      const defaultYear = Number(paperConfig?.year || incomingList[0]?.Year || 2024);
+      const targetCategory: ExamCategory = paperConfig?.examCategory || (
+        String(defaultExamName).toLowerCase().includes('psc') ? 'CGPSC' :
+        String(defaultExamName).toLowerCase().includes('central') || String(defaultExamName).toLowerCase().includes('ssc') ? 'CENTRAL_EXAMS' :
+        'CGSSB'
+      );
+
+      const catPrefix = targetCategory === 'CGPSC' ? 'CGPSC' : targetCategory === 'CENTRAL_EXAMS' ? 'CENTRAL' : 'CGSSB';
+
+      for (let idx = 0; idx < incomingList.length; idx++) {
+        const item = incomingList[idx];
+        const rawExamname = String(item.Examname || item.examname || defaultExamName).trim();
+        const examname = rawExamname.toLowerCase();
+        const year = Number(item.Year || item.year || defaultYear);
+        const sno = Number(item['S.No.'] || item.sno || item.sNo || (idx + 1));
+
+        const questionHindi = String(item['Question(Hindi)'] || item.questionHindi || '').trim();
+        const questionEnglish = String(item['Question(english)'] || item.questionEnglish || '').trim();
+        const optionA = String(item.option_A ?? '');
+        const optionB = String(item.option_B ?? '');
+        const optionC = String(item.option_C ?? '');
+        const optionD = String(item.option_D ?? '');
+        const rawAns = String(item.answer || 'A').trim().toUpperCase();
+        const answer: 'A' | 'B' | 'C' | 'D' = ['A', 'B', 'C', 'D'].includes(rawAns)
+          ? (rawAns as 'A' | 'B' | 'C' | 'D')
+          : (rawAns.includes('B') ? 'B' : rawAns.includes('C') ? 'C' : rawAns.includes('D') ? 'D' : 'A');
+        const explanation = String(item.explaination || item.explanation || '').trim();
+
+        // Systematic Auto-Generated Unique Question ID
+        const generatedUniqueId = `${catPrefix}-${year}-Q${String(sno).padStart(3, '0')}`;
+        const uniqueKey = String(item.uniqueQuestionId || generatedUniqueId).trim();
+        const questionId = item.id || `q-bulk-${catPrefix.toLowerCase()}-${year}-${sno}`;
+
+        const isCgpsc = targetCategory === 'CGPSC';
+
+        // Auto-classify chapter & topic, or honor user-supplied chapter in JSON
+        const defaultSubj = targetCategory === 'CGPSC'
+          ? 'Chhattisgarh General Studies (CGPSC)'
+          : targetCategory === 'CENTRAL_EXAMS'
+          ? 'General Studies & Aptitude (Central)'
+          : 'Chhattisgarh Special Knowledge';
+        const defaultTopic = `${rawExamname} (${year}) Official`;
+
+        const combinedText = `${questionHindi} ${questionEnglish} ${explanation}`;
+        const classification = autoClassifyChapter(combinedText, defaultSubj, defaultTopic);
+
+        const assignedSubject = String(item.subject || classification.subject);
+        const assignedTopic = String(item.topic || classification.topic);
+        const assignedChapterName = String(item.chapterName || item.chapter || classification.chapterName || assignedTopic);
+        const assignedSubtopic = String(item.subtopic || classification.subtopic || `Question #${sno}`);
+
+        // Build appearance for this current exam
+        const currentAppearance: PYQAppearance = { examName: rawExamname, year, shift: 'Official' };
+
+        // Check if this question exists or is repeated from another prior exam in the question bank
+        const similarQuestion = findSimilarOrRepeatedQuestion(questionHindi || questionEnglish, questions, questionId);
+
+        let appearancesList: PYQAppearance[] = [currentAppearance];
+        if (similarQuestion?.pypAppearances && Array.isArray(similarQuestion.pypAppearances)) {
+          // Merge appearances without duplicate exam + year
+          const merged: PYQAppearance[] = [...similarQuestion.pypAppearances];
+          if (!merged.some(a => a.examName.toLowerCase() === examname && a.year === year)) {
+            merged.push(currentAppearance);
+          }
+          appearancesList = merged;
+          // Update the original existing similar question too so both reflect the repeat
+          similarQuestion.pypAppearances = merged;
+          similarQuestion.repeatedInExams = merged.map(a => `${a.examName} (${a.year})`);
+        }
+
+        // Support user manually specifying repeatedInExams or timesRepeated in JSON
+        if (item.repeatedInExams) {
+          const rawRep = Array.isArray(item.repeatedInExams) ? item.repeatedInExams : String(item.repeatedInExams).split(',');
+          for (const rep of rawRep) {
+            const trimmed = String(rep).trim();
+            if (trimmed && !appearancesList.some(a => a.examName.toLowerCase() === trimmed.toLowerCase())) {
+              appearancesList.push({ examName: trimmed, year: year, shift: 'Official' });
+            }
+          }
+        }
+
+        const formattedQuestion: Question = {
+          id: questionId,
+          uniqueQuestionId: uniqueKey,
+          subject: assignedSubject,
+          topic: assignedTopic,
+          subtopic: assignedSubtopic,
+          chapterName: assignedChapterName,
+          chapterId: assignedChapterName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          difficulty: 'Medium',
+          category: targetCategory,
+          questionText: questionEnglish || questionHindi,
+          text: questionEnglish || questionHindi,
+          questionHindi: questionHindi,
+          textHindi: questionHindi,
+          options: [
+            { id: 'A', text: optionA },
+            { id: 'B', text: optionB },
+            { id: 'C', text: optionC },
+            { id: 'D', text: optionD },
+          ],
+          correctOption: answer,
+          correctAnswer: answer,
+          marks: isCgpsc ? 2.0 : 1.0,
+          negativeMarks: isCgpsc ? 0.667 : 0.333,
+          explanation: explanation,
+          explanationHindi: explanation,
+          pypSource: `${rawExamname} ${year} (Q${sno})`,
+          pypAppearances: appearancesList,
+          repeatedInExams: appearancesList.map(a => `${a.examName} (${a.year})`),
+          createdAt: new Date().toISOString().split('T')[0],
+        };
+
+        // Deduplication search: match { examname, year, sno } or uniqueQuestionId
+        const existingIdx = questions.findIndex(q =>
+          (q.uniqueQuestionId && q.uniqueQuestionId === uniqueKey) ||
+          q.id === questionId ||
+          (q.category === targetCategory && q.pypAppearances?.some(p => p.examName.toLowerCase() === examname && p.year === year) && q.subtopic === `Question #${sno}`)
+        );
+
+        if (existingIdx !== -1) {
+          // Merge any prior appearances into the updated question
+          const prior = questions[existingIdx];
+          if (prior.pypAppearances && formattedQuestion.pypAppearances) {
+            for (const app of prior.pypAppearances) {
+              if (!formattedQuestion.pypAppearances.some(a => a.examName.toLowerCase() === app.examName.toLowerCase() && a.year === app.year)) {
+                formattedQuestion.pypAppearances.push(app);
+              }
+            }
+            formattedQuestion.repeatedInExams = formattedQuestion.pypAppearances.map(a => `${a.examName} (${a.year})`);
+          }
+          questions[existingIdx] = formattedQuestion;
+          updated++;
+        } else {
+          questions.unshift(formattedQuestion);
+          inserted++;
+        }
+        processedQuestions.push(formattedQuestion);
+      }
+
+      // Configure / Register Previous Year Paper
+      const paperTitle = paperConfig?.title || `${defaultExamName} ${defaultYear} Official Solved Paper`;
+      const paperYear = Number(paperConfig?.year || defaultYear);
+      const paperDuration = Number(paperConfig?.durationMinutes || (targetCategory === 'CGPSC' ? 120 : 180));
+      const paperMarks = Number(paperConfig?.marks || (targetCategory === 'CGPSC' ? processedQuestions.length * 2 : processedQuestions.length));
+      const paperNegRatio = paperConfig?.negativeMarkingRatio || (targetCategory === 'CGPSC' ? '-⅓rd (0.667 Marks per wrong answer)' : '-⅓rd (0.33 Marks)');
+      const paperSummary = paperConfig?.paperSummary || `Official question paper archive for ${paperTitle} containing ${processedQuestions.length} bilingual questions, official key, and detailed solutions.`;
+      
+      const existingPaper = pypPapers.find(p => p.year === paperYear && p.title.toLowerCase().includes(paperTitle.toLowerCase()));
+      const paperId = existingPaper?.id || `pyp-${catPrefix.toLowerCase()}-${paperYear}-${Date.now()}`;
+
+      const updatedOrNewPaper: PreviousYearPaper = {
+        id: paperId,
+        title: paperTitle,
+        examCategory: targetCategory,
+        year: paperYear,
+        totalQuestions: processedQuestions.length,
+        durationMinutes: paperDuration,
+        marks: paperMarks,
+        negativeMarkingRatio: paperNegRatio,
+        paperSummary: paperSummary,
+        subjectsWeightage: paperConfig?.subjectsWeightage || [
+          { subject: targetCategory === 'CGPSC' ? 'Chhattisgarh General Studies' : 'Chhattisgarh Special Knowledge', questionCount: Math.round(processedQuestions.length * 0.5), percentage: 50 },
+          { subject: 'General Aptitude, Reasoning & Language', questionCount: Math.round(processedQuestions.length * 0.5), percentage: 50 },
+        ],
+        downloadFileName: `${paperTitle.replace(/\s+/g, '_')}.pdf`,
+        fileSize: '3.5 MB',
+        isOfficialPaper: true,
+        linkedQuestionIds: processedQuestions.map(q => q.id),
+      };
+
+      if (existingPaper) {
+        Object.assign(existingPaper, updatedOrNewPaper);
+      } else {
+        pypPapers.unshift(updatedOrNewPaper);
+      }
+
+      // Automatically generate playable Mock Test to allow immediate testing
+      let createdMockTest: MockTest | null = null;
+      if (createMockTest) {
+        const mockTestId = `test-from-${updatedOrNewPaper.id}`;
+        const existingTestIdx = mockTests.findIndex(t => t.id === mockTestId);
+
+        createdMockTest = {
+          id: mockTestId,
+          title: `${paperTitle} (Real Exam Simulation)`,
+          category: targetCategory,
+          description: paperSummary,
+          durationMinutes: paperDuration,
+          questionCount: processedQuestions.length,
+          marksPerQuestion: targetCategory === 'CGPSC' ? 2.0 : 1.0,
+          negativeMarksPerQuestion: targetCategory === 'CGPSC' ? 0.667 : 0.333,
+          isPYP: true,
+          pypYear: paperYear,
+          pypExamName: paperTitle,
+          sections: [
+            {
+              id: `sec-${updatedOrNewPaper.id}`,
+              name: 'Official Question Paper',
+              questionIds: processedQuestions.map(q => q.id),
+            },
+          ],
+          attemptsCount: 0,
+          isPublished: true,
+          difficultyDistribution: { easy: 40, medium: 40, hard: 20 },
+          createdAt: new Date().toISOString().split('T')[0],
+        };
+
+        if (existingTestIdx !== -1) {
+          mockTests[existingTestIdx] = createdMockTest;
+        } else {
+          mockTests.unshift(createdMockTest);
+        }
+
+        updatedOrNewPaper.linkedMockTestId = createdMockTest.id;
+      }
+
+      return res.status(200).json({
+        success: true,
+        inserted,
+        updated,
+        total: incomingList.length,
+        paper: updatedOrNewPaper,
+        mockTest: createdMockTest,
+        questions: processedQuestions,
+      });
+    } catch (err: any) {
+      console.error('Error in /api/pyp/bulk-import:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Bulk import failed' });
     }
   });
 

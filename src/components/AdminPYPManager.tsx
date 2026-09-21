@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { PreviousYearPaper, ExamCategory } from '../types';
+import React, { useState, useRef } from 'react';
+import Papa from 'papaparse';
+import { PreviousYearPaper, ExamCategory, BulkImportQuestion, MockTest, Question } from '../types';
 import {
   FileText,
   Plus,
@@ -14,16 +15,37 @@ import {
   Sparkles,
   Hash,
   BookOpenCheck,
-  Tag
+  Tag,
+  AlertCircle,
+  Play,
+  ArrowRight
 } from 'lucide-react';
 import { ManualGridBuilder } from './ManualGridBuilder';
 import { AIPYPExtractorModal } from './AIPYPExtractorModal';
+import { BulkImportPreviewModal } from './BulkImportPreviewModal';
+
+const REQUIRED_BULK_KEYS = [
+  'S.No.',
+  'Examname',
+  'Year',
+  'Question(Hindi)',
+  'Question(english)',
+  'option_A',
+  'option_B',
+  'option_C',
+  'option_D',
+  'answer',
+  'explaination'
+] as const;
 
 interface AdminPYPManagerProps {
   pypPapers: PreviousYearPaper[];
   onAddPYP: (pyp: Partial<PreviousYearPaper>) => void;
   onDeletePYP: (id: string) => void;
   onConvertPYPToMockTest: (pyp: PreviousYearPaper) => void;
+  onStartTest?: (test: MockTest) => void;
+  onQuestionsAdded?: (questions: Question[]) => void;
+  onTestAdded?: (test: MockTest) => void;
 }
 
 export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
@@ -31,11 +53,28 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   onAddPYP,
   onDeletePYP,
   onConvertPYPToMockTest,
+  onStartTest,
+  onQuestionsAdded,
+  onTestAdded,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGridBuilderOpen, setIsGridBuilderOpen] = useState(false);
   const [isAIExtractorOpen, setIsAIExtractorOpen] = useState(false);
   const [convertedNotice, setConvertedNotice] = useState<string | null>(null);
+
+  // Bulk Import State
+  const [previewQuestions, setPreviewQuestions] = useState<BulkImportQuestion[]>([]);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importToast, setImportToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [publishedSuccess, setPublishedSuccess] = useState<{
+    paper: PreviousYearPaper;
+    mockTest?: MockTest;
+    count: number;
+  } | null>(null);
+
+  const jsonInputRef = useRef<HTMLInputElement | null>(null);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState<{
     title: string;
@@ -83,10 +122,230 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     setTimeout(() => setConvertedNotice(null), 3500);
   };
 
+  // 11 Required Keys Validator
+  const validateRecords = (records: any[]): { isValid: boolean; missingFields: string[] } => {
+    if (!Array.isArray(records) || records.length === 0) {
+      return { isValid: false, missingFields: ['Empty file: No records found.'] };
+    }
+
+    const missingSet = new Set<string>();
+    records.forEach((row, idx) => {
+      if (!row || typeof row !== 'object') {
+        missingSet.add(`Record #${idx + 1} is not a valid object`);
+        return;
+      }
+      REQUIRED_BULK_KEYS.forEach(key => {
+        if (!(key in row) || row[key] === undefined || row[key] === null) {
+          missingSet.add(key);
+        }
+      });
+    });
+
+    return {
+      isValid: missingSet.size === 0,
+      missingFields: Array.from(missingSet),
+    };
+  };
+
+  // JSON Import Handler
+  const handleJSONImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        const records = Array.isArray(parsed) ? parsed : (parsed.questions || []);
+
+        const { isValid, missingFields } = validateRecords(records);
+        if (!isValid) {
+          alert(
+            `❌ Validation Failed for JSON Import!\n\nThe file is missing the following required key(s):\n\n${missingFields.map(f => `• ${f}`).join('\n')}\n\nEvery record must contain exactly these 11 keys:\n${REQUIRED_BULK_KEYS.join(', ')}`
+          );
+          return;
+        }
+
+        setPreviewQuestions(records);
+        setIsPreviewModalOpen(true);
+      } catch (err: any) {
+        alert(`❌ Invalid JSON file: ${err.message}`);
+      } finally {
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // CSV Import Handler using PapaParse
+  const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        try {
+          const records = results.data as any[];
+          const { isValid, missingFields } = validateRecords(records);
+
+          if (!isValid) {
+            alert(
+              `❌ Validation Failed for CSV Import!\n\nThe CSV is missing the following required column(s):\n\n${missingFields.map(f => `• ${f}`).join('\n')}\n\nEvery record must contain exactly these 11 columns:\n${REQUIRED_BULK_KEYS.join(', ')}`
+            );
+            return;
+          }
+
+          setPreviewQuestions(records);
+          setIsPreviewModalOpen(true);
+        } catch (err: any) {
+          alert(`❌ CSV Parsing Error: ${err.message}`);
+        } finally {
+          if (e.target) e.target.value = '';
+        }
+      },
+      error: (err) => {
+        alert(`❌ Failed to read CSV file: ${err.message}`);
+        if (e.target) e.target.value = '';
+      }
+    });
+  };
+
+  // Confirm Import & Send to Backend API with custom configuration & Mock Test generation
+  const handleConfirmImport = async (
+    paperConfig: {
+      title: string;
+      examCategory: ExamCategory;
+      year: number;
+      durationMinutes: number;
+      marks: number;
+      negativeMarkingRatio: string;
+      paperSummary: string;
+      subjectsWeightage: { subject: string; questionCount: number; percentage: number }[];
+    },
+    finalQuestions: BulkImportQuestion[]
+  ) => {
+    if (finalQuestions.length === 0) return;
+    setIsImporting(true);
+    try {
+      const res = await fetch('/api/pyp/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questions: finalQuestions,
+          paperConfig,
+          createMockTest: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsPreviewModalOpen(false);
+
+        // Update local state with the returned objects
+        if (data.paper) {
+          onAddPYP(data.paper);
+        }
+        if (data.mockTest && onTestAdded) {
+          onTestAdded(data.mockTest);
+        }
+        if (data.questions && onQuestionsAdded) {
+          onQuestionsAdded(data.questions);
+        }
+
+        setImportToast({
+          message: `✅ Ingested ${finalQuestions.length} questions into "${paperConfig.title}"! Live mock test created.`,
+          type: 'success',
+        });
+        setTimeout(() => setImportToast(null), 5000);
+
+        // Open Celebration & Live Test Trigger Dialog
+        setPublishedSuccess({
+          paper: data.paper,
+          mockTest: data.mockTest,
+          count: finalQuestions.length,
+        });
+      } else {
+        throw new Error(data.error || 'Server rejected the import payload.');
+      }
+    } catch (err: any) {
+      setImportToast({
+        message: `❌ Import Failed: ${err.message}`,
+        type: 'error',
+      });
+      setTimeout(() => setImportToast(null), 6000);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Template Download Handlers
+  const downloadCSVTemplate = () => {
+    const csvContent =
+      'S.No.,Examname,Year,Question(Hindi),Question(english),option_A,option_B,option_C,option_D,answer,explaination,chapterName,repeatedInExams\n' +
+      '1,CGPSC PRE,2024,कलचुरी कालीन शासन व्यवस्था में प्रशासनिक प्रमुख को क्या कहा जाता था ?,In Kalchuri administration what was the administrative head called ?,महामात्य (Mahamatya),महापुरोहित (Mahapurohit),महाप्रतिहार (Mahapratihar),महासेनापति (Mahasenapati),A,कलचुरी शासन में राजा के मुख्य प्रशासनिक सलाहकार एवं प्रधान अधिकारी को महामात्य कहा जाता था।,History of Chhattisgarh,CGPSC 2018; CGPSC 2021';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'pyp_questions_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadJSONTemplate = () => {
+    const jsonSample = [
+      {
+        'S.No.': 1,
+        'Examname': 'CGPSC PRE',
+        'Year': 2024,
+        'Question(Hindi)': 'कलचुरी कालीन शासन व्यवस्था में प्रशासनिक प्रमुख को क्या कहा जाता था ?',
+        'Question(english)': 'In Kalchuri administration what was the administrative head called ?',
+        'option_A': 'महामात्य (Mahamatya)',
+        'option_B': 'महापुरोहित (Mahapurohit)',
+        'option_C': 'महाप्रतिहार (Mahapratihar)',
+        'option_D': 'महासेनापति (Mahasenapati)',
+        'answer': 'A',
+        'explaination': 'कलचुरी शासन में राजा के मुख्य प्रशासनिक सलाहकार एवं प्रधान अधिकारी को महामात्य कहा जाता था।',
+        'chapterName': 'History of Chhattisgarh',
+        'repeatedInExams': 'CGPSC 2018, CGPSC 2021'
+      }
+    ];
+    const blob = new Blob([JSON.stringify(jsonSample, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'pyp_questions_template.json');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Hidden File Inputs for Native File Pickers */}
+      <input
+        type="file"
+        ref={jsonInputRef}
+        onChange={handleJSONImport}
+        accept=".json,application/json"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={csvInputRef}
+        onChange={handleCSVImport}
+        accept=".csv,text/csv"
+        className="hidden"
+      />
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl">
         <div>
           <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 inline-block mb-1">
             Official Exam Archives
@@ -100,32 +359,100 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => setIsGridBuilderOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-blue-500/20 border border-blue-400/30 cursor-pointer"
-          >
-            <Grid className="w-4 h-4" />
-            <span>Interactive Grid Form</span>
-          </button>
+        <div className="flex flex-col items-start lg:items-end gap-2">
+          {/* Main Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setIsGridBuilderOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-blue-500/20 border border-blue-400/30 cursor-pointer"
+            >
+              <Grid className="w-4 h-4" />
+              <span>Interactive Grid Form</span>
+            </button>
 
-          <button
-            onClick={() => setIsAIExtractorOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>AI Smart Ingest</span>
-          </button>
+            <button
+              onClick={() => setIsAIExtractorOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>AI Smart Ingest</span>
+            </button>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs sm:text-sm flex items-center space-x-2 transition cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-emerald-400" />
-            <span>Quick Index PYP</span>
-          </button>
+            {/* NEW: Import JSON Button */}
+            <button
+              onClick={() => jsonInputRef.current?.click()}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 hover:border-emerald-500/50 font-bold text-xs sm:text-sm flex items-center space-x-2 transition cursor-pointer"
+              title="Upload and bulk import from a JSON file"
+            >
+              <span className="text-sm">📥</span>
+              <span>Import JSON</span>
+            </button>
+
+            {/* NEW: Import CSV Button */}
+            <button
+              onClick={() => csvInputRef.current?.click()}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-400 border border-slate-700 hover:border-teal-500/50 font-bold text-xs sm:text-sm flex items-center space-x-2 transition cursor-pointer"
+              title="Upload and bulk import from a CSV file"
+            >
+              <span className="text-sm">📥</span>
+              <span>Import CSV</span>
+            </button>
+
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs sm:text-sm flex items-center space-x-2 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-emerald-400" />
+              <span>Quick Index PYP</span>
+            </button>
+          </div>
+
+          {/* Secondary Template Download Links */}
+          <div className="flex items-center space-x-3 text-xs text-slate-400 pr-1 pt-0.5">
+            <button
+              type="button"
+              onClick={downloadCSVTemplate}
+              className="hover:text-emerald-400 flex items-center space-x-1.5 transition underline decoration-slate-700 hover:decoration-emerald-400 cursor-pointer"
+            >
+              <span>📄 Download CSV Template</span>
+            </button>
+            <span className="text-slate-700">•</span>
+            <button
+              type="button"
+              onClick={downloadJSONTemplate}
+              className="hover:text-emerald-400 flex items-center space-x-1.5 transition underline decoration-slate-700 hover:decoration-emerald-400 cursor-pointer"
+            >
+              <span>📄 Download JSON Template</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Import Toast / Status Notification */}
+      {importToast && (
+        <div
+          className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between space-x-2 transition-all shadow-md ${
+            importToast.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {importToast.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{importToast.message}</span>
+          </div>
+          <button
+            onClick={() => setImportToast(null)}
+            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-slate-800 transition"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {convertedNotice && (
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-semibold flex items-center space-x-2">
@@ -190,20 +517,51 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
               <button
                 onClick={() => onDeletePYP(paper.id)}
-                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition text-xs flex items-center space-x-1"
+                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition text-xs flex items-center space-x-1 cursor-pointer"
                 title="Remove paper from repository"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Remove</span>
               </button>
 
-              <button
-                onClick={() => handleConvert(paper)}
-                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold transition flex items-center space-x-1.5"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Publish as Mock Test</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                {onStartTest && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const testToRun: MockTest = {
+                        id: paper.linkedMockTestId || `test-from-${paper.id}`,
+                        title: `${paper.title} (Official Simulation)`,
+                        category: paper.examCategory,
+                        description: paper.paperSummary,
+                        durationMinutes: paper.durationMinutes,
+                        questionCount: paper.totalQuestions,
+                        marksPerQuestion: paper.examCategory === 'CGPSC' ? 2.0 : 1.0,
+                        negativeMarksPerQuestion: paper.examCategory === 'CGPSC' ? 0.667 : 0.333,
+                        sections: [{ id: `sec-${paper.id}`, name: 'Official Paper', questionIds: paper.linkedQuestionIds || [] }],
+                        attemptsCount: 0,
+                        isPublished: true,
+                        createdAt: new Date().toISOString(),
+                      };
+                      onStartTest(testToRun);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black transition flex items-center space-x-1 shadow-sm cursor-pointer active:scale-95"
+                    title="Start Live Timed Exam for this Paper"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Give Test</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleConvert(paper)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
+                  title="Generate or Re-link Mock Test"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Publish Test</span>
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -338,6 +696,101 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
           }}
           existingQuestions={[]}
         />
+      )}
+
+      {/* Bulk Ingest Preview Modal (JSON & CSV) */}
+      <BulkImportPreviewModal
+        isOpen={isPreviewModalOpen}
+        records={previewQuestions}
+        onClose={() => {
+          if (!isImporting) {
+            setIsPreviewModalOpen(false);
+            setPreviewQuestions([]);
+          }
+        }}
+        onConfirm={handleConfirmImport}
+        isImporting={isImporting}
+      />
+
+      {/* Post-Publish Celebration & Live Test Modal */}
+      {publishedSuccess && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-700/90 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 my-8">
+            <div className="text-center space-y-1.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto mb-2">
+                <CheckCircle className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-black text-white">
+                Exam Paper & Mock Test Published!
+              </h3>
+              <p className="text-xs text-slate-400">
+                {publishedSuccess.count} bilingual questions have been saved and indexed with auto-generated unique IDs. You can take this exam immediately in live simulation mode!
+              </p>
+            </div>
+
+            {/* Exact Preview Card */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4.5 space-y-3 shadow-inner">
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-emerald-400 border border-slate-700">
+                  {publishedSuccess.paper.examCategory}
+                </span>
+                <span className="text-xs text-slate-400 flex items-center space-x-1 font-semibold">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Exam Year: {publishedSuccess.paper.year}</span>
+                </span>
+              </div>
+
+              <h4 className="text-sm font-bold text-white leading-snug">
+                {publishedSuccess.paper.title}
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
+                {publishedSuccess.paper.paperSummary}
+              </p>
+
+              <div className="grid grid-cols-3 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 text-center text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Questions</span>
+                  <span className="font-bold text-white">{publishedSuccess.paper.totalQuestions}</span>
+                </div>
+                <div className="border-x border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Duration</span>
+                  <span className="font-bold text-emerald-400">{publishedSuccess.paper.durationMinutes}m</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Negative</span>
+                  <span className="font-bold text-rose-400 truncate block px-0.5">{publishedSuccess.paper.negativeMarkingRatio}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-1">
+              {onStartTest && publishedSuccess.mockTest && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const test = publishedSuccess.mockTest!;
+                    setPublishedSuccess(null);
+                    onStartTest(test);
+                  }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs transition shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 cursor-pointer active:scale-98"
+                >
+                  <Play className="w-4 h-4 fill-slate-950" />
+                  <span>Give Test Now (Start Live Exam Engine)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPublishedSuccess(null)}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
+              >
+                Done & View in PYP Repository
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -128,6 +128,7 @@ export interface PreviousYearPaper {
   downloadFileName?: string;
   fileSize?: string;
   downloadUrl?: string;
+  linkedQuestionIds?: string[];
 }
 
 export interface SectorAnalysis {
@@ -175,4 +176,27 @@ export interface HierarchicalSubjectNode {
     name: string;
     subtopics: string[];
   }[];
+}
+
+export interface BulkImportQuestion {
+  'S.No.': number | string;
+  Examname: string;
+  Year: number | string;
+  'Question(Hindi)': string;
+  'Question(english)': string;
+  option_A: string;
+  option_B: string;
+  option_C: string;
+  option_D: string;
+  answer: string;
+  explaination: string;
+  uniqueQuestionId?: string;
+  // Optional chapter linking & repeated metadata (can be supplied in JSON or auto-linked)
+  chapterName?: string;
+  chapter?: string;
+  subject?: string;
+  topic?: string;
+  subtopic?: string;
+  timesRepeated?: number;
+  repeatedInExams?: string[] | string;
 }

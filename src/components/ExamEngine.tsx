@@ -365,6 +365,15 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                 <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-medium border border-slate-700">
                   {activeQuestion.subject}
                 </span>
+
+                {/* Chapter Name Badge */}
+                {activeQuestion.chapterName && (
+                  <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 text-[11px] font-bold border border-purple-500/30 flex items-center space-x-1">
+                    <span className="text-[10px] text-purple-400">अध्याय:</span>
+                    <span>{activeQuestion.chapterName}</span>
+                  </span>
+                )}
+
                 <span className="text-[11px] text-slate-400 hidden sm:inline">
                   • {activeQuestion.topic}
                 </span>
