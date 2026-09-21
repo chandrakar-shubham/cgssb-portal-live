@@ -36,8 +36,9 @@ export const AdminAITestCreator: React.FC<AdminAITestCreatorProps> = ({
   const [referencePYPId, setReferencePYPId] = useState<string>(pypPapers[0]?.id || '');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([
     'Chhattisgarh General Studies',
-    'General Mental Ability & Reasoning',
-    'Computer Awareness'
+    'India General Studies',
+    'Quantitative Aptitude',
+    'Computer Knowledge'
   ]);
   const [questionCount, setQuestionCount] = useState<number>(10);
   const [difficultyDistribution, setDifficultyDistribution] = useState<'BALANCED' | 'HARD' | 'MODERATE'>('BALANCED');

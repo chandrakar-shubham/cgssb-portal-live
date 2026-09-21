@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { TestAttempt, Question } from '../types';
+import React, { useState, useMemo } from 'react';
+import { TestAttempt, Question, SectorAnalysis } from '../types';
+import { normalizeSubjectName, migrateLegacyAttempt } from '../utils/taxonomyMigration';
 import {
   Award,
   TrendingUp,
@@ -19,7 +20,9 @@ import {
   Target,
   Flame,
   History,
-  Hash
+  Hash,
+  BookOpen,
+  Filter
 } from 'lucide-react';
 
 interface SolutionsScreenProps {
@@ -37,7 +40,14 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'solutions' | 'sectors'>('summary');
   const [filterSolution, setFilterSolution] = useState<'all' | 'correct' | 'incorrect' | 'unattempted'>('all');
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [expandedExplanation, setExpandedExplanation] = useState<Record<string, boolean>>({});
+
+  // Ensure sector analysis is completely migrated and reflects separate non-conjoined taxonomy
+  const resolvedSectors: SectorAnalysis[] = useMemo(() => {
+    const migrated = migrateLegacyAttempt(attempt, questions);
+    return migrated.sectorAnalysis || [];
+  }, [attempt, questions]);
 
   const toggleExplanation = (qid: string) => {
     setExpandedExplanation(prev => ({
@@ -48,6 +58,12 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
 
   const filteredQuestions = questions.filter(q => {
     const candidateAnswer = attempt.responses[q.id];
+    const cleanSubj = normalizeSubjectName(q.subject);
+
+    if (subjectFilter !== 'all' && cleanSubj !== subjectFilter) {
+      return false;
+    }
+
     if (filterSolution === 'correct') {
       return candidateAnswer === q.correctOption;
     }
@@ -59,6 +75,31 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
     }
     return true;
   });
+
+  const getSubjectBadgeStyle = (subjName: string) => {
+    switch (subjName) {
+      case 'India General Studies':
+        return 'bg-blue-500/15 text-blue-300 border-blue-500/40';
+      case 'Chhattisgarh General Studies':
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40';
+      case 'Quantitative Aptitude':
+        return 'bg-purple-500/15 text-purple-300 border-purple-500/40';
+      case 'Reasoning':
+        return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40';
+      case 'Computer Knowledge':
+        return 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40';
+      case 'General Science':
+        return 'bg-lime-500/15 text-lime-300 border-lime-500/40';
+      case 'General Hindi':
+        return 'bg-amber-500/15 text-amber-300 border-amber-500/40';
+      case 'Chhattisgarhi Language':
+        return 'bg-rose-500/15 text-rose-300 border-rose-500/40';
+      case 'Child Pedagogy & Teaching Methodology':
+        return 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/40';
+      default:
+        return 'bg-slate-700/50 text-slate-300 border-slate-600';
+    }
+  };
 
   const formatSeconds = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -350,59 +391,91 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
 
       {/* TAB 2: OVERALL SECTOR-WISE (SUBJECT-WISE) ANALYSIS */}
       {activeTab === 'sectors' && (
-        <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/80 pb-3">
-            <div>
-              <h3 className="text-base font-bold text-white">Sector & Subject Proficiency Matrix</h3>
-              <p className="text-xs text-slate-400">
-                Detailed breakdown of your accuracy, positive scores, and error rate across curriculum subjects.
-              </p>
+        <div className="space-y-4">
+          {/* Sector Matrix Header & Cards */}
+          <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/80 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                  <Target className="w-4 h-4 text-emerald-400" />
+                  <span>Sector & Subject Proficiency Matrix</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Discrete curriculum breakdown. India GS, Chhattisgarh GS, Quantitative Aptitude, Reasoning, and Sciences are categorized individually.
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-700 text-slate-400 font-semibold bg-slate-900/50">
-                  <th className="p-3">Subject / Sector</th>
-                  <th className="p-3 text-center">Total Qs</th>
-                  <th className="p-3 text-center text-emerald-400">Correct</th>
-                  <th className="p-3 text-center text-rose-400">Incorrect</th>
-                  <th className="p-3 text-center text-slate-400">Skipped</th>
-                  <th className="p-3 text-center">Accuracy %</th>
-                  <th className="p-3 text-right">Net Score</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {attempt.sectorAnalysis && attempt.sectorAnalysis.length > 0 ? (
-                  attempt.sectorAnalysis.map((sector, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/50 transition">
-                      <td className="p-3 font-semibold text-white">{sector.subject}</td>
-                      <td className="p-3 text-center font-mono">{sector.total}</td>
-                      <td className="p-3 text-center font-mono font-bold text-emerald-400">{sector.correct}</td>
-                      <td className="p-3 text-center font-mono font-bold text-rose-400">{sector.incorrect}</td>
-                      <td className="p-3 text-center font-mono text-slate-400">{sector.unattempted}</td>
-                      <td className="p-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full font-bold ${
-                          sector.accuracy >= 75 ? 'bg-emerald-500/20 text-emerald-300' : sector.accuracy >= 50 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
-                        }`}>
-                          {sector.accuracy}%
-                        </span>
-                      </td>
-                      <td className="p-3 text-right font-mono font-black text-emerald-400">
-                        {sector.score} / {sector.maxScore}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-700 text-slate-400 font-semibold bg-slate-900/60">
+                    <th className="p-3">Subject / Sector</th>
+                    <th className="p-3 text-center">Total Qs</th>
+                    <th className="p-3 text-center text-emerald-400">Correct</th>
+                    <th className="p-3 text-center text-rose-400">Incorrect</th>
+                    <th className="p-3 text-center text-slate-400">Skipped</th>
+                    <th className="p-3 text-center">Accuracy %</th>
+                    <th className="p-3 text-right">Net Score</th>
+                    <th className="p-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  {resolvedSectors && resolvedSectors.length > 0 ? (
+                    resolvedSectors.map((sector, idx) => {
+                      const badgeClass = getSubjectBadgeStyle(sector.subject);
+                      return (
+                        <tr key={idx} className="hover:bg-slate-800/60 transition">
+                          <td className="p-3">
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${badgeClass}`}>
+                                {sector.subject}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-200">{sector.total}</td>
+                          <td className="p-3 text-center font-mono font-bold text-emerald-400">{sector.correct}</td>
+                          <td className="p-3 text-center font-mono font-bold text-rose-400">{sector.incorrect}</td>
+                          <td className="p-3 text-center font-mono text-slate-400">{sector.unattempted}</td>
+                          <td className="p-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
+                              sector.accuracy >= 75
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : sector.accuracy >= 50
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            }`}>
+                              {sector.accuracy}%
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-mono font-black text-emerald-400 text-sm">
+                            {sector.score} / {sector.maxScore}
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => {
+                                setSubjectFilter(sector.subject);
+                                setFilterSolution('all');
+                                setActiveTab('solutions');
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold transition border border-slate-600 inline-flex items-center space-x-1"
+                            >
+                              <span>Inspect Qs</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="p-6 text-center text-slate-400">
+                        No subject breakdown available for this attempt.
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="p-4 text-center text-slate-400">
-                      Sector analysis details available.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -411,53 +484,92 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
       {activeTab === 'solutions' && (
         <div className="space-y-4">
           {/* Solution Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
-            <div className="flex items-center space-x-1.5 text-xs">
-              <span className="text-slate-400 font-semibold mr-1">Filter:</span>
-              <button
-                onClick={() => setFilterSolution('all')}
-                className={`px-3 py-1 rounded-lg font-bold transition ${
-                  filterSolution === 'all'
-                    ? 'bg-slate-700 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                All ({questions.length})
-              </button>
-              <button
-                onClick={() => setFilterSolution('correct')}
-                className={`px-3 py-1 rounded-lg font-bold transition ${
-                  filterSolution === 'correct'
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Correct ({attempt.correctCount})
-              </button>
-              <button
-                onClick={() => setFilterSolution('incorrect')}
-                className={`px-3 py-1 rounded-lg font-bold transition ${
-                  filterSolution === 'incorrect'
-                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Incorrect ({attempt.incorrectCount})
-              </button>
-              <button
-                onClick={() => setFilterSolution('unattempted')}
-                className={`px-3 py-1 rounded-lg font-bold transition ${
-                  filterSolution === 'unattempted'
-                    ? 'bg-slate-700 text-slate-200'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Skipped ({attempt.unattemptedCount})
-              </button>
+          <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-slate-400 font-semibold mr-1">Outcome:</span>
+                <button
+                  onClick={() => setFilterSolution('all')}
+                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                    filterSolution === 'all'
+                      ? 'bg-slate-700 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All ({questions.length})
+                </button>
+                <button
+                  onClick={() => setFilterSolution('correct')}
+                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                    filterSolution === 'correct'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Correct ({attempt.correctCount})
+                </button>
+                <button
+                  onClick={() => setFilterSolution('incorrect')}
+                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                    filterSolution === 'incorrect'
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Incorrect ({attempt.incorrectCount})
+                </button>
+                <button
+                  onClick={() => setFilterSolution('unattempted')}
+                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                    filterSolution === 'unattempted'
+                      ? 'bg-slate-700 text-slate-200'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Skipped ({attempt.unattemptedCount})
+                </button>
+              </div>
+
+              <span className="text-xs text-slate-400">
+                Showing <strong>{filteredQuestions.length}</strong> questions
+              </span>
             </div>
-            <span className="text-xs text-slate-400">
-              Showing <strong>{filteredQuestions.length}</strong> questions
-            </span>
+
+            {/* Subject Filters */}
+            {resolvedSectors.length > 1 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-700/60 text-xs">
+                <span className="text-slate-400 font-semibold flex items-center space-x-1 mr-1">
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>Subject:</span>
+                </span>
+                <button
+                  onClick={() => setSubjectFilter('all')}
+                  className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold transition ${
+                    subjectFilter === 'all'
+                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-700'
+                  }`}
+                >
+                  All Subjects
+                </button>
+                {resolvedSectors.map((sec, sIdx) => {
+                  const isSelected = subjectFilter === sec.subject;
+                  return (
+                    <button
+                      key={sIdx}
+                      onClick={() => setSubjectFilter(sec.subject)}
+                      className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold transition border ${
+                        isSelected
+                          ? 'bg-slate-700 text-white border-slate-500'
+                          : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800'
+                      }`}
+                    >
+                      {sec.subject} ({sec.total})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Questions Solution List */}

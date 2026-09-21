@@ -30,6 +30,12 @@ import {
   INITIAL_PYP_PAPERS,
   INITIAL_ATTEMPTS
 } from './mockData';
+import {
+  normalizeSubjectName,
+  migrateLegacyQuestion,
+  migrateLegacyAttempt,
+  runTaxonomyMigration
+} from './utils/taxonomyMigration';
 
 function MainApp() {
   const { user, deductCredits } = useAuth();
@@ -71,7 +77,12 @@ function MainApp() {
   const [questions, setQuestions] = useState<Question[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_questions');
-      if (saved) return dedupeById(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return dedupeById(parsed.map(migrateLegacyQuestion));
+        }
+      }
     } catch {}
     return INITIAL_QUESTIONS;
   });
@@ -87,10 +98,20 @@ function MainApp() {
   const [attempts, setAttempts] = useState<TestAttempt[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_attempts');
-      if (saved) return dedupeById(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return dedupeById(parsed.map(a => migrateLegacyAttempt(a, INITIAL_QUESTIONS)));
+        }
+      }
     } catch {}
     return INITIAL_ATTEMPTS;
   });
+
+  // Run taxonomy migration in localStorage on initial mount
+  useEffect(() => {
+    runTaxonomyMigration(INITIAL_QUESTIONS, INITIAL_ATTEMPTS);
+  }, []);
 
   // Sync to localStorage with quota protection
   useEffect(() => {
@@ -248,20 +269,21 @@ function MainApp() {
 
     activeQuestionList.forEach(q => {
       const resp = submission.responses[q.id];
-      if (!subjectMap[q.subject]) {
-        subjectMap[q.subject] = { total: 0, correct: 0, incorrect: 0, unattempted: 0 };
+      const cleanSubj = normalizeSubjectName(q.subject, `${q.questionHindi || ''} ${q.questionText || ''}`);
+      if (!subjectMap[cleanSubj]) {
+        subjectMap[cleanSubj] = { total: 0, correct: 0, incorrect: 0, unattempted: 0 };
       }
-      subjectMap[q.subject].total += 1;
+      subjectMap[cleanSubj].total += 1;
 
       if (resp == null) {
         unattemptedCount += 1;
-        subjectMap[q.subject].unattempted += 1;
+        subjectMap[cleanSubj].unattempted += 1;
       } else if (resp === q.correctOption) {
         correctCount += 1;
-        subjectMap[q.subject].correct += 1;
+        subjectMap[cleanSubj].correct += 1;
       } else {
         incorrectCount += 1;
-        subjectMap[q.subject].incorrect += 1;
+        subjectMap[cleanSubj].incorrect += 1;
       }
     });
 

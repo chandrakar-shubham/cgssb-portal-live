@@ -106,11 +106,13 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     negativeMarkingRatio: '1/3rd (0.333)',
     paperSummary: '',
     subjectsWeightage: [
-      { subject: 'Chhattisgarh General Studies', questionCount: 30, percentage: 30 },
-      { subject: 'General Mental Ability & Reasoning', questionCount: 20, percentage: 20 },
-      { subject: 'Hindi & Chhattisgarhi Bhasha', questionCount: 20, percentage: 20 },
-      { subject: 'Computer Awareness', questionCount: 15, percentage: 15 },
-      { subject: 'General Science & Environment', questionCount: 15, percentage: 15 },
+      { subject: 'Chhattisgarh General Studies', questionCount: 25, percentage: 25 },
+      { subject: 'India General Studies', questionCount: 20, percentage: 20 },
+      { subject: 'Quantitative Aptitude', questionCount: 15, percentage: 15 },
+      { subject: 'Reasoning', questionCount: 10, percentage: 10 },
+      { subject: 'General Hindi', questionCount: 10, percentage: 10 },
+      { subject: 'Chhattisgarhi Language', questionCount: 10, percentage: 10 },
+      { subject: 'Computer Knowledge', questionCount: 10, percentage: 10 },
     ],
   });
 

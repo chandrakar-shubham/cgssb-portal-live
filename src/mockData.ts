@@ -69,7 +69,7 @@ export const EXAM_PATTERNS: Record<ExamCategory, ExamPatternConfig> = {
 
 export const HIERARCHY_TREE: HierarchicalSubjectNode[] = [
   {
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topics: [
       {
         name: 'History of Chhattisgarh',
@@ -90,41 +90,158 @@ export const HIERARCHY_TREE: HierarchicalSubjectNode[] = [
     ],
   },
   {
-    subject: 'General Mental Ability & Reasoning',
+    subject: 'India General Studies',
     topics: [
       {
-        name: 'Analytical Reasoning',
-        subtopics: ['Coding-Decoding', 'Blood Relations', 'Syllogism & Logical Deduction', 'Direction Sense Test'],
+        name: 'Indian History & National Movement',
+        subtopics: ['Ancient India (Indus Valley & Vedic)', 'Maurya, Gupta & Medieval Dynasties', '1857 Revolt & Freedom Struggle', 'Gandhian Era & Independence Movement'],
       },
       {
-        name: 'Quantitative Aptitude',
-        subtopics: ['Percentages & Profit-Loss', 'Ratio & Proportion', 'Time, Speed & Distance', 'Data Interpretation'],
+        name: 'Indian Polity & Constitution',
+        subtopics: ['Constitutional Framework & Preamble', 'Fundamental Rights & Duties', 'Parliament, President & Judiciary', 'Constitutional Bodies & Amendments'],
+      },
+      {
+        name: 'Physical & Economic Geography of India',
+        subtopics: ['Himalayas & Northern Plains', 'River Systems (Ganga, Brahmaputra, Peninsular)', 'Climate, Monsoon & Natural Vegetation', 'Agriculture, Minerals & Industries'],
+      },
+      {
+        name: 'Indian Economy & Development',
+        subtopics: ['National Income & Economic Planning', 'RBI, Banking & Monetary Policy', 'Fiscal Policy, Budget & Taxation', 'NITI Aayog & Flagship Schemes'],
+      },
+      {
+        name: 'National Current Affairs & General Knowledge',
+        subtopics: ['National & International Events', 'Major Awards, Honours & Sports', 'Space, Science & Defence Missions', 'International Organizations (UN, BRICS)'],
       },
     ],
   },
   {
-    subject: 'General Hindi & Chhattisgarhi Language',
+    subject: 'General Science',
     topics: [
       {
-        name: 'Chhattisgarhi Bhasha & Vyakaran',
-        subtopics: ['Idioms & Proverbs (Hana)', 'Chhattisgarhi Nouns & Pronouns', 'Local Dialects & Terminology'],
+        name: 'Physics',
+        subtopics: ['Mechanics, Units & Measurements', 'Light, Optics & Sound', 'Electricity & Magnetism', 'Heat & Thermodynamics'],
       },
       {
-        name: 'Samanya Hindi',
-        subtopics: ['Sandhi & Samas', 'Paryayvachi & Vilom Shabd', 'Muhavare & Lokoktiyan', 'Vartani Shuddhi'],
+        name: 'Chemistry',
+        subtopics: ['Atomic Structure & Periodic Table', 'Acids, Bases & Salts', 'Metals, Non-metals & Metallurgy', 'Carbon & Environmental Chemistry'],
+      },
+      {
+        name: 'Biology & Environmental Ecology',
+        subtopics: ['Cell Biology & Genetics', 'Human Physiology & Nutrition', 'Diseases, Immunity & Vaccines', 'Ecology, Biodiversity & Conservation'],
       },
     ],
   },
   {
-    subject: 'General Science & Computer Knowledge',
+    subject: 'Computer Knowledge',
     topics: [
       {
-        name: 'Computer Fundamentals (Vyapam)',
-        subtopics: ['MS Office & Operating Systems', 'Internet & Cybersecurity', 'Computer Hardware & Memory', 'Abbreviations & File Formats'],
+        name: 'Computer Fundamentals',
+        subtopics: ['Computer Architecture & CPU', 'Hardware, Memory & Storage (RAM/ROM)', 'Input & Output Devices', 'Abbreviations & File Extensions'],
       },
       {
-        name: 'Basic Science',
-        subtopics: ['Physics Concepts & Units', 'Human Physiology & Nutrition', 'Ecology & Environmental Science'],
+        name: 'Operating Systems & Software',
+        subtopics: ['Windows & Linux Fundamentals', 'MS Word & Text Processing', 'MS Excel & Data Analysis', 'MS PowerPoint & Multimedia'],
+      },
+      {
+        name: 'Internet & Cybersecurity',
+        subtopics: ['Web Browsers & Protocols (HTTP/HTTPS)', 'Computer Networks (LAN/WAN/IP)', 'Viruses, Malware & Firewalls', 'Cyber Safety & IT Act'],
+      },
+    ],
+  },
+  {
+    subject: 'Quantitative Aptitude',
+    topics: [
+      {
+        name: 'Arithmetic & Commercial Mathematics',
+        subtopics: ['Percentages & Profit-Loss', 'Ratio & Proportion', 'Simple & Compound Interest', 'Time, Work & Wages', 'Speed, Time & Distance'],
+      },
+      {
+        name: 'Number System & Algebra',
+        subtopics: ['HCF & LCM', 'Number Series & Simplification', 'Linear Equations & Polynomials', 'Square Roots & Indices'],
+      },
+      {
+        name: 'Geometry & Mensuration',
+        subtopics: ['2D Geometry (Triangles, Circles)', 'Mensuration (Area & Perimeter)', '3D Mensuration (Volume & Surface Area)'],
+      },
+      {
+        name: 'Data Interpretation',
+        subtopics: ['Bar Graphs & Histograms', 'Pie Charts', 'Tables & Line Graphs'],
+      },
+    ],
+  },
+  {
+    subject: 'Reasoning',
+    topics: [
+      {
+        name: 'Verbal & Analytical Reasoning',
+        subtopics: ['Coding-Decoding', 'Blood Relations', 'Direction Sense Test', 'Order & Ranking'],
+      },
+      {
+        name: 'Logical Deductions',
+        subtopics: ['Syllogism', 'Statement & Assumptions', 'Statement & Conclusions', 'Cause & Effect'],
+      },
+      {
+        name: 'Puzzles & Series',
+        subtopics: ['Number & Alphabet Series', 'Seating Arrangement', 'Clocks & Calendars', 'Mathematical Operations'],
+      },
+      {
+        name: 'Non-Verbal Reasoning',
+        subtopics: ['Pattern Completion & Series', 'Mirror & Water Images', 'Paper Folding & Cutting', 'Dice & Cubes'],
+      },
+    ],
+  },
+  {
+    subject: 'General Hindi',
+    topics: [
+      {
+        name: 'Hindi Vyakaran & Varnamala',
+        subtopics: ['Varna, Swar & Vyanjan', 'Sangya, Sarvanam & Visheshan', 'Kriya, Kaal & Karak', 'Vachya & Avyaya'],
+      },
+      {
+        name: 'Sandhi & Samas',
+        subtopics: ['Swar Sandhi, Vyanjan Sandhi, Visarga Sandhi', 'Samas Bhed (Tatpurush, Karmadharaya, Dvigu, Bahuvrihi)', 'Upsarg & Pratyay'],
+      },
+      {
+        name: 'Shabd Bodh & Vocabulary',
+        subtopics: ['Paryayvachi Shabd', 'Vilom Shabd', 'Tatsam & Tadbhav', 'Anekarthi & Samanarthi Shabd'],
+      },
+      {
+        name: 'Vakya Shuddhi & Muhavare',
+        subtopics: ['Vartani Shuddhi', 'Vakya Shuddhi & Krama', 'Muhavare & Lokoktiyan', 'Anek Shabdon Ke Liye Ek Shabd'],
+      },
+    ],
+  },
+  {
+    subject: 'Chhattisgarhi Language',
+    topics: [
+      {
+        name: 'Chhattisgarhi Vyakaran',
+        subtopics: ['Chhattisgarhi Sangya & Sarvanam', 'Chhattisgarhi Karak & Vibhakti', 'Chhattisgarhi Kriya & Kaal', 'Linga & Vachana Niyam'],
+      },
+      {
+        name: 'Chhattisgarhi Hana & Janula',
+        subtopics: ['Prasiddha Hana (Idioms & Proverbs)', 'Janula (Chhattisgarhi Riddles)', 'Local Muhavare & Expressions'],
+      },
+      {
+        name: 'Chhattisgarhi Lok Sahitya',
+        subtopics: ['Pramukh Kavi & Rachnaye', 'Chhattisgarhi Boli & Dialects', 'Chhattisgarhi Shabdkosh & Terminology'],
+      },
+    ],
+  },
+  {
+    subject: 'General English',
+    topics: [
+      {
+        name: 'Grammar & Parts of Speech',
+        subtopics: ['Tenses & Modals', 'Active & Passive Voice', 'Direct & Indirect Speech', 'Prepositions & Articles'],
+      },
+      {
+        name: 'Vocabulary & Usage',
+        subtopics: ['Synonyms & Antonyms', 'Idioms & Phrases', 'One Word Substitution', 'Common Spelling Errors'],
+      },
+      {
+        name: 'Comprehension & Error Detection',
+        subtopics: ['Reading Comprehension', 'Spotting Errors in Sentences', 'Sentence Rearrangement & Fillers'],
       },
     ],
   },
@@ -147,7 +264,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 1
   {
     id: 'q-cg-01',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'History of Chhattisgarh',
     subtopic: 'Kalchuri Dynasty',
     difficulty: 'Medium',
@@ -176,7 +293,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 2
   {
     id: 'q-cg-02',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Geography & Natural Resources',
     subtopic: 'River Basins (Mahanadi, Indravati)',
     difficulty: 'Easy',
@@ -206,7 +323,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 3
   {
     id: 'q-cg-03',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Culture, Tribes & Tourism',
     subtopic: 'Bastar Dussehra & Madai Mela',
     difficulty: 'Medium',
@@ -235,8 +352,8 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 4
   {
     id: 'q-cg-04',
-    subject: 'General Science & Computer Knowledge',
-    topic: 'Computer Fundamentals (Vyapam)',
+    subject: 'Computer Knowledge',
+    topic: 'Operating Systems & Software',
     subtopic: 'Internet & Cybersecurity',
     difficulty: 'Easy',
     category: 'CGSSB',
@@ -263,8 +380,8 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 5
   {
     id: 'q-cg-05',
-    subject: 'General Hindi & Chhattisgarhi Language',
-    topic: 'Chhattisgarhi Bhasha & Vyakaran',
+    subject: 'Chhattisgarhi Language',
+    topic: 'Chhattisgarhi Hana & Janula',
     subtopic: 'Idioms & Proverbs (Hana)',
     difficulty: 'Hard',
     category: 'CGSSB',
@@ -292,8 +409,8 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 6
   {
     id: 'q-cg-06',
-    subject: 'General Mental Ability & Reasoning',
-    topic: 'Analytical Reasoning',
+    subject: 'Reasoning',
+    topic: 'Verbal & Analytical Reasoning',
     subtopic: 'Coding-Decoding',
     difficulty: 'Medium',
     category: 'CGSSB',
@@ -320,7 +437,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 7
   {
     id: 'q-cg-07',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'History of Chhattisgarh',
     subtopic: 'Tribal Revolts & Freedom Struggle',
     difficulty: 'Hard',
@@ -349,7 +466,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 8
   {
     id: 'q-cg-08',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Administration & Economy',
     subtopic: 'Panchayati Raj & Urban Local Bodies',
     difficulty: 'Medium',
@@ -378,7 +495,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 9
   {
     id: 'q-cg-09',
-    subject: 'General Science & Computer Knowledge',
+    subject: 'Computer Knowledge',
     topic: 'Computer Fundamentals (Vyapam)',
     subtopic: 'Computer Hardware & Memory',
     difficulty: 'Easy',
@@ -407,7 +524,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 10
   {
     id: 'q-cg-10',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Culture, Tribes & Tourism',
     subtopic: 'Folk Dances (Karma, Raut Nacha, Panthi)',
     difficulty: 'Easy',
@@ -438,7 +555,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 11
   {
     id: 'q-psc-01',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'History of Chhattisgarh',
     subtopic: 'Modern State Formation (2000)',
     difficulty: 'Medium',
@@ -467,7 +584,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 12
   {
     id: 'q-psc-02',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Geography & Natural Resources',
     subtopic: 'Minerals & Industrial Zones',
     difficulty: 'Medium',
@@ -496,7 +613,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 13
   {
     id: 'q-psc-03',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Culture, Tribes & Tourism',
     subtopic: 'Tribal Traditions (Gond, Baiga, Maria)',
     difficulty: 'Hard',
@@ -525,7 +642,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 14
   {
     id: 'q-psc-04',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'History of Chhattisgarh',
     subtopic: 'Tribal Revolts & Freedom Struggle',
     difficulty: 'Hard',
@@ -555,7 +672,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 15
   {
     id: 'q-psc-05',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Administration & Economy',
     subtopic: 'State Budget & Welfare Schemes',
     difficulty: 'Medium',
@@ -583,7 +700,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 16
   {
     id: 'q-psc-06',
-    subject: 'General Mental Ability & Reasoning',
+    subject: 'Quantitative Aptitude',
     topic: 'Quantitative Aptitude',
     subtopic: 'Percentages & Profit-Loss',
     difficulty: 'Medium',
@@ -611,7 +728,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 17
   {
     id: 'q-psc-07',
-    subject: 'Chhattisgarh Special Knowledge',
+    subject: 'Chhattisgarh General Studies',
     topic: 'Geography & Natural Resources',
     subtopic: 'Forests & National Parks',
     difficulty: 'Medium',
@@ -640,7 +757,7 @@ export const INITIAL_QUESTIONS: Question[] = [
   // 18
   {
     id: 'q-psc-08',
-    subject: 'General Hindi & Chhattisgarhi Language',
+    subject: 'General Hindi',
     topic: 'Samanya Hindi',
     subtopic: 'Sandhi & Samas',
     difficulty: 'Medium',
@@ -721,6 +838,90 @@ export const INITIAL_QUESTIONS: Question[] = [
       { examName: 'Central CTET Paper-II', year: 2021 },
     ],
     createdAt: '2024-01-30',
+  },
+  // 21 - India General Studies (Polity)
+  {
+    id: 'q-ind-01',
+    subject: 'India General Studies',
+    topic: 'Indian Polity & Constitution',
+    subtopic: 'Fundamental Rights & Duties',
+    difficulty: 'Medium',
+    category: 'CGPSC',
+    questionText: 'Under which Article of the Constitution of India can a citizen move directly to the Supreme Court for enforcement of Fundamental Rights?',
+    questionHindi: 'भारतीय संविधान के किस अनुच्छेद के तहत कोई नागरिक मौलिक अधिकारों के प्रवर्तन के लिए सीधे सर्वोच्च न्यायालय जा सकता है?',
+    options: [
+      { id: 'A', text: 'Article 19', textHindi: 'अनुच्छेद 19' },
+      { id: 'B', text: 'Article 21', textHindi: 'अनुच्छेद 21' },
+      { id: 'C', text: 'Article 32', textHindi: 'अनुच्छेद 32' },
+      { id: 'D', text: 'Article 226', textHindi: 'अनुच्छेद 226' },
+    ],
+    correctOption: 'C',
+    marks: 2.0,
+    negativeMarks: 0.667,
+    explanation: 'Article 32 provides the Right to Constitutional Remedies, allowing citizens to move the Supreme Court via writs (Habeas Corpus, Mandamus, etc.). Dr. B.R. Ambedkar termed it the "Heart and Soul" of the Constitution.',
+    explanationHindi: 'अनुच्छेद 32 को डॉ. भीमराव आंबेडकर ने संविधान की "आत्मा और हृदय" कहा था, जिसके तहत मौलिक अधिकारों के उल्लंघन पर सर्वोच्च न्यायालय रिट जारी कर सकता है।',
+    pypSource: 'CGPSC SSE Prelims 2023',
+    pypAppearances: [
+      { examName: 'CGPSC SSE Prelims Paper-I', year: 2023 },
+      { examName: 'CGPSC State Service Prelims', year: 2019 },
+    ],
+    createdAt: '2024-02-01',
+  },
+  // 22 - India General Studies (History)
+  {
+    id: 'q-ind-02',
+    subject: 'India General Studies',
+    topic: 'Indian History & National Movement',
+    subtopic: '1857 Revolt & Freedom Struggle',
+    difficulty: 'Medium',
+    category: 'CGPSC',
+    questionText: 'From which cantonment town did the historic Revolt of 1857 officially begin on 10th May 1857?',
+    questionHindi: '10 मई 1857 को 1857 की ऐतिहासिक क्रांति की शुरुआत औपचारिक रूप से किस छावनी से हुई थी?',
+    options: [
+      { id: 'A', text: 'Barrackpore', textHindi: 'बैरकपुर' },
+      { id: 'B', text: 'Meerut', textHindi: 'मेरठ' },
+      { id: 'C', text: 'Delhi', textHindi: 'दिल्ली' },
+      { id: 'D', text: 'Kanpur', textHindi: 'कानपुर' },
+    ],
+    correctOption: 'B',
+    marks: 2.0,
+    negativeMarks: 0.667,
+    explanation: 'Although Mangal Pandey rebelled in Barrackpore in March 1857, the widespread organized mutiny erupted from Meerut on 10 May 1857 when sepoys marched to Delhi.',
+    explanationHindi: '10 मई 1857 को मेरठ छावनी के सैनिकों ने खुला विद्रोह कर दिल्ली की ओर कूच किया था।',
+    pypSource: 'CGPSC SSE Prelims 2022',
+    pypAppearances: [
+      { examName: 'CGPSC SSE Prelims Paper-I', year: 2022 },
+      { examName: 'CG Vyapam Combined Exam', year: 2018 },
+    ],
+    createdAt: '2024-02-02',
+  },
+  // 23 - General Science (Biology)
+  {
+    id: 'q-sci-01',
+    subject: 'General Science',
+    topic: 'Biology & Environmental Ecology',
+    subtopic: 'Cell Biology & Genetics',
+    difficulty: 'Easy',
+    category: 'CGSSB',
+    questionText: 'Which organelle is universally known as the "Powerhouse of the Cell"?',
+    questionHindi: 'कोशिका का "विद्युत गृह" या "पावर हाउस" (Powerhouse of the Cell) किसे कहा जाता है?',
+    options: [
+      { id: 'A', text: 'Ribosome', textHindi: 'राइबोसोम' },
+      { id: 'B', text: 'Mitochondria', textHindi: 'माइटोकॉन्ड्रिया' },
+      { id: 'C', text: 'Golgi Apparatus', textHindi: 'गॉल्जी काय' },
+      { id: 'D', text: 'Lysosome', textHindi: 'लाइसोसोम' },
+    ],
+    correctOption: 'B',
+    marks: 1.0,
+    negativeMarks: 0.333,
+    explanation: 'Mitochondria generate most of the chemical energy needed to power the biochemical reactions of the cell in the form of ATP (Adenosine Triphosphate).',
+    explanationHindi: 'माइटोकॉन्ड्रिया में कोशिकीय श्वसन द्वारा ATP के रूप में ऊर्जा उत्पन्न होती है, इसलिए इसे कोशिका का पावरहाउस कहा जाता है।',
+    pypSource: 'CGSSB Patwari 2022',
+    pypAppearances: [
+      { examName: 'CGSSB Patwari Exam', year: 2022 },
+      { examName: 'CG Police Constable', year: 2021 },
+    ],
+    createdAt: '2024-02-03',
   },
 ];
 
@@ -942,7 +1143,7 @@ export const SAMPLE_USER_ATTEMPTS: TestAttempt[] = [
     percentile: 98.8,
     sectorAnalysis: [
       {
-        subject: 'Chhattisgarh Special Knowledge',
+        subject: 'Chhattisgarh General Studies',
         total: 6,
         correct: 6,
         incorrect: 0,
@@ -953,7 +1154,7 @@ export const SAMPLE_USER_ATTEMPTS: TestAttempt[] = [
         timeSpentSeconds: 320,
       },
       {
-        subject: 'General Science & Computer Knowledge',
+        subject: 'Computer Knowledge',
         total: 2,
         correct: 2,
         incorrect: 0,
@@ -964,7 +1165,7 @@ export const SAMPLE_USER_ATTEMPTS: TestAttempt[] = [
         timeSpentSeconds: 110,
       },
       {
-        subject: 'General Mental Ability & Reasoning',
+        subject: 'Quantitative Aptitude',
         total: 1,
         correct: 1,
         incorrect: 0,
@@ -975,7 +1176,7 @@ export const SAMPLE_USER_ATTEMPTS: TestAttempt[] = [
         timeSpentSeconds: 85,
       },
       {
-        subject: 'General Hindi & Chhattisgarhi Language',
+        subject: 'General Hindi',
         total: 1,
         correct: 1,
         incorrect: 0,
