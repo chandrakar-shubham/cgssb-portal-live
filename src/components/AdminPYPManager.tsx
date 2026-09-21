@@ -18,12 +18,15 @@ import {
   Tag,
   AlertCircle,
   Play,
-  ArrowRight
+  ArrowRight,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { ManualGridBuilder } from './ManualGridBuilder';
 import { AIPYPExtractorModal } from './AIPYPExtractorModal';
 import { BulkImportPreviewModal } from './BulkImportPreviewModal';
 import { processBulkImportClientSide } from '../utils/pypEngine';
+import { getBaseTestTitle } from '../utils/testDeduplication';
 
 const REQUIRED_BULK_KEYS = [
   'S.No.',
@@ -41,9 +44,11 @@ const REQUIRED_BULK_KEYS = [
 
 interface AdminPYPManagerProps {
   pypPapers: PreviousYearPaper[];
+  tests?: MockTest[];
   onAddPYP: (pyp: Partial<PreviousYearPaper>) => void;
   onDeletePYP: (id: string) => void;
   onConvertPYPToMockTest: (pyp: PreviousYearPaper) => void;
+  onTogglePublishTest?: (testId: string) => void;
   onStartTest?: (test: MockTest) => void;
   onQuestionsAdded?: (questions: Question[]) => void;
   onTestAdded?: (test: MockTest) => void;
@@ -51,9 +56,11 @@ interface AdminPYPManagerProps {
 
 export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   pypPapers,
+  tests = [],
   onAddPYP,
   onDeletePYP,
   onConvertPYPToMockTest,
+  onTogglePublishTest,
   onStartTest,
   onQuestionsAdded,
   onTestAdded,
@@ -507,106 +514,154 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
 
       {/* Papers Listing */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {uniquePapers.map(paper => (
-          <div
-            key={paper.id}
-            className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-emerald-400 border border-slate-700">
-                  {paper.examCategory}
-                </span>
-                <span className="text-xs text-slate-400 flex items-center space-x-1 font-semibold">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Exam Year: {paper.year}</span>
-                </span>
-              </div>
+        {uniquePapers.map(paper => {
+          const linkedTest = tests.find(t =>
+            (paper.linkedMockTestId && t.id === paper.linkedMockTestId) ||
+            (paper.testId && t.id === paper.testId) ||
+            t.id === `test-from-${paper.id}` ||
+            getBaseTestTitle(t.title) === getBaseTestTitle(paper.title)
+          );
+          const isTestPublished = linkedTest ? linkedTest.isPublished !== false : false;
 
-              <h3 className="text-base font-bold text-white">{paper.title}</h3>
-              <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{paper.paperSummary}</p>
-
-              {/* Specs */}
-              <div className="mt-4 grid grid-cols-3 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50 text-center text-xs">
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Questions</span>
-                  <span className="font-bold text-white">{paper.totalQuestions}</span>
-                </div>
-                <div className="border-x border-slate-700/50">
-                  <span className="text-[10px] text-slate-400 block">Duration</span>
-                  <span className="font-bold text-emerald-400">{paper.durationMinutes}m</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Negative</span>
-                  <span className="font-bold text-rose-400">{paper.negativeMarkingRatio}</span>
-                </div>
-              </div>
-
-              {/* Subject Breakdown */}
-              <div className="mt-3 text-xs space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Subject Weightages
-                </span>
-                {paper.subjectsWeightage.slice(0, 3).map((sw, i) => (
-                  <div key={i} className="flex justify-between text-[11px] text-slate-300">
-                    <span>{sw.subject}</span>
-                    <span className="text-emerald-400 font-mono font-bold">{sw.percentage}%</span>
+          return (
+            <div
+              key={paper.id}
+              className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-emerald-400 border border-slate-700">
+                      {paper.examCategory}
+                    </span>
+                    {linkedTest ? (
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center space-x-1 ${
+                          isTestPublished
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${isTestPublished ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                        <span>{isTestPublished ? 'Live in Catalog' : 'Draft / Unpublished'}</span>
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800/80 text-slate-400 border border-slate-700">
+                        Archived Only
+                      </span>
+                    )}
                   </div>
-                ))}
+                  <span className="text-xs text-slate-400 flex items-center space-x-1 font-semibold">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Exam Year: {paper.year}</span>
+                  </span>
+                </div>
+
+                <h3 className="text-base font-bold text-white">{paper.title}</h3>
+                <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{paper.paperSummary}</p>
+
+                {/* Specs */}
+                <div className="mt-4 grid grid-cols-3 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50 text-center text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Questions</span>
+                    <span className="font-bold text-white">{paper.totalQuestions}</span>
+                  </div>
+                  <div className="border-x border-slate-700/50">
+                    <span className="text-[10px] text-slate-400 block">Duration</span>
+                    <span className="font-bold text-emerald-400">{paper.durationMinutes}m</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Negative</span>
+                    <span className="font-bold text-rose-400">{paper.negativeMarkingRatio}</span>
+                  </div>
+                </div>
+
+                {/* Subject Breakdown */}
+                <div className="mt-3 text-xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Subject Weightages
+                  </span>
+                  {paper.subjectsWeightage.slice(0, 3).map((sw, i) => (
+                    <div key={i} className="flex justify-between text-[11px] text-slate-300">
+                      <span>{sw.subject}</span>
+                      <span className="text-emerald-400 font-mono font-bold">{sw.percentage}%</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-              <button
-                onClick={() => onDeletePYP(paper.id)}
-                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition text-xs flex items-center space-x-1 cursor-pointer"
-                title="Remove paper from repository"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Remove</span>
-              </button>
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                <button
+                  onClick={() => onDeletePYP(paper.id)}
+                  className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition text-xs flex items-center space-x-1 cursor-pointer"
+                  title="Remove paper from repository"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Remove</span>
+                </button>
 
-              <div className="flex items-center space-x-2">
-                {onStartTest && (
+                <div className="flex items-center space-x-2">
+                  {onStartTest && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const testToRun: MockTest = linkedTest || {
+                          id: paper.linkedMockTestId || `test-from-${paper.id}`,
+                          title: `${paper.title} (Official Simulation)`,
+                          category: paper.examCategory,
+                          description: paper.paperSummary,
+                          durationMinutes: paper.durationMinutes,
+                          questionCount: paper.totalQuestions,
+                          marksPerQuestion: paper.examCategory === 'CGPSC' ? 2.0 : 1.0,
+                          negativeMarksPerQuestion: paper.examCategory === 'CGPSC' ? 0.667 : 0.333,
+                          sections: [{ id: `sec-${paper.id}`, name: 'Official Paper', questionIds: paper.linkedQuestionIds || [] }],
+                          attemptsCount: 0,
+                          isPublished: true,
+                          createdAt: new Date().toISOString(),
+                        };
+                        onStartTest(testToRun);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black transition flex items-center space-x-1 shadow-sm cursor-pointer active:scale-95"
+                      title="Start Live Timed Exam for this Paper"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-slate-950" />
+                      <span>Give Test</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
-                      const testToRun: MockTest = {
-                        id: paper.linkedMockTestId || `test-from-${paper.id}`,
-                        title: `${paper.title} (Official Simulation)`,
-                        category: paper.examCategory,
-                        description: paper.paperSummary,
-                        durationMinutes: paper.durationMinutes,
-                        questionCount: paper.totalQuestions,
-                        marksPerQuestion: paper.examCategory === 'CGPSC' ? 2.0 : 1.0,
-                        negativeMarksPerQuestion: paper.examCategory === 'CGPSC' ? 0.667 : 0.333,
-                        sections: [{ id: `sec-${paper.id}`, name: 'Official Paper', questionIds: paper.linkedQuestionIds || [] }],
-                        attemptsCount: 0,
-                        isPublished: true,
-                        createdAt: new Date().toISOString(),
-                      };
-                      onStartTest(testToRun);
+                      if (linkedTest && onTogglePublishTest) {
+                        onTogglePublishTest(linkedTest.id);
+                      } else {
+                        handleConvert(paper);
+                      }
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black transition flex items-center space-x-1 shadow-sm cursor-pointer active:scale-95"
-                    title="Start Live Timed Exam for this Paper"
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer border ${
+                      isTestPublished
+                        ? 'bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border-slate-700'
+                        : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
+                    }`}
+                    title={isTestPublished ? 'Hide from student catalog' : 'Publish to student catalog'}
                   >
-                    <Play className="w-3.5 h-3.5 fill-slate-950" />
-                    <span>Give Test</span>
+                    {isTestPublished ? (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Unpublish</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Publish Test</span>
+                      </>
+                    )}
                   </button>
-                )}
-
-                <button
-                  onClick={() => handleConvert(paper)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
-                  title="Generate or Re-link Mock Test"
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Publish Test</span>
-                </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Add PYP Modal */}

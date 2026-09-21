@@ -165,14 +165,15 @@ async function startServer() {
 
   // 5. Mock Tests CRUD
   app.get('/api/tests', (req, res) => {
-    const { category } = req.query;
+    const { category, publishedOnly } = req.query;
     const seen = new Set<string>();
     let list = mockTests.filter(t => {
       if (!t || !t.id || seen.has(t.id)) return false;
       seen.add(t.id);
+      if (publishedOnly === 'true' && t.isPublished === false) return false;
       return true;
     });
-    if (category) {
+    if (category && category !== 'ALL') {
       list = list.filter(t => t.category === category);
     }
     res.json({ success: true, tests: list });
@@ -198,6 +199,31 @@ async function startServer() {
       success: true,
       test,
       questions: testQuestions,
+    });
+  });
+
+  app.put('/api/tests/:id', (req, res) => {
+    const { id } = req.params;
+    const idx = mockTests.findIndex(t => t.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: 'Test not found' });
+    }
+    mockTests[idx] = {
+      ...mockTests[idx],
+      ...req.body,
+      id, // protect ID
+    };
+    res.json({ success: true, test: mockTests[idx] });
+  });
+
+  app.delete('/api/tests/:id', (req, res) => {
+    const { id } = req.params;
+    const beforeCount = mockTests.length;
+    mockTests = mockTests.filter(t => t.id !== id);
+    res.json({
+      success: true,
+      deleted: beforeCount !== mockTests.length,
+      message: 'Test deleted successfully',
     });
   });
 
@@ -642,19 +668,36 @@ async function startServer() {
       lower.includes('तीजा') || lower.includes('पोला') || lower.includes('हरेली') || lower.includes('छेरछेरा') ||
       lower.includes('भूमकाल') || lower.includes('bhumkal') ||
       lower.includes('तारापुर विद्रोह') || lower.includes('काकतीय') || lower.includes('kakatiya') ||
-      lower.includes('गोधन न्याय') || lower.includes('सुराजी गांव') ||
-      lower.includes('मैनपाट') || lower.includes('सामरीपाट') ||
+      lower.includes('गोधन न्याय') || lower.includes('सुराजी गांव') || lower.includes('महतारी वंदन') ||
+      lower.includes('मैनपाट') || lower.includes('सामरीपाट') || lower.includes('गौरलाटा') ||
       lower.includes('दंतेवाड़ा') || lower.includes('कांकेर') || lower.includes('सुकमा') || lower.includes('धमतरी') ||
       lower.includes('कवर्धा') || lower.includes('दुर्ग') || lower.includes('कोरबा') || lower.includes('रायगढ़') ||
-      lower.includes('जशपुर') || lower.includes('राजनांदगांव') || lower.includes('जांजगीर');
+      lower.includes('जशपुर') || lower.includes('राजनांदगांव') || lower.includes('जांजगीर') || lower.includes('कोरिया') ||
+      lower.includes('बलरामपुर') || lower.includes('सूरजपुर') || lower.includes('बेमेतरा') || lower.includes('बालोद') ||
+      lower.includes('गरियाबंद') || lower.includes('महासमुंद') || lower.includes('मुंगेली') || lower.includes('गौरेला') ||
+      lower.includes('मोहला') || lower.includes('सारंगढ़') || lower.includes('खैरागढ़') || lower.includes('मनेंद्रगढ़') ||
+      lower.includes('सक्ती') || lower.includes('दल्ली राजहरा') || lower.includes('बैलाडीला');
+
+    // Explicit India GS geographical, historical, cultural, and national markers
+    const hasIndiaIdentifier =
+      lower.includes('भारत') || lower.includes('india') || lower.includes('indian') ||
+      lower.includes('भारतीय') || lower.includes('राष्ट्रीय') || lower.includes('national') ||
+      lower.includes('केंद्र') || lower.includes('central') || lower.includes('union') ||
+      lower.includes('संसद') || lower.includes('parliament') || lower.includes('लोकसभा') ||
+      lower.includes('राज्यसभा') || lower.includes('राष्ट्रपति') || lower.includes('supreme court') ||
+      lower.includes('हड़प्पा') || lower.includes('सिंधु घाटी') || lower.includes('मौर्य') ||
+      lower.includes('मुगल') || lower.includes('गांधी') || lower.includes('हिमालय') ||
+      lower.includes('गंगा') || lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') ||
+      lower.includes('आरबीआई') || lower.includes('rbi') || lower.includes('इसरो') || lower.includes('isro');
 
     if (hasCGIdentifier) {
       if (
         lower.includes('कलचुरी') || lower.includes('kalchuri') ||
         lower.includes('रतनपुर') || lower.includes('तुम्माण') ||
-        lower.includes('मराठा') || lower.includes('विद्रोह') || lower.includes('revolt') ||
-        lower.includes('भूमकाल') || lower.includes('काकतीय') || lower.includes('गठन') ||
-        lower.includes('राज्य स्थापना') || lower.includes('रियासत')
+        lower.includes('मराठा') || lower.includes('भूमकाल') || lower.includes('काकतीय') ||
+        lower.includes('विद्रोह') || lower.includes('revolt') || lower.includes('गठन') ||
+        lower.includes('राज्य स्थापना') || lower.includes('रियासत') || lower.includes('वीर नारायण') ||
+        lower.includes('सोनाखान') || lower.includes('गुंडाधूर') || lower.includes('सत्याग्रह')
       ) {
         return {
           subject: 'Chhattisgarh General Studies',
@@ -666,9 +709,9 @@ async function startServer() {
       if (
         lower.includes('जलप्रपात') || lower.includes('waterfall') ||
         lower.includes('नदी') || lower.includes('river') ||
-        lower.includes('महानदी') || lower.includes('इंद्रावती') || lower.includes('शिवनाथ') ||
-        lower.includes('चित्रकोट') || lower.includes('तीरथगढ़') ||
-        lower.includes('खनिज') || lower.includes('mineral') ||
+        lower.includes('महानदी') || lower.includes('इंद्रावती') || lower.includes('शिवनाथ') || lower.includes('हसदेव') ||
+        lower.includes('चित्रकोट') || lower.includes('तीरथगढ़') || lower.includes('मैनपाट') || lower.includes('सामरीपाट') ||
+        lower.includes('खनिज') || lower.includes('mineral') || lower.includes('कोयला') || lower.includes('लौह अयस्क') ||
         lower.includes('अभयारण्य') || lower.includes('राष्ट्रीय उद्यान') || lower.includes('कांगेर घाटी')
       ) {
         return {
@@ -681,9 +724,10 @@ async function startServer() {
       if (
         lower.includes('जनजाति') || lower.includes('tribe') ||
         lower.includes('गोंड') || lower.includes('बैगा') || lower.includes('माड़िया') || lower.includes('मुरिया') ||
-        lower.includes('दशहरा') || lower.includes('बस्तर') || lower.includes('नृत्य') ||
-        lower.includes('करमा') || lower.includes('पंथी') || lower.includes('राउत') ||
-        lower.includes('दंतेश्वरी') || lower.includes('मड़ई') || lower.includes('हरेली') || lower.includes('पोला')
+        lower.includes('दशहरा') || lower.includes('बस्तर') || lower.includes('नृत्य') || lower.includes('dance') ||
+        lower.includes('करमा') || lower.includes('पंथी') || lower.includes('राउत') || lower.includes('पंडवानी') ||
+        lower.includes('दंतेश्वरी') || lower.includes('मड़ई') || lower.includes('हरेली') || lower.includes('पोला') ||
+        lower.includes('छेरछेरा') || lower.includes('घोटुल') || lower.includes('मेला')
       ) {
         return {
           subject: 'Chhattisgarh General Studies',
@@ -719,7 +763,8 @@ async function startServer() {
       lower.includes('नियंत्रक एवं महालेखा') || lower.includes('cag') ||
       lower.includes('संघ लोक सेवा') || lower.includes('upsc') ||
       lower.includes('वित्त आयोग') || lower.includes('finance commission') ||
-      lower.includes('संविधान संशोधन') || lower.includes('amendment')
+      lower.includes('संविधान संशोधन') || lower.includes('amendment') ||
+      lower.includes('न्यायपालिका') || lower.includes('judiciary')
     ) {
       return {
         subject: 'India General Studies',
@@ -732,20 +777,21 @@ async function startServer() {
     if (
       lower.includes('हड़प्पा') || lower.includes('harappa') ||
       lower.includes('सिंधु घाटी') || lower.includes('indus valley') ||
-      lower.includes('मोहनजोदड़ो') || lower.includes('वैदिक काल') ||
+      lower.includes('मोहनजोदड़ो') || lower.includes('वैदिक काल') || lower.includes('vedic') ||
       lower.includes('ऋग्वेद') || lower.includes('महाजनपद') ||
-      lower.includes('बौद्ध धर्म') || lower.includes('जैन धर्म') ||
+      lower.includes('बौद्ध धर्म') || lower.includes('buddhism') || lower.includes('जैन धर्म') || lower.includes('jainism') ||
       lower.includes('मौर्य') || lower.includes('maurya') || lower.includes('अशोक') || lower.includes('ashoka') ||
       lower.includes('गुप्त काल') || lower.includes('gupta') || lower.includes('समुद्रगुप्त') ||
-      lower.includes('दिल्ली सल्तनत') || lower.includes('delhi sultanate') || lower.includes('खिलजी') ||
+      lower.includes('दिल्ली सल्तनत') || lower.includes('delhi sultanate') || lower.includes('खिलजी') || lower.includes('तुगलक') ||
       lower.includes('मुगल') || lower.includes('mughal') || lower.includes('बाबर') || lower.includes('अकबर') ||
-      lower.includes('शाहजहां') || lower.includes('औरंगजेब') ||
+      lower.includes('शाहजहां') || lower.includes('औरंगजेब') || lower.includes('शिवाजी') ||
       lower.includes('1857') || lower.includes('सिपाही विद्रोह') ||
       lower.includes('कांग्रेस') || lower.includes('inc') ||
       lower.includes('गांधी') || lower.includes('gandhi') ||
       lower.includes('चंपारण') || lower.includes('असहयोग') || lower.includes('सविनय अवज्ञा') || lower.includes('भारत छोड़ो') ||
-      lower.includes('सुभाष चंद्र बोस') || lower.includes('भगत सिंह') ||
-      lower.includes('ईस्ट इंडिया कंपनी') || lower.includes('प्लासी') || lower.includes('बक्सर')
+      lower.includes('सुभाष चंद्र बोस') || lower.includes('भगत सिंह') || lower.includes('आजाद हिंद') ||
+      lower.includes('ईस्ट इंडिया कंपनी') || lower.includes('प्लासी') || lower.includes('बक्सर') ||
+      lower.includes('वायसराय') || lower.includes('गवर्नर जनरल')
     ) {
       return {
         subject: 'India General Studies',
@@ -758,14 +804,16 @@ async function startServer() {
     if (
       lower.includes('हिमालय') || lower.includes('himalaya') ||
       lower.includes('गंगा नदी') || lower.includes('ganga') ||
-      lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') || lower.includes('सिंधु नदी') ||
+      lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') || lower.includes('brahmaputra') ||
+      lower.includes('सिंधु नदी') || lower.includes('indus river') ||
       lower.includes('गोदावरी') || lower.includes('कावेरी') || lower.includes('कृष्णा नदी') ||
       lower.includes('नर्मदा') || lower.includes('ताप्ती') ||
       lower.includes('पश्चिमी घाट') || lower.includes('western ghats') ||
       lower.includes('पूर्वी घाट') || lower.includes('मानसून') || lower.includes('monsoon') ||
       lower.includes('कर्क रेखा') || lower.includes('tropic of cancer') ||
       lower.includes('अंडमान') || lower.includes('andaman') || lower.includes('निकोबार') ||
-      lower.includes('लक्षद्वीप') || lower.includes('थार मरुस्थल') || lower.includes('नीलगिरी') || lower.includes('सुंदरवन')
+      lower.includes('लक्षद्वीप') || lower.includes('lakshadweep') || lower.includes('थार मरुस्थल') ||
+      lower.includes('नीलगिरी') || lower.includes('सुंदरवन') || lower.includes('अरावली')
     ) {
       return {
         subject: 'India General Studies',
@@ -776,13 +824,34 @@ async function startServer() {
     }
 
     if (
+      lower.includes('रिजर्व बैंक') || lower.includes('rbi') ||
+      lower.includes('रेपो रेट') || lower.includes('repo rate') ||
+      lower.includes('मौद्रिक नीति') || lower.includes('monetary policy') ||
+      lower.includes('पंचवर्षीय योजना') || lower.includes('five year plan') ||
+      lower.includes('नीति आयोग') || lower.includes('niti aayog') ||
+      lower.includes('सकल घरेलू उत्पाद') || lower.includes('gdp') ||
+      lower.includes('मुद्रास्फीति') || lower.includes('inflation') ||
+      lower.includes('राजकोषीय घाटा') || lower.includes('fiscal deficit') ||
+      lower.includes('सेबी') || lower.includes('sebi') || lower.includes('नाबार्ड') || lower.includes('nabard')
+    ) {
+      return {
+        subject: 'India General Studies',
+        topic: 'Indian Economy & Development',
+        chapterName: 'Indian Economy & Development (भारतीय अर्थव्यवस्था)',
+        subtopic: lower.includes('rbi') || lower.includes('बैंक') ? 'Banking & Monetary Policy' : 'Economic Planning & Indicators'
+      };
+    }
+
+    if (
       lower.includes('नोबेल') || lower.includes('nobel') ||
       lower.includes('भारत रत्न') || lower.includes('bharat ratna') ||
       lower.includes('पद्म') || lower.includes('padma') ||
       lower.includes('इसरो') || lower.includes('isro') || lower.includes('चंद्रयान') || lower.includes('chandrayaan') ||
       lower.includes('डीआरडीओ') || lower.includes('drdo') ||
       lower.includes('संयुक्त राष्ट्र') || lower.includes('united nations') ||
-      lower.includes('g20') || lower.includes('brics')
+      lower.includes('g20') || lower.includes('brics') ||
+      lower.includes('विश्व बैंक') || lower.includes('world bank') ||
+      lower.includes('ओलंपिक') || lower.includes('olympic')
     ) {
       return {
         subject: 'India General Studies',
@@ -792,18 +861,29 @@ async function startServer() {
       };
     }
 
+    if (hasIndiaIdentifier) {
+      return {
+        subject: 'India General Studies',
+        topic: 'National Current Affairs & General Knowledge',
+        chapterName: 'Current Affairs & GK (समसामयिक घटनाएं एवं सामान्य ज्ञान)',
+        subtopic: 'General India Studies'
+      };
+    }
+
     // Default fallback
     let normalizedDefaultSubject = 'Chhattisgarh General Studies';
     if (defaultSubject) {
-      if (defaultSubject.includes('Central') || defaultSubject.includes('CENTRAL') || defaultSubject.includes('Aptitude')) {
+      const clean = defaultSubject.trim();
+      if (clean.includes('Central') || clean.includes('CENTRAL') || clean.includes('India GS') || clean.includes('National')) {
         normalizedDefaultSubject = 'India General Studies';
-      } else if (defaultSubject.includes('CGPSC') || defaultSubject.includes('Special Knowledge')) {
+      } else if (clean.includes('CGPSC') || clean.includes('Special Knowledge') || clean.includes('Chhattisgarh')) {
         normalizedDefaultSubject = 'Chhattisgarh General Studies';
       } else {
-        normalizedDefaultSubject = defaultSubject
+        normalizedDefaultSubject = clean
           .replace('General Science & Computer Knowledge', 'General Science')
           .replace('General Mental Ability & Reasoning', 'Quantitative Aptitude')
-          .replace('General Hindi & Chhattisgarhi Language', 'General Hindi');
+          .replace('General Hindi & Chhattisgarhi Language', 'General Hindi')
+          .replace('General Mental Ability', 'Quantitative Aptitude');
       }
     }
 
@@ -905,16 +985,24 @@ async function startServer() {
 
         // Auto-classify chapter & topic, or honor user-supplied chapter in JSON
         const defaultSubj = targetCategory === 'CGPSC'
-          ? 'Chhattisgarh General Studies (CGPSC)'
+          ? 'Chhattisgarh General Studies'
           : targetCategory === 'CENTRAL_EXAMS'
-          ? 'General Studies & Aptitude (Central)'
-          : 'Chhattisgarh Special Knowledge';
+          ? 'India General Studies'
+          : 'Chhattisgarh General Studies';
         const defaultTopic = `${rawExamname} (${year}) Official`;
 
         const combinedText = `${questionHindi} ${questionEnglish} ${explanation}`;
         const classification = autoClassifyChapter(combinedText, defaultSubj, defaultTopic);
 
-        const assignedSubject = String(item.subject || classification.subject);
+        const rawSubj = String(item.subject || '').trim();
+        const assignedSubject = rawSubj ? (
+          rawSubj.includes('Central') || rawSubj.includes('CENTRAL') || rawSubj.includes('India GS') ? 'India General Studies' :
+          rawSubj.includes('CGPSC') || rawSubj.includes('Special Knowledge') || rawSubj.includes('Chhattisgarh') ? 'Chhattisgarh General Studies' :
+          rawSubj.replace('General Science & Computer Knowledge', 'General Science')
+                 .replace('General Mental Ability & Reasoning', 'Quantitative Aptitude')
+                 .replace('General Hindi & Chhattisgarhi Language', 'General Hindi')
+                 .replace('General Mental Ability', 'Quantitative Aptitude')
+        ) : classification.subject;
         const assignedTopic = String(item.topic || classification.topic);
         const assignedChapterName = String(item.chapterName || item.chapter || classification.chapterName || assignedTopic);
         const assignedSubtopic = String(item.subtopic || classification.subtopic || `Question #${sno}`);
@@ -1114,14 +1202,11 @@ async function startServer() {
   // 9. AI-Powered Smart Mock Test Creator
   app.post('/api/ai/generate-test', async (req, res) => {
     try {
-      const {
-        examCategory = 'CGSSB',
-        targetSubjects = [],
-        pypReferenceId,
-        questionCount = 10,
-        difficultyRatio = { Easy: 40, Medium: 40, Hard: 20 },
-        testTitle,
-      } = req.body;
+      const examCategory = (req.body.examCategory || req.body.category || 'CGSSB') as ExamCategory;
+      const targetSubjects: string[] = req.body.targetSubjects || req.body.subjects || [];
+      const pypReferenceId = req.body.pypReferenceId || req.body.referencePYPId;
+      const questionCount = Number(req.body.questionCount || 10);
+      const testTitle = req.body.testTitle || req.body.title;
 
       const pattern = EXAM_PATTERNS[examCategory as ExamCategory] || EXAM_PATTERNS.CGSSB;
       const referencedPyp = pypReferenceId ? pypPapers.find(p => p.id === pypReferenceId) : null;
@@ -1144,7 +1229,12 @@ async function startServer() {
         try {
           const prompt = `You are a senior question paper setter for ${pattern.name}.
 We are assembling an authentic mock test matching the historical pattern of: ${referencedPyp ? referencedPyp.title : pattern.name}.
-Target Subjects: ${targetSubjects.length > 0 ? targetSubjects.join(', ') : 'Chhattisgarh Special Knowledge, Reasoning, Language, Computers'}.
+Target Subjects: ${targetSubjects.length > 0 ? targetSubjects.join(', ') : 'India General Studies, Chhattisgarh General Studies, Quantitative Aptitude, Reasoning Ability, General Science, Computer Knowledge, General Hindi, Chhattisgarhi Language, General English'}.
+IMPORTANT SUBJECT RULES:
+- "India General Studies" and "Chhattisgarh General Studies" are strictly separate subjects.
+- For India General Studies, topics are: Indian Polity & Constitution, Indian History & National Movement, Geography of India, Indian Economy & Development, National Current Affairs & GK.
+- For Chhattisgarh General Studies, topics are: History of Chhattisgarh, Geography & Natural Resources, Culture, Tribes & Tourism, Administration & Economy.
+- Do NOT combine subjects with '&'. Separate subjects cleanly: General Science, Computer Knowledge, Quantitative Aptitude, Reasoning Ability, General Hindi, Chhattisgarhi Language.
 Exam Pattern Rules:
 - Marks per right question: ${pattern.marksPerCorrect}
 - Negative marking per wrong answer: ${pattern.negativeMarksPerWrong}
@@ -1177,29 +1267,42 @@ Respond strictly with a JSON object having key "questions" containing an array o
           const jsonText = response.text?.trim() || '{}';
           const parsed = JSON.parse(jsonText);
           if (Array.isArray(parsed.questions)) {
-            generatedFreshQuestions = parsed.questions.map((item: any, idx: number) => ({
-              id: `q-ai-${Date.now()}-${idx}`,
-              subject: item.subject || 'Chhattisgarh Special Knowledge',
-              topic: item.topic || 'General Topic',
-              subtopic: item.subtopic || 'General Subtopic',
-              difficulty: (['Easy', 'Medium', 'Hard'].includes(item.difficulty) ? item.difficulty : 'Medium') as any,
-              category: examCategory as ExamCategory,
-              questionText: item.questionText || 'Sample competitive question',
-              questionHindi: item.questionHindi || '',
-              options: Array.isArray(item.options) && item.options.length === 4 ? item.options : [
-                { id: 'A', text: 'Option A' },
-                { id: 'B', text: 'Option B' },
-                { id: 'C', text: 'Option C' },
-                { id: 'D', text: 'Option D' },
-              ],
-              correctOption: item.correctOption || 'A',
-              marks: pattern.marksPerCorrect,
-              negativeMarks: pattern.negativeMarksPerWrong,
-              explanation: item.explanation || 'Detailed analysis step.',
-              explanationHindi: item.explanationHindi || '',
-              pypSource: `AI PYP Synthesizer (${referencedPyp ? referencedPyp.year : '2024'})`,
-              createdAt: new Date().toISOString().split('T')[0],
-            }));
+            generatedFreshQuestions = parsed.questions.map((item: any, idx: number) => {
+              const rawSubj = String(item.subject || '').trim();
+              const cleanSubj = rawSubj.includes('Central') || rawSubj.includes('India GS') || rawSubj.includes('National')
+                ? 'India General Studies'
+                : rawSubj.includes('CGPSC') || rawSubj.includes('Special Knowledge') || rawSubj.includes('Chhattisgarh')
+                ? 'Chhattisgarh General Studies'
+                : rawSubj.replace('General Science & Computer Knowledge', 'General Science')
+                    .replace('General Mental Ability & Reasoning', 'Quantitative Aptitude')
+                    .replace('General Hindi & Chhattisgarhi Language', 'General Hindi')
+                    .replace('General Mental Ability', 'Quantitative Aptitude')
+                    || 'Chhattisgarh General Studies';
+
+              return {
+                id: `q-ai-${Date.now()}-${idx}`,
+                subject: cleanSubj,
+                topic: item.topic || 'General Topic',
+                subtopic: item.subtopic || 'General Subtopic',
+                difficulty: (['Easy', 'Medium', 'Hard'].includes(item.difficulty) ? item.difficulty : 'Medium') as any,
+                category: examCategory as ExamCategory,
+                questionText: item.questionText || 'Sample competitive question',
+                questionHindi: item.questionHindi || '',
+                options: Array.isArray(item.options) && item.options.length === 4 ? item.options : [
+                  { id: 'A', text: 'Option A' },
+                  { id: 'B', text: 'Option B' },
+                  { id: 'C', text: 'Option C' },
+                  { id: 'D', text: 'Option D' },
+                ],
+                correctOption: item.correctOption || 'A',
+                marks: pattern.marksPerCorrect,
+                negativeMarks: pattern.negativeMarksPerWrong,
+                explanation: item.explanation || 'Detailed analysis step.',
+                explanationHindi: item.explanationHindi || '',
+                pypSource: `AI PYP Synthesizer (${referencedPyp ? referencedPyp.year : '2024'})`,
+                createdAt: new Date().toISOString().split('T')[0],
+              };
+            });
             // Add generated questions to main question bank
             questions.push(...generatedFreshQuestions);
           }
@@ -1258,6 +1361,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
       res.status(201).json({
         success: true,
         test: newTest,
+        questions: finalSelectedQuestions,
         assembledQuestionCount: finalSelectedQuestions.length,
         aiGeneratedCount: generatedFreshQuestions.length,
         bankRetrievedCount: finalSelectedQuestions.length - generatedFreshQuestions.length,

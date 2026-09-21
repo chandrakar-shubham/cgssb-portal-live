@@ -6,6 +6,7 @@ import {
   BulkImportQuestion,
   PYQAppearance
 } from '../types';
+import { normalizeSubjectName } from './taxonomyMigration';
 
 export type ExamPreset = 'CGSSB' | 'CGPSC' | 'HOSTEL_WARDEN' | 'CG_TEACHER';
 
@@ -295,7 +296,7 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
   }
 
   // 8. CHHATTISGARH GENERAL STUDIES (विशिष्ट छत्तीसगढ़ सामान्य ज्ञान)
-  // Check for distinct Chhattisgarh identifiers
+  // Distinct Chhattisgarh geographical, historical, cultural, and political markers
   const hasCGIdentifier =
     lower.includes('छत्तीसगढ़') || lower.includes('chhattisgarh') ||
     lower.includes('कलचुरी') || lower.includes('kalchuri') ||
@@ -322,19 +323,37 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
     lower.includes('तीजा') || lower.includes('पोला') || lower.includes('हरेली') || lower.includes('छेरछेरा') ||
     lower.includes('भूमकाल') || lower.includes('bhumkal') ||
     lower.includes('तारापुर विद्रोह') || lower.includes('काकतीय') || lower.includes('kakatiya') ||
-    lower.includes('गोधन न्याय') || lower.includes('सुराजी गांव') ||
-    lower.includes('मैनपाट') || lower.includes('सामरीपाट') ||
+    lower.includes('गोधन न्याय') || lower.includes('सुराजी गांव') || lower.includes('महतारी वंदन') ||
+    lower.includes('मैनपाट') || lower.includes('सामरीपाट') || lower.includes('गौरलाटा') ||
     lower.includes('दंतेवाड़ा') || lower.includes('कांकेर') || lower.includes('सुकमा') || lower.includes('धमतरी') ||
     lower.includes('कवर्धा') || lower.includes('दुर्ग') || lower.includes('कोरबा') || lower.includes('रायगढ़') ||
-    lower.includes('जशपुर') || lower.includes('राजनांदगांव') || lower.includes('जांजगीर');
+    lower.includes('जशपुर') || lower.includes('राजनांदगांव') || lower.includes('जांजगीर') || lower.includes('कोरिया') ||
+    lower.includes('बलरामपुर') || lower.includes('सूरजपुर') || lower.includes('बेमेतरा') || lower.includes('बालोद') ||
+    lower.includes('गरियाबंद') || lower.includes('महासमुंद') || lower.includes('मुंगेली') || lower.includes('गौरेला') ||
+    lower.includes('मोहला') || lower.includes('सारंगढ़') || lower.includes('खैरागढ़') || lower.includes('मनेंद्रगढ़') ||
+    lower.includes('सक्ती') || lower.includes('दल्ली राजहरा') || lower.includes('बैलाडीला');
 
+  // Explicit India GS geographical, historical, cultural, and national markers
+  const hasIndiaIdentifier =
+    lower.includes('भारत') || lower.includes('india') || lower.includes('indian') ||
+    lower.includes('भारतीय') || lower.includes('राष्ट्रीय') || lower.includes('national') ||
+    lower.includes('केंद्र') || lower.includes('central') || lower.includes('union') ||
+    lower.includes('संसद') || lower.includes('parliament') || lower.includes('लोकसभा') ||
+    lower.includes('राज्यसभा') || lower.includes('राष्ट्रपति') || lower.includes('supreme court') ||
+    lower.includes('हड़प्पा') || lower.includes('सिंधु घाटी') || lower.includes('मौर्य') ||
+    lower.includes('मुगल') || lower.includes('गांधी') || lower.includes('हिमालय') ||
+    lower.includes('गंगा') || lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') ||
+    lower.includes('आरबीआई') || lower.includes('rbi') || lower.includes('इसरो') || lower.includes('isro');
+
+  // If Chhattisgarh identifiers are present AND no overpowering national-only context
   if (hasCGIdentifier) {
     if (
       lower.includes('कलचुरी') || lower.includes('kalchuri') ||
       lower.includes('रतनपुर') || lower.includes('तुम्माण') ||
-      lower.includes('मराठा') || lower.includes('विद्रोह') || lower.includes('revolt') ||
-      lower.includes('भूमकाल') || lower.includes('काकतीय') || lower.includes('गठन') ||
-      lower.includes('राज्य स्थापना') || lower.includes('रियासत')
+      lower.includes('मराठा') || lower.includes('भूमकाल') || lower.includes('काकतीय') ||
+      lower.includes('विद्रोह') || lower.includes('revolt') || lower.includes('गठन') ||
+      lower.includes('राज्य स्थापना') || lower.includes('रियासत') || lower.includes('वीर नारायण') ||
+      lower.includes('सोनाखान') || lower.includes('गुंडाधूर') || lower.includes('सत्याग्रह')
     ) {
       return {
         subject: 'Chhattisgarh General Studies',
@@ -346,9 +365,9 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
     if (
       lower.includes('जलप्रपात') || lower.includes('waterfall') ||
       lower.includes('नदी') || lower.includes('river') ||
-      lower.includes('महानदी') || lower.includes('इंद्रावती') || lower.includes('शिवनाथ') ||
-      lower.includes('चित्रकोट') || lower.includes('तीरथगढ़') ||
-      lower.includes('खनिज') || lower.includes('mineral') ||
+      lower.includes('महानदी') || lower.includes('इंद्रावती') || lower.includes('शिवनाथ') || lower.includes('हसदेव') ||
+      lower.includes('चित्रकोट') || lower.includes('तीरथगढ़') || lower.includes('मैनपाट') || lower.includes('सामरीपाट') ||
+      lower.includes('खनिज') || lower.includes('mineral') || lower.includes('कोयला') || lower.includes('लौह अयस्क') ||
       lower.includes('अभयारण्य') || lower.includes('राष्ट्रीय उद्यान') || lower.includes('कांगेर घाटी')
     ) {
       return {
@@ -361,9 +380,10 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
     if (
       lower.includes('जनजाति') || lower.includes('tribe') ||
       lower.includes('गोंड') || lower.includes('बैगा') || lower.includes('माड़िया') || lower.includes('मुरिया') ||
-      lower.includes('दशहरा') || lower.includes('बस्तर') || lower.includes('नृत्य') ||
-      lower.includes('करमा') || lower.includes('पंथी') || lower.includes('राउत') ||
-      lower.includes('दंतेश्वरी') || lower.includes('मड़ई') || lower.includes('हरेली') || lower.includes('पोला')
+      lower.includes('दशहरा') || lower.includes('बस्तर') || lower.includes('नृत्य') || lower.includes('dance') ||
+      lower.includes('करमा') || lower.includes('पंथी') || lower.includes('राउत') || lower.includes('पंडवानी') ||
+      lower.includes('दंतेश्वरी') || lower.includes('मड़ई') || lower.includes('हरेली') || lower.includes('पोला') ||
+      lower.includes('छेरछेरा') || lower.includes('घोटुल') || lower.includes('मेला')
     ) {
       return {
         subject: 'Chhattisgarh General Studies',
@@ -400,7 +420,8 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
     lower.includes('नियंत्रक एवं महालेखा') || lower.includes('cag') ||
     lower.includes('संघ लोक सेवा') || lower.includes('upsc') ||
     lower.includes('वित्त आयोग') || lower.includes('finance commission') ||
-    lower.includes('संविधान संशोधन') || lower.includes('amendment')
+    lower.includes('संविधान संशोधन') || lower.includes('amendment') ||
+    lower.includes('न्यायपालिका') || lower.includes('judiciary')
   ) {
     return {
       subject: 'India General Studies',
@@ -414,20 +435,21 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
   if (
     lower.includes('हड़प्पा') || lower.includes('harappa') ||
     lower.includes('सिंधु घाटी') || lower.includes('indus valley') ||
-    lower.includes('मोहनजोदड़ो') || lower.includes('वैदिक काल') ||
+    lower.includes('मोहनजोदड़ो') || lower.includes('वैदिक काल') || lower.includes('vedic') ||
     lower.includes('ऋग्वेद') || lower.includes('महाजनपद') ||
-    lower.includes('बौद्ध धर्म') || lower.includes('जैन धर्म') ||
+    lower.includes('बौद्ध धर्म') || lower.includes('buddhism') || lower.includes('जैन धर्म') || lower.includes('jainism') ||
     lower.includes('मौर्य') || lower.includes('maurya') || lower.includes('अशोक') || lower.includes('ashoka') ||
     lower.includes('गुप्त काल') || lower.includes('gupta') || lower.includes('समुद्रगुप्त') ||
-    lower.includes('दिल्ली सल्तनत') || lower.includes('delhi sultanate') || lower.includes('खिलजी') ||
+    lower.includes('दिल्ली सल्तनत') || lower.includes('delhi sultanate') || lower.includes('खिलजी') || lower.includes('तुगलक') ||
     lower.includes('मुगल') || lower.includes('mughal') || lower.includes('बाबर') || lower.includes('अकबर') ||
-    lower.includes('शाहजहां') || lower.includes('औरंगजेब') ||
+    lower.includes('शाहजहां') || lower.includes('औरंगजेब') || lower.includes('शिवाजी') ||
     lower.includes('1857') || lower.includes('सिपाही विद्रोह') ||
     lower.includes('कांग्रेस') || lower.includes('inc') ||
     lower.includes('गांधी') || lower.includes('gandhi') ||
     lower.includes('चंपारण') || lower.includes('असहयोग') || lower.includes('सविनय अवज्ञा') || lower.includes('भारत छोड़ो') ||
-    lower.includes('सुभाष चंद्र बोस') || lower.includes('भगत सिंह') ||
-    lower.includes('ईस्ट इंडिया कंपनी') || lower.includes('प्लासी') || lower.includes('बक्सर')
+    lower.includes('सुभाष चंद्र बोस') || lower.includes('भगत सिंह') || lower.includes('आजाद हिंद') ||
+    lower.includes('ईस्ट इंडिया कंपनी') || lower.includes('प्लासी') || lower.includes('बक्सर') ||
+    lower.includes('वायसराय') || lower.includes('गवर्नर जनरल')
   ) {
     return {
       subject: 'India General Studies',
@@ -441,14 +463,16 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
   if (
     lower.includes('हिमालय') || lower.includes('himalaya') ||
     lower.includes('गंगा नदी') || lower.includes('ganga') ||
-    lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') || lower.includes('सिंधु नदी') ||
+    lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') || lower.includes('brahmaputra') ||
+    lower.includes('सिंधु नदी') || lower.includes('indus river') ||
     lower.includes('गोदावरी') || lower.includes('कावेरी') || lower.includes('कृष्णा नदी') ||
     lower.includes('नर्मदा') || lower.includes('ताप्ती') ||
     lower.includes('पश्चिमी घाट') || lower.includes('western ghats') ||
     lower.includes('पूर्वी घाट') || lower.includes('मानसून') || lower.includes('monsoon') ||
     lower.includes('कर्क रेखा') || lower.includes('tropic of cancer') ||
     lower.includes('अंडमान') || lower.includes('andaman') || lower.includes('निकोबार') ||
-    lower.includes('लक्षद्वीप') || lower.includes('थार मरुस्थल') || lower.includes('नीलगिरी') || lower.includes('सुंदरवन')
+    lower.includes('लक्षद्वीप') || lower.includes('lakshadweep') || lower.includes('थार मरुस्थल') ||
+    lower.includes('नीलगिरी') || lower.includes('सुंदरवन') || lower.includes('अरावली')
   ) {
     return {
       subject: 'India General Studies',
@@ -487,7 +511,8 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
     lower.includes('डीआरडीओ') || lower.includes('drdo') ||
     lower.includes('संयुक्त राष्ट्र') || lower.includes('united nations') ||
     lower.includes('g20') || lower.includes('brics') ||
-    lower.includes('विश्व बैंक') || lower.includes('ओलंपिक') || lower.includes('olympic')
+    lower.includes('विश्व बैंक') || lower.includes('world bank') ||
+    lower.includes('ओलंपिक') || lower.includes('olympic')
   ) {
     return {
       subject: 'India General Studies',
@@ -497,18 +522,22 @@ export function autoClassifyChapter(text: string, defaultSubject: string, defaul
     };
   }
 
+  // If India identifier matched any general context without falling into previous blocks
+  if (hasIndiaIdentifier) {
+    return {
+      subject: 'India General Studies',
+      topic: 'National Current Affairs & General Knowledge',
+      chapterName: 'Current Affairs & GK (समसामयिक घटनाएं एवं सामान्य ज्ञान)',
+      subtopic: 'General India Studies'
+    };
+  }
+
   // Clean Default fallback without conjoined names
   let normalizedDefaultSubject = 'Chhattisgarh General Studies';
   if (defaultSubject) {
-    if (defaultSubject.includes('Central') || defaultSubject.includes('CENTRAL') || defaultSubject.includes('Aptitude')) {
-      normalizedDefaultSubject = 'India General Studies';
-    } else if (defaultSubject.includes('CGPSC') || defaultSubject.includes('Special Knowledge')) {
-      normalizedDefaultSubject = 'Chhattisgarh General Studies';
-    } else {
-      normalizedDefaultSubject = defaultSubject
-        .replace('General Science & Computer Knowledge', 'General Science')
-        .replace('General Mental Ability & Reasoning', 'Quantitative Aptitude')
-        .replace('General Hindi & Chhattisgarhi Language', 'General Hindi');
+    const clean = normalizeSubjectName(defaultSubject, text);
+    if (clean) {
+      normalizedDefaultSubject = clean;
     }
   }
 
@@ -597,7 +626,8 @@ export function processBulkImportClientSide({
     const combinedText = `${questionHindi} ${questionEnglish} ${explanation}`;
     const classification = autoClassifyChapter(combinedText, defaultSubj, defaultTopic);
 
-    const assignedSubject = String(item.subject || classification.subject);
+    const rawSubj = String(item.subject || '').trim();
+    const assignedSubject = rawSubj ? normalizeSubjectName(rawSubj, combinedText) : classification.subject;
     const assignedTopic = String(item.topic || classification.topic);
     const assignedChapterName = String(item.chapterName || item.chapter || classification.chapterName || assignedTopic);
     const assignedSubtopic = String(item.subtopic || classification.subtopic || `Question #${sno}`);

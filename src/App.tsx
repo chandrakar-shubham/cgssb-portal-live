@@ -448,10 +448,55 @@ function MainApp() {
     );
   };
 
+  // ADMIN TEST MANAGEMENT ACTIONS
+  const handleTogglePublishTest = async (testId: string) => {
+    const target = tests.find(t => t.id === testId);
+    const nextStatus = target ? target.isPublished === false : false;
+    setTests(prev => prev.map(t => t.id === testId ? { ...t, isPublished: nextStatus } : t));
+    try {
+      await fetch(`/api/tests/${testId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublished: nextStatus }),
+      });
+    } catch (err) {
+      console.warn('Failed to sync publish status with server:', err);
+    }
+  };
+
+  const handleUpdateTest = async (testId: string, updates: Partial<MockTest>) => {
+    setTests(prev => prev.map(t => t.id === testId ? { ...t, ...updates } : t));
+    try {
+      await fetch(`/api/tests/${testId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+    } catch (err) {
+      console.warn('Failed to update test on server:', err);
+    }
+  };
+
+  const handleDeleteTest = async (testId: string) => {
+    setTests(prev => prev.filter(t => t.id !== testId));
+    try {
+      await fetch(`/api/tests/${testId}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.warn('Failed to delete test on server:', err);
+    }
+  };
+
   // ADMIN AI TEST CREATOR PUBLISH ACTION
   const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
     setQuestions(prev => dedupeById([...newQuestions, ...prev]));
     setTests(prev => dedupeById([newTest, ...prev]));
+    fetch('/api/tests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTest),
+    }).catch(() => {});
   };
 
   // 1. IF ACTIVE EXAM RUNNING -> RENDER DEDICATED FULLSCREEN EXAM ENGINE
@@ -524,6 +569,31 @@ function MainApp() {
             onStartTest={handleStartTest}
             onSelectCategory={cat => setSelectedCategory(cat)}
             selectedCategory={selectedCategory}
+            onTogglePublishTest={handleTogglePublishTest}
+            onUpdateTest={handleUpdateTest}
+            onDeleteTest={handleDeleteTest}
+            onAddTest={(newTest: Partial<MockTest>) => {
+              const fullTest: MockTest = {
+                id: newTest.id || `test-${Date.now()}`,
+                title: newTest.title || 'New Mock Test',
+                category: newTest.category || 'CGSSB',
+                description: newTest.description || '',
+                durationMinutes: newTest.durationMinutes || 120,
+                questionCount: newTest.questionCount || 100,
+                marksPerQuestion: newTest.marksPerQuestion || 1.0,
+                negativeMarksPerQuestion: newTest.negativeMarksPerQuestion || 0.333,
+                sections: newTest.sections || [{ id: 'sec-1', name: 'General', questionIds: [] }],
+                attemptsCount: 0,
+                isPublished: newTest.isPublished !== false,
+                createdAt: new Date().toISOString(),
+              };
+              setTests(prev => dedupeById([fullTest, ...prev]));
+              fetch('/api/tests', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fullTest),
+              }).catch(() => {});
+            }}
           />
         )}
 
@@ -558,9 +628,11 @@ function MainApp() {
         {activeTab === 'admin-pyp' && (
           <AdminPYPManager
             pypPapers={pypPapers}
+            tests={tests}
             onAddPYP={handleAddPYP}
             onDeletePYP={handleDeletePYP}
             onConvertPYPToMockTest={handleConvertPYPToMockTest}
+            onTogglePublishTest={handleTogglePublishTest}
             onStartTest={handleStartTest}
             onQuestionsAdded={(newQs) => setQuestions(prev => dedupeById([...newQs, ...prev]))}
             onTestAdded={(newTest) => setTests(prev => dedupeById([newTest, ...prev]))}

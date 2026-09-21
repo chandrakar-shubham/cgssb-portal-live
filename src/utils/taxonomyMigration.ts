@@ -3,11 +3,13 @@ import { autoClassifyChapter } from './pypEngine';
 
 /**
  * Normalizes any legacy or combined subject string into the official separated taxonomy:
- * - "General Mental Ability & Reasoning" -> "Quantitative Aptitude" (Per directive: General Mental Ability must be Quantitative Aptitude)
+ * - "General Mental Ability & Reasoning" -> "Quantitative Aptitude" or "Reasoning" (Per directive: General Mental Ability must be Quantitative Aptitude)
  * - "General Science & Computer Knowledge" -> "Computer Knowledge" or "General Science"
  * - "General Hindi & Chhattisgarhi Language" -> "General Hindi" or "Chhattisgarhi Language"
+ * - "General Hindi & English" -> "General Hindi" or "General English"
  * - "Chhattisgarh Special Knowledge" -> "Chhattisgarh General Studies"
  * - "General Studies & Aptitude (Central)" -> "India General Studies"
+ * - Strictly distinguishes between "India General Studies" and "Chhattisgarh General Studies"
  */
 export function normalizeSubjectName(rawSubject: string, contextText: string = ''): string {
   if (!rawSubject) return 'Chhattisgarh General Studies';
@@ -15,33 +17,32 @@ export function normalizeSubjectName(rawSubject: string, contextText: string = '
   const lower = s.toLowerCase();
   const lowerContext = contextText.toLowerCase();
 
-  // Combined: Science & Computer
-  if (lower.includes('science') && lower.includes('computer')) {
+  // 1. Combined: Science & Computer
+  if (lower.includes('science') && (lower.includes('computer') || lower.includes('कंप्यूटर'))) {
     if (
       lowerContext.includes('computer') || lowerContext.includes('कंप्यूटर') ||
       lowerContext.includes('software') || lowerContext.includes('hardware') ||
       lowerContext.includes('internet') || lowerContext.includes('cpu') ||
-      lowerContext.includes('ram') || lowerContext.includes('ms word') || lowerContext.includes('excel')
+      lowerContext.includes('ram') || lowerContext.includes('rom') ||
+      lowerContext.includes('ms word') || lowerContext.includes('excel') ||
+      lowerContext.includes('browser') || lowerContext.includes('malware')
     ) {
       return 'Computer Knowledge';
     }
     return 'General Science';
   }
 
-  // Combined: Mental Ability & Reasoning
-  if ((lower.includes('mental') || lower.includes('aptitude') || lower.includes('गणित')) && lower.includes('reasoning')) {
-    if (
-      lowerContext.includes('प्रतिशत') || lowerContext.includes('percentage') ||
-      lowerContext.includes('अनुपात') || lowerContext.includes('ratio') ||
-      lowerContext.includes('लाभ') || lowerContext.includes('हानि') ||
-      lowerContext.includes('ब्याज') || lowerContext.includes('औसत') || lowerContext.includes('कार्य')
-    ) {
-      return 'Quantitative Aptitude';
-    }
+  // 2. Combined: Mental Ability & Reasoning / Maths & Reasoning
+  if (
+    (lower.includes('mental') || lower.includes('aptitude') || lower.includes('गणित') || lower.includes('math')) &&
+    (lower.includes('reasoning') || lower.includes('तर्कशक्ति') || lower.includes('रीजनिंग'))
+  ) {
     if (
       lowerContext.includes('कोडिंग') || lowerContext.includes('coding') ||
       lowerContext.includes('रक्त संबंध') || lowerContext.includes('blood') ||
-      lowerContext.includes('दिशा') || lowerContext.includes('कथन')
+      lowerContext.includes('दिशा') || lowerContext.includes('direction') ||
+      lowerContext.includes('कथन') || lowerContext.includes('निष्कर्ष') ||
+      lowerContext.includes('syllogism') || lowerContext.includes('seating')
     ) {
       return 'Reasoning';
     }
@@ -49,41 +50,148 @@ export function normalizeSubjectName(rawSubject: string, contextText: string = '
     return 'Quantitative Aptitude';
   }
 
-  // Direct: General Mental Ability
-  if (lower === 'general mental ability' || lower.includes('मानसिक योग्यता')) {
+  // Direct: General Mental Ability -> Quantitative Aptitude per directive
+  if (
+    lower === 'general mental ability' ||
+    lower === 'mental ability' ||
+    lower.includes('मानसिक योग्यता') ||
+    lower.includes('मानसिक क्षमता') ||
+    lower === 'maths & mental ability'
+  ) {
+    if (
+      lowerContext.includes('कोडिंग') || lowerContext.includes('coding') ||
+      lowerContext.includes('रक्त संबंध') || lowerContext.includes('blood') ||
+      lowerContext.includes('दिशा') || lowerContext.includes('direction')
+    ) {
+      return 'Reasoning';
+    }
     return 'Quantitative Aptitude';
   }
 
-  // Combined: Hindi & Chhattisgarhi Language
+  // 3. Combined: Hindi & Chhattisgarhi Language
   if (lower.includes('hindi') && (lower.includes('chhattisgarhi') || lower.includes('छत्तीसगढ़ी'))) {
     if (
       lowerContext.includes('हाना') || lowerContext.includes('जनउला') ||
-      lowerContext.includes('छत्तीसगढ़ी') || lowerContext.includes('chhattisgarhi')
+      lowerContext.includes('छत्तीसगढ़ी') || lowerContext.includes('chhattisgarhi') ||
+      lowerContext.includes('भाखा') || lowerContext.includes('हलबी') || lowerContext.includes('गोंडी')
     ) {
       return 'Chhattisgarhi Language';
     }
     return 'General Hindi';
   }
 
-  // Legacy CG names
+  // Combined: Hindi & English
+  if (lower.includes('hindi') && lower.includes('english')) {
+    if (
+      lowerContext.includes('synonym') || lowerContext.includes('antonym') ||
+      lowerContext.includes('tense') || lowerContext.includes('preposition') ||
+      lowerContext.includes('comprehension') || lowerContext.includes('english')
+    ) {
+      return 'General English';
+    }
+    return 'General Hindi';
+  }
+
+  // Combined: Language & Computers
+  if (lower.includes('language') && lower.includes('computer')) {
+    return 'Computer Knowledge';
+  }
+
+  // 4. Distinction between India GS and Chhattisgarh GS
+  // Explicit India GS aliases
   if (
+    lower === 'india general studies' ||
+    lower === 'india gs' ||
+    lower === 'indian gs' ||
+    lower === 'general studies & aptitude (central)' ||
+    lower === 'central exams general studies' ||
+    lower === 'current affairs & national gk' ||
+    lower === 'national gk' ||
+    lower === 'indian polity & constitution' ||
+    lower === 'indian history & national movement' ||
+    lower === 'geography of india' ||
+    lower === 'indian economy & development' ||
+    lower === 'national current affairs'
+  ) {
+    return 'India General Studies';
+  }
+
+  // Explicit CG GS aliases
+  if (
+    lower === 'chhattisgarh general studies' ||
+    lower === 'chhattisgarh general studies (cgpsc)' ||
     lower === 'chhattisgarh special knowledge' ||
     lower === 'chhattisgarh special' ||
     lower === 'cg special knowledge' ||
-    lower === 'chhattisgarh general studies (cgpsc)' ||
+    lower === 'cg special' ||
     lower === 'chhattisgarh gs' ||
-    lower === 'cg gs'
+    lower === 'cg gs' ||
+    lower === 'chhattisgarh history & culture' ||
+    lower === 'chhattisgarh geography & economy' ||
+    lower === 'chhattisgarh special & land laws' ||
+    lower === 'cg knowledge & culture'
   ) {
     return 'Chhattisgarh General Studies';
   }
 
-  // Central / India GS
+  // Science variants
   if (
-    lower === 'general studies & aptitude (central)' ||
-    lower === 'central exams general studies' ||
-    lower === 'india gs' ||
-    lower === 'indian gs'
+    lower === 'general science & tech' ||
+    lower === 'general science & technology' ||
+    lower === 'science & technology' ||
+    lower === 'science'
   ) {
+    return 'General Science';
+  }
+
+  // Pedagogy variants
+  if (
+    lower.includes('pedagogy') ||
+    lower.includes('child development') ||
+    lower.includes('teaching aptitude')
+  ) {
+    return 'Child Pedagogy & Teaching Methodology';
+  }
+
+  // English variants
+  if (lower === 'english' || lower === 'general english' || lower.includes('english language')) {
+    return 'General English';
+  }
+
+  // Hindi variants
+  if (lower === 'hindi' || lower === 'general hindi') {
+    return 'General Hindi';
+  }
+
+  // Chhattisgarhi variants
+  if (lower === 'chhattisgarhi' || lower === 'chhattisgarhi language' || lower.includes('छत्तीसगढ़ी भाषा')) {
+    return 'Chhattisgarhi Language';
+  }
+
+  // Computer variants
+  if (lower === 'computer' || lower === 'computer applications' || lower === 'computer awareness' || lower === 'computer knowledge') {
+    return 'Computer Knowledge';
+  }
+
+  // Aptitude / Maths variants
+  if (lower === 'quantitative aptitude' || lower === 'mathematics' || lower === 'maths' || lower === 'math') {
+    return 'Quantitative Aptitude';
+  }
+
+  // Reasoning variants
+  if (lower === 'reasoning' || lower === 'reasoning ability' || lower === 'logical reasoning') {
+    return 'Reasoning';
+  }
+
+  // Context-based fallback if rawSubject is generic "General Studies" or "General Knowledge"
+  if (lower === 'general studies' || lower === 'general knowledge' || lower === 'gk' || lower === 'gs') {
+    if (
+      lowerContext.includes('छत्तीसगढ़') || lowerContext.includes('chhattisgarh') ||
+      lowerContext.includes('बस्तर') || lowerContext.includes('कलचुरी') ||
+      lowerContext.includes('महानदी') || lowerContext.includes('रायपुर')
+    ) {
+      return 'Chhattisgarh General Studies';
+    }
     return 'India General Studies';
   }
 
