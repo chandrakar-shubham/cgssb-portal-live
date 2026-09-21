@@ -92,24 +92,40 @@ function MainApp() {
     return INITIAL_ATTEMPTS;
   });
 
-  // Sync to localStorage
+  // Sync to localStorage with quota protection
   useEffect(() => {
-    localStorage.setItem('cgssb_tests', JSON.stringify(tests));
+    try {
+      localStorage.setItem('cgssb_tests', JSON.stringify(tests));
+    } catch (e) {
+      console.warn('LocalStorage quota exceeded or unavailable for tests:', e);
+    }
   }, [tests]);
 
   useEffect(() => {
-    localStorage.setItem('cgssb_questions', JSON.stringify(questions));
+    try {
+      localStorage.setItem('cgssb_questions', JSON.stringify(questions));
+    } catch (e) {
+      console.warn('LocalStorage quota exceeded or unavailable for questions:', e);
+    }
   }, [questions]);
 
   useEffect(() => {
-    localStorage.setItem('cgssb_pyp', JSON.stringify(pypPapers));
+    try {
+      localStorage.setItem('cgssb_pyp', JSON.stringify(pypPapers));
+    } catch (e) {
+      console.warn('LocalStorage quota exceeded or unavailable for PYP:', e);
+    }
   }, [pypPapers]);
 
   useEffect(() => {
-    localStorage.setItem('cgssb_attempts', JSON.stringify(attempts));
+    try {
+      localStorage.setItem('cgssb_attempts', JSON.stringify(attempts));
+    } catch (e) {
+      console.warn('LocalStorage quota exceeded or unavailable for attempts:', e);
+    }
   }, [attempts]);
 
-  // Fetch initial data from server if reachable
+  // Fetch initial data from server if reachable and returns genuine JSON
   useEffect(() => {
     async function loadData() {
       try {
@@ -119,23 +135,23 @@ function MainApp() {
           fetch('/api/questions').catch(() => null),
         ]);
 
-        if (testsRes && testsRes.ok) {
+        if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
           const t = await testsRes.json();
           const list = Array.isArray(t) ? t : (t?.tests || []);
           if (list.length > 0) setTests(prev => dedupeById([...list, ...prev]));
         }
-        if (pypRes && pypRes.ok) {
+        if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
           const p = await pypRes.json();
           const list = Array.isArray(p) ? p : (p?.papers || []);
           if (list.length > 0) setPypPapers(prev => dedupeById([...list, ...prev]));
         }
-        if (qRes && qRes.ok) {
+        if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
           const q = await qRes.json();
           const list = Array.isArray(q) ? q : (q?.questions || []);
           if (list.length > 0) setQuestions(prev => dedupeById([...list, ...prev]));
         }
-      } catch {
-        // Fallback to local data
+      } catch (err) {
+        console.warn('Backend API unavailable or non-JSON response received. Falling back to local state:', err);
       }
     }
     loadData();
