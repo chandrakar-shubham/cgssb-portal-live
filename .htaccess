@@ -3,46 +3,48 @@
   RewriteEngine On
   RewriteBase /
 
-  # -------------------------------------------------------------
-  # 1. MIME Types: Ensure modern JS modules & CSS are recognized
-  # -------------------------------------------------------------
+  # 1. Ensure index.html takes precedence over Hostinger default.php or index.php
+  DirectoryIndex index.html index.php
+
+  # 2. Block direct access to environment & secret repository files
+  <FilesMatch "^\.env|^\.git|package\.json|tsconfig\.json|server\.ts">
+    Require all denied
+  </FilesMatch>
+
+  # 3. Serve real existing files and directories directly without rewriting
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 4. If repository was uploaded directly and built files are in dist/
+  RewriteCond %{DOCUMENT_ROOT}/dist/assets/$1 -f
+  RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
+
+  # 5. Prevent rewriting missing static assets to index.html
+  # (Prevents "Failed to load module script: Expected JavaScript but got text/html" errors)
+  RewriteCond %{REQUEST_URI} \.(js|mjs|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|map)$ [NC]
+  RewriteRule ^ - [R=404,L]
+
+  # 6. If dist/index.html exists and root index.html is raw source, route to dist/index.html
+  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f
+  RewriteRule ^$ dist/index.html [L]
+  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f
+  RewriteRule ^index\.html$ dist/index.html [L]
+
+  # 7. Fallback all non-existing routes to index.html for Single Page App routing
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# -------------------------------------------------------------
+# MIME Types: Ensure modern JS modules & CSS are recognized
+# -------------------------------------------------------------
+<IfModule mod_mime.c>
   AddType application/javascript .js .mjs
   AddType text/css .css
   AddType image/svg+xml .svg
   AddType application/json .json
   AddType font/woff2 .woff2
   AddType font/woff .woff
-
-  # -------------------------------------------------------------
-  # 2. Block direct access to environment & secret files
-  # -------------------------------------------------------------
-  <FilesMatch "^\.env">
-    Require all denied
-  </FilesMatch>
-
-  # -------------------------------------------------------------
-  # 3. Directory Index
-  # -------------------------------------------------------------
-  DirectoryIndex index.html index.php
-
-  # -------------------------------------------------------------
-  # 4. Serve real existing files and directories directly
-  # -------------------------------------------------------------
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
-
-  # -------------------------------------------------------------
-  # 5. Route to dist/index.html ONLY if dist/index.html exists on disk
-  # -------------------------------------------------------------
-  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f [OR]
-  RewriteCond dist/index.html -f
-  RewriteRule ^.*$ /dist/index.html [L]
-
-  # -------------------------------------------------------------
-  # 6. Primary SPA Fallback: Route /admin, /tests, and all client
-  #    routes directly to /index.html
-  # -------------------------------------------------------------
-  RewriteRule ^.*$ /index.html [L]
 </IfModule>
+
 
