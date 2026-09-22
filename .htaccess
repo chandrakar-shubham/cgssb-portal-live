@@ -4,7 +4,7 @@
   RewriteBase /
 
   # -------------------------------------------------------------
-  # MIME Types Configuration (Fixes text/plain script error)
+  # 1. MIME Types: Ensure modern JS modules & CSS are recognized
   # -------------------------------------------------------------
   AddType application/javascript .js .mjs
   AddType text/css .css
@@ -14,48 +14,44 @@
   AddType font/woff .woff
 
   # -------------------------------------------------------------
-  # Security: Block direct access to raw TypeScript / source files
+  # 2. Security: Block direct access to environment & secret files
   # -------------------------------------------------------------
-  <FilesMatch "\.(tsx|ts|env|lock)$">
+  <FilesMatch "^\.env">
     Require all denied
   </FilesMatch>
 
   # -------------------------------------------------------------
-  # SCENARIO 1: Full Repository in public_html (dist/ folder present)
-  # Automatically proxy/route all traffic through compiled dist/
+  # 3. Do not rewrite requests already pointing directly to dist/
   # -------------------------------------------------------------
-
-  # 1.1 Root "/" or "/index.html" -> dist/index.html
-  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f [OR]
-  RewriteCond dist/index.html -f
-  RewriteRule ^(index\.html)?$ dist/index.html [L]
-
-  # 1.2 Route assets directly if request matches /assets/...
-  RewriteCond %{DOCUMENT_ROOT}/dist%{REQUEST_URI} -f [OR]
-  RewriteCond dist%{REQUEST_URI} -f
-  RewriteRule ^(assets/.*)$ dist/$1 [L]
-
-  # 1.3 Route any file that exists inside dist/
-  RewriteCond %{REQUEST_URI} !^/dist/
-  RewriteCond %{DOCUMENT_ROOT}/dist%{REQUEST_URI} -f [OR]
-  RewriteCond dist%{REQUEST_URI} -f
-  RewriteRule ^(.*)$ dist/$1 [L]
-
-  # 1.4 Single Page Application fallback (/admin, /tests, etc.) -> dist/index.html
-  RewriteCond %{REQUEST_URI} !^/dist/
-  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f [OR]
-  RewriteCond dist/index.html -f
-  RewriteRule ^.*$ dist/index.html [L]
+  RewriteRule ^dist/ - [L]
 
   # -------------------------------------------------------------
-  # SCENARIO 2: Standalone Static Build (dist contents in public_html)
+  # 4. Fallback for any request for raw src/main (e.g. browser cache)
   # -------------------------------------------------------------
-  DirectoryIndex index.html index.php
+  RewriteRule ^src/main\.(tsx|ts|js)$ dist/index.html [L]
 
+  # -------------------------------------------------------------
+  # 5. Route compiled assets (/assets/...) to /dist/assets/...
+  # -------------------------------------------------------------
+  RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
+
+  # -------------------------------------------------------------
+  # 6. Route Root "/" or "/index.html" directly to dist/index.html
+  # -------------------------------------------------------------
+  RewriteRule ^$ dist/index.html [L]
+  RewriteRule ^index\.html$ dist/index.html [L]
+
+  # -------------------------------------------------------------
+  # 7. Existing Files & Directories (except root index.html)
+  # -------------------------------------------------------------
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # Direct all SPA routes (like /admin) to index.html
-  RewriteRule . /index.html [L]
+  # -------------------------------------------------------------
+  # 8. SPA Fallback: Route /admin, /tests, and all client routes
+  #    directly to dist/index.html
+  # -------------------------------------------------------------
+  RewriteRule ^.*$ dist/index.html [L]
 </IfModule>
+
