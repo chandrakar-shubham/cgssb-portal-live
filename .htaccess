@@ -3,42 +3,59 @@
   RewriteEngine On
   RewriteBase /
 
-  # 1. Prioritize index.html over default.php or index.php on Hostinger
+  # -------------------------------------------------------------
+  # MIME Types Configuration (Fixes text/plain script error)
+  # -------------------------------------------------------------
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+  AddType image/svg+xml .svg
+  AddType application/json .json
+  AddType font/woff2 .woff2
+  AddType font/woff .woff
+
+  # -------------------------------------------------------------
+  # Security: Block direct access to raw TypeScript / source files
+  # -------------------------------------------------------------
+  <FilesMatch "\.(tsx|ts|env|lock)$">
+    Require all denied
+  </FilesMatch>
+
+  # -------------------------------------------------------------
+  # SCENARIO 1: Full Repository in public_html (dist/ folder present)
+  # Automatically proxy/route all traffic through compiled dist/
+  # -------------------------------------------------------------
+
+  # 1.1 Root "/" or "/index.html" -> dist/index.html
+  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f [OR]
+  RewriteCond dist/index.html -f
+  RewriteRule ^(index\.html)?$ dist/index.html [L]
+
+  # 1.2 Route assets directly if request matches /assets/...
+  RewriteCond %{DOCUMENT_ROOT}/dist%{REQUEST_URI} -f [OR]
+  RewriteCond dist%{REQUEST_URI} -f
+  RewriteRule ^(assets/.*)$ dist/$1 [L]
+
+  # 1.3 Route any file that exists inside dist/
+  RewriteCond %{REQUEST_URI} !^/dist/
+  RewriteCond %{DOCUMENT_ROOT}/dist%{REQUEST_URI} -f [OR]
+  RewriteCond dist%{REQUEST_URI} -f
+  RewriteRule ^(.*)$ dist/$1 [L]
+
+  # 1.4 Single Page Application fallback (/admin, /tests, etc.) -> dist/index.html
+  RewriteCond %{REQUEST_URI} !^/dist/
+  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f [OR]
+  RewriteCond dist/index.html -f
+  RewriteRule ^.*$ dist/index.html [L]
+
+  # -------------------------------------------------------------
+  # SCENARIO 2: Standalone Static Build (dist contents in public_html)
+  # -------------------------------------------------------------
   DirectoryIndex index.html index.php
 
-  # 2. Serve real existing files and directories directly without rewriting
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # 3. If files are organized inside dist/ directory (Full repository deployment)
-  RewriteCond %{REQUEST_URI} !^/dist/
-  RewriteCond %{DOCUMENT_ROOT}/dist%{REQUEST_URI} -f
-  RewriteRule ^(.*)$ dist/$1 [L]
-
-  RewriteCond %{REQUEST_URI} !^/dist/
-  RewriteCond dist%{REQUEST_URI} -f
-  RewriteRule ^(.*)$ dist/$1 [L]
-
-  # 4. If dist/index.html exists (Full repository deployment fallback for /admin and SPA routes)
-  RewriteCond %{REQUEST_URI} !^/dist/
-  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f
-  RewriteRule . dist/index.html [L]
-
-  RewriteCond %{REQUEST_URI} !^/dist/
-  RewriteCond dist/index.html -f
-  RewriteRule . dist/index.html [L]
-
-  # 5. Standard SPA fallback (when contents of dist/ are uploaded directly to public_html)
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
+  # Direct all SPA routes (like /admin) to index.html
   RewriteRule . /index.html [L]
 </IfModule>
-
-# Ensure proper MIME types for modern JS modules, styles, and data
-AddType application/javascript .js .mjs
-AddType text/css .css
-AddType image/svg+xml .svg
-AddType application/json .json
-AddType font/woff2 .woff2
-AddType font/woff .woff
