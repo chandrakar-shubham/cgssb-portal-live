@@ -22,7 +22,7 @@
   RewriteRule ^ - [R=404,L]
 
   # 5. Fallback all non-existing routes to index.html for Single Page App routing
-  RewriteRule . /index.html [L]
+  RewriteRule ^ index.html [L]
 </IfModule>
 
 # -------------------------------------------------------------
