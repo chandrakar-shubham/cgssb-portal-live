@@ -772,7 +772,8 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
               paperSummary: `Comprehensive ${paper.totalQuestions}-question paper aligned with official CG syllabus. Includes full bilingual explanations.`,
               subjectsWeightage: [
                 { subject: 'Chhattisgarh General Studies', questionCount: Math.round(paper.totalQuestions * 0.4), percentage: 40 },
-                { subject: 'Aptitude, Computer & Language', questionCount: Math.round(paper.totalQuestions * 0.6), percentage: 60 },
+                { subject: 'Quantitative Aptitude', questionCount: Math.round(paper.totalQuestions * 0.3), percentage: 30 },
+                { subject: 'Computer Knowledge', questionCount: Math.round(paper.totalQuestions * 0.3), percentage: 30 },
               ],
             });
             setIsGridBuilderOpen(false);

@@ -142,7 +142,7 @@ export const AdminAITestCreator: React.FC<AdminAITestCreatorProps> = ({
       },
       {
         id: `ai-q-${Date.now()}-2`,
-        subject: selectedSubjects[1] || 'Computer Awareness',
+        subject: selectedSubjects[1] || 'Computer Knowledge',
         topic: 'Operating Systems & Office',
         subtopic: 'MS Excel & Database',
         difficulty: 'Easy',
