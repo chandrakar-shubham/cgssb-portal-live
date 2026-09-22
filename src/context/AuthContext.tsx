@@ -2,15 +2,21 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 
 interface AuthContextType {
+  // Student Auth
   user: User | null;
-  login: (email: string, role: UserRole, name?: string) => void;
+  login: (email: string, role?: UserRole, name?: string) => void;
   logout: () => void;
-  switchRole: (newRole: UserRole) => void;
   deductCredits: (amount: number) => boolean;
   addCredits: (amount: number) => void;
+
+  // Admin Auth (Strictly Separated)
+  adminUser: User | null;
+  isAdminAuthenticated: boolean;
+  adminLogin: (usernameOrEmail: string, passwordOrPasskey?: string) => Promise<{ success: boolean; error?: string }>;
+  adminLogout: () => void;
 }
 
-const DEFAULT_USER: User = {
+const DEFAULT_STUDENT_USER: User = {
   id: 'u-student-01',
   name: 'Rameshwar Dewangan',
   email: 'rameshwar@cgssbtest.com',
@@ -22,33 +28,57 @@ const DEFAULT_USER: User = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Student Auth State
   const [user, setUser] = useState<User | null>(() => {
     try {
-      const saved = localStorage.getItem('cgssb_user');
+      const saved = localStorage.getItem('cgssb_student_user');
       if (saved) return JSON.parse(saved);
     } catch {
       // ignore
     }
-    return DEFAULT_USER;
+    return DEFAULT_STUDENT_USER;
+  });
+
+  // Admin Auth State (Separate key and state)
+  const [adminUser, setAdminUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('cgssb_admin_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.role === 'admin') return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
   });
 
   useEffect(() => {
     if (user) {
-      localStorage.setItem('cgssb_user', JSON.stringify(user));
+      localStorage.setItem('cgssb_student_user', JSON.stringify(user));
     } else {
-      localStorage.removeItem('cgssb_user');
+      localStorage.removeItem('cgssb_student_user');
     }
   }, [user]);
 
-  const login = (email: string, role: UserRole, name?: string) => {
+  useEffect(() => {
+    if (adminUser) {
+      localStorage.setItem('cgssb_admin_session', JSON.stringify(adminUser));
+    } else {
+      localStorage.removeItem('cgssb_admin_session');
+    }
+  }, [adminUser]);
+
+  // Student Login
+  const login = (email: string, role: UserRole = 'student', name?: string) => {
     const newUser: User = {
       id: `u-${Date.now()}`,
-      name: name || (role === 'admin' ? 'Super Admin' : 'Aspirant Student'),
+      name: name || 'Aspirant Student',
       email,
-      role,
-      credits: role === 'admin' ? 9999 : 350,
+      role: 'student', // Student login is always student
+      credits: 350,
       registeredAt: new Date().toISOString().split('T')[0],
-      token: `jwt-cgssb-${Date.now()}`,
+      token: `jwt-student-${Date.now()}`,
     };
     setUser(newUser);
   };
@@ -57,19 +87,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const switchRole = (newRole: UserRole) => {
-    if (!user) return;
-    const updated = {
-      ...user,
-      role: newRole,
-      name: newRole === 'admin' ? 'Super Admin' : 'Rameshwar Dewangan',
+  // Admin Login (Strictly separate credentials check)
+  const adminLogin = async (usernameOrEmail: string, passwordOrPasskey?: string): Promise<{ success: boolean; error?: string }> => {
+    const identifier = usernameOrEmail.trim().toLowerCase();
+    const pass = (passwordOrPasskey || '').trim();
+
+    // Verify admin credentials
+    // Supported admin usernames: admin, admin@cgssbtest.com, controller
+    // Supported passkeys: admin123, cgssb2024, or any non-empty pass for admin identifier
+    const isValidIdentifier = identifier === 'admin' || identifier === 'admin@cgssbtest.com' || identifier === 'controller' || identifier.includes('admin');
+    const isValidPass = pass === 'admin123' || pass === 'cgssb2024' || pass.length >= 4;
+
+    if (isValidIdentifier && isValidPass) {
+      const newAdmin: User = {
+        id: 'u-admin-controller',
+        name: 'Exam Controller Admin',
+        email: identifier.includes('@') ? identifier : 'admin@cgssbtest.com',
+        role: 'admin',
+        credits: 99999,
+        registeredAt: '2024-01-01',
+        token: `jwt-admin-${Date.now()}`,
+      };
+      setAdminUser(newAdmin);
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: 'Invalid credentials. Default: admin@cgssbtest.com / admin123',
     };
-    setUser(updated);
+  };
+
+  const adminLogout = () => {
+    setAdminUser(null);
+    localStorage.removeItem('cgssb_admin_session');
   };
 
   const deductCredits = (amount: number): boolean => {
     if (!user) return false;
-    if (user.role === 'admin') return true; // unlimited
     if (user.credits < amount) return false;
     setUser({ ...user, credits: user.credits - amount });
     return true;
@@ -81,7 +136,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, switchRole, deductCredits, addCredits }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        deductCredits,
+        addCredits,
+        adminUser,
+        isAdminAuthenticated: !!adminUser && adminUser.role === 'admin',
+        adminLogin,
+        adminLogout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -94,3 +161,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

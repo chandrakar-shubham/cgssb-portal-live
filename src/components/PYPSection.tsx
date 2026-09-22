@@ -32,7 +32,7 @@ export const PYPSection: React.FC<PYPSectionProps> = ({
   onSelectCategory,
   onOpenAdminPYP,
 }) => {
-  const { user, switchRole } = useAuth();
+  const { user } = useAuth();
   const [activePaperForAnalysis, setActivePaperForAnalysis] = useState<PreviousYearPaper | null>(null);
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
 
@@ -102,18 +102,19 @@ Visit https://cgssbtest.com for online mock test simulation.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            onClick={() => {
-              if (user?.role !== 'admin') switchRole('admin');
-              if (onOpenAdminPYP) onOpenAdminPYP();
-            }}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-blue-500/20 transition cursor-pointer"
-          >
-            <Grid className="w-4 h-4" />
-            <span>Open Ingestion Grid & AI</span>
-          </button>
-        </div>
+        {user?.role === 'admin' && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                if (onOpenAdminPYP) onOpenAdminPYP();
+              }}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-blue-500/20 transition cursor-pointer"
+            >
+              <Grid className="w-4 h-4" />
+              <span>Open Ingestion Grid & AI</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Download Alert Toast */}

@@ -14,7 +14,10 @@ import { SolutionsScreen } from './components/SolutionsScreen';
 import { AdminQuestionBank } from './components/AdminQuestionBank';
 import { AdminPYPManager } from './components/AdminPYPManager';
 import { AdminAITestCreator } from './components/AdminAITestCreator';
-import { AndroidConnectModal } from './components/AndroidConnectModal';
+import { AdminTestCatalog } from './components/AdminTestCatalog';
+import { AdminAndroidAPIManager } from './components/AdminAndroidAPIManager';
+import { AdminPortalLogin } from './components/AdminPortalLogin';
+import { AdminHeader } from './components/AdminHeader';
 import { AuthModal } from './components/AuthModal';
 import {
   MockTest,
@@ -36,16 +39,74 @@ import {
   migrateLegacyAttempt,
   runTaxonomyMigration
 } from './utils/taxonomyMigration';
+import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
 
 function MainApp() {
-  const { user, deductCredits } = useAuth();
+  const { user, deductCredits, isAdminAuthenticated } = useAuth();
 
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<string>('tests');
+  // Route State: Strictly separated 'student' vs 'admin'
+  const [currentRoute, setCurrentRoute] = useState<'student' | 'admin'>(() => {
+    if (typeof window === 'undefined') return 'student';
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
+      return 'admin';
+    }
+    return 'student';
+  });
+
+  // Track browser forward / back button and hash changes
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
+        setCurrentRoute('admin');
+      } else {
+        setCurrentRoute('student');
+      }
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  const navigateToAdmin = () => {
+    if (window.location.pathname !== '/admin') {
+      try {
+        window.history.pushState({}, '', '/admin');
+      } catch {
+        window.location.hash = '#/admin';
+      }
+    }
+    setCurrentRoute('admin');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateToStudent = () => {
+    if (window.location.pathname !== '/') {
+      try {
+        window.history.pushState({}, '', '/');
+      } catch {
+        window.location.hash = '';
+      }
+    }
+    setCurrentRoute('student');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Student Navigation State
+  const [studentActiveTab, setStudentActiveTab] = useState<string>('tests');
   const [selectedCategory, setSelectedCategory] = useState<ExamCategory | 'ALL'>('ALL');
 
-  // Modals
-  const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
+  // Admin Navigation State (Strictly for admin tabs)
+  const [adminActiveTab, setAdminActiveTab] = useState<string>('admin-pyp');
+
+  // Student Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Active Exam Session & Review
@@ -180,7 +241,6 @@ function MainApp() {
 
   // START TEST HANDLER
   const handleStartTest = (test: MockTest) => {
-    // Check credits if student
     if (user?.role === 'student') {
       deductCredits(10);
     }
@@ -190,14 +250,12 @@ function MainApp() {
 
   // PRACTICE PYP AS TEST HANDLER
   const handlePracticePaper = (paper: PreviousYearPaper) => {
-    // Find or construct a mock test from this paper
     const existingTest = tests.find(t => t.id === paper.linkedMockTestId);
     if (existingTest) {
       handleStartTest(existingTest);
       return;
     }
 
-    // Dynamic mock test from PYP
     const relevantQs = questions.filter(q => q.category === paper.examCategory);
     const pypTest: MockTest = {
       id: `pyp-test-${paper.id}`,
@@ -239,7 +297,6 @@ function MainApp() {
 
     const activeQuestionList = testQs.length > 0 ? testQs : questions;
 
-    // Try server calculation first
     try {
       const res = await fetch(`/api/tests/${currentTest.id}/submit`, {
         method: 'POST',
@@ -452,7 +509,7 @@ function MainApp() {
   const handleTogglePublishTest = async (testId: string) => {
     const target = tests.find(t => t.id === testId);
     const nextStatus = target ? target.isPublished === false : false;
-    setTests(prev => prev.map(t => t.id === testId ? { ...t, isPublished: nextStatus } : t));
+    setTests(prev => prev.map(t => (t.id === testId ? { ...t, isPublished: nextStatus } : t)));
     try {
       await fetch(`/api/tests/${testId}`, {
         method: 'PUT',
@@ -465,7 +522,7 @@ function MainApp() {
   };
 
   const handleUpdateTest = async (testId: string, updates: Partial<MockTest>) => {
-    setTests(prev => prev.map(t => t.id === testId ? { ...t, ...updates } : t));
+    setTests(prev => prev.map(t => (t.id === testId ? { ...t, ...updates } : t)));
     try {
       await fetch(`/api/tests/${testId}`, {
         method: 'PUT',
@@ -488,6 +545,29 @@ function MainApp() {
     }
   };
 
+  const handleAddTest = (newTest: Partial<MockTest>) => {
+    const fullTest: MockTest = {
+      id: newTest.id || `test-${Date.now()}`,
+      title: newTest.title || 'New Mock Test',
+      category: newTest.category || 'CGSSB',
+      description: newTest.description || '',
+      durationMinutes: newTest.durationMinutes || 120,
+      questionCount: newTest.questionCount || 100,
+      marksPerQuestion: newTest.marksPerQuestion || 1.0,
+      negativeMarksPerQuestion: newTest.negativeMarksPerQuestion || 0.333,
+      sections: newTest.sections || [{ id: 'sec-1', name: 'General', questionIds: [] }],
+      attemptsCount: 0,
+      isPublished: newTest.isPublished !== false,
+      createdAt: new Date().toISOString(),
+    };
+    setTests(prev => dedupeById([fullTest, ...prev]));
+    fetch('/api/tests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullTest),
+    }).catch(() => {});
+  };
+
   // ADMIN AI TEST CREATOR PUBLISH ACTION
   const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
     setQuestions(prev => dedupeById([...newQuestions, ...prev]));
@@ -499,7 +579,9 @@ function MainApp() {
     }).catch(() => {});
   };
 
-  // 1. IF ACTIVE EXAM RUNNING -> RENDER DEDICATED FULLSCREEN EXAM ENGINE
+  // =========================================================================
+  // VIEW 1: ACTIVE FULLSCREEN EXAM SESSION
+  // =========================================================================
   if (activeExamTest) {
     const examQuestions = questions.filter(q =>
       activeExamTest.sections.some(s => s.questionIds.includes(q.id))
@@ -516,7 +598,9 @@ function MainApp() {
     );
   }
 
-  // 2. IF ACTIVE ATTEMPT REVIEW -> RENDER SOLUTIONS & PERFORMANCE REPORT SCREEN
+  // =========================================================================
+  // VIEW 2: ACTIVE ATTEMPT REVIEW SCREEN
+  // =========================================================================
   if (activeAttemptReview) {
     const attemptQuestions = questions.filter(q =>
       Object.keys(activeAttemptReview.responses).includes(q.id)
@@ -526,12 +610,11 @@ function MainApp() {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
         <Navbar
-          activeTab={activeTab}
+          activeTab={studentActiveTab}
           setActiveTab={tab => {
             setActiveAttemptReview(null);
-            setActiveTab(tab);
+            setStudentActiveTab(tab);
           }}
-          onOpenAndroidModal={() => setIsAndroidModalOpen(true)}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
         />
         <main className="flex-1">
@@ -551,19 +634,115 @@ function MainApp() {
     );
   }
 
-  // 3. MAIN PORTAL VIEWS
+  // =========================================================================
+  // VIEW 3: SEPARATED ADMIN PORTAL (/admin)
+  // Accessible at https://darkorange-chimpanzee-661223.hostingersite.com/admin
+  // =========================================================================
+  if (currentRoute === 'admin') {
+    // If not logged in as Admin, show dedicated AdminPortalLogin
+    if (!isAdminAuthenticated) {
+      return (
+        <AdminPortalLogin
+          onSuccess={() => {}}
+          onNavigateHome={navigateToStudent}
+        />
+      );
+    }
+
+    // Authenticated Admin Dashboard
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+        <AdminHeader
+          activeTab={adminActiveTab}
+          setActiveTab={setAdminActiveTab}
+          onNavigateToStudent={navigateToStudent}
+        />
+
+        <main className="flex-1">
+          {adminActiveTab === 'admin-pyp' && (
+            <AdminPYPManager
+              pypPapers={pypPapers}
+              tests={tests}
+              onAddPYP={handleAddPYP}
+              onDeletePYP={handleDeletePYP}
+              onConvertPYPToMockTest={handleConvertPYPToMockTest}
+              onTogglePublishTest={handleTogglePublishTest}
+              onStartTest={handleStartTest}
+              onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+              onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
+            />
+          )}
+
+          {adminActiveTab === 'admin-questions' && (
+            <AdminQuestionBank
+              questions={questions}
+              onAddQuestion={handleAddQuestion}
+              onUpdateQuestion={handleUpdateQuestion}
+              onDeleteQuestion={handleDeleteQuestion}
+            />
+          )}
+
+          {adminActiveTab === 'admin-ai' && (
+            <AdminAITestCreator
+              pypPapers={pypPapers}
+              onTestPublished={handleTestPublished}
+            />
+          )}
+
+          {adminActiveTab === 'admin-tests' && (
+            <AdminTestCatalog
+              tests={tests}
+              onStartTest={handleStartTest}
+              onTogglePublishTest={handleTogglePublishTest}
+              onUpdateTest={handleUpdateTest}
+              onDeleteTest={handleDeleteTest}
+              onAddTest={handleAddTest}
+              onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
+            />
+          )}
+
+          {adminActiveTab === 'admin-android-api' && (
+            <AdminAndroidAPIManager />
+          )}
+        </main>
+
+        <footer className="bg-slate-950 border-t border-indigo-950/60 py-5 text-xs text-slate-500">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center space-x-2">
+              <Shield className="w-4 h-4 text-indigo-400" />
+              <span className="font-bold text-slate-300">CGSSB Admin & Exam Controller Console</span>
+              <span className="text-slate-700">•</span>
+              <span className="font-mono text-emerald-400 text-[11px]">/admin</span>
+            </div>
+            <div className="flex items-center space-x-3 text-[11px]">
+              <span className="text-slate-400">Hostinger Live Server Ready</span>
+              <span className="text-slate-700">•</span>
+              <button
+                onClick={navigateToStudent}
+                className="text-indigo-400 hover:text-indigo-300 font-semibold transition"
+              >
+                Go to Candidate Portal
+              </button>
+            </div>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VIEW 4: STUDENT / CANDIDATE PORTAL (/)
+  // =========================================================================
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
       <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onOpenAndroidModal={() => setIsAndroidModalOpen(true)}
+        activeTab={studentActiveTab}
+        setActiveTab={setStudentActiveTab}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
       <main className="flex-1">
-        {/* STUDENT VIEWS */}
-        {activeTab === 'tests' && (
+        {studentActiveTab === 'tests' && (
           <StudentDashboard
             tests={tests}
             onStartTest={handleStartTest}
@@ -572,112 +751,56 @@ function MainApp() {
             onTogglePublishTest={handleTogglePublishTest}
             onUpdateTest={handleUpdateTest}
             onDeleteTest={handleDeleteTest}
-            onAddTest={(newTest: Partial<MockTest>) => {
-              const fullTest: MockTest = {
-                id: newTest.id || `test-${Date.now()}`,
-                title: newTest.title || 'New Mock Test',
-                category: newTest.category || 'CGSSB',
-                description: newTest.description || '',
-                durationMinutes: newTest.durationMinutes || 120,
-                questionCount: newTest.questionCount || 100,
-                marksPerQuestion: newTest.marksPerQuestion || 1.0,
-                negativeMarksPerQuestion: newTest.negativeMarksPerQuestion || 0.333,
-                sections: newTest.sections || [{ id: 'sec-1', name: 'General', questionIds: [] }],
-                attemptsCount: 0,
-                isPublished: newTest.isPublished !== false,
-                createdAt: new Date().toISOString(),
-              };
-              setTests(prev => dedupeById([fullTest, ...prev]));
-              fetch('/api/tests', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fullTest),
-              }).catch(() => {});
-            }}
+            onAddTest={handleAddTest}
           />
         )}
 
-        {activeTab === 'pyp' && (
+        {studentActiveTab === 'pyp' && (
           <PYPSection
             pypPapers={pypPapers}
             onPracticePaper={handlePracticePaper}
             selectedCategory={selectedCategory}
             onSelectCategory={setSelectedCategory}
-            onOpenAdminPYP={() => setActiveTab('admin-pyp')}
+            onOpenAdminPYP={navigateToAdmin}
           />
         )}
 
-        {activeTab === 'analytics' && (
+        {studentActiveTab === 'analytics' && (
           <AnalyticsHub
             attempts={attempts}
             onReviewAttempt={attempt => setActiveAttemptReview(attempt)}
-            onExploreTests={() => setActiveTab('tests')}
-          />
-        )}
-
-        {/* ADMIN VIEWS */}
-        {activeTab === 'admin-questions' && (
-          <AdminQuestionBank
-            questions={questions}
-            onAddQuestion={handleAddQuestion}
-            onUpdateQuestion={handleUpdateQuestion}
-            onDeleteQuestion={handleDeleteQuestion}
-          />
-        )}
-
-        {activeTab === 'admin-pyp' && (
-          <AdminPYPManager
-            pypPapers={pypPapers}
-            tests={tests}
-            onAddPYP={handleAddPYP}
-            onDeletePYP={handleDeletePYP}
-            onConvertPYPToMockTest={handleConvertPYPToMockTest}
-            onTogglePublishTest={handleTogglePublishTest}
-            onStartTest={handleStartTest}
-            onQuestionsAdded={(newQs) => setQuestions(prev => dedupeById([...newQs, ...prev]))}
-            onTestAdded={(newTest) => setTests(prev => dedupeById([newTest, ...prev]))}
-          />
-        )}
-
-        {activeTab === 'admin-ai' && (
-          <AdminAITestCreator
-            pypPapers={pypPapers}
-            onTestPublished={handleTestPublished}
+            onExploreTests={() => setStudentActiveTab('tests')}
           />
         )}
       </main>
 
-      {/* Footer */}
+      {/* Student Portal Footer */}
       <footer className="bg-slate-900 border-t border-slate-800 py-6 mt-12 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-extrabold text-white">
               CGSSB <span className="text-emerald-400">Test</span>
             </span>
-            <span className="text-slate-500">•</span>
+            <span className="text-slate-600">•</span>
             <span>cgssbtest.com</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-emerald-400 font-semibold">Live Mock Test & PYP Platform</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-emerald-400 font-semibold">Chhattisgarh State Exam Preparation</span>
           </div>
+
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => setIsAndroidModalOpen(true)}
-              className="text-slate-300 hover:text-emerald-400 transition"
+              onClick={navigateToAdmin}
+              title="Official Exam Controller Administration (/admin)"
+              className="text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5 py-1 px-2.5 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700"
             >
-              Android App Sync & API
+              <Lock className="w-3 h-3 text-indigo-400" />
+              <span>Staff & Admin Portal</span>
             </button>
-            <span className="text-slate-600">|</span>
-            <span>Chhattisgarh State Exam Preparation</span>
           </div>
         </div>
       </footer>
 
-      {/* Global Modals */}
-      <AndroidConnectModal
-        isOpen={isAndroidModalOpen}
-        onClose={() => setIsAndroidModalOpen(false)}
-      />
-
+      {/* Student Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
