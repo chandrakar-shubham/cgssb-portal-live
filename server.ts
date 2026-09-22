@@ -24,8 +24,22 @@ import {
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const getFilename = () => {
+  try {
+    return fileURLToPath(import.meta.url);
+  } catch {
+    return typeof __filename !== 'undefined' ? __filename : '';
+  }
+};
+const getDirname = () => {
+  try {
+    return path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    return typeof __dirname !== 'undefined' ? __dirname : process.cwd();
+  }
+};
+const appFilename = getFilename();
+const appDirname = getDirname();
 
 // In-Memory Database Store (persisting across actions)
 let questions: Question[] = [...INITIAL_QUESTIONS];

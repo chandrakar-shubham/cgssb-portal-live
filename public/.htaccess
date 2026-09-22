@@ -1,12 +1,27 @@
 <IfModule mod_rewrite.c>
+  Options -MultiViews
   RewriteEngine On
   RewriteBase /
+
+  # 1. Prioritize index.html over default.php or index.php on Hostinger
+  DirectoryIndex index.html index.php
+
+  # 2. Prevent infinite loops on index.html
   RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # 3. Serve real existing files and directories directly without rewriting
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 4. Fallback all non-existing routes (like /admin, /tests, etc.) to /index.html
   RewriteRule . /index.html [L]
 </IfModule>
 
-# Ensure proper MIME types for JS modules
+# Ensure proper MIME types for modern JS modules, styles, and data
 AddType application/javascript .js .mjs
 AddType text/css .css
+AddType image/svg+xml .svg
+AddType application/json .json
+AddType font/woff2 .woff2
+AddType font/woff .woff
