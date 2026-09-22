@@ -14,44 +14,35 @@
   AddType font/woff .woff
 
   # -------------------------------------------------------------
-  # 2. Security: Block direct access to environment & secret files
+  # 2. Block direct access to environment & secret files
   # -------------------------------------------------------------
   <FilesMatch "^\.env">
     Require all denied
   </FilesMatch>
 
   # -------------------------------------------------------------
-  # 3. Do not rewrite requests already pointing directly to dist/
+  # 3. Directory Index
   # -------------------------------------------------------------
-  RewriteRule ^dist/ - [L]
+  DirectoryIndex index.html index.php
 
   # -------------------------------------------------------------
-  # 4. Fallback for any request for raw src/main (e.g. browser cache)
-  # -------------------------------------------------------------
-  RewriteRule ^src/main\.(tsx|ts|js)$ dist/index.html [L]
-
-  # -------------------------------------------------------------
-  # 5. Route compiled assets (/assets/...) to /dist/assets/...
-  # -------------------------------------------------------------
-  RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
-
-  # -------------------------------------------------------------
-  # 6. Route Root "/" or "/index.html" directly to dist/index.html
-  # -------------------------------------------------------------
-  RewriteRule ^$ dist/index.html [L]
-  RewriteRule ^index\.html$ dist/index.html [L]
-
-  # -------------------------------------------------------------
-  # 7. Existing Files & Directories (except root index.html)
+  # 4. Serve real existing files and directories directly
   # -------------------------------------------------------------
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
   # -------------------------------------------------------------
-  # 8. SPA Fallback: Route /admin, /tests, and all client routes
-  #    directly to dist/index.html
+  # 5. Route to dist/index.html ONLY if dist/index.html exists on disk
   # -------------------------------------------------------------
-  RewriteRule ^.*$ dist/index.html [L]
+  RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f [OR]
+  RewriteCond dist/index.html -f
+  RewriteRule ^.*$ /dist/index.html [L]
+
+  # -------------------------------------------------------------
+  # 6. Primary SPA Fallback: Route /admin, /tests, and all client
+  #    routes directly to /index.html
+  # -------------------------------------------------------------
+  RewriteRule ^.*$ /index.html [L]
 </IfModule>
 

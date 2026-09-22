@@ -6,7 +6,38 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     base: '/',
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      {
+        name: 'html-dev-entry',
+        transformIndexHtml: {
+          order: 'pre',
+          handler(html) {
+            return html
+              .replace(/<link rel="stylesheet" crossorigin href="\/assets\/index\.css">\s*/g, '')
+              .replace(
+                '<script type="module" crossorigin src="/assets/index.js"></script>',
+                '<script type="module" src="/src/main.tsx"></script>'
+              );
+          }
+        }
+      },
+      react(),
+      tailwindcss()
+    ],
+    build: {
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/index.js',
+          chunkFileNames: 'assets/[name].js',
+          assetFileNames: (assetInfo) => {
+            if (assetInfo.name && assetInfo.name.endsWith('.css')) {
+              return 'assets/index.css';
+            }
+            return 'assets/[name].[ext]';
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
