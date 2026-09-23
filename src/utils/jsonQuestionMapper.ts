@@ -22,6 +22,7 @@ export interface RawJsonQuestionInput {
   subjectCategory?: string;
   QuestionType?: string;
   questionType?: string;
+  type?: string;
   Difficulty?: string;
   difficulty?: string;
   'Question(Hindi)'?: string;
@@ -30,6 +31,17 @@ export interface RawJsonQuestionInput {
   questionHindi?: string;
   questionEnglish?: string;
   question?: string;
+  questionText?: string;
+  text?: string;
+  textHindi?: string;
+  options?: any[];
+  statements?: any[];
+  columnA?: any[];
+  columnB?: any[];
+  assertion?: string;
+  assertionHindi?: string;
+  reason?: string;
+  reasonHindi?: string;
   option_A_en?: string;
   option_A_hi?: string;
   option_B_en?: string;
@@ -45,6 +57,7 @@ export interface RawJsonQuestionInput {
   option_D?: string;
   answer?: string;
   correctOption?: string;
+  correctAnswer?: string;
   explanation_en?: string;
   explanation_hi?: string;
   explanationHindi?: string;
@@ -53,6 +66,7 @@ export interface RawJsonQuestionInput {
   marks?: number;
   negativeMarks?: number;
   idealTimeSeconds?: number;
+  pypAppearances?: any[];
 }
 
 /**
@@ -87,46 +101,66 @@ export function mapRawJsonToQuestion(raw: RawJsonQuestionInput, index: number = 
   }
 
   // Question Type: 'mcq' | 'matching' | 'assertion_reason' | 'multi_statement'
+  // Supports both questionType and type aliases
   let questionType: QuestionType = 'mcq';
-  const rawType = String(raw.QuestionType || raw.questionType || '').toLowerCase();
-  if (rawType.includes('match')) {
+  const rawType = String(raw.QuestionType || raw.questionType || raw.type || '').toLowerCase();
+  if (rawType.includes('match') || Array.isArray(raw.columnA)) {
     questionType = 'matching';
-  } else if (rawType.includes('assertion') || rawType.includes('reason')) {
+  } else if (rawType.includes('assertion') || rawType.includes('reason') || Boolean(raw.assertion)) {
     questionType = 'assertion_reason';
-  } else if (rawType.includes('statement') || rawType.includes('multi')) {
+  } else if (rawType.includes('statement') || rawType.includes('multi') || (Array.isArray(raw.statements) && raw.statements.length > 0)) {
     questionType = 'multi_statement';
   }
 
   // Question Stems
-  const stemEnglish = String(raw['Question(English)'] || raw['Question(english)'] || raw.questionEnglish || raw.question || '').trim();
-  const stemHindi = String(raw['Question(Hindi)'] || raw.questionHindi || '').trim();
+  const stemEnglish = String(raw['Question(English)'] || raw['Question(english)'] || raw.questionEnglish || raw.question || raw.questionText || raw.text || '').trim();
+  const stemHindi = String(raw['Question(Hindi)'] || raw.questionHindi || raw.textHindi || '').trim();
 
   // Language mode
   const questionLanguage = stemEnglish && stemHindi ? 'both' : stemHindi ? 'hi' : 'en';
 
-  // Options (Bilingual)
-  const optionA_en = String(raw.option_A_en ?? raw.option_A ?? '').trim();
-  const optionA_hi = String(raw.option_A_hi ?? raw.option_A ?? optionA_en).trim();
+  // Options (Supports both structured array options and legacy option_A... keys)
+  let options: QuestionOption[] = [];
 
-  const optionB_en = String(raw.option_B_en ?? raw.option_B ?? '').trim();
-  const optionB_hi = String(raw.option_B_hi ?? raw.option_B ?? optionB_en).trim();
+  if (Array.isArray(raw.options) && raw.options.length > 0) {
+    options = raw.options.map((opt: any, idx: number) => {
+      const rawLabel = String(opt.label || opt.id || String.fromCharCode(65 + idx)).toUpperCase();
+      const label = (['A', 'B', 'C', 'D'].includes(rawLabel) ? rawLabel : undefined) as 'A' | 'B' | 'C' | 'D' | undefined;
+      const id = String(opt.id || opt.label || rawLabel).toUpperCase();
+      const textEn = String(opt.text ?? opt.textEnglish ?? opt.option ?? '').trim();
+      const textHi = String(opt.textHindi ?? opt.text ?? textEn).trim();
+      return {
+        label,
+        id,
+        text: textEn || textHi,
+        textHindi: textHi || textEn,
+      };
+    });
+  } else {
+    const optionA_en = String(raw.option_A_en ?? raw.option_A ?? '').trim();
+    const optionA_hi = String(raw.option_A_hi ?? raw.option_A ?? optionA_en).trim();
 
-  const optionC_en = String(raw.option_C_en ?? raw.option_C ?? '').trim();
-  const optionC_hi = String(raw.option_C_hi ?? raw.option_C ?? optionC_en).trim();
+    const optionB_en = String(raw.option_B_en ?? raw.option_B ?? '').trim();
+    const optionB_hi = String(raw.option_B_hi ?? raw.option_B ?? optionB_en).trim();
 
-  const optionD_en = String(raw.option_D_en ?? raw.option_D ?? '').trim();
-  const optionD_hi = String(raw.option_D_hi ?? raw.option_D ?? optionD_en).trim();
+    const optionC_en = String(raw.option_C_en ?? raw.option_C ?? '').trim();
+    const optionC_hi = String(raw.option_C_hi ?? raw.option_C ?? optionC_en).trim();
 
-  const options: QuestionOption[] = [
-    { label: 'A', id: 'A', text: optionA_en || optionA_hi, textHindi: optionA_hi || optionA_en },
-    { label: 'B', id: 'B', text: optionB_en || optionB_hi, textHindi: optionB_hi || optionB_en },
-    { label: 'C', id: 'C', text: optionC_en || optionC_hi, textHindi: optionC_hi || optionC_en },
-    { label: 'D', id: 'D', text: optionD_en || optionD_hi, textHindi: optionD_hi || optionD_en },
-  ];
+    const optionD_en = String(raw.option_D_en ?? raw.option_D ?? '').trim();
+    const optionD_hi = String(raw.option_D_hi ?? raw.option_D ?? optionD_en).trim();
 
-  // Correct Answer
-  const rawAns = String(raw.answer || raw.correctOption || 'A').trim().toUpperCase();
-  const correctOption: 'A' | 'B' | 'C' | 'D' = ['A', 'B', 'C', 'D'].includes(rawAns)
+    options = [
+      { label: 'A', id: 'A', text: optionA_en || optionA_hi, textHindi: optionA_hi || optionA_en },
+      { label: 'B', id: 'B', text: optionB_en || optionB_hi, textHindi: optionB_hi || optionB_en },
+      { label: 'C', id: 'C', text: optionC_en || optionC_hi, textHindi: optionC_hi || optionC_en },
+      { label: 'D', id: 'D', text: optionD_en || optionD_hi, textHindi: optionD_hi || optionD_en },
+    ];
+  }
+
+  // Correct Answer: supports correctOption, correctAnswer, and answer aliases
+  const rawAns = String(raw.correctOption || raw.correctAnswer || raw.answer || 'A').trim().toUpperCase();
+  const validOptionLetters = ['A', 'B', 'C', 'D', 'E'];
+  const correctOption: 'A' | 'B' | 'C' | 'D' = validOptionLetters.includes(rawAns)
     ? (rawAns as 'A' | 'B' | 'C' | 'D')
     : (rawAns.includes('B') ? 'B' : rawAns.includes('C') ? 'C' : rawAns.includes('D') ? 'D' : 'A');
 
@@ -146,8 +180,10 @@ export function mapRawJsonToQuestion(raw: RawJsonQuestionInput, index: number = 
   let subtopic = String(raw.Subtopic || raw.subtopic || '').trim();
 
   if (!subject || !topic) {
+    const opt0Hi = options[0]?.textHindi || options[0]?.text || '';
+    const opt1Hi = options[1]?.textHindi || options[1]?.text || '';
     const detected = autoClassifyChapter(
-      `${stemHindi} ${stemEnglish} ${optionA_hi} ${optionB_hi}`,
+      `${stemHindi} ${stemEnglish} ${opt0Hi} ${opt1Hi}`,
       'Chhattisgarh General Studies',
       `${examName} (${year}) Official`
     );
@@ -176,6 +212,7 @@ export function mapRawJsonToQuestion(raw: RawJsonQuestionInput, index: number = 
     marks: Number(raw.marks) || 1,
     negativeMarks: Number(raw.negativeMarks) || 0.25,
     questionType,
+    type: questionType, // alias
     subjectCategory,
     questionLanguage,
     question: stemEnglish || stemHindi,
@@ -189,7 +226,14 @@ export function mapRawJsonToQuestion(raw: RawJsonQuestionInput, index: number = 
     explanation,
     explanationHindi,
     idealTimeSeconds: Number(raw.idealTimeSeconds) || idealSeconds,
-    pypAppearances: [{ examName, year }],
+    pypAppearances: Array.isArray(raw.pypAppearances) ? raw.pypAppearances : (examName ? [{ examName, year }] : []),
+    statements: raw.statements,
+    columnA: raw.columnA,
+    columnB: raw.columnB,
+    assertion: raw.assertion,
+    assertionHindi: raw.assertionHindi,
+    reason: raw.reason,
+    reasonHindi: raw.reasonHindi,
   };
 }
 
@@ -218,10 +262,10 @@ export function validateBulkQuestions(questions: any[]): { isValid: boolean; err
       errors.push(`Item #${rowNum} is missing question text (Question(English) or Question(Hindi)).`);
     }
 
-    // Has answer
-    const ans = q.answer || q.correctOption;
+    // Has answer (supports answer, correctOption, correctAnswer)
+    const ans = q.answer || q.correctOption || q.correctAnswer;
     if (!ans) {
-      errors.push(`Item #${rowNum} is missing 'answer' (A, B, C, or D).`);
+      errors.push(`Item #${rowNum} is missing 'correctOption', 'correctAnswer', or 'answer' (A, B, C, or D).`);
     }
   });
 

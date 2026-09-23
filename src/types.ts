@@ -35,8 +35,8 @@ export type SubjectCategory = 'language' | 'non_language';
 export type QuestionLanguage = 'en' | 'hi' | 'both';
 
 export interface QuestionOption {
-  label?: 'A' | 'B' | 'C' | 'D';
-  id?: 'A' | 'B' | 'C' | 'D'; // Backwards compatibility alias
+  label?: 'A' | 'B' | 'C' | 'D' | string;
+  id?: 'A' | 'B' | 'C' | 'D' | string; // Backwards compatibility alias
   text: string;               // English text
   textHindi?: string;         // Hindi text
 }
@@ -63,6 +63,7 @@ export interface Question {
 
   // Advanced question rendering metadata
   questionType?: QuestionType;                      // 'mcq' | 'matching' | 'assertion_reason' | 'multi_statement'
+  type?: QuestionType;                              // Backward-compatibility alias for questionType
   subjectCategory?: SubjectCategory;                // 'language' | 'non_language'
   questionLanguage?: QuestionLanguage;              // 'en' | 'hi' | 'both'
 
@@ -73,6 +74,15 @@ export interface Question {
   text?: string;                     // Backward-compatibility alias
   questionEnglish?: string;          // Backward-compatibility alias
   textHindi?: string;                // Backward-compatibility alias
+
+  // Structured multi-type components
+  statements?: Array<{ id?: string | number; text?: string; textHindi?: string; [key: string]: any }>;
+  columnA?: Array<{ id?: string | number; text?: string; textHindi?: string; [key: string]: any }>;
+  columnB?: Array<{ id?: string | number; text?: string; textHindi?: string; [key: string]: any }>;
+  assertion?: string;
+  assertionHindi?: string;
+  reason?: string;
+  reasonHindi?: string;
 
   // Options (bilingual)
   options: QuestionOption[];

@@ -193,15 +193,19 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
           return;
         }
 
-        // Check if records represent advanced question schema (has question/questionText/questionType/options)
+        // Check if records represent advanced question schema (has question/questionText/questionType/type/options/statements)
         const first = records[0];
         const isAdvancedFormat = first && (
           'questionType' in first ||
+          'type' in first ||
           'subjectCategory' in first ||
           'options' in first ||
           ('question' in first && !('S.No.' in first)) ||
           'columnA' in first ||
-          'assertion' in first
+          'assertion' in first ||
+          'statements' in first ||
+          'correctOption' in first ||
+          'correctAnswer' in first
         );
 
         if (isAdvancedFormat) {

@@ -149,6 +149,69 @@ export const ADVANCED_JSON_TEMPLATE = [
     "negativeMarks": 0.66,
     "explanation": "Higher repo rate increases funds cost for banks, forcing them to raise interest on loans to consumers.",
     "explanationHindi": "रेपो दर बढ़ने पर बैंकों की निधि लागत बढ़ जाती है, जिससे वे ग्राहकों के ऋण पर ब्याज दरें बढ़ा देते हैं।"
+  },
+  {
+    "id": "CGPSC-2024-Q04",
+    "examName": "CGPSC Pre",
+    "year": 2024,
+    "subjectCategory": "gs_reasoning",
+    "subject": "Chhattisgarh General Studies",
+    "chapter": "Geography of Chhattisgarh",
+    "topic": "Drainage System",
+    "difficulty": "Hard",
+    "questionType": "multi_statement",
+    "questionLanguage": "bilingual",
+    "question": "Consider the following statements regarding the Mahanadi River basin in Chhattisgarh:",
+    "questionHindi": "छत्तीसगढ़ में महानदी अपवाह तंत्र के संबंध में निम्नलिखित कथनों पर विचार कीजिए:",
+    "statements": [
+      {
+        "id": "1",
+        "text": "It covers approximately 56.15% of the total geographic area of the state.",
+        "textHindi": "यह राज्य के कुल भौगोलिक क्षेत्रफल का लगभग 56.15% भाग घेरता है।"
+      },
+      {
+        "id": "2",
+        "text": "The main river originates from Sihawa hill in Dhamtari district.",
+        "textHindi": "मुख्य नदी का उद्गम धमतरी जिले की सिहावा पहाड़ी से होता है।"
+      },
+      {
+        "id": "3",
+        "text": "Its total length inside Chhattisgarh is 286 km.",
+        "textHindi": "छत्तीसगढ़ के भीतर इसकी कुल लंबाई 286 किमी है।"
+      }
+    ],
+    "options": [
+      {
+        "label": "A",
+        "id": "A",
+        "text": "1 and 2 only",
+        "textHindi": "केवल 1 और 2"
+      },
+      {
+        "label": "B",
+        "id": "B",
+        "text": "2 and 3 only",
+        "textHindi": "केवल 2 और 3"
+      },
+      {
+        "label": "C",
+        "id": "C",
+        "text": "1, 2, and 3",
+        "textHindi": "1, 2 और 3 सभी"
+      },
+      {
+        "label": "D",
+        "id": "D",
+        "text": "1 only",
+        "textHindi": "केवल 1"
+      }
+    ],
+    "correctOption": "C",
+    "idealTimeSeconds": 70,
+    "marks": 2,
+    "negativeMarks": 0.66,
+    "explanation": "All three statements are factually correct. The Mahanadi basin covers 56.15% of CG, originates at Sihawa, and flows for 286 km within CG out of its total 858 km length.",
+    "explanationHindi": "तीनों कथन सत्य हैं। महानदी अपवाह तंत्र 56.15% क्षेत्र को कवर करता है, सिहावा से उद्गमित होता है तथा राज्य में 286 किमी प्रवाहित होता है।"
   }
 ];
 
@@ -275,19 +338,19 @@ export const JsonSchemaGuideModal: React.FC<JsonSchemaGuideModalProps> = ({
               <div className="flex items-start space-x-1.5">
                 <span className="text-emerald-400 font-bold">✓ Types:</span>
                 <span className="text-slate-300">
-                  <code className="text-emerald-300 font-mono">"mcq"</code>, <code className="text-purple-300 font-mono">"matching"</code> (columnA + columnB), <code className="text-amber-300 font-mono">"assertion_reason"</code>
+                  <code className="text-emerald-300 font-mono">"mcq"</code>, <code className="text-purple-300 font-mono">"matching"</code>, <code className="text-amber-300 font-mono">"assertion_reason"</code>, <code className="text-sky-300 font-mono">"multi_statement"</code>
+                </span>
+              </div>
+              <div className="flex items-start space-x-1.5">
+                <span className="text-emerald-400 font-bold">✓ Aliases:</span>
+                <span className="text-slate-300">
+                  Accepts <code className="text-slate-200 font-mono">questionType</code> or <code className="text-slate-200 font-mono">type</code>; <code className="text-slate-200 font-mono">correctOption</code>, <code className="text-slate-200 font-mono">correctAnswer</code>, or <code className="text-slate-200 font-mono">answer</code>
                 </span>
               </div>
               <div className="flex items-start space-x-1.5">
                 <span className="text-emerald-400 font-bold">✓ Language:</span>
                 <span className="text-slate-300">
-                  Hindi & English stems (<code className="text-slate-200 font-mono">question</code> & <code className="text-slate-200 font-mono">questionHindi</code>)
-                </span>
-              </div>
-              <div className="flex items-start space-x-1.5">
-                <span className="text-emerald-400 font-bold">✓ Benchmarks:</span>
-                <span className="text-slate-300">
-                  Ideal seconds (<code className="text-slate-200 font-mono">idealTimeSeconds</code>) & marks deduction
+                  Bilingual stems (<code className="text-slate-200 font-mono">question</code> & <code className="text-slate-200 font-mono">questionHindi</code>) with options & statements
                 </span>
               </div>
             </div>

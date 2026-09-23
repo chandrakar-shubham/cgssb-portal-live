@@ -5,8 +5,8 @@ import { Table, CheckCircle2, SplitSquareVertical, HelpCircle, FileText, Check }
 
 interface QuestionRendererProps {
   question: Question;
-  selectedOption: 'A' | 'B' | 'C' | 'D' | null;
-  onSelectOption?: (opt: 'A' | 'B' | 'C' | 'D') => void;
+  selectedOption: 'A' | 'B' | 'C' | 'D' | string | null;
+  onSelectOption?: (opt: any) => void;
   showSolution?: boolean;
 }
 
@@ -63,6 +63,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   // Detected question type fallback
   const resolvedType: QuestionType = useMemo(() => {
     if (question.questionType) return question.questionType;
+    if (question.type) return question.type;
 
     const lower = (activeContent.stem + ' ' + (question.question || '') + ' ' + (question.questionHindi || '')).toLowerCase();
     if (lower.includes('कथन') && (lower.includes('कारण') || lower.includes('अभिकथन')) || lower.includes('assertion') && lower.includes('reason')) {
@@ -239,6 +240,42 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   // MULTI-STATEMENT RENDERER
   // -------------------------------------------------------------
   const renderMultiStatementStem = (stemText: string) => {
+    // If structured statements array is provided on the question
+    const structuredStatements = question.statements;
+    if (Array.isArray(structuredStatements) && structuredStatements.length > 0) {
+      return (
+        <div className="space-y-4">
+          {stemText && (
+            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
+              {stemText}
+            </p>
+          )}
+
+          <div className="space-y-2.5">
+            {structuredStatements.map((stmt: any, idx: number) => {
+              const stmtText = (language === 'hi'
+                ? (stmt.textHindi || stmt.text || (typeof stmt === 'string' ? stmt : ''))
+                : (stmt.text || stmt.textHindi || (typeof stmt === 'string' ? stmt : ''))
+              );
+              const label = stmt.id || (idx + 1);
+
+              return (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 text-sm sm:text-base flex items-start space-x-3"
+                >
+                  <div className="w-6 h-6 rounded-full bg-slate-800 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 mt-0.5 border border-slate-700">
+                    {label}
+                  </div>
+                  <p className="font-medium leading-relaxed">{stmtText}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     const lines = stemText.split('\n').map(l => l.trim()).filter(Boolean);
     const statements: string[] = [];
     const promptLines: string[] = [];
