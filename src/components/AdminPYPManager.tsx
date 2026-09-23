@@ -20,12 +20,14 @@ import {
   Play,
   ArrowRight,
   Eye,
-  EyeOff
+  EyeOff,
+  FileJson
 } from 'lucide-react';
 import { ManualGridBuilder } from './ManualGridBuilder';
 import { AIPYPExtractorModal } from './AIPYPExtractorModal';
 import { BulkImportPreviewModal } from './BulkImportPreviewModal';
 import { JsonImportPreviewModal } from './JsonImportPreviewModal';
+import { JsonSchemaGuideModal, ADVANCED_JSON_TEMPLATE, LEGACY_PYP_JSON_TEMPLATE } from './JsonSchemaGuideModal';
 import { processBulkImportClientSide } from '../utils/pypEngine';
 import { getBaseTestTitle } from '../utils/testDeduplication';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
@@ -82,6 +84,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   const [advancedRawJson, setAdvancedRawJson] = useState<any[]>([]);
   const [advancedMappedQuestions, setAdvancedMappedQuestions] = useState<Question[]>([]);
   const [isAdvancedJsonModalOpen, setIsAdvancedJsonModalOpen] = useState(false);
+  const [isSchemaGuideOpen, setIsSchemaGuideOpen] = useState(false);
   const [publishedSuccess, setPublishedSuccess] = useState<{
     paper: PreviousYearPaper;
     mockTest?: MockTest;
@@ -435,29 +438,14 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const downloadJSONTemplate = () => {
-    const jsonSample = [
-      {
-        'S.No.': 1,
-        'Examname': 'CGPSC PRE',
-        'Year': 2024,
-        'Question(Hindi)': 'कलचुरी कालीन शासन व्यवस्था में प्रशासनिक प्रमुख को क्या कहा जाता था ?',
-        'Question(english)': 'In Kalchuri administration what was the administrative head called ?',
-        'option_A': 'महामात्य (Mahamatya)',
-        'option_B': 'महापुरोहित (Mahapurohit)',
-        'option_C': 'महाप्रतिहार (Mahapratihar)',
-        'option_D': 'महासेनापति (Mahasenapati)',
-        'answer': 'A',
-        'explaination': 'कलचुरी शासन में राजा के मुख्य प्रशासनिक सलाहकार एवं प्रधान अधिकारी को महामात्य कहा जाता था।',
-        'chapterName': 'History of Chhattisgarh',
-        'repeatedInExams': 'CGPSC 2018, CGPSC 2021'
-      }
-    ];
+  const downloadJSONTemplate = (type: 'advanced' | 'legacy' = 'advanced') => {
+    const jsonSample = type === 'advanced' ? ADVANCED_JSON_TEMPLATE : LEGACY_PYP_JSON_TEMPLATE;
+    const filename = type === 'advanced' ? 'bilingual_questions_advanced_template.json' : 'pyp_questions_template.json';
     const blob = new Blob([JSON.stringify(jsonSample, null, 2)], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'pyp_questions_template.json');
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -545,22 +533,33 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
             </button>
           </div>
 
-          {/* Secondary Template Download Links */}
-          <div className="flex items-center space-x-3 text-xs text-slate-400 pr-1 pt-0.5">
+          {/* Secondary Template Download Links & Schema Guide */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-400 pr-1 pt-0.5">
             <button
               type="button"
-              onClick={downloadCSVTemplate}
-              className="hover:text-emerald-400 flex items-center space-x-1.5 transition underline decoration-slate-700 hover:decoration-emerald-400 cursor-pointer"
+              onClick={() => setIsSchemaGuideOpen(true)}
+              className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1.5 transition font-semibold cursor-pointer shadow-sm"
+              title="View format documentation, JSON schema rules, and sample files"
             >
-              <span>📄 Download CSV Template</span>
+              <FileJson className="w-3.5 h-3.5 text-emerald-400" />
+              <span>📋 View JSON Format Guide</span>
+            </button>
+            <span className="text-slate-700 hidden sm:inline">•</span>
+            <button
+              type="button"
+              onClick={() => downloadJSONTemplate('advanced')}
+              className="hover:text-emerald-400 flex items-center space-x-1 transition underline decoration-slate-700 hover:decoration-emerald-400 cursor-pointer"
+              title="Download Full Feature Bilingual JSON template"
+            >
+              <span>📄 Download JSON Template</span>
             </button>
             <span className="text-slate-700">•</span>
             <button
               type="button"
-              onClick={downloadJSONTemplate}
-              className="hover:text-emerald-400 flex items-center space-x-1.5 transition underline decoration-slate-700 hover:decoration-emerald-400 cursor-pointer"
+              onClick={downloadCSVTemplate}
+              className="hover:text-emerald-400 flex items-center space-x-1 transition underline decoration-slate-700 hover:decoration-emerald-400 cursor-pointer"
             >
-              <span>📄 Download JSON Template</span>
+              <span>📄 Download CSV Template</span>
             </button>
           </div>
         </div>
@@ -913,6 +912,13 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
         }}
         onConfirm={handleConfirmAdvancedJsonImport}
         isImporting={isImporting}
+      />
+
+      {/* JSON Schema Format Guide Modal */}
+      <JsonSchemaGuideModal
+        isOpen={isSchemaGuideOpen}
+        onClose={() => setIsSchemaGuideOpen(false)}
+        onDownloadTemplate={downloadJSONTemplate}
       />
 
       {/* Post-Publish Celebration & Live Test Modal */}
