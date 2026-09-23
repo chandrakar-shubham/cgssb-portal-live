@@ -16,13 +16,29 @@
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # 4. Prevent rewriting missing static assets to index.html
+  # 4. Route any sub-path asset requests (e.g. /admin/assets/* or /test/assets/*) to /assets/*
+  RewriteCond %{DOCUMENT_ROOT}/assets/$1 -f [OR]
+  RewriteCond %{DOCUMENT_ROOT}/dist/assets/$1 -f
+  RewriteRule ^.*?assets/(.*)$ assets/$1 [L]
+
+  # 5. Prevent rewriting missing static assets to index.html
   # (Prevents "Failed to load module script: Expected JavaScript but got text/html" errors)
   RewriteCond %{REQUEST_URI} \.(js|mjs|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|map)$ [NC]
   RewriteRule ^ - [R=404,L]
 
-  # 5. Fallback all non-existing routes to index.html for Single Page App routing
+  # 6. Fallback all non-existing routes to index.html for Single Page App routing
   RewriteRule ^ index.html [L]
+</IfModule>
+
+# -------------------------------------------------------------
+# Caching: Prevent caching of index.html so updates reflect instantly
+# -------------------------------------------------------------
+<IfModule mod_headers.c>
+  <FilesMatch "index\.html$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </FilesMatch>
 </IfModule>
 
 # -------------------------------------------------------------
