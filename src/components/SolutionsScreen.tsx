@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { TestAttempt, Question, SectorAnalysis } from '../types';
 import { normalizeSubjectName, migrateLegacyAttempt } from '../utils/taxonomyMigration';
+import { QuestionRenderer } from './QuestionRenderer';
+import { LanguageToggle } from './LanguageToggle';
+import { useLanguage } from '../context/LanguageContext';
 import {
   Award,
   TrendingUp,
@@ -22,7 +25,8 @@ import {
   History,
   Hash,
   BookOpen,
-  Filter
+  Filter,
+  Trophy
 } from 'lucide-react';
 
 interface SolutionsScreenProps {
@@ -530,9 +534,12 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
                 </button>
               </div>
 
-              <span className="text-xs text-slate-400">
-                Showing <strong>{filteredQuestions.length}</strong> questions
-              </span>
+              <div className="flex items-center space-x-3">
+                <LanguageToggle />
+                <span className="text-xs text-slate-400">
+                  Showing <strong>{filteredQuestions.length}</strong> questions
+                </span>
+              </div>
             </div>
 
             {/* Subject Filters */}
@@ -685,69 +692,20 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
                     </div>
                   )}
 
-                  {/* Question Text */}
-                  <div>
-                    <p className="text-sm sm:text-base font-semibold text-white leading-relaxed">
-                      {q.questionText}
-                    </p>
-                    {q.questionHindi && (
-                      <p className="text-xs sm:text-sm text-emerald-300/80 mt-1 font-sans">
-                        {q.questionHindi}
-                      </p>
-                    )}
+                  {/* Benchmark Comparison Badge */}
+                  <div className="flex items-center space-x-2 text-[11px]">
+                    <div className="px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 font-mono font-bold flex items-center space-x-1.5">
+                      <Trophy className="w-3 h-3 text-indigo-400" />
+                      <span>Ideal / Topper Benchmark: {q.idealTimeSeconds || (q.difficulty === 'Easy' ? 35 : q.difficulty === 'Hard' ? 75 : 50)}s</span>
+                    </div>
                   </div>
 
-                  {/* Options List */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    {q.options.map(opt => {
-                      const isCandidateChoice = candidateAnswer === opt.id;
-                      const isRightChoice = q.correctOption === opt.id;
-
-                      let optClass = 'bg-slate-800/60 border-slate-800 text-slate-300';
-                      if (isRightChoice) {
-                        optClass = 'bg-emerald-500/15 border-emerald-500/70 text-white font-bold';
-                      } else if (isCandidateChoice && !isRightChoice) {
-                        optClass = 'bg-rose-500/15 border-rose-500 text-rose-300 line-through';
-                      }
-
-                      return (
-                        <div
-                          key={opt.id}
-                          className={`p-3 rounded-xl border flex items-start space-x-2.5 ${optClass}`}
-                        >
-                          <span
-                            className={`w-5 h-5 rounded flex items-center justify-center font-bold text-[10px] shrink-0 ${
-                              isRightChoice
-                                ? 'bg-emerald-500 text-slate-950 font-black'
-                                : isCandidateChoice
-                                ? 'bg-rose-500 text-white'
-                                : 'bg-slate-700 text-slate-400'
-                            }`}
-                          >
-                            {opt.id}
-                          </span>
-                          <div className="flex-1">
-                            <span>{opt.text}</span>
-                            {opt.textHindi && (
-                              <span className="block text-[11px] text-slate-400 mt-0.5">
-                                {opt.textHindi}
-                              </span>
-                            )}
-                          </div>
-                          {isRightChoice && (
-                            <span className="text-[10px] font-bold text-emerald-400 ml-auto">
-                              Correct Key
-                            </span>
-                          )}
-                          {isCandidateChoice && !isRightChoice && (
-                            <span className="text-[10px] font-bold text-rose-400 ml-auto">
-                              Your Answer
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {/* Dynamic Question Renderer */}
+                  <QuestionRenderer
+                    question={q}
+                    selectedOption={candidateAnswer}
+                    showSolution={true}
+                  />
 
                   {/* Step-by-Step Explanation Accordion */}
                   <div className="bg-slate-800/70 rounded-xl p-4 border border-slate-700/60 text-xs">

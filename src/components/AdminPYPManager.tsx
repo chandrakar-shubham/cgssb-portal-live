@@ -25,8 +25,10 @@ import {
 import { ManualGridBuilder } from './ManualGridBuilder';
 import { AIPYPExtractorModal } from './AIPYPExtractorModal';
 import { BulkImportPreviewModal } from './BulkImportPreviewModal';
+import { JsonImportPreviewModal } from './JsonImportPreviewModal';
 import { processBulkImportClientSide } from '../utils/pypEngine';
 import { getBaseTestTitle } from '../utils/testDeduplication';
+import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 
 const REQUIRED_BULK_KEYS = [
   'S.No.',
@@ -75,6 +77,11 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importToast, setImportToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Advanced JSON Import State
+  const [advancedRawJson, setAdvancedRawJson] = useState<any[]>([]);
+  const [advancedMappedQuestions, setAdvancedMappedQuestions] = useState<Question[]>([]);
+  const [isAdvancedJsonModalOpen, setIsAdvancedJsonModalOpen] = useState(false);
   const [publishedSuccess, setPublishedSuccess] = useState<{
     paper: PreviousYearPaper;
     mockTest?: MockTest;
@@ -166,7 +173,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     };
   };
 
-  // JSON Import Handler
+  // JSON Import Handler (Supports Advanced Question Schema + Legacy PYP)
   const handleJSONImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -176,18 +183,51 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
       try {
         const text = event.target?.result as string;
         const parsed = JSON.parse(text);
-        const records = Array.isArray(parsed) ? parsed : (parsed.questions || []);
+        const records: any[] = Array.isArray(parsed) ? parsed : (parsed.questions || []);
 
-        const { isValid, missingFields } = validateRecords(records);
-        if (!isValid) {
-          alert(
-            `❌ Validation Failed for JSON Import!\n\nThe file is missing the following required key(s):\n\n${missingFields.map(f => `• ${f}`).join('\n')}\n\nEvery record must contain exactly these 11 keys:\n${REQUIRED_BULK_KEYS.join(', ')}`
-          );
+        if (records.length === 0) {
+          alert('❌ The JSON file is empty or does not contain questions.');
           return;
         }
 
-        setPreviewQuestions(records);
-        setIsPreviewModalOpen(true);
+        // Check if records represent advanced question schema (has question/questionText/questionType/options)
+        const first = records[0];
+        const isAdvancedFormat = first && (
+          'questionType' in first ||
+          'subjectCategory' in first ||
+          'options' in first ||
+          ('question' in first && !('S.No.' in first)) ||
+          'columnA' in first ||
+          'assertion' in first
+        );
+
+        if (isAdvancedFormat) {
+          const mapped = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
+          setAdvancedRawJson(records);
+          setAdvancedMappedQuestions(mapped);
+          setIsAdvancedJsonModalOpen(true);
+        } else {
+          // Standard Legacy 11-key format
+          const { isValid, missingFields } = validateRecords(records);
+          if (!isValid) {
+            // If it failed strict 11 keys, try mapping to questions
+            try {
+              const fallbackMapped = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
+              setAdvancedRawJson(records);
+              setAdvancedMappedQuestions(fallbackMapped);
+              setIsAdvancedJsonModalOpen(true);
+              return;
+            } catch {
+              alert(
+                `❌ Validation Failed for JSON Import!\n\nMissing key(s):\n${missingFields.map(f => `• ${f}`).join('\n')}`
+              );
+              return;
+            }
+          }
+
+          setPreviewQuestions(records);
+          setIsPreviewModalOpen(true);
+        }
       } catch (err: any) {
         alert(`❌ Invalid JSON file: ${err.message}`);
       } finally {
@@ -325,6 +365,55 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
         type: 'error',
       });
       setTimeout(() => setImportToast(null), 6000);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Confirm Advanced JSON Import (Sends to /api/questions/bulk or adds locally)
+  const handleConfirmAdvancedJsonImport = async () => {
+    if (advancedMappedQuestions.length === 0) return;
+    setIsImporting(true);
+
+    try {
+      let savedQuestions: Question[] = [];
+
+      try {
+        const res = await fetch('/api/questions/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ questions: advancedMappedQuestions }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.questions) {
+            savedQuestions = data.questions;
+          }
+        }
+      } catch (e) {
+        console.warn('Backend API bulk questions unavailable, saving client-side:', e);
+      }
+
+      if (savedQuestions.length === 0) {
+        savedQuestions = advancedMappedQuestions;
+      }
+
+      if (onQuestionsAdded) {
+        onQuestionsAdded(savedQuestions);
+      }
+
+      setIsAdvancedJsonModalOpen(false);
+      setImportToast({
+        message: `✅ Successfully imported ${savedQuestions.length} bilingual questions!`,
+        type: 'success',
+      });
+      setTimeout(() => setImportToast(null), 4000);
+    } catch (err: any) {
+      setImportToast({
+        message: `❌ Failed to import questions: ${err.message}`,
+        type: 'error',
+      });
     } finally {
       setIsImporting(false);
     }
@@ -807,6 +896,22 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
           }
         }}
         onConfirm={handleConfirmImport}
+        isImporting={isImporting}
+      />
+
+      {/* Advanced Question JSON Import Preview Modal */}
+      <JsonImportPreviewModal
+        isOpen={isAdvancedJsonModalOpen}
+        rawJsonData={advancedRawJson}
+        mappedQuestions={advancedMappedQuestions}
+        onClose={() => {
+          if (!isImporting) {
+            setIsAdvancedJsonModalOpen(false);
+            setAdvancedRawJson([]);
+            setAdvancedMappedQuestions([]);
+          }
+        }}
+        onConfirm={handleConfirmAdvancedJsonImport}
         isImporting={isImporting}
       />
 

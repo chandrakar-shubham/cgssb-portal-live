@@ -193,22 +193,22 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     setFormData({
       id: q.id,
       chapter: q.chapter || q.chapterName || '',
-      subject: q.subject,
-      topic: q.topic,
-      subtopic: q.subtopic,
-      difficulty: q.difficulty,
-      category: q.category,
-      questionText: q.questionText,
+      subject: q.subject || 'Chhattisgarh General Studies',
+      topic: q.topic || 'General',
+      subtopic: q.subtopic || 'General',
+      difficulty: q.difficulty || 'Medium',
+      category: (q.category as ExamCategory) || 'CGSSB',
+      questionText: q.questionText || q.question || '',
       questionHindi: q.questionHindi || '',
-      options: q.options.map(o => ({
-        id: o.id,
-        text: o.text,
+      options: (q.options || []).map((o, idx) => ({
+        id: (o.id || o.label || ['A', 'B', 'C', 'D'][idx] || 'A') as 'A' | 'B' | 'C' | 'D',
+        text: o.text || '',
         textHindi: o.textHindi || '',
       })),
-      correctOption: q.correctOption,
-      marks: q.marks,
-      negativeMarks: q.negativeMarks,
-      explanation: q.explanation,
+      correctOption: q.correctOption || 'A',
+      marks: q.marks || 1.0,
+      negativeMarks: q.negativeMarks || 0.333,
+      explanation: q.explanation || '',
       explanationHindi: q.explanationHindi || '',
       pypAppearances: appearances,
     });
@@ -345,10 +345,10 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
         q.id.toLowerCase().includes(s) ||
         (q.chapter && q.chapter.toLowerCase().includes(s)) ||
         (q.chapterName && q.chapterName.toLowerCase().includes(s)) ||
-        q.questionText.toLowerCase().includes(s) ||
+        (q.questionText || q.question || '').toLowerCase().includes(s) ||
         (q.questionHindi && q.questionHindi.toLowerCase().includes(s)) ||
-        q.topic.toLowerCase().includes(s) ||
-        q.subtopic.toLowerCase().includes(s) ||
+        (q.topic || '').toLowerCase().includes(s) ||
+        (q.subtopic && q.subtopic.toLowerCase().includes(s)) ||
         (q.pypSource && q.pypSource.toLowerCase().includes(s)) ||
         (q.pypAppearances &&
           q.pypAppearances.some(

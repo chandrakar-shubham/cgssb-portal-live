@@ -117,9 +117,9 @@ async function startServer() {
       const s = search.toLowerCase();
       filtered = filtered.filter(
         q =>
-          q.questionText.toLowerCase().includes(s) ||
+          (q.questionText || q.question || '').toLowerCase().includes(s) ||
           (q.questionHindi && q.questionHindi.toLowerCase().includes(s)) ||
-          q.topic.toLowerCase().includes(s)
+          (q.topic || '').toLowerCase().includes(s)
       );
     }
 
@@ -175,6 +175,79 @@ async function startServer() {
     const { id } = req.params;
     questions = questions.filter(q => q.id !== id);
     res.json({ success: true, message: 'Question deleted successfully' });
+  });
+
+  // 4b. Bulk Questions Ingestion Endpoint
+  app.post('/api/questions/bulk', (req, res) => {
+    try {
+      const { questions: incomingList } = req.body;
+      const list = Array.isArray(incomingList) ? incomingList : (Array.isArray(req.body) ? req.body : []);
+
+      if (!Array.isArray(list) || list.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing or empty questions array in request body.'
+        });
+      }
+
+      let inserted = 0;
+      let updated = 0;
+      const savedQuestions: Question[] = [];
+
+      for (const rawQ of list) {
+        if (!rawQ) continue;
+        const qId = String(rawQ.id || `q-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+        const existingIdx = questions.findIndex(q => q.id === qId || (rawQ.uniqueQuestionId && q.uniqueQuestionId === rawQ.uniqueQuestionId));
+
+        const formattedQ: Question = {
+          ...rawQ,
+          id: qId,
+          subject: rawQ.subject || 'Chhattisgarh General Studies',
+          topic: rawQ.topic || 'General',
+          questionType: rawQ.questionType || 'mcq',
+          subjectCategory: rawQ.subjectCategory || 'gs_reasoning',
+          questionLanguage: rawQ.questionLanguage || 'bilingual',
+          question: rawQ.question || rawQ.questionText || '',
+          questionText: rawQ.questionText || rawQ.question || '',
+          questionHindi: rawQ.questionHindi || '',
+          options: (rawQ.options || []).map((opt: any, oIdx: number) => {
+            const lbl = (opt.label || opt.id || ['A', 'B', 'C', 'D'][oIdx] || 'A') as 'A' | 'B' | 'C' | 'D';
+            return {
+              id: lbl,
+              label: lbl,
+              text: opt.text || '',
+              textHindi: opt.textHindi || '',
+            };
+          }),
+          correctOption: rawQ.correctOption || rawQ.correctAnswer || 'A',
+          correctAnswer: rawQ.correctAnswer || rawQ.correctOption || 'A',
+          idealTimeSeconds: Number(rawQ.idealTimeSeconds) || (rawQ.difficulty === 'Easy' ? 35 : rawQ.difficulty === 'Hard' ? 75 : 50),
+          marks: Number(rawQ.marks) || 1.0,
+          negativeMarks: Number(rawQ.negativeMarks) || 0.333,
+        };
+
+        if (existingIdx !== -1) {
+          questions[existingIdx] = { ...questions[existingIdx], ...formattedQ };
+          updated++;
+          savedQuestions.push(questions[existingIdx]);
+        } else {
+          questions.unshift(formattedQ);
+          inserted++;
+          savedQuestions.push(formattedQ);
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        inserted,
+        updated,
+        total: list.length,
+        questions: savedQuestions,
+      });
+    } catch (err: any) {
+      console.error('Error in /api/questions/bulk:', err);
+      res.status(500).json({ success: false, error: err.message || 'Bulk questions import failed' });
+    }
   });
 
   // 5. Mock Tests CRUD

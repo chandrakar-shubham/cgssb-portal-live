@@ -30,10 +30,15 @@ export interface ExamPatternConfig {
 
 export type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 
+export type QuestionType = 'mcq' | 'matching' | 'assertion_reason' | 'multi_statement';
+export type SubjectCategory = 'language' | 'non_language';
+export type QuestionLanguage = 'en' | 'hi' | 'both';
+
 export interface QuestionOption {
-  id: 'A' | 'B' | 'C' | 'D';
-  text: string;
-  textHindi?: string;
+  label?: 'A' | 'B' | 'C' | 'D';
+  id?: 'A' | 'B' | 'C' | 'D'; // Backwards compatibility alias
+  text: string;               // English text
+  textHindi?: string;         // Hindi text
 }
 
 export interface PYQAppearance {
@@ -44,36 +49,53 @@ export interface PYQAppearance {
 }
 
 export interface Question {
-  id: string; // Unique Question ID (e.g. QID-CGSSB-2024-001)
+  id: string;                       // Unique, e.g., "CG-LECT-2026-EN-001" or "QID-CGSSB-2024-001"
   uniqueQuestionId?: string;
-  subject: string;
-  topic: string;
-  subtopic: string;
+  examName?: string;                 // e.g., "CG Lecturer Test 2026"
+  year?: number;                     // e.g., 2026
+  category: ExamCategory | string;   // e.g., "CG Lecturer" or "CGSSB"
+  subject: string;                  // e.g., "General English"
+  topic: string;                    // e.g., "Prepositions"
+  subtopic?: string;                // e.g., "Compound Prepositions"
   difficulty: DifficultyLevel;
-  questionText: string;
-  text?: string; // alias for compatibility
-  questionHindi?: string;
-  questionEnglish?: string;
-  textHindi?: string; // alias for compatibility
+  marks: number;                    // Usually 1
+  negativeMarks: number;            // Usually 0.25 (or 0.33)
+
+  // Advanced question rendering metadata
+  questionType?: QuestionType;                      // 'mcq' | 'matching' | 'assertion_reason' | 'multi_statement'
+  subjectCategory?: SubjectCategory;                // 'language' | 'non_language'
+  questionLanguage?: QuestionLanguage;              // 'en' | 'hi' | 'both'
+
+  // Question text (bilingual stems)
+  question?: string;                 // English stem
+  questionHindi?: string;            // Hindi stem
+  questionText: string;              // Base question text (guaranteed string)
+  text?: string;                     // Backward-compatibility alias
+  questionEnglish?: string;          // Backward-compatibility alias
+  textHindi?: string;                // Backward-compatibility alias
+
+  // Options (bilingual)
   options: QuestionOption[];
+
   correctOption: 'A' | 'B' | 'C' | 'D';
-  correctAnswer?: 'A' | 'B' | 'C' | 'D'; // alias for compatibility
-  marks: number;
-  negativeMarks: number;
-  explanation: string;
-  explanationHindi?: string;
+  correctAnswer?: 'A' | 'B' | 'C' | 'D'; // Backward-compatibility alias
+  explanation: string;              // English
+  explanationHindi?: string;         // Hindi
+
+  // Timings & analytics
+  idealTimeSeconds?: number;        // Topper / benchmark time in seconds (e.g. 45s)
+
+  // Provenance & PYQ relations
   pypSource?: string;
   examSource?: string;
-  pypAppearances?: PYQAppearance[]; // Multiple exam appearances with year and exam name
+  pypAppearances?: PYQAppearance[];
   repeatedInExams?: string[];
   similarQuestionIds?: string[];
   moduleId?: string;
   chapterId?: string;
   chapterName?: string;
-  chapter?: string; // Chapter property for curriculum organization (e.g. 'History of Chhattisgarh')
+  chapter?: string;
   keyFactHindi?: string;
-  category: ExamCategory;
-  year?: number;
   createdAt?: string;
 }
 

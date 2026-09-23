@@ -22,8 +22,13 @@ import {
   Send,
   Flame,
   History,
-  Hash
+  Hash,
+  Timer,
+  Trophy
 } from 'lucide-react';
+import { QuestionRenderer } from './QuestionRenderer';
+import { LanguageToggle } from './LanguageToggle';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ExamEngineProps {
   test: MockTest;
@@ -43,6 +48,8 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   onExit,
   onSubmit,
 }) => {
+  const { t } = useLanguage();
+
   // Timer State
   const initialDurationSeconds = (test.durationMinutes || 15) * 60;
   const [secondsRemaining, setSecondsRemaining] = useState(initialDurationSeconds);
@@ -51,6 +58,11 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   // Active Navigation State
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+  // Individual Question Timers
+  const [questionTimes, setQuestionTimes] = useState<Record<string, number>>({});
+  const activeQuestionStartTimeRef = useRef<number>(Date.now());
+  const [activeQuestionLiveSeconds, setActiveQuestionLiveSeconds] = useState(0);
 
   // Candidate Response State
   const [responses, setResponses] = useState<Record<string, 'A' | 'B' | 'C' | 'D' | null>>({});
@@ -82,6 +94,32 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   );
 
   const activeQuestion = sectionQuestions[currentQuestionIndex] || questions[0];
+
+  // Helper to commit time on current active question
+  const recordActiveQuestionTime = () => {
+    if (!activeQuestion) return;
+    const now = Date.now();
+    const elapsedSeconds = Math.max(1, Math.round((now - activeQuestionStartTimeRef.current) / 1000));
+    setQuestionTimes(prev => ({
+      ...prev,
+      [activeQuestion.id]: (prev[activeQuestion.id] || 0) + elapsedSeconds,
+    }));
+    activeQuestionStartTimeRef.current = Date.now();
+  };
+
+  // Live second counter for active question
+  useEffect(() => {
+    activeQuestionStartTimeRef.current = Date.now();
+    setActiveQuestionLiveSeconds(questionTimes[activeQuestion?.id] || 0);
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const currentDelta = Math.round((now - activeQuestionStartTimeRef.current) / 1000);
+      setActiveQuestionLiveSeconds((questionTimes[activeQuestion?.id] || 0) + currentDelta);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeQuestion?.id]);
 
   // Calculate unique question ID within this specific mock test context
   let overallMockIndex = 0;
@@ -120,6 +158,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   };
 
   const doFinalSubmit = () => {
+    recordActiveQuestionTime();
     const timeTaken = initialDurationSeconds - secondsRemaining;
     onSubmit({
       testId: test.id,
@@ -134,6 +173,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
     const targetQ = sectionQuestions[qIndex];
     if (!targetQ) return;
 
+    recordActiveQuestionTime();
     setCurrentQuestionIndex(qIndex);
 
     // If currently 'not_visited', mark it 'unanswered'
@@ -147,6 +187,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
 
   // Section switcher
   const selectSection = (sIndex: number) => {
+    recordActiveQuestionTime();
     setCurrentSectionIndex(sIndex);
     setCurrentQuestionIndex(0);
     const newSection = test.sections[sIndex];
@@ -267,8 +308,10 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
           </div>
         </div>
 
-        {/* Center: Live Countdown Timer */}
-        <div className="flex items-center">
+        {/* Center: Live Countdown Timer & Language Switcher */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <LanguageToggle />
+
           <div
             className={`px-3 py-1.5 rounded-xl border flex items-center space-x-2 font-mono font-bold tracking-wider transition-all duration-300 ${
               isUrgentTimer
@@ -280,7 +323,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
           >
             <Clock className={`w-4 h-4 ${isUrgentTimer ? 'text-rose-400' : 'text-emerald-400'}`} />
             <div className="text-xs sm:text-sm">
-              <span className="text-[10px] text-slate-400 font-normal mr-1.5 hidden sm:inline">Time Left:</span>
+              <span className="text-[10px] text-slate-400 font-normal mr-1.5 hidden sm:inline">{t('time_left', 'Time Left')}:</span>
               <span className="font-extrabold">{formatTime(secondsRemaining)}</span>
             </div>
           </div>
@@ -344,22 +387,37 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
         {/* Workspace: Question Content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-between">
           <div className="max-w-3xl mx-auto w-full space-y-6">
-            {/* Question Header meta with Unique IDs */}
+            {/* Question Header meta with Unique IDs, Question Timer & Topper Benchmark */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-black text-sm border border-emerald-500/30">
-                  Question #{currentQuestionIndex + 1}
+                  #{currentQuestionIndex + 1}
                 </span>
+
+                {/* Individual Question Live Stopwatch */}
+                <div
+                  className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 font-mono text-xs font-bold flex items-center space-x-1.5"
+                  title="Time spent on this specific question"
+                >
+                  <Timer className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-[10px] text-slate-400 font-sans hidden sm:inline">{t('time_spent', 'Time')}:</span>
+                  <span>{formatTime(activeQuestionLiveSeconds)}</span>
+                </div>
+
+                {/* Topper / Ideal Benchmark Time */}
+                <div
+                  className="px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 font-mono text-xs font-bold flex items-center space-x-1.5"
+                  title="Target / Topper Benchmark Time"
+                >
+                  <Trophy className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-[10px] text-indigo-300/80 font-sans hidden sm:inline">{t('topper_time', 'Topper')}:</span>
+                  <span>{activeQuestion.idealTimeSeconds || (activeQuestion.difficulty === 'Easy' ? 35 : activeQuestion.difficulty === 'Hard' ? 75 : 50)}s</span>
+                </div>
 
                 {/* Unique Question ID in Mock context */}
                 <span className="px-2 py-0.5 rounded bg-slate-950 text-emerald-300 font-mono text-[11px] font-bold border border-emerald-500/30 flex items-center space-x-1" title="Unique Question ID in this Mock Test">
                   <span className="text-slate-400">Mock QID:</span>
                   <span>{mockQuestionUniqueId}</span>
-                </span>
-
-                {/* Question Bank Master ID */}
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px] border border-slate-700 hidden sm:inline" title="Question Bank Master ID">
-                  Bank QID: {activeQuestion.id}
                 </span>
 
                 <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-medium border border-slate-700">
@@ -373,10 +431,6 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                     <span>{activeQuestion.chapterName}</span>
                   </span>
                 )}
-
-                <span className="text-[11px] text-slate-400 hidden sm:inline">
-                  • {activeQuestion.topic}
-                </span>
               </div>
 
               <div className="flex items-center space-x-2 text-xs font-semibold shrink-0">
@@ -430,60 +484,13 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
               </div>
             )}
 
-            {/* Question Text (Bilingual) */}
-            <div className="space-y-3 bg-slate-900/60 p-5 rounded-2xl border border-slate-800/80 shadow-sm">
-              <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
-                {activeQuestion.questionText}
-              </p>
-              {activeQuestion.questionHindi && (
-                <p className="text-sm sm:text-base font-medium text-emerald-300/90 leading-relaxed border-t border-slate-800/60 pt-2 font-sans">
-                  {activeQuestion.questionHindi}
-                </p>
-              )}
-            </div>
-
-            {/* Options (A, B, C, D) */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                Select one answer:
-              </span>
-              <div className="grid grid-cols-1 gap-3">
-                {activeQuestion.options.map(option => {
-                  const isSelected = responses[activeQuestion.id] === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      onClick={() => handleOptionSelect(option.id)}
-                      className={`w-full text-left p-4 rounded-xl border transition-all flex items-start space-x-3.5 group ${
-                        isSelected
-                          ? 'bg-emerald-500/15 border-emerald-500 shadow-md shadow-emerald-500/10'
-                          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-850'
-                      }`}
-                    >
-                      <div
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition ${
-                          isSelected
-                            ? 'bg-emerald-500 text-slate-950 font-black shadow'
-                            : 'bg-slate-800 text-slate-400 group-hover:text-slate-200 border border-slate-700'
-                        }`}
-                      >
-                        {option.id}
-                      </div>
-                      <div className="flex-1 text-sm font-medium">
-                        <span className={isSelected ? 'text-white font-bold' : 'text-slate-200'}>
-                          {option.text}
-                        </span>
-                        {option.textHindi && (
-                          <span className="block text-xs text-slate-400 mt-0.5">
-                            {option.textHindi}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            {/* Dynamic Question Renderer supporting MCQ, Matching (2-col table), Assertion-Reason, Multi-Statement */}
+            <QuestionRenderer
+              question={activeQuestion}
+              selectedOption={responses[activeQuestion.id]}
+              onSelectOption={handleOptionSelect}
+              showSolution={false}
+            />
           </div>
 
           {/* Bottom Toolbar */}
