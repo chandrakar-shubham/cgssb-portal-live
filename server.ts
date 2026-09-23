@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
@@ -41,11 +42,77 @@ const getDirname = () => {
 const appFilename = getFilename();
 const appDirname = getDirname();
 
-// In-Memory Database Store (persisting across actions)
-let questions: Question[] = [...INITIAL_QUESTIONS];
-let mockTests: MockTest[] = [...INITIAL_MOCK_TESTS];
-let pypPapers: PreviousYearPaper[] = [...INITIAL_PYP_PAPERS];
-let attempts: TestAttempt[] = [...SAMPLE_USER_ATTEMPTS];
+// ==================== PERSISTENT STORAGE ====================
+// Path to a JSON file that survives server restarts
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'cgssb-db.json');
+
+interface DatabaseShape {
+  questions: Question[];
+  mockTests: MockTest[];
+  pypPapers: PreviousYearPaper[];
+  attempts: TestAttempt[];
+}
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+}
+
+function loadDatabase(): DatabaseShape {
+  ensureDataDir();
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      console.log(`✅ Loaded DB from ${DB_FILE}`);
+      return {
+        questions: parsed.questions || [...INITIAL_QUESTIONS],
+        mockTests: parsed.mockTests || [...INITIAL_MOCK_TESTS],
+        pypPapers: parsed.pypPapers || [...INITIAL_PYP_PAPERS],
+        attempts: parsed.attempts || [...SAMPLE_USER_ATTEMPTS],
+      };
+    }
+  } catch (err) {
+    console.warn('⚠️ Failed to load DB, using seeds:', err);
+  }
+  console.log('📦 No DB found, seeding with initial data');
+  return {
+    questions: [...INITIAL_QUESTIONS],
+    mockTests: [...INITIAL_MOCK_TESTS],
+    pypPapers: [...INITIAL_PYP_PAPERS],
+    attempts: [...SAMPLE_USER_ATTEMPTS],
+  };
+}
+
+const db: DatabaseShape = loadDatabase();
+let questions: Question[] = db.questions;
+let mockTests: MockTest[] = db.mockTests;
+let pypPapers: PreviousYearPaper[] = db.pypPapers;
+let attempts: TestAttempt[] = db.attempts;
+
+let saveTimer: NodeJS.Timeout | null = null;
+function saveDatabase(immediate = false) {
+  const doSave = () => {
+    try {
+      ensureDataDir();
+      const payload: DatabaseShape = { questions, mockTests, pypPapers, attempts };
+      fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), 'utf-8');
+      console.log(`💾 DB saved (${questions.length} Qs, ${mockTests.length} tests, ${pypPapers.length} PYPs)`);
+    } catch (err) {
+      console.error('❌ Failed to save DB:', err);
+    }
+  };
+  if (immediate) {
+    if (saveTimer) clearTimeout(saveTimer);
+    doSave();
+  } else {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 2000);
+  }
+}
+// ==================== END PERSISTENT STORAGE ====================
 
 // Gemini Client initialization (server-side only)
 function getGeminiClient(): GoogleGenAI | null {
@@ -63,9 +130,9 @@ function getGeminiClient(): GoogleGenAI | null {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '50mb' }));
 
   // CORS support for Android clients connecting over network
   app.use((req, res, next) => {
@@ -89,6 +156,24 @@ async function startServer() {
         minSdkVersion: 24,
         targetSdkVersion: 34,
         supportsOfflineSync: true,
+      },
+    });
+  });
+
+  // 1b. Version & Deployment Verification Endpoint
+  app.get('/api/version', (req, res) => {
+    res.json({
+      commitSha: process.env.GITHUB_SHA || 'unknown',
+      buildTime: process.env.BUILD_TIME || 'unknown',
+      serverStartedAt: new Date().toISOString(),
+      nodeVersion: process.version,
+      env: process.env.NODE_ENV || 'development',
+      dataFile: DB_FILE,
+      counts: {
+        questions: questions.length,
+        mockTests: mockTests.length,
+        pypPapers: pypPapers.length,
+        attempts: attempts.length,
       },
     });
   });
@@ -155,6 +240,7 @@ async function startServer() {
       };
 
       questions.unshift(newQuestion);
+      saveDatabase();
       res.status(201).json({ success: true, question: newQuestion });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
@@ -168,12 +254,14 @@ async function startServer() {
       return res.status(404).json({ success: false, error: 'Question not found' });
     }
     questions[index] = { ...questions[index], ...req.body, id };
+    saveDatabase();
     res.json({ success: true, question: questions[index] });
   });
 
   app.delete('/api/questions/:id', (req, res) => {
     const { id } = req.params;
     questions = questions.filter(q => q.id !== id);
+    saveDatabase();
     res.json({ success: true, message: 'Question deleted successfully' });
   });
 
@@ -237,6 +325,7 @@ async function startServer() {
         }
       }
 
+      saveDatabase();
       res.status(200).json({
         success: true,
         inserted,
@@ -272,7 +361,6 @@ async function startServer() {
       return res.status(404).json({ success: false, error: 'Test not found' });
     }
 
-    // Gather question IDs from all sections
     const allQIds: string[] = [];
     test.sections.forEach(s => {
       s.questionIds.forEach(qid => {
@@ -298,8 +386,9 @@ async function startServer() {
     mockTests[idx] = {
       ...mockTests[idx],
       ...req.body,
-      id, // protect ID
+      id,
     };
+    saveDatabase();
     res.json({ success: true, test: mockTests[idx] });
   });
 
@@ -307,6 +396,7 @@ async function startServer() {
     const { id } = req.params;
     const beforeCount = mockTests.length;
     mockTests = mockTests.filter(t => t.id !== id);
+    saveDatabase();
     res.json({
       success: true,
       deleted: beforeCount !== mockTests.length,
@@ -343,6 +433,7 @@ async function startServer() {
       };
 
       mockTests.unshift(newTest);
+      saveDatabase();
       res.status(201).json({ success: true, test: newTest });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
@@ -366,7 +457,6 @@ async function startServer() {
         return res.status(404).json({ success: false, error: 'Test not found' });
       }
 
-      // Gather question objects
       const allQIds: string[] = [];
       test.sections.forEach(s => {
         s.questionIds.forEach(qid => {
@@ -383,7 +473,6 @@ async function startServer() {
       let rawScore = 0;
       let negativeMarksDeducted = 0;
 
-      // Group by subject for sector-wise analysis
       const sectorMap: Record<string, {
         total: number;
         correct: number;
@@ -437,11 +526,9 @@ async function startServer() {
       const maxPossibleScore = testQuestions.reduce((sum, q) => sum + q.marks, 0);
       const percentage = maxPossibleScore > 0 ? (finalScore / maxPossibleScore) * 100 : 0;
 
-      // Simulated All-India Rank & Percentile
       const totalParticipants = (test.attemptsCount || 1200) + 1;
       test.attemptsCount = totalParticipants;
 
-      // Rank formula simulation based on percentile score
       const percentile = Math.min(99.9, Math.max(15.0, parseFloat((percentage * 0.95 + (accuracy * 0.05)).toFixed(1))));
       const simulatedRank = Math.max(1, Math.round(totalParticipants * (1 - percentile / 100)));
 
@@ -489,6 +576,7 @@ async function startServer() {
       };
 
       attempts.unshift(attemptResult);
+      saveDatabase();
 
       res.json({
         success: true,
@@ -563,6 +651,7 @@ async function startServer() {
       };
 
       pypPapers.unshift(newPyp);
+      saveDatabase();
       res.status(201).json({ success: true, pyp: newPyp });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
@@ -573,7 +662,6 @@ async function startServer() {
   function autoClassifyChapter(text: string, defaultSubject: string, defaultTopic: string) {
     const lower = text.toLowerCase();
 
-    // 1. Chhattisgarhi Language (छत्तीसगढ़ी भाषा, व्याकरण, हाना एवं जनउला)
     if (
       lower.includes('हाना') || lower.includes('hana') ||
       lower.includes('जनउला') || lower.includes('janula') ||
@@ -588,7 +676,6 @@ async function startServer() {
       };
     }
 
-    // 2. General Hindi (सामान्य हिन्दी व्याकरण)
     if (
       lower.includes('संधि') || lower.includes('समास') ||
       lower.includes('पर्यायवाची') || lower.includes('विलोम') ||
@@ -607,7 +694,6 @@ async function startServer() {
       };
     }
 
-    // 3. Computer Knowledge (कंप्यूटर ज्ञान)
     if (
       lower.includes('computer') || lower.includes('कंप्यूटर') ||
       lower.includes('cpu') || lower.includes('सीपीयू') ||
@@ -636,7 +722,6 @@ async function startServer() {
       };
     }
 
-    // 4. Quantitative Aptitude (User specified: General Mental Ability must be Quantitative Aptitude)
     if (
       lower.includes('प्रतिशत') || lower.includes('percentage') ||
       lower.includes('अनुपात') || lower.includes('ratio') ||
@@ -662,7 +747,6 @@ async function startServer() {
       };
     }
 
-    // 5. Reasoning (तर्कशक्ति एवं मानसिक क्षमता)
     if (
       lower.includes('रीजनिंग') || lower.includes('reasoning') ||
       lower.includes('कोडिंग') || lower.includes('coding') || lower.includes('decoding') ||
@@ -685,7 +769,6 @@ async function startServer() {
       };
     }
 
-    // 6. General Science (सामान्य विज्ञान)
     if (
       lower.includes('प्रकाश वर्ष') || lower.includes('light year') ||
       lower.includes('न्यूटन') || lower.includes('गुरुत्वाकर्षण') || lower.includes('gravity') ||
@@ -713,7 +796,6 @@ async function startServer() {
       };
     }
 
-    // 7. Child Pedagogy & Teaching Methodology (शिक्षण अभिरुचि)
     if (
       lower.includes('pedagogy') || lower.includes('बाल विकास') || lower.includes('शिक्षा शास्त्र') ||
       lower.includes('पियाजे') || lower.includes('piaget') ||
@@ -728,7 +810,6 @@ async function startServer() {
       };
     }
 
-    // 8. CHHATTISGARH GENERAL STUDIES (विशिष्ट छत्तीसगढ़ सामान्य ज्ञान)
     const hasCGIdentifier =
       lower.includes('छत्तीसगढ़') || lower.includes('chhattisgarh') ||
       lower.includes('कलचुरी') || lower.includes('kalchuri') ||
@@ -765,7 +846,6 @@ async function startServer() {
       lower.includes('मोहला') || lower.includes('सारंगढ़') || lower.includes('खैरागढ़') || lower.includes('मनेंद्रगढ़') ||
       lower.includes('सक्ती') || lower.includes('दल्ली राजहरा') || lower.includes('बैलाडीला');
 
-    // Explicit India GS geographical, historical, cultural, and national markers
     const hasIndiaIdentifier =
       lower.includes('भारत') || lower.includes('india') || lower.includes('indian') ||
       lower.includes('भारतीय') || lower.includes('राष्ट्रीय') || lower.includes('national') ||
@@ -831,7 +911,6 @@ async function startServer() {
       };
     }
 
-    // 9. INDIA GENERAL STUDIES (भारत का सामान्य अध्ययन: इतिहास, संविधान, भूगोल, अर्थव्यवस्था)
     if (
       lower.includes('संविधान') || lower.includes('constitution') ||
       lower.includes('अनुच्छेद') || lower.includes('article ') ||
@@ -957,7 +1036,6 @@ async function startServer() {
       };
     }
 
-    // Default fallback
     let normalizedDefaultSubject = 'Chhattisgarh General Studies';
     if (defaultSubject) {
       const clean = defaultSubject.trim();
@@ -982,7 +1060,6 @@ async function startServer() {
     };
   }
 
-  // Helper: Check for repetition against existing repository questions
   function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Question[], currentId: string) {
     if (!newText || newText.length < 15) return null;
     const clean = (s: string) => s.replace(/[^\w\u0900-\u097F]/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -996,12 +1073,10 @@ async function startServer() {
       const compText = clean(q.questionHindi || q.questionText || '');
       if (!compText) continue;
 
-      // Exact substring or near-exact match
       if (target.includes(compText) || compText.includes(target)) {
         return q;
       }
 
-      // Overlap of key keywords > 75%
       const compWords = compText.split(' ').filter(w => w.length > 3);
       let matchCount = 0;
       for (const cw of compWords) {
@@ -1016,9 +1091,6 @@ async function startServer() {
   }
 
   // 8b. PYP Bulk Ingestion (JSON & CSV Bulk Import)
-  // Accepts { questions: [...], paperConfig?: {...}, createMockTest?: boolean }
-  // Auto-generates unique question IDs, performs deduplication with upsert,
-  // creates or updates the PYP catalog paper, and generates an official playable Mock Test.
   app.post('/api/pyp/bulk-import', (req, res) => {
     try {
       const { questions: incomingList, paperConfig, createMockTest = true } = req.body;
@@ -1033,7 +1105,6 @@ async function startServer() {
       let updated = 0;
       const processedQuestions: Question[] = [];
 
-      // Determine default category & paper meta
       const defaultExamName = paperConfig?.title || incomingList[0]?.Examname || 'CG Exam';
       const defaultYear = Number(paperConfig?.year || incomingList[0]?.Year || 2024);
       const targetCategory: ExamCategory = paperConfig?.examCategory || (
@@ -1063,14 +1134,12 @@ async function startServer() {
           : (rawAns.includes('B') ? 'B' : rawAns.includes('C') ? 'C' : rawAns.includes('D') ? 'D' : 'A');
         const explanation = String(item.explaination || item.explanation || '').trim();
 
-        // Systematic Auto-Generated Unique Question ID
         const generatedUniqueId = `${catPrefix}-${year}-Q${String(sno).padStart(3, '0')}`;
         const uniqueKey = String(item.uniqueQuestionId || generatedUniqueId).trim();
         const questionId = item.id || `q-bulk-${catPrefix.toLowerCase()}-${year}-${sno}`;
 
         const isCgpsc = targetCategory === 'CGPSC';
 
-        // Auto-classify chapter & topic, or honor user-supplied chapter in JSON
         const defaultSubj = targetCategory === 'CGPSC'
           ? 'Chhattisgarh General Studies'
           : targetCategory === 'CENTRAL_EXAMS'
@@ -1094,26 +1163,21 @@ async function startServer() {
         const assignedChapterName = String(item.chapterName || item.chapter || classification.chapterName || assignedTopic);
         const assignedSubtopic = String(item.subtopic || classification.subtopic || `Question #${sno}`);
 
-        // Build appearance for this current exam
         const currentAppearance: PYQAppearance = { examName: rawExamname, year, shift: 'Official' };
 
-        // Check if this question exists or is repeated from another prior exam in the question bank
         const similarQuestion = findSimilarOrRepeatedQuestion(questionHindi || questionEnglish, questions, questionId);
 
         let appearancesList: PYQAppearance[] = [currentAppearance];
         if (similarQuestion?.pypAppearances && Array.isArray(similarQuestion.pypAppearances)) {
-          // Merge appearances without duplicate exam + year
           const merged: PYQAppearance[] = [...similarQuestion.pypAppearances];
           if (!merged.some(a => a.examName.toLowerCase() === examname && a.year === year)) {
             merged.push(currentAppearance);
           }
           appearancesList = merged;
-          // Update the original existing similar question too so both reflect the repeat
           similarQuestion.pypAppearances = merged;
           similarQuestion.repeatedInExams = merged.map(a => `${a.examName} (${a.year})`);
         }
 
-        // Support user manually specifying repeatedInExams or timesRepeated in JSON
         if (item.repeatedInExams) {
           const rawRep = Array.isArray(item.repeatedInExams) ? item.repeatedInExams : String(item.repeatedInExams).split(',');
           for (const rep of rawRep) {
@@ -1157,7 +1221,6 @@ async function startServer() {
           createdAt: new Date().toISOString().split('T')[0],
         };
 
-        // Deduplication search: match { examname, year, sno } or uniqueQuestionId
         const existingIdx = questions.findIndex(q =>
           (q.uniqueQuestionId && q.uniqueQuestionId === uniqueKey) ||
           q.id === questionId ||
@@ -1165,7 +1228,6 @@ async function startServer() {
         );
 
         if (existingIdx !== -1) {
-          // Merge any prior appearances into the updated question
           const prior = questions[existingIdx];
           if (prior.pypAppearances && formattedQuestion.pypAppearances) {
             for (const app of prior.pypAppearances) {
@@ -1184,18 +1246,16 @@ async function startServer() {
         processedQuestions.push(formattedQuestion);
       }
 
-      // Configure / Register Previous Year Paper
       const paperTitle = paperConfig?.title || `${defaultExamName} ${defaultYear} Official Solved Paper`;
       const paperYear = Number(paperConfig?.year || defaultYear);
       const paperDuration = Number(paperConfig?.durationMinutes || (targetCategory === 'CGPSC' ? 120 : 180));
       const paperMarks = Number(paperConfig?.marks || (targetCategory === 'CGPSC' ? processedQuestions.length * 2 : processedQuestions.length));
       const paperNegRatio = paperConfig?.negativeMarkingRatio || (targetCategory === 'CGPSC' ? '-⅓rd (0.667 Marks per wrong answer)' : '-⅓rd (0.33 Marks)');
       const paperSummary = paperConfig?.paperSummary || `Official question paper archive for ${paperTitle} containing ${processedQuestions.length} bilingual questions, official key, and detailed solutions.`;
-      
+
       const existingPaper = pypPapers.find(p => p.year === paperYear && p.title.toLowerCase().includes(paperTitle.toLowerCase()));
       const paperId = existingPaper?.id || `pyp-${catPrefix.toLowerCase()}-${paperYear}-${Date.now()}`;
 
-      // Dynamically compute accurate subjectsWeightage from processed questions
       const subjMap: Record<string, number> = {};
       processedQuestions.forEach(q => {
         subjMap[q.subject] = (subjMap[q.subject] || 0) + 1;
@@ -1231,7 +1291,6 @@ async function startServer() {
         pypPapers.unshift(updatedOrNewPaper);
       }
 
-      // Automatically generate playable Mock Test to allow immediate testing
       let createdMockTest: MockTest | null = null;
       if (createMockTest) {
         const mockTestId = `test-from-${updatedOrNewPaper.id}`;
@@ -1271,6 +1330,7 @@ async function startServer() {
         updatedOrNewPaper.linkedMockTestId = createdMockTest.id;
       }
 
+      saveDatabase();
       return res.status(200).json({
         success: true,
         inserted,
@@ -1298,7 +1358,6 @@ async function startServer() {
       const pattern = EXAM_PATTERNS[examCategory as ExamCategory] || EXAM_PATTERNS.CGSSB;
       const referencedPyp = pypReferenceId ? pypPapers.find(p => p.id === pypReferenceId) : null;
 
-      // Query question bank that match target category and subjects
       let candidatePool = questions.filter(q => {
         const catMatch = q.category === examCategory || q.category === 'CGSSB';
         const subjMatch = targetSubjects.length === 0 || targetSubjects.includes(q.subject);
@@ -1319,8 +1378,6 @@ We are assembling an authentic mock test matching the historical pattern of: ${r
 Target Subjects: ${targetSubjects.length > 0 ? targetSubjects.join(', ') : 'India General Studies, Chhattisgarh General Studies, Quantitative Aptitude, Reasoning Ability, General Science, Computer Knowledge, General Hindi, Chhattisgarhi Language, General English'}.
 IMPORTANT SUBJECT RULES:
 - "India General Studies" and "Chhattisgarh General Studies" are strictly separate subjects.
-- For India General Studies, topics are: Indian Polity & Constitution, Indian History & National Movement, Geography of India, Indian Economy & Development, National Current Affairs & GK.
-- For Chhattisgarh General Studies, topics are: History of Chhattisgarh, Geography & Natural Resources, Culture, Tribes & Tourism, Administration & Economy.
 - Do NOT combine subjects with '&'. Separate subjects cleanly: General Science, Computer Knowledge, Quantitative Aptitude, Reasoning Ability, General Hindi, Chhattisgarhi Language.
 Exam Pattern Rules:
 - Marks per right question: ${pattern.marksPerCorrect}
@@ -1336,14 +1393,14 @@ Respond strictly with a JSON object having key "questions" containing an array o
   "difficulty": "Easy" | "Medium" | "Hard",
   "questionText": string,
   "questionHindi": string,
-  "options": [{"id": "A", "text": string, "textHindi": string}, {"id": "B", "text": string, "textHindi": string}, {"id": "C", "text": string, "textHindi": string}, {"id": "D", "text": string, "textHindi": string}],
+  "options": [{"id": "A", "text": string, "textHindi": string}, ...],
   "correctOption": "A" | "B" | "C" | "D",
   "explanation": string,
   "explanationHindi": string
 }`;
 
           const response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
+            model: 'gemini-2.0-flash',
             contents: prompt,
             config: {
               responseMimeType: 'application/json',
@@ -1390,7 +1447,6 @@ Respond strictly with a JSON object having key "questions" containing an array o
                 createdAt: new Date().toISOString().split('T')[0],
               };
             });
-            // Add generated questions to main question bank
             questions.push(...generatedFreshQuestions);
           }
         } catch (geminiError) {
@@ -1398,11 +1454,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
         }
       }
 
-      // Combine fresh questions and tagged bank questions to fill target count
       const finalSelectedQuestions: Question[] = [...generatedFreshQuestions];
       const neededFromBank = questionCount - finalSelectedQuestions.length;
 
-      // Shuffle pool
       const shuffledBank = [...candidatePool].sort(() => 0.5 - Math.random());
       for (const q of shuffledBank) {
         if (finalSelectedQuestions.length >= questionCount) break;
@@ -1411,7 +1465,6 @@ Respond strictly with a JSON object having key "questions" containing an array o
         }
       }
 
-      // Group into balanced sections
       const sec1Questions = finalSelectedQuestions.slice(0, Math.ceil(finalSelectedQuestions.length / 2));
       const sec2Questions = finalSelectedQuestions.slice(Math.ceil(finalSelectedQuestions.length / 2));
 
@@ -1419,7 +1472,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
         id: `test-ai-${Date.now()}`,
         title: testTitle || `AI Smart Mock: ${pattern.shortName} Balanced Test`,
         category: examCategory as ExamCategory,
-        description: `Automated AI-synthesized mock test aligned with ${referencedPyp ? referencedPyp.title : pattern.name} historical trends. Negative marking: -${pattern.negativeMarksRatio.toFixed(2)} (${pattern.negativeMarksPerWrong} marks).`,
+        description: `Automated AI-synthesized mock test aligned with ${referencedPyp ? referencedPyp.title : pattern.name} historical trends.`,
         durationMinutes: Math.min(120, questionCount * 1.5),
         totalMarks: finalSelectedQuestions.reduce((s, q) => s + q.marks, 0),
         marksPerQuestion: pattern.marksPerCorrect,
@@ -1444,6 +1497,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
       };
 
       mockTests.unshift(newTest);
+      saveDatabase();
 
       res.status(201).json({
         success: true,
@@ -1473,7 +1527,6 @@ Respond strictly with a JSON object having key "questions" containing an array o
         authentication: {
           endpoint: 'POST /api/auth/login',
           description: 'Authenticate mobile user & obtain authorization token',
-          samplePayload: { email: 'student@cgssbtest.com', password: 'password123', role: 'student' },
         },
         testsList: {
           endpoint: 'GET /api/tests?category=CGSSB',
@@ -1481,16 +1534,11 @@ Respond strictly with a JSON object having key "questions" containing an array o
         },
         testDetails: {
           endpoint: 'GET /api/tests/{testId}',
-          description: 'Download full test paper with questions and options for offline/online test taking',
+          description: 'Download full test paper with questions and options',
         },
         submitTest: {
           endpoint: 'POST /api/tests/{testId}/submit',
           description: 'Submit candidate responses and receive instant Rank, Accuracy & Solutions',
-          samplePayload: {
-            userId: 'u-android-student',
-            timeTakenSeconds: 3400,
-            responses: { 'q-cg-01': 'A', 'q-cg-02': 'B' },
-          },
         },
         pypList: {
           endpoint: 'GET /api/pyp',
@@ -1498,26 +1546,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
         },
         offlineSync: {
           endpoint: 'GET /api/android/sync',
-          description: 'One-click full sync of categories, questions, and tests to populate Android SQLite / Room database',
+          description: 'One-click full sync of categories, questions, and tests',
         },
       },
-      androidKotlinSnippet: `// Retrofit API Interface for CGSSB Test Android App
-interface CgssbApiService {
-    @GET("api/tests")
-    suspend fun getMockTests(@Query("category") category: String?): Response<TestsResponse>
-
-    @GET("api/tests/{id}")
-    suspend fun getTestDetails(@Path("id") testId: String): Response<TestDetailsResponse>
-
-    @POST("api/tests/{id}/submit")
-    suspend fun submitTest(
-        @Path("id") testId: String,
-        @Body submission: TestSubmissionRequest
-    ): Response<TestSubmissionResult>
-
-    @GET("api/android/sync")
-    suspend fun syncOfflineData(): Response<OfflineSyncPayload>
-}`,
     });
   });
 
@@ -1543,14 +1574,34 @@ interface CgssbApiService {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    console.log(`📁 Serving static files from: ${distPath}`);
+
+    if (!fs.existsSync(distPath)) {
+      console.error(`❌ dist folder NOT FOUND at ${distPath}`);
+    }
+
     app.use(express.static(distPath));
+
+    // SPA fallback — serve index.html for any non-API route
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      // Don't intercept API routes
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ success: false, error: 'API route not found' });
+      }
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(500).send('Frontend not built. Please run npm run build.');
+      }
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`CGSSB Test Full-Stack Server running on http://0.0.0.0:${PORT}`);
+    console.log(`🚀 CGSSB Test Server running on port ${PORT}`);
+    console.log(`📁 Data directory: ${DATA_DIR}`);
+    console.log(`📁 DB file: ${DB_FILE}`);
+    console.log(`📊 Loaded: ${questions.length} questions, ${mockTests.length} tests, ${pypPapers.length} PYPs`);
   });
 }
 
