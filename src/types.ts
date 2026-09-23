@@ -51,7 +51,10 @@ export interface PYQAppearance {
 export interface Question {
   id: string;                       // Unique, e.g., "CG-LECT-2026-EN-001" or "QID-CGSSB-2024-001"
   uniqueQuestionId?: string;
-  examName?: string;                 // e.g., "CG Lecturer Test 2026"
+  authority?: string;                // e.g. "CGSSB", "CGPSC", "Central Exams"
+  subCategory?: string;              // e.g. "Teacher Recruitment 2026", "Police Recruitment 2026"
+  postName?: string;                 // e.g. "CG Lecturer 2026", "CG Teacher 2026"
+  examName?: string;                 // e.g., "CG English Lecturer 2026"
   year?: number;                     // e.g., 2026
   category: ExamCategory | string;   // e.g., "CG Lecturer" or "CGSSB"
   subject: string;                  // e.g., "General English"
@@ -127,7 +130,11 @@ export interface MockTestSection {
 export interface MockTest {
   id: string;
   title: string;
+  authority?: string;
   category: ExamCategory;
+  subCategory?: string;
+  postName?: string;
+  examName?: string;
   description: string;
   durationMinutes: number;
   totalMarks?: number;
@@ -148,7 +155,11 @@ export interface MockTest {
 export interface PreviousYearPaper {
   id: string;
   title: string;
+  authority?: string;
   examCategory: ExamCategory;
+  subCategory?: string;
+  postName?: string;
+  examName?: string;
   year: number;
   totalQuestions: number;
   durationMinutes: number;

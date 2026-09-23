@@ -1,6 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { Question, DifficultyLevel, ExamCategory, PYQAppearance } from '../types';
 import { HIERARCHY_TREE } from '../mockData';
+import { ExamHierarchySelector, ExamHierarchyValue } from './ExamHierarchySelector';
+import {
+  HierarchyRecord,
+  extractHierarchyFromApp,
+  mapAuthorityToExamCategory,
+  getAvailableAuthorities,
+  getAvailableCategories
+} from '../utils/examHierarchy';
 import {
   FolderTree,
   Plus,
@@ -34,6 +42,7 @@ interface AdminQuestionBankProps {
   onAddQuestion: (q: Partial<Question>) => void;
   onUpdateQuestion: (id: string, q: Partial<Question>) => void;
   onDeleteQuestion: (id: string) => void;
+  allHierarchyRecords?: HierarchyRecord[];
 }
 
 // Preset common CG competitive exams for quick selection
@@ -65,6 +74,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   onAddQuestion,
   onUpdateQuestion,
   onDeleteQuestion,
+  allHierarchyRecords,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('ALL');
@@ -73,7 +83,14 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   const [selectedChapter, setSelectedChapter] = useState<string>('ALL');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [selectedAuthority, setSelectedAuthority] = useState<string>('ALL');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('ALL');
   const [pyqFilter, setPyqFilter] = useState<'ALL' | 'REPEATED' | 'SINGLE_PYQ' | 'PRACTICE'>('ALL');
+
+  const computedHierarchyRecords = useMemo(() => {
+    if (allHierarchyRecords && allHierarchyRecords.length > 0) return allHierarchyRecords;
+    return extractHierarchyFromApp([], [], questions);
+  }, [allHierarchyRecords, questions]);
 
   // Taxonomy Explorer toggle
   const [showTaxonomyTree, setShowTaxonomyTree] = useState(false);
@@ -93,7 +110,11 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     topic: string;
     subtopic: string;
     difficulty: DifficultyLevel;
+    authority: string;
     category: ExamCategory;
+    subCategory: string;
+    postName?: string;
+    examName: string;
     questionText: string;
     questionHindi: string;
     options: { id: 'A' | 'B' | 'C' | 'D'; text: string; textHindi: string }[];
@@ -110,7 +131,10 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     topic: HIERARCHY_TREE[0].topics[0].name,
     subtopic: HIERARCHY_TREE[0].topics[0].subtopics[0],
     difficulty: 'Medium',
+    authority: 'CGSSB',
     category: 'CGSSB',
+    subCategory: 'Teacher Recruitment 2026',
+    examName: 'CG English Lecturer 2026',
     questionText: '',
     questionHindi: '',
     options: [
@@ -153,7 +177,11 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       topic: HIERARCHY_TREE[0].topics[0].name,
       subtopic: HIERARCHY_TREE[0].topics[0].subtopics[0],
       difficulty: 'Medium',
+      authority: 'CGSSB',
       category: 'CGSSB',
+      subCategory: 'Teacher Recruitment 2026',
+      postName: 'CG Lecturer 2026',
+      examName: 'CG English Lecturer 2026',
       questionText: '',
       questionHindi: '',
       options: [
@@ -169,8 +197,8 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       explanationHindi: '',
       pypAppearances: [
         {
-          examName: 'CGSSB Combined Exam',
-          year: 2023,
+          examName: 'CG English Lecturer 2026',
+          year: 2026,
           shift: 'Morning Shift',
         },
       ],
@@ -197,7 +225,11 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       topic: q.topic || 'General',
       subtopic: q.subtopic || 'General',
       difficulty: q.difficulty || 'Medium',
+      authority: q.authority || (q.category as string) || 'CGSSB',
       category: (q.category as ExamCategory) || 'CGSSB',
+      subCategory: q.subCategory || 'Teacher Recruitment 2026',
+      postName: q.postName || 'CG Lecturer 2026',
+      examName: q.examName || q.pypSource || '',
       questionText: q.questionText || q.question || '',
       questionHindi: q.questionHindi || '',
       options: (q.options || []).map((o, idx) => ({
@@ -213,6 +245,39 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       pypAppearances: appearances,
     });
     setIsModalOpen(true);
+  };
+
+  // Multi-Level Exam Hierarchy change in Question Modal
+  const handleModalHierarchyChange = (val: ExamHierarchyValue, matchedRecord?: HierarchyRecord) => {
+    setFormData(prev => {
+      const nextCat = mapAuthorityToExamCategory(val.authority);
+      const appearances = [...prev.pypAppearances];
+      if (val.examName && appearances.length === 0) {
+        appearances.push({
+          examName: val.examName,
+          year: matchedRecord?.year || 2026,
+          shift: 'Official Paper',
+        });
+      } else if (val.examName && appearances.length > 0) {
+        appearances[0] = {
+          ...appearances[0],
+          examName: val.examName,
+          year: matchedRecord?.year || appearances[0].year,
+        };
+      }
+      return {
+        ...prev,
+        authority: val.authority,
+        subCategory: val.category,
+        postName: val.postName || matchedRecord?.postName || prev.postName || 'CG Lecturer 2026',
+        examName: val.examName,
+        category: nextCat,
+        negativeMarks: matchedRecord?.negativeMarkingRatio
+          ? (matchedRecord.negativeMarkingRatio.includes('0.66') || matchedRecord.negativeMarkingRatio.includes('0.67') ? 0.667 : 0.25)
+          : prev.negativeMarks,
+        pypAppearances: appearances,
+      };
+    });
   };
 
   // Clone Question Action
@@ -233,15 +298,20 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     if (!formData.questionText.trim()) return;
 
     const trimmedChapter = formData.chapter.trim();
-    const payload = {
+    const payload: Partial<Question> = {
       ...formData,
       id: formData.id.trim() || generateUniqueId('q-cg'),
+      authority: formData.authority,
+      category: formData.category,
+      subCategory: formData.subCategory,
+      postName: formData.postName,
+      examName: formData.examName,
       chapter: trimmedChapter || undefined,
       chapterName: trimmedChapter || undefined,
-      // Keep pypSource backwards compatible with first appearance if present
+      // Keep pypSource backwards compatible with first appearance or examName
       pypSource: formData.pypAppearances.length > 0
         ? `${formData.pypAppearances[0].examName} ${formData.pypAppearances[0].year}`
-        : '',
+        : (formData.examName || ''),
     };
 
     if (editingQuestionId) {
@@ -330,6 +400,16 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
           : (q.chapter || q.chapterName) === selectedChapter);
       const matchDifficulty = selectedDifficulty === 'ALL' || q.difficulty === selectedDifficulty;
       const matchCategory = selectedCategory === 'ALL' || q.category === selectedCategory;
+      const matchAuthority =
+        selectedAuthority === 'ALL' ||
+        (q.authority || q.category) === selectedAuthority ||
+        (selectedAuthority === 'CGPSC' && q.category === 'CGPSC') ||
+        (selectedAuthority === 'CGSSB' && q.category === 'CGSSB');
+      const matchSubCategory =
+        selectedSubCategory === 'ALL' ||
+        q.subCategory === selectedSubCategory;
+
+      if (!matchAuthority || !matchSubCategory) return false;
 
       // PYQ Filter
       const appCount = q.pypAppearances?.length || (q.pypSource ? 1 : 0);
@@ -343,6 +423,9 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       const matchSearch =
         !s ||
         q.id.toLowerCase().includes(s) ||
+        (q.authority && q.authority.toLowerCase().includes(s)) ||
+        (q.subCategory && q.subCategory.toLowerCase().includes(s)) ||
+        (q.examName && q.examName.toLowerCase().includes(s)) ||
         (q.chapter && q.chapter.toLowerCase().includes(s)) ||
         (q.chapterName && q.chapterName.toLowerCase().includes(s)) ||
         (q.questionText || q.question || '').toLowerCase().includes(s) ||
@@ -656,17 +739,34 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
             </select>
           </div>
 
-          {/* Exam Category Filter */}
+          {/* Authority Filter */}
           <div>
             <select
-              value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500"
+              value={selectedAuthority}
+              onChange={e => {
+                setSelectedAuthority(e.target.value);
+                setSelectedSubCategory('ALL');
+              }}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 truncate"
             >
-              <option value="ALL">All Categories</option>
-              <option value="CGSSB">CGSSB / Vyapam</option>
-              <option value="CGPSC">CGPSC SSE</option>
-              <option value="SWAMI_ATMANAND">Swami Atmanand</option>
+              <option value="ALL">All Authorities</option>
+              {getAvailableAuthorities(computedHierarchyRecords).map(auth => (
+                <option key={auth} value={auth}>{auth}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sub-Category / Recruitment Drive Filter */}
+          <div>
+            <select
+              value={selectedSubCategory}
+              onChange={e => setSelectedSubCategory(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 truncate"
+            >
+              <option value="ALL">All Sub-Categories</option>
+              {getAvailableCategories(computedHierarchyRecords, selectedAuthority !== 'ALL' ? selectedAuthority : undefined).map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
 
@@ -818,6 +918,25 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
                         {q.subtopic}
                       </span>
                     </div>
+
+                    {/* Multi-Level Exam Hierarchy Badges */}
+                    {(q.authority || q.subCategory || q.examName) && (
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] pt-0.5">
+                        <span className="px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 font-bold">
+                          🏛️ {q.authority || q.category}
+                        </span>
+                        {q.subCategory && (
+                          <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
+                            📁 {q.subCategory}
+                          </span>
+                        )}
+                        {q.examName && (
+                          <span className="px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30 font-medium">
+                            🎯 {q.examName}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Right Meta & Action Buttons */}
@@ -925,12 +1044,104 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
                   <p className="text-sm sm:text-base font-semibold text-white leading-relaxed">
                     {q.questionText}
                   </p>
-                  {q.questionHindi && (
+                  {q.questionHindi && q.questionHindi.trim() !== q.questionText.trim() && (
                     <p className="text-xs sm:text-sm text-emerald-300/90 font-medium leading-relaxed border-l-2 border-emerald-500/40 pl-3 py-0.5">
                       {q.questionHindi}
                     </p>
                   )}
                 </div>
+
+                {/* MATCHING LIST DISPLAY (Column A & Column B) */}
+                {(q.questionType === 'matching' || (Array.isArray(q.columnA) && q.columnA.length > 0)) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/80 border border-purple-500/30 my-2">
+                    {Array.isArray(q.columnA) && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block border-b border-purple-500/20 pb-1">
+                          Column I (सूची-I)
+                        </span>
+                        {q.columnA.map((item, idx) => (
+                          <div key={idx} className="flex items-start space-x-2 text-xs text-slate-200">
+                            <span className="w-5 h-5 rounded bg-purple-500/20 text-purple-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                              {item.id || idx + 1}
+                            </span>
+                            <span>{item.text || item.textHindi || String(item)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {Array.isArray(q.columnB) && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block border-b border-purple-500/20 pb-1">
+                          Column II (सूची-II)
+                        </span>
+                        {q.columnB.map((item, idx) => (
+                          <div key={idx} className="flex items-start space-x-2 text-xs text-slate-200">
+                            <span className="w-5 h-5 rounded bg-purple-500/20 text-purple-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                              {item.id || String.fromCharCode(65 + idx)}
+                            </span>
+                            <span>{item.text || item.textHindi || String(item)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ASSERTION & REASON DISPLAY */}
+                {(q.questionType === 'assertion_reason' || q.assertion) && (
+                  <div className="space-y-2 p-3 rounded-xl bg-slate-950/80 border border-amber-500/30 my-2 text-xs">
+                    {q.assertion && (
+                      <div className="flex items-start space-x-2.5">
+                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-black text-[10px] shrink-0 mt-0.5 border border-amber-500/40">
+                          Assertion (A)
+                        </span>
+                        <div className="text-slate-100 font-medium leading-relaxed">
+                          {q.assertion}
+                          {q.assertionHindi && q.assertionHindi !== q.assertion && (
+                            <div className="text-emerald-300/80 text-[11px] mt-0.5">{q.assertionHindi}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {q.reason && (
+                      <div className="flex items-start space-x-2.5 pt-1.5 border-t border-slate-800">
+                        <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-black text-[10px] shrink-0 mt-0.5 border border-cyan-500/40">
+                          Reason (R)
+                        </span>
+                        <div className="text-slate-100 font-medium leading-relaxed">
+                          {q.reason}
+                          {q.reasonHindi && q.reasonHindi !== q.reason && (
+                            <div className="text-emerald-300/80 text-[11px] mt-0.5">{q.reasonHindi}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* MULTI-STATEMENT DISPLAY */}
+                {(q.questionType === 'multi_statement' || (Array.isArray(q.statements) && q.statements.length > 0)) && (
+                  <div className="space-y-2 p-3 rounded-xl bg-slate-950/80 border border-sky-500/30 my-2 text-xs">
+                    <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider block border-b border-sky-500/20 pb-1">
+                      Statements (कथन)
+                    </span>
+                    <div className="space-y-2">
+                      {q.statements?.map((stmt, sIdx) => (
+                        <div key={sIdx} className="flex items-start space-x-2 text-slate-200">
+                          <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-300 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                            {stmt.id || sIdx + 1}
+                          </span>
+                          <div>
+                            <p>{stmt.text || (typeof stmt === 'string' ? stmt : '')}</p>
+                            {stmt.textHindi && stmt.textHindi !== stmt.text && (
+                              <p className="text-emerald-300/80 text-[11px] mt-0.5">{stmt.textHindi}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Options Preview */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
@@ -1009,8 +1220,8 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
             </div>
 
             <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
-              {/* Unique ID & Category Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-850 p-3.5 rounded-xl border border-slate-800">
+              {/* Unique ID & Multi-Level Exam Hierarchy */}
+              <div className="bg-slate-850 p-3.5 rounded-xl border border-slate-800 space-y-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-slate-300 font-bold">
@@ -1035,17 +1246,26 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Exam Category Target</label>
-                  <select
-                    value={formData.category}
-                    onChange={e => setFormData({ ...formData, category: e.target.value as any })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:border-emerald-500 focus:outline-none"
-                  >
-                    <option value="CGSSB">CGSSB / CG Vyapam</option>
-                    <option value="CGPSC">CGPSC State Service Exam</option>
-                    <option value="SWAMI_ATMANAND">Swami Atmanand Recruitment</option>
-                  </select>
+                {/* Multi-Level Exam Hierarchy: Authority > Category > Exam Name */}
+                <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-200 flex items-center space-x-1.5">
+                      <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Exam Hierarchy (Authority &gt; Drive &gt; Cadre &gt; Specific Exam)</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">Searchable dropdowns with auto-population</span>
+                  </div>
+
+                  <ExamHierarchySelector
+                    value={{
+                      authority: formData.authority,
+                      category: formData.subCategory,
+                      postName: formData.postName,
+                      examName: formData.examName,
+                    }}
+                    onChange={handleModalHierarchyChange}
+                    allRecords={computedHierarchyRecords}
+                  />
                 </div>
               </div>
 

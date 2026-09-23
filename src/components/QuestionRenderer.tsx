@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Question, QuestionOption, QuestionType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { Table, CheckCircle2, SplitSquareVertical, HelpCircle, FileText, Check } from 'lucide-react';
+import { extractStatementsFromStem, ParsedStemSegments } from '../utils/statementParser';
 
 interface QuestionRendererProps {
   question: Question;
@@ -35,22 +36,26 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     const isEnglishOnly = subj.includes('english');
     const isHindiOnly = subj.includes('hindi') || subj.includes('chhattisgarhi');
 
+    const rawEnglish = (question.questionEnglish || question.question || question.questionText || question.text || '').trim();
+    const rawHindi = (question.questionHindi || question.textHindi || '').trim();
+    const fallbackText = rawEnglish || rawHindi || (question as any).prompt || 'Question content loading...';
+
     let textStem = '';
     let isFixedLanguage = false;
 
     if (isLanguageSubject) {
       isFixedLanguage = true;
       if (isEnglishOnly) {
-        textStem = question.question || question.questionEnglish || question.questionText || question.text || question.questionHindi || '';
+        textStem = rawEnglish || rawHindi || fallbackText;
       } else {
-        textStem = question.questionHindi || question.textHindi || question.question || question.questionText || question.text || '';
+        textStem = rawHindi || rawEnglish || fallbackText;
       }
     } else {
       // Non-language subject follows the toggle
       if (language === 'hi') {
-        textStem = question.questionHindi || question.textHindi || question.question || question.questionText || question.text || '';
+        textStem = rawHindi || rawEnglish || fallbackText;
       } else {
-        textStem = question.question || question.questionEnglish || question.questionText || question.text || question.questionHindi || '';
+        textStem = rawEnglish || rawHindi || fallbackText;
       }
     }
 
@@ -60,23 +65,140 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     };
   }, [question, isLanguageSubject, language]);
 
+  // Robust Normalized Options Parser: supports Array of objects, Array of strings, Dictionary object, and Legacy option_A... keys
+  const normalizedOptions = useMemo(() => {
+    if (!question) return [];
+    const rawOpts = question.options;
+
+    // 1. Array of options
+    if (Array.isArray(rawOpts) && rawOpts.length > 0) {
+      return rawOpts.map((opt: any, idx: number) => {
+        if (typeof opt === 'string') {
+          const letter = ['A', 'B', 'C', 'D', 'E'][idx] || `Opt ${idx + 1}`;
+          return { id: letter, label: letter, text: opt, textHindi: opt };
+        }
+        const letter = String(opt.label || opt.id || ['A', 'B', 'C', 'D', 'E'][idx] || 'A').toUpperCase();
+        const textEn = String(opt.text || opt.textEnglish || opt.option || opt.value || opt.textHindi || '').trim();
+        const textHi = String(opt.textHindi || opt.text || opt.value || textEn).trim();
+        return {
+          id: letter,
+          label: letter,
+          text: textEn || textHi,
+          textHindi: textHi || textEn,
+        };
+      });
+    }
+
+    // 2. Dictionary object: { A: 'text', B: 'text' }
+    if (rawOpts && typeof rawOpts === 'object') {
+      return Object.entries(rawOpts).map(([key, val]: [string, any], idx) => {
+        const textStr = typeof val === 'string' ? val : (val.text || val.textHindi || val.value || '');
+        const letter = key.toUpperCase();
+        return {
+          id: letter,
+          label: letter,
+          text: textStr,
+          textHindi: typeof val === 'object' && val.textHindi ? val.textHindi : textStr,
+        };
+      });
+    }
+
+    // 3. Fallback for legacy option_A, option_B, option_C, option_D
+    const qAny = question as any;
+    if (qAny.option_A || qAny.option_B || qAny.optionA || qAny.optionB) {
+      const optA = String(qAny.option_A || qAny.optionA || '');
+      const optB = String(qAny.option_B || qAny.optionB || '');
+      const optC = String(qAny.option_C || qAny.optionC || '');
+      const optD = String(qAny.option_D || qAny.optionD || '');
+      return [
+        { id: 'A', label: 'A', text: optA, textHindi: qAny.option_A_hi || optA },
+        { id: 'B', label: 'B', text: optB, textHindi: qAny.option_B_hi || optB },
+        { id: 'C', label: 'C', text: optC, textHindi: qAny.option_C_hi || optC },
+        { id: 'D', label: 'D', text: optD, textHindi: qAny.option_D_hi || optD },
+      ];
+    }
+
+    return [];
+  }, [question]);
+
+  // Extract structured statements/segments from attached data or text stem
+  const parsedStem: ParsedStemSegments = useMemo(() => {
+    // 1. If explicit structured statements exist on the question
+    if (Array.isArray(question.statements) && question.statements.length > 0) {
+      const segs = question.statements.map((stmt: any, idx: number) => {
+        const stmtText = (language === 'hi'
+          ? (stmt.textHindi || stmt.text || (typeof stmt === 'string' ? stmt : ''))
+          : (stmt.text || stmt.textHindi || (typeof stmt === 'string' ? stmt : ''))
+        );
+        const label = String(stmt.label || stmt.id || (idx + 1));
+        return {
+          id: label,
+          label,
+          text: stmtText,
+        };
+      });
+
+      return {
+        hasSegments: true,
+        intro: activeContent.stem,
+        segments: segs,
+      };
+    }
+
+    // 2. Automatically parse segments from active stem text (e.g. "K. ... L. ... M. ... N. ...")
+    return extractStatementsFromStem(activeContent.stem);
+  }, [question.statements, activeContent.stem, language]);
+
   // Detected question type fallback
   const resolvedType: QuestionType = useMemo(() => {
+    // Priority 1: Check for Matching question (Column A / Column B)
+    const colA = question.columnA || (question as any).column1 || (question as any).list1;
+    const colB = question.columnB || (question as any).column2 || (question as any).list2;
+    if (Array.isArray(colA) && Array.isArray(colB) && colA.length > 0 && colB.length > 0) {
+      return 'matching';
+    }
+
+    // Priority 2: Check for Assertion & Reason question (STRICT PRIORITY over multi_statement)
+    const lower = (activeContent.stem + ' ' + (question.question || '') + ' ' + (question.questionHindi || '')).toLowerCase();
+    const isAssertionReason = (
+      question.questionType === 'assertion_reason' ||
+      question.type === 'assertion_reason' ||
+      Boolean(question.assertion || question.reason) ||
+      Boolean(question.assertionHindi || question.reasonHindi) ||
+      (lower.includes('कथन') && (lower.includes('कारण') || lower.includes('अभिकथन'))) ||
+      (lower.includes('अभिकथन') && lower.includes('कारण')) ||
+      (lower.includes('assertion') && lower.includes('reason')) ||
+      lower.includes('labelled as assertion') ||
+      lower.includes('labelled as reason') ||
+      lower.includes('अभिकथन (a)') ||
+      lower.includes('कारण (r)')
+    );
+
+    if (isAssertionReason) {
+      return 'assertion_reason';
+    }
+
+    // Priority 3: Multi-statement question (structured or detected)
+    if (parsedStem.hasSegments) {
+      return 'multi_statement';
+    }
+    if (Array.isArray(question.statements) && question.statements.length > 0) {
+      return 'multi_statement';
+    }
+    if (question.questionType === 'multi_statement' || question.type === 'multi_statement') {
+      return 'multi_statement';
+    }
+
+    // Priority 4: Text-based matching lists
+    if (lower.includes('सूची-i') || lower.includes('सूची - i') || lower.includes('list-i') || lower.includes('list i') || lower.includes('match the following') || lower.includes('सुमेलित कीजिए')) {
+      return 'matching';
+    }
+
     if (question.questionType) return question.questionType;
     if (question.type) return question.type;
 
-    const lower = (activeContent.stem + ' ' + (question.question || '') + ' ' + (question.questionHindi || '')).toLowerCase();
-    if (lower.includes('कथन') && (lower.includes('कारण') || lower.includes('अभिकथन')) || lower.includes('assertion') && lower.includes('reason')) {
-      return 'assertion_reason';
-    }
-    if (lower.includes('सूची-i') || lower.includes('सूची - i') || lower.includes('list-i') || lower.includes('list i') || lower.includes('match the following')) {
-      return 'matching';
-    }
-    if ((lower.includes('(j)') || lower.includes('(1)') || lower.includes('(i)')) && (lower.includes('केवल') || lower.includes('only') || lower.includes('which of the statement'))) {
-      return 'multi_statement';
-    }
     return 'mcq';
-  }, [question, activeContent.stem]);
+  }, [question, activeContent.stem, parsedStem.hasSegments]);
 
   // Helper to get option text according to bilingual rules
   const getOptionText = (option: QuestionOption): string => {
@@ -100,7 +222,96 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   // MATCHING QUESTION RENDERER (List-I and List-II Table)
   // -------------------------------------------------------------
   const renderMatchingStem = (stemText: string) => {
-    // Check if the text contains List-I and List-II markers
+    const colA: any[] = question.columnA || (question as any).column1 || (question as any).list1 || (question as any).listA || [];
+    const colB: any[] = question.columnB || (question as any).column2 || (question as any).list2 || (question as any).listB || [];
+    const hasStructuredColumns = Array.isArray(colA) && Array.isArray(colB) && colA.length > 0 && colB.length > 0;
+
+    // CASE 1: Structured Column A and Column B arrays (from Ingestion or Question Bank)
+    if (hasStructuredColumns) {
+      const showHindiSecondary = language === 'en' && question.questionHindi && question.questionHindi.trim() !== stemText.trim() && !isLanguageSubject;
+
+      return (
+        <div className="space-y-4">
+          <div>
+            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
+              {stemText}
+            </p>
+            {showHindiSecondary && (
+              <p className="text-emerald-300/90 text-sm font-medium leading-relaxed border-l-2 border-emerald-500/40 pl-3 py-0.5 mt-1.5">
+                {question.questionHindi}
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-purple-500/30 overflow-hidden bg-slate-950/80 shadow-lg">
+            {/* Table Header */}
+            <div className="grid grid-cols-1 md:grid-cols-2 bg-purple-950/40 border-b border-purple-500/30 text-xs sm:text-sm font-black text-purple-200">
+              <div className="p-3 md:border-r border-purple-500/20 flex items-center space-x-2">
+                <Table className="w-4 h-4 text-purple-400" />
+                <span>Column I (सूची - I)</span>
+              </div>
+              <div className="p-3 hidden md:flex items-center space-x-2">
+                <Table className="w-4 h-4 text-purple-400" />
+                <span>Column II (सूची - II)</span>
+              </div>
+            </div>
+
+            {/* Two Column Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800">
+              {/* Column A Items */}
+              <div className="p-3.5 space-y-2">
+                <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block md:hidden pb-1 border-b border-purple-500/20">
+                  Column I (सूची - I)
+                </span>
+                {colA.map((item, idx) => {
+                  const label = item.id || (idx + 1);
+                  const text = (language === 'hi' && !isLanguageSubject
+                    ? (item.textHindi || item.text || String(item))
+                    : (item.text || item.textHindi || String(item))
+                  );
+                  return (
+                    <div key={idx} className="flex items-start space-x-2.5 p-2 rounded-lg bg-slate-900/60 border border-slate-850 hover:border-purple-500/30 transition">
+                      <span className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-purple-500/30 font-mono">
+                        {label}
+                      </span>
+                      <div className="text-sm font-medium text-slate-100 leading-snug pt-0.5">
+                        {text}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Column B Items */}
+              <div className="p-3.5 space-y-2">
+                <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block md:hidden pb-1 border-b border-purple-500/20">
+                  Column II (सूची - II)
+                </span>
+                {colB.map((item, idx) => {
+                  const label = item.id || String.fromCharCode(65 + idx);
+                  const text = (language === 'hi' && !isLanguageSubject
+                    ? (item.textHindi || item.text || String(item))
+                    : (item.text || item.textHindi || String(item))
+                  );
+                  return (
+                    <div key={idx} className="flex items-start space-x-2.5 p-2 rounded-lg bg-slate-900/60 border border-slate-850 hover:border-purple-500/30 transition">
+                      <span className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-purple-500/30 font-mono">
+                        {label}
+                      </span>
+                      <div className="text-sm font-medium text-slate-100 leading-snug pt-0.5">
+                        {text}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // CASE 2: Text-parsed List-I and List-II markers
     const hasListSplit = stemText.includes('List-I') || stemText.includes('सूची-I') || stemText.includes('सूची - I') || stemText.includes('List I');
 
     if (!hasListSplit) {
@@ -176,7 +387,48 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   // ASSERTION & REASON RENDERER
   // -------------------------------------------------------------
   const renderAssertionReasonStem = (stemText: string) => {
-    // Attempt to parse Assertion and Reason components
+    // Check structured assertion/reason properties first
+    const hasStructured = Boolean(question.assertion || question.reason);
+    if (hasStructured) {
+      const assertionText = (language === 'hi' && !isLanguageSubject && question.assertionHindi) ? question.assertionHindi : (question.assertion || question.assertionHindi || '');
+      const reasonText = (language === 'hi' && !isLanguageSubject && question.reasonHindi) ? question.reasonHindi : (question.reason || question.reasonHindi || '');
+
+      return (
+        <div className="space-y-4">
+          {stemText && stemText !== assertionText && (
+            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
+              {stemText}
+            </p>
+          )}
+
+          {/* Assertion Box */}
+          {assertionText && (
+            <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-start space-x-3">
+              <span className="px-2.5 py-1 rounded bg-amber-500/30 text-amber-300 font-bold text-xs shrink-0 tracking-wide border border-amber-500/40">
+                {t('assertion', 'Assertion [A]')}
+              </span>
+              <div className="text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
+                {assertionText}
+              </div>
+            </div>
+          )}
+
+          {/* Reason Box */}
+          {reasonText && (
+            <div className="p-4 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-start space-x-3">
+              <span className="px-2.5 py-1 rounded bg-cyan-500/30 text-cyan-300 font-bold text-xs shrink-0 tracking-wide border border-cyan-500/40">
+                {t('reason', 'Reason [R]')}
+              </span>
+              <div className="text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
+                {reasonText}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Attempt to parse Assertion and Reason components from text
     let assertionText = '';
     let reasonText = '';
     let intro = '';
@@ -193,6 +445,16 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         intro += (intro ? ' ' : '') + line;
       }
     });
+
+    if (!assertionText && !reasonText) {
+      // Check inline pattern e.g. "Assertion (A): ... Reason (R): ..." or "Assertion [A]: ... Reason [R]: ..."
+      const inlineMatch = stemText.match(/(.*?)(?:Assertion|अभिकथन)\s*[\(\[]A[\)\]]?[:\s]+(.*?)(?:Reason|कारण)\s*[\(\[]R[\)\]]?[:\s]+(.*)/i);
+      if (inlineMatch) {
+        intro = inlineMatch[1].trim();
+        assertionText = inlineMatch[2].trim();
+        reasonText = inlineMatch[3].trim();
+      }
+    }
 
     if (!assertionText && !reasonText) {
       // Fallback: If not separated by newlines, render formatted stem
@@ -237,83 +499,39 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   };
 
   // -------------------------------------------------------------
-  // MULTI-STATEMENT RENDERER
+  // MULTI-STATEMENT RENDERER (Clean one-below-another segmented layout)
   // -------------------------------------------------------------
-  const renderMultiStatementStem = (stemText: string) => {
-    // If structured statements array is provided on the question
-    const structuredStatements = question.statements;
-    if (Array.isArray(structuredStatements) && structuredStatements.length > 0) {
-      return (
-        <div className="space-y-4">
-          {stemText && (
-            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
-              {stemText}
-            </p>
-          )}
+  const renderMultiStatementStem = () => {
+    const { intro, segments, hasSegments } = parsedStem;
 
-          <div className="space-y-2.5">
-            {structuredStatements.map((stmt: any, idx: number) => {
-              const stmtText = (language === 'hi'
-                ? (stmt.textHindi || stmt.text || (typeof stmt === 'string' ? stmt : ''))
-                : (stmt.text || stmt.textHindi || (typeof stmt === 'string' ? stmt : ''))
-              );
-              const label = stmt.id || (idx + 1);
-
-              return (
-                <div
-                  key={idx}
-                  className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 text-sm sm:text-base flex items-start space-x-3"
-                >
-                  <div className="w-6 h-6 rounded-full bg-slate-800 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 mt-0.5 border border-slate-700">
-                    {label}
-                  </div>
-                  <p className="font-medium leading-relaxed">{stmtText}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
-
-    const lines = stemText.split('\n').map(l => l.trim()).filter(Boolean);
-    const statements: string[] = [];
-    const promptLines: string[] = [];
-
-    lines.forEach(line => {
-      if (/^(\([A-Z0-9]\)|[A-Z0-9]\.|\([i|v|x]+\)|[i|v|x]+\.)\s*/i.test(line)) {
-        statements.push(line);
-      } else {
-        promptLines.push(line);
-      }
-    });
-
-    if (statements.length === 0) {
+    if (!hasSegments || segments.length === 0) {
       return (
         <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
-          {stemText}
+          {activeContent.stem}
         </p>
       );
     }
 
     return (
       <div className="space-y-4">
-        {promptLines.length > 0 && (
+        {intro && (
           <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
-            {promptLines.join(' ')}
+            {intro}
           </p>
         )}
 
-        <div className="space-y-2.5">
-          {statements.map((stmt, idx) => (
+        <div className="space-y-2.5 pt-1">
+          {segments.map((stmt, idx) => (
             <div
               key={idx}
-              className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 text-sm sm:text-base flex items-start space-x-3"
+              className="p-3.5 sm:p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 text-sm sm:text-base flex items-start space-x-3.5 hover:border-slate-750 transition-colors shadow-sm"
             >
-              <div className="w-6 h-6 rounded-full bg-slate-800 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 mt-0.5 border border-slate-700">
-                {idx + 1}
+              <div className="w-7 h-7 rounded-full bg-slate-800 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/30 ring-2 ring-emerald-500/10 font-mono">
+                {stmt.label}
               </div>
-              <p className="font-medium leading-relaxed">{stmt}</p>
+              <p className="font-medium leading-relaxed pt-0.5 text-slate-100">
+                {stmt.text}
+              </p>
             </div>
           ))}
         </div>
@@ -347,11 +565,13 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         {/* Dynamic Stem Render */}
         {resolvedType === 'matching' && renderMatchingStem(activeContent.stem)}
         {resolvedType === 'assertion_reason' && renderAssertionReasonStem(activeContent.stem)}
-        {resolvedType === 'multi_statement' && renderMultiStatementStem(activeContent.stem)}
+        {resolvedType === 'multi_statement' && renderMultiStatementStem()}
         {resolvedType === 'mcq' && (
-          <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
-            {activeContent.stem}
-          </p>
+          parsedStem.hasSegments ? renderMultiStatementStem() : (
+            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
+              {activeContent.stem}
+            </p>
+          )
         )}
       </div>
 
@@ -362,10 +582,13 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         </div>
 
         <div className="grid grid-cols-1 gap-3">
-          {question.options.map((option) => {
+          {normalizedOptions.map((option) => {
             const optLabel = option.label || option.id || 'A';
             const isSelected = selectedOption === optLabel;
-            const optionText = getOptionText(option);
+            const optionText = (language === 'hi' && !activeContent.isFixedLanguage
+              ? (option.textHindi || option.text)
+              : (option.text || option.textHindi)
+            );
             const isCorrect = showSolution && question.correctOption === optLabel;
             const isWrong = showSolution && isSelected && question.correctOption !== optLabel;
 
@@ -412,19 +635,40 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       </div>
 
       {/* 3. Explanation in Solutions Mode */}
-      {showSolution && (
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2 mt-4">
-          <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{t('explanation', 'Detailed Explanation')}</span>
+      {showSolution && (() => {
+        const expEn = String(question.explanation || (question as any).explaination || (question as any).solution || (question as any).sol || '').trim();
+        const expHi = String(question.explanationHindi || (question as any).solutionHindi || (question as any).explainationHindi || '').trim();
+
+        return (
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-emerald-500/40 space-y-3 mt-4 shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+              <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{t('explanation', 'Step-by-Step Detailed Solution (विस्तृत व्याख्या)')}</span>
+              </div>
+              {question.correctOption && (
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-mono font-bold flex items-center space-x-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
+                  <span>Correct Option: <strong className="text-white text-sm">{question.correctOption}</strong></span>
+                </span>
+              )}
+            </div>
+            <div className="space-y-2.5 text-sm text-slate-200 leading-relaxed pt-1">
+              {expEn && (
+                <p className="whitespace-pre-line">{expEn}</p>
+              )}
+              {expHi && expHi !== expEn && (
+                <p className="text-emerald-300/95 font-medium leading-relaxed border-t border-slate-800/80 pt-2 text-xs sm:text-sm whitespace-pre-line">
+                  {expHi}
+                </p>
+              )}
+              {!expEn && !expHi && (
+                <p className="text-slate-400 italic text-xs">Explanation not provided for this question.</p>
+              )}
+            </div>
           </div>
-          <p className="text-sm text-slate-300 leading-relaxed">
-            {language === 'hi' && question.explanationHindi
-              ? question.explanationHindi
-              : question.explanation || question.explanationHindi || 'Explanation not provided.'}
-          </p>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

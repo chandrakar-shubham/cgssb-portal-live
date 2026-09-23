@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   MockTest,
-  ExamCategory
+  ExamCategory,
+  Question
 } from '../types';
 import {
   Layers,
@@ -20,25 +21,30 @@ import {
   Filter,
   AlertTriangle
 } from 'lucide-react';
+import { AdminCompleteTestEditorModal } from './AdminCompleteTestEditorModal';
 
 interface AdminTestCatalogProps {
   tests: MockTest[];
+  questions?: Question[];
   onStartTest: (test: MockTest) => void;
   onTogglePublishTest: (testId: string) => void;
   onUpdateTest: (testId: string, updates: Partial<MockTest>) => void;
   onDeleteTest: (testId: string) => void;
   onAddTest: (test: Partial<MockTest>) => void;
   onNavigateToAICreator: () => void;
+  onSaveCompletedTest?: (test: MockTest, questions: Question[]) => void;
 }
 
 export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
   tests,
+  questions = [],
   onStartTest,
   onTogglePublishTest,
   onUpdateTest,
   onDeleteTest,
   onAddTest,
   onNavigateToAICreator,
+  onSaveCompletedTest,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ExamCategory | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -226,10 +232,11 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
 
                 <button
                   onClick={() => setEditingTest(test)}
-                  title="Edit Test Settings"
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                  title="Completely Edit Published Test & Questions"
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
+                  <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Edit Test</span>
                 </button>
 
                 <button
@@ -256,77 +263,21 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
         )}
       </div>
 
-      {/* Edit Test Modal */}
+      {/* Complete Test & Questions Editor Modal */}
       {editingTest && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-white">Edit Mock Test Parameters</h3>
-            <form onSubmit={handleSaveEdit} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">Test Title</label>
-                <input
-                  type="text"
-                  value={editingTest.title}
-                  onChange={e => setEditingTest({ ...editingTest, title: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1">Duration (Mins)</label>
-                  <input
-                    type="number"
-                    value={editingTest.durationMinutes}
-                    onChange={e => setEditingTest({ ...editingTest, durationMinutes: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1">Marks per Question</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={editingTest.marksPerQuestion}
-                    onChange={e => setEditingTest({ ...editingTest, marksPerQuestion: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1">Negative Marking Deduction</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={editingTest.negativeMarksPerQuestion}
-                  onChange={e => setEditingTest({ ...editingTest, negativeMarksPerQuestion: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center justify-end space-x-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setEditingTest(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md cursor-pointer"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AdminCompleteTestEditorModal
+          test={editingTest}
+          allQuestions={questions}
+          isOpen={Boolean(editingTest)}
+          onClose={() => setEditingTest(null)}
+          onSaveTest={(updatedTest, updatedQuestions) => {
+            onUpdateTest(updatedTest.id, updatedTest);
+            if (onSaveCompletedTest) {
+              onSaveCompletedTest(updatedTest, updatedQuestions);
+            }
+            setEditingTest(null);
+          }}
+        />
       )}
 
       {/* New Test Modal */}

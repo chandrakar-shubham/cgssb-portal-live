@@ -25,12 +25,20 @@ import {
 } from 'lucide-react';
 import { ManualGridBuilder } from './ManualGridBuilder';
 import { AIPYPExtractorModal } from './AIPYPExtractorModal';
-import { BulkImportPreviewModal } from './BulkImportPreviewModal';
-import { JsonImportPreviewModal } from './JsonImportPreviewModal';
+import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
 import { JsonSchemaGuideModal, ADVANCED_JSON_TEMPLATE, LEGACY_PYP_JSON_TEMPLATE } from './JsonSchemaGuideModal';
-import { processBulkImportClientSide } from '../utils/pypEngine';
+import { ExamHierarchySelector, ExamHierarchyValue } from './ExamHierarchySelector';
+import {
+  HierarchyRecord,
+  extractHierarchyFromApp,
+  mapAuthorityToExamCategory,
+  DEFAULT_HIERARCHY_RECORDS,
+  getAvailableAuthorities,
+  getAvailableCategories
+} from '../utils/examHierarchy';
 import { getBaseTestTitle } from '../utils/testDeduplication';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
+import { AdminCompleteTestEditorModal } from './AdminCompleteTestEditorModal';
 
 const REQUIRED_BULK_KEYS = [
   'S.No.',
@@ -49,6 +57,7 @@ const REQUIRED_BULK_KEYS = [
 interface AdminPYPManagerProps {
   pypPapers: PreviousYearPaper[];
   tests?: MockTest[];
+  questions?: Question[];
   onAddPYP: (pyp: Partial<PreviousYearPaper>) => void;
   onDeletePYP: (id: string) => void;
   onConvertPYPToMockTest: (pyp: PreviousYearPaper) => void;
@@ -56,11 +65,14 @@ interface AdminPYPManagerProps {
   onStartTest?: (test: MockTest) => void;
   onQuestionsAdded?: (questions: Question[]) => void;
   onTestAdded?: (test: MockTest) => void;
+  onUpdateTest?: (testId: string, updates: Partial<MockTest>) => void;
+  onSaveCompletedTest?: (test: MockTest, questions: Question[]) => void;
 }
 
 export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   pypPapers,
   tests = [],
+  questions = [],
   onAddPYP,
   onDeletePYP,
   onConvertPYPToMockTest,
@@ -68,28 +80,37 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   onStartTest,
   onQuestionsAdded,
   onTestAdded,
+  onUpdateTest,
+  onSaveCompletedTest,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGridBuilderOpen, setIsGridBuilderOpen] = useState(false);
   const [isAIExtractorOpen, setIsAIExtractorOpen] = useState(false);
   const [convertedNotice, setConvertedNotice] = useState<string | null>(null);
+  const [editingTest, setEditingTest] = useState<MockTest | null>(null);
 
-  // Bulk Import State
-  const [previewQuestions, setPreviewQuestions] = useState<BulkImportQuestion[]>([]);
+  // Bulk Ingestion State (Universal Question Pipeline)
+  const [previewQuestions, setPreviewQuestions] = useState<Question[]>([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importToast, setImportToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Advanced JSON Import State
-  const [advancedRawJson, setAdvancedRawJson] = useState<any[]>([]);
-  const [advancedMappedQuestions, setAdvancedMappedQuestions] = useState<Question[]>([]);
-  const [isAdvancedJsonModalOpen, setIsAdvancedJsonModalOpen] = useState(false);
+  // Schema Guide State
   const [isSchemaGuideOpen, setIsSchemaGuideOpen] = useState(false);
   const [publishedSuccess, setPublishedSuccess] = useState<{
     paper: PreviousYearPaper;
     mockTest?: MockTest;
     count: number;
   } | null>(null);
+
+  const allHierarchyRecords = useMemo(() => {
+    return extractHierarchyFromApp(tests, pypPapers, []);
+  }, [tests, pypPapers]);
+
+  // Filtering PYP cards by Authority and Sub-category
+  const [filterAuthority, setFilterAuthority] = useState<string>('ALL');
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const uniquePapers = useMemo(() => {
     const seen = new Set<string>();
@@ -100,12 +121,37 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     });
   }, [pypPapers]);
 
+  const filteredPapers = useMemo(() => {
+    return uniquePapers.filter(paper => {
+      if (filterAuthority !== 'ALL') {
+        const auth = paper.authority || paper.examCategory;
+        if (auth !== filterAuthority && paper.examCategory !== filterAuthority) return false;
+      }
+      if (filterCategory !== 'ALL') {
+        if (paper.subCategory !== filterCategory) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = paper.title.toLowerCase().includes(q);
+        const matchSummary = (paper.paperSummary || '').toLowerCase().includes(q);
+        const matchExam = (paper.examName || '').toLowerCase().includes(q);
+        const matchSub = (paper.subCategory || '').toLowerCase().includes(q);
+        const matchYear = String(paper.year).includes(q);
+        if (!matchTitle && !matchSummary && !matchExam && !matchSub && !matchYear) return false;
+      }
+      return true;
+    });
+  }, [uniquePapers, filterAuthority, filterCategory, searchQuery]);
+
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState<{
     title: string;
+    authority: string;
     examCategory: ExamCategory;
+    subCategory: string;
+    examName: string;
     year: number;
     totalQuestions: number;
     durationMinutes: number;
@@ -115,7 +161,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     subjectsWeightage: { subject: string; questionCount: number; percentage: number }[];
   }>({
     title: '',
+    authority: 'CGSSB',
     examCategory: 'CGSSB',
+    subCategory: 'Teacher Recruitment 2026',
+    examName: '',
     year: 2024,
     totalQuestions: 100,
     durationMinutes: 120,
@@ -133,14 +182,31 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     ],
   });
 
+  const handleQuickIndexHierarchyChange = (val: ExamHierarchyValue, matchedRecord?: HierarchyRecord) => {
+    setFormData(prev => ({
+      ...prev,
+      authority: val.authority,
+      subCategory: val.category,
+      examName: val.examName,
+      title: val.examName || prev.title,
+      examCategory: mapAuthorityToExamCategory(val.authority),
+      year: matchedRecord?.year || prev.year,
+      durationMinutes: matchedRecord?.durationMinutes || prev.durationMinutes,
+      negativeMarkingRatio: matchedRecord?.negativeMarkingRatio || prev.negativeMarkingRatio,
+      paperSummary: matchedRecord?.paperSummary || prev.paperSummary,
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim()) return;
+    const finalTitle = formData.examName.trim() || formData.title.trim();
+    if (!finalTitle) return;
 
     onAddPYP({
       ...formData,
+      title: finalTitle,
       isOfficialPaper: true,
-      downloadFileName: `${formData.title.replace(/\s+/g, '_')}_Official.pdf`,
+      downloadFileName: `${finalTitle.replace(/\s+/g, '_')}_Official.pdf`,
     });
     setIsModalOpen(false);
   };
@@ -176,7 +242,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     };
   };
 
-  // JSON Import Handler (Supports Advanced Question Schema + Legacy PYP)
+  // JSON Import Handler (Universal Question Pipeline for all JSON schemas)
   const handleJSONImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -193,48 +259,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
           return;
         }
 
-        // Check if records represent advanced question schema (has question/questionText/questionType/type/options/statements)
-        const first = records[0];
-        const isAdvancedFormat = first && (
-          'questionType' in first ||
-          'type' in first ||
-          'subjectCategory' in first ||
-          'options' in first ||
-          ('question' in first && !('S.No.' in first)) ||
-          'columnA' in first ||
-          'assertion' in first ||
-          'statements' in first ||
-          'correctOption' in first ||
-          'correctAnswer' in first
-        );
-
-        if (isAdvancedFormat) {
-          const mapped = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
-          setAdvancedRawJson(records);
-          setAdvancedMappedQuestions(mapped);
-          setIsAdvancedJsonModalOpen(true);
-        } else {
-          // Standard Legacy 11-key format
-          const { isValid, missingFields } = validateRecords(records);
-          if (!isValid) {
-            // If it failed strict 11 keys, try mapping to questions
-            try {
-              const fallbackMapped = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
-              setAdvancedRawJson(records);
-              setAdvancedMappedQuestions(fallbackMapped);
-              setIsAdvancedJsonModalOpen(true);
-              return;
-            } catch {
-              alert(
-                `❌ Validation Failed for JSON Import!\n\nMissing key(s):\n${missingFields.map(f => `• ${f}`).join('\n')}`
-              );
-              return;
-            }
-          }
-
-          setPreviewQuestions(records);
-          setIsPreviewModalOpen(true);
-        }
+        // Map every incoming question record into unified Question entity
+        const mappedQuestions = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
+        setPreviewQuestions(mappedQuestions);
+        setIsPreviewModalOpen(true);
       } catch (err: any) {
         alert(`❌ Invalid JSON file: ${err.message}`);
       } finally {
@@ -244,7 +272,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     reader.readAsText(file);
   };
 
-  // CSV Import Handler using PapaParse
+  // CSV Import Handler using PapaParse & Unified Pipeline
   const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -255,16 +283,14 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
       complete: (results) => {
         try {
           const records = results.data as any[];
-          const { isValid, missingFields } = validateRecords(records);
-
-          if (!isValid) {
-            alert(
-              `❌ Validation Failed for CSV Import!\n\nThe CSV is missing the following required column(s):\n\n${missingFields.map(f => `• ${f}`).join('\n')}\n\nEvery record must contain exactly these 11 columns:\n${REQUIRED_BULK_KEYS.join(', ')}`
-            );
+          if (!records || records.length === 0) {
+            alert('❌ The CSV file is empty.');
             return;
           }
 
-          setPreviewQuestions(records);
+          // Map CSV rows into unified Question entities
+          const mappedQuestions = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
+          setPreviewQuestions(mappedQuestions);
           setIsPreviewModalOpen(true);
         } catch (err: any) {
           alert(`❌ CSV Parsing Error: ${err.message}`);
@@ -279,92 +305,201 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     });
   };
 
-  // Confirm Import & Send to Backend API with custom configuration & Mock Test generation
+  // Confirm Import: Universal Ingestion for Mock Tests and PYP Papers
   // Resilient to both full-stack Node environments and static hosting (e.g. Hostinger, cPanel, Vercel static)
   const handleConfirmImport = async (
-    paperConfig: {
-      title: string;
-      examCategory: ExamCategory;
-      year: number;
-      durationMinutes: number;
-      marks: number;
-      negativeMarkingRatio: string;
-      paperSummary: string;
-      subjectsWeightage: { subject: string; questionCount: number; percentage: number }[];
-    },
-    finalQuestions: BulkImportQuestion[]
+    paperConfig: IngestionPaperConfig,
+    finalQuestions: Question[]
   ) => {
     if (finalQuestions.length === 0) return;
     setIsImporting(true);
+
     try {
+      const catPrefix = paperConfig.examCategory === 'CGPSC' ? 'cgpsc' : paperConfig.examCategory === 'CENTRAL_EXAMS' ? 'central' : 'cgssb';
+      const year = paperConfig.year || new Date().getFullYear();
+      const timestamp = Date.now();
+      const marksPerQ = Number((paperConfig.marks / (finalQuestions.length || 1)).toFixed(2)) || 1.0;
+      const negMarks = finalQuestions[0]?.negativeMarks || (paperConfig.examCategory === 'CGPSC' ? 0.667 : 0.25);
+
+      const authority = paperConfig.authority || 'CGSSB';
+      const subCategory = paperConfig.subCategory || 'General Recruitment';
+      const postName = paperConfig.postName || 'CG Lecturer 2026';
+      const examNameStr = paperConfig.examName || paperConfig.title;
+
+      // Universal Tagging: tag all imported questions with Authority, Category, and Exam Name
+      const taggedQuestions: Question[] = finalQuestions.map(q => ({
+        ...q,
+        authority,
+        category: paperConfig.examCategory,
+        subCategory,
+        postName,
+        examName: examNameStr,
+        pypSource: examNameStr,
+        year: year,
+        pypAppearances: [
+          ...(q.pypAppearances || []).filter(a => a.examName !== examNameStr),
+          {
+            examName: examNameStr,
+            year: year,
+            shift: 'Official Paper',
+          }
+        ]
+      }));
+
       let publishedPaper: PreviousYearPaper | null = null;
       let publishedMockTest: MockTest | null = null;
-      let publishedQuestions: Question[] = [];
 
-      // 1. Attempt backend API ingestion if server is reachable and active
+      // Handle Mock Test Creation
+      if (paperConfig.paperNature === 'mock') {
+        const testId = `mock-${catPrefix}-${year}-${timestamp}`;
+        publishedMockTest = {
+          id: testId,
+          title: paperConfig.title,
+          authority,
+          category: paperConfig.examCategory,
+          subCategory,
+          postName,
+          examName: examNameStr,
+          description: paperConfig.paperSummary,
+          durationMinutes: paperConfig.durationMinutes,
+          questionCount: taggedQuestions.length,
+          marksPerQuestion: marksPerQ,
+          negativeMarksPerQuestion: negMarks,
+          isPYP: false,
+          pypYear: year,
+          pypExamName: examNameStr,
+          sections: [
+            {
+              id: `sec-${testId}`,
+              name: 'Complete Test Paper',
+              questionIds: taggedQuestions.map(q => q.id),
+            },
+          ],
+          attemptsCount: 0,
+          isPublished: true,
+          difficultyDistribution: { easy: 30, medium: 50, hard: 20 },
+          createdAt: new Date().toISOString().split('T')[0],
+        };
+
+        // Create a representation for the celebration modal
+        publishedPaper = {
+          id: testId,
+          title: paperConfig.title,
+          authority,
+          examCategory: paperConfig.examCategory,
+          subCategory,
+          postName,
+          examName: examNameStr,
+          year: year,
+          totalQuestions: taggedQuestions.length,
+          durationMinutes: paperConfig.durationMinutes,
+          marks: paperConfig.marks,
+          negativeMarkingRatio: paperConfig.negativeMarkingRatio,
+          paperSummary: paperConfig.paperSummary,
+          subjectsWeightage: paperConfig.subjectsWeightage,
+          isOfficialPaper: false,
+          linkedQuestionIds: taggedQuestions.map(q => q.id),
+          linkedMockTestId: testId,
+        };
+      } else {
+        // Handle Official PYP Paper Creation
+        const paperId = `pyp-${catPrefix}-${year}-${timestamp}`;
+        const testId = `test-from-${paperId}`;
+
+        publishedPaper = {
+          id: paperId,
+          title: paperConfig.title,
+          authority,
+          examCategory: paperConfig.examCategory,
+          subCategory,
+          postName,
+          examName: examNameStr,
+          year: year,
+          totalQuestions: taggedQuestions.length,
+          durationMinutes: paperConfig.durationMinutes,
+          marks: paperConfig.marks,
+          negativeMarkingRatio: paperConfig.negativeMarkingRatio,
+          paperSummary: paperConfig.paperSummary,
+          subjectsWeightage: paperConfig.subjectsWeightage,
+          downloadFileName: `${paperConfig.title.replace(/\s+/g, '_')}.pdf`,
+          fileSize: '3.5 MB',
+          isOfficialPaper: true,
+          linkedQuestionIds: taggedQuestions.map(q => q.id),
+          linkedMockTestId: testId,
+        };
+
+        publishedMockTest = {
+          id: testId,
+          title: `${paperConfig.title} (Official Simulation)`,
+          authority,
+          category: paperConfig.examCategory,
+          subCategory,
+          postName,
+          examName: examNameStr,
+          description: paperConfig.paperSummary,
+          durationMinutes: paperConfig.durationMinutes,
+          questionCount: taggedQuestions.length,
+          marksPerQuestion: marksPerQ,
+          negativeMarksPerQuestion: negMarks,
+          isPYP: true,
+          pypYear: year,
+          pypExamName: examNameStr,
+          sections: [
+            {
+              id: `sec-${paperId}`,
+              name: 'Official Question Paper',
+              questionIds: taggedQuestions.map(q => q.id),
+            },
+          ],
+          attemptsCount: 0,
+          isPublished: true,
+          difficultyDistribution: { easy: 35, medium: 45, hard: 20 },
+          createdAt: new Date().toISOString().split('T')[0],
+        };
+      }
+
+      // 1. Attempt backend API sync if available
       try {
-        const res = await fetch('/api/pyp/bulk-import', {
+        await fetch('/api/pyp/bulk-import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            questions: finalQuestions,
+            questions: taggedQuestions,
             paperConfig,
             createMockTest: true,
           }),
         });
-
-        const contentType = res.headers.get('content-type') || '';
-        // Only parse as JSON if response is OK and header confirms application/json
-        // (Prevents "Unexpected token '<' in <!doctype html>" on static hosts like Hostinger)
-        if (res.ok && contentType.includes('application/json')) {
-          const data = await res.json();
-          if (data && data.success) {
-            publishedPaper = data.paper;
-            publishedMockTest = data.mockTest;
-            publishedQuestions = data.questions || [];
-          }
-        }
       } catch (networkErr) {
-        console.warn('Backend API unavailable or static environment detected. Falling back to client-side engine:', networkErr);
+        console.warn('Backend API unavailable. Saved client-side:', networkErr);
       }
 
-      // 2. If backend did not return JSON (e.g. Hostinger static build or offline mode),
-      // perform high-performance client-side ingestion instantly
-      if (!publishedPaper) {
-        const clientResult = processBulkImportClientSide({
-          questions: finalQuestions,
-          paperConfig,
-        });
-        publishedPaper = clientResult.paper;
-        publishedMockTest = clientResult.mockTest;
-        publishedQuestions = clientResult.questions;
-      }
-
-      // 3. Update application state and auto-persist to localStorage
-      if (publishedPaper) {
+      // 2. Register with Application State
+      if (paperConfig.paperNature === 'pyp' && publishedPaper) {
         onAddPYP(publishedPaper);
       }
       if (publishedMockTest && onTestAdded) {
         onTestAdded(publishedMockTest);
       }
-      if (publishedQuestions.length > 0 && onQuestionsAdded) {
-        onQuestionsAdded(publishedQuestions);
+      if (taggedQuestions.length > 0 && onQuestionsAdded) {
+        onQuestionsAdded(taggedQuestions);
       }
 
       setIsPreviewModalOpen(false);
 
       setImportToast({
-        message: `✅ Published "${paperConfig.title}" with ${finalQuestions.length} questions! Live mock test created.`,
+        message: `✅ Published "${paperConfig.title}" (${paperConfig.paperNature === 'mock' ? 'Mock Test' : 'Official PYP'}) with ${finalQuestions.length} questions!`,
         type: 'success',
       });
       setTimeout(() => setImportToast(null), 5000);
 
       // Open Celebration & Live Test Trigger Dialog
-      setPublishedSuccess({
-        paper: publishedPaper,
-        mockTest: publishedMockTest || undefined,
-        count: finalQuestions.length,
-      });
+      if (publishedPaper) {
+        setPublishedSuccess({
+          paper: publishedPaper,
+          mockTest: publishedMockTest || undefined,
+          count: finalQuestions.length,
+        });
+      }
     } catch (err: any) {
       console.error('Publishing failed:', err);
       setImportToast({
@@ -372,55 +507,6 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
         type: 'error',
       });
       setTimeout(() => setImportToast(null), 6000);
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  // Confirm Advanced JSON Import (Sends to /api/questions/bulk or adds locally)
-  const handleConfirmAdvancedJsonImport = async () => {
-    if (advancedMappedQuestions.length === 0) return;
-    setIsImporting(true);
-
-    try {
-      let savedQuestions: Question[] = [];
-
-      try {
-        const res = await fetch('/api/questions/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ questions: advancedMappedQuestions }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success && data.questions) {
-            savedQuestions = data.questions;
-          }
-        }
-      } catch (e) {
-        console.warn('Backend API bulk questions unavailable, saving client-side:', e);
-      }
-
-      if (savedQuestions.length === 0) {
-        savedQuestions = advancedMappedQuestions;
-      }
-
-      if (onQuestionsAdded) {
-        onQuestionsAdded(savedQuestions);
-      }
-
-      setIsAdvancedJsonModalOpen(false);
-      setImportToast({
-        message: `✅ Successfully imported ${savedQuestions.length} bilingual questions!`,
-        type: 'success',
-      });
-      setTimeout(() => setImportToast(null), 4000);
-    } catch (err: any) {
-      setImportToast({
-        message: `❌ Failed to import questions: ${err.message}`,
-        type: 'error',
-      });
     } finally {
       setIsImporting(false);
     }
@@ -604,9 +690,72 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
         </div>
       )}
 
+      {/* Search & Multi-level Hierarchy Filter Bar */}
+      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by exam name, syllabus topic, year, authority..."
+              className="w-full px-3.5 py-2 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Authority Filter */}
+            <select
+              value={filterAuthority}
+              onChange={e => {
+                setFilterAuthority(e.target.value);
+                setFilterCategory('ALL');
+              }}
+              className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+            >
+              <option value="ALL">All Authorities (CGSSB, CGPSC, Central)</option>
+              {getAvailableAuthorities(allHierarchyRecords).map(auth => (
+                <option key={auth} value={auth}>{auth}</option>
+              ))}
+            </select>
+
+            {/* Category Filter */}
+            <select
+              value={filterCategory}
+              onChange={e => setFilterCategory(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+            >
+              <option value="ALL">All Sub-Categories</option>
+              {getAvailableCategories(allHierarchyRecords, filterAuthority !== 'ALL' ? filterAuthority : undefined).map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            {(filterAuthority !== 'ALL' || filterCategory !== 'ALL' || searchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterAuthority('ALL');
+                  setFilterCategory('ALL');
+                  setSearchQuery('');
+                }}
+                className="px-2.5 py-2 rounded-xl text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition cursor-pointer"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
+          <span>Showing <strong className="text-white">{filteredPapers.length}</strong> of {uniquePapers.length} Papers</span>
+          <span className="text-[10px] text-emerald-400 font-semibold">Hierarchy-indexed official archives</span>
+        </div>
+      </div>
+
       {/* Papers Listing */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {uniquePapers.map(paper => {
+        {filteredPapers.map(paper => {
           const linkedTest = tests.find(t =>
             (paper.linkedMockTestId && t.id === paper.linkedMockTestId) ||
             (paper.testId && t.id === paper.testId) ||
@@ -749,6 +898,18 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
                       </>
                     )}
                   </button>
+
+                  {linkedTest && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingTest(linkedTest)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40"
+                      title="Completely Edit Published Test & Questions"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Edit Test</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -771,31 +932,28 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Official Paper Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. CGSSB Hostel Superintendent 2022 Official Paper"
-                  value={formData.title}
-                  onChange={e => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white"
+              {/* Multi-Level Exam Hierarchy */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-200 flex items-center space-x-1.5">
+                    <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Exam Hierarchy (Authority &gt; Category &gt; Specific Exam)</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">Searchable dropdowns with auto-population</span>
+                </div>
+
+                <ExamHierarchySelector
+                  value={{
+                    authority: formData.authority,
+                    category: formData.subCategory,
+                    examName: formData.examName || formData.title,
+                  }}
+                  onChange={handleQuickIndexHierarchyChange}
+                  allRecords={allHierarchyRecords}
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1">Exam Authority</label>
-                  <select
-                    value={formData.examCategory}
-                    onChange={e => setFormData({ ...formData, examCategory: e.target.value as any })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value="CGSSB">CGSSB</option>
-                    <option value="CGPSC">CGPSC</option>
-                    <option value="SWAMI_ATMANAND">Swami Atmanand</option>
-                  </select>
-                </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 font-bold mb-1">Exam Year</label>
                   <input
@@ -806,7 +964,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-bold mb-1">Duration (Min)</label>
+                  <label className="block text-slate-400 font-bold mb-1">Duration (Minutes)</label>
                   <input
                     type="number"
                     value={formData.durationMinutes}
@@ -900,22 +1058,9 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
         }}
         onConfirm={handleConfirmImport}
         isImporting={isImporting}
-      />
-
-      {/* Advanced Question JSON Import Preview Modal */}
-      <JsonImportPreviewModal
-        isOpen={isAdvancedJsonModalOpen}
-        rawJsonData={advancedRawJson}
-        mappedQuestions={advancedMappedQuestions}
-        onClose={() => {
-          if (!isImporting) {
-            setIsAdvancedJsonModalOpen(false);
-            setAdvancedRawJson([]);
-            setAdvancedMappedQuestions([]);
-          }
-        }}
-        onConfirm={handleConfirmAdvancedJsonImport}
-        isImporting={isImporting}
+        allRecords={allHierarchyRecords}
+        existingTests={tests}
+        existingPYPs={pypPapers}
       />
 
       {/* JSON Schema Format Guide Modal */}
@@ -1004,6 +1149,25 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Complete Test & Questions Editor Modal */}
+      {editingTest && (
+        <AdminCompleteTestEditorModal
+          test={editingTest}
+          allQuestions={questions}
+          isOpen={Boolean(editingTest)}
+          onClose={() => setEditingTest(null)}
+          onSaveTest={(updatedTest, updatedQuestions) => {
+            if (onUpdateTest) {
+              onUpdateTest(updatedTest.id, updatedTest);
+            }
+            if (onSaveCompletedTest) {
+              onSaveCompletedTest(updatedTest, updatedQuestions);
+            }
+            setEditingTest(null);
+          }}
+        />
       )}
     </div>
   );

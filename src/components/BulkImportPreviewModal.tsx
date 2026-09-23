@@ -1,5 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { BulkImportQuestion, ExamCategory, PreviousYearPaper } from '../types';
+import { Question, ExamCategory, PreviousYearPaper, MockTest, QuestionType } from '../types';
+import { ExamHierarchySelector, ExamHierarchyValue } from './ExamHierarchySelector';
+import {
+  HierarchyRecord,
+  mapAuthorityToExamCategory,
+  normalizeAuthority,
+  extractHierarchyFromApp
+} from '../utils/examHierarchy';
 import {
   X,
   FileSpreadsheet,
@@ -20,28 +27,60 @@ import {
   Save,
   Tag,
   Check,
-  RotateCcw
+  RotateCcw,
+  BookOpen,
+  Briefcase,
+  Award,
+  ListOrdered,
+  ArrowRightLeft,
+  FileQuestion,
+  HelpCircle,
+  Building2,
+  FolderTree
 } from 'lucide-react';
+
+export interface IngestionPaperConfig {
+  paperNature: 'pyp' | 'mock';
+  title: string;
+  authority: string;
+  examCategory: ExamCategory;
+  subCategory: string;
+  postName?: string;
+  examName: string;
+  year: number;
+  durationMinutes: number;
+  marks: number;
+  negativeMarkingRatio: string;
+  paperSummary: string;
+  subjectsWeightage: { subject: string; questionCount: number; percentage: number }[];
+  vacancies?: string;
+}
 
 interface BulkImportPreviewModalProps {
   isOpen: boolean;
-  records: BulkImportQuestion[];
+  records: Question[];
   onClose: () => void;
   onConfirm: (
-    paperConfig: {
-      title: string;
-      examCategory: ExamCategory;
-      year: number;
-      durationMinutes: number;
-      marks: number;
-      negativeMarkingRatio: string;
-      paperSummary: string;
-      subjectsWeightage: { subject: string; questionCount: number; percentage: number }[];
-    },
-    finalQuestions: BulkImportQuestion[]
+    paperConfig: IngestionPaperConfig,
+    finalQuestions: Question[]
   ) => void;
   isImporting: boolean;
+  allRecords?: HierarchyRecord[];
+  existingTests?: MockTest[];
+  existingPYPs?: PreviousYearPaper[];
 }
+
+// Common Sub-Category Suggestions
+const SUB_CATEGORY_SUGGESTIONS = [
+  'Teacher Recruitment 2026',
+  'Police Recruitment 2026',
+  'Patwari & Revenue Inspector (RI)',
+  'State Service Examination (Prelims)',
+  'Hostel Warden (छात्रावास अधीक्षक)',
+  'Sub-Inspector (CG SI)',
+  'Staff Selection Commission (SSC)',
+  'Railway Recruitment Board (RRB)',
+];
 
 export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
   isOpen,
@@ -49,59 +88,131 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
   onClose,
   onConfirm,
   isImporting,
+  allRecords = [],
+  existingTests = [],
+  existingPYPs = [],
 }) => {
   if (!isOpen || initialRecords.length === 0) return null;
 
   // Active View Tab: 'settings' (Exam Configuration & Live Card Preview) vs 'questions' (All Questions & Editor)
   const [activeTab, setActiveTab] = useState<'settings' | 'questions'>('settings');
 
-  // Detect Initial Exam Meta
-  const sampleExam = String(initialRecords[0]?.Examname || 'CGPSC PRE').trim();
-  const sampleYear = Number(initialRecords[0]?.Year || 2024);
+  // Detect Initial Exam Meta from first question
+  const firstQ = initialRecords[0];
+  const sampleExam = String(firstQ?.pypSource || firstQ?.examSource || firstQ?.chapter || 'CG Exam').replace(/\s*\(Q\d+\)/, '').trim();
+  const sampleYear = Number(firstQ?.pypAppearances?.[0]?.year || new Date().getFullYear());
 
-  const initialCategory: ExamCategory = useMemo(() => {
+  // Detect Paper Nature: Mock Test vs PYP
+  const initialNature: 'pyp' | 'mock' = useMemo(() => {
+    const textToCheck = `${sampleExam} ${firstQ?.id || ''}`.toLowerCase();
+    if (textToCheck.includes('mock') || textToCheck.includes('model') || textToCheck.includes('practice') || textToCheck.includes('-m')) {
+      return 'mock';
+    }
+    if ((firstQ?.pypAppearances && firstQ.pypAppearances.length > 0) || textToCheck.includes('pyp') || textToCheck.includes('official') || textToCheck.includes('solved')) {
+      return 'pyp';
+    }
+    return 'mock';
+  }, [sampleExam, firstQ]);
+
+  // Detect Initial Authority
+  const initialAuthority: string = useMemo(() => {
+    if (firstQ?.authority) return firstQ.authority;
     const lower = sampleExam.toLowerCase();
     if (lower.includes('psc')) return 'CGPSC';
     if (lower.includes('central') || lower.includes('ssc') || lower.includes('railway') || lower.includes('upsc')) return 'CENTRAL_EXAMS';
+    if (lower.includes('police')) return 'CG Police';
     return 'CGSSB';
+  }, [sampleExam, firstQ]);
+
+  const initialCategory: ExamCategory = useMemo(() => {
+    return mapAuthorityToExamCategory(initialAuthority);
+  }, [initialAuthority]);
+
+  // Detect Initial Sub-Category
+  const initialSubCategory = useMemo(() => {
+    const lower = sampleExam.toLowerCase();
+    if (lower.includes('lecturer') || lower.includes('teacher') || lower.includes('shikshak') || lower.includes('vyakhyata')) {
+      return 'Teacher Recruitment 2026';
+    }
+    if (lower.includes('police') || lower.includes('si') || lower.includes('sub-inspector') || lower.includes('constable')) {
+      return 'Police Recruitment 2026';
+    }
+    if (lower.includes('patwari') || lower.includes('ri') || lower.includes('revenue')) {
+      return 'Patwari & Revenue Inspector (RI)';
+    }
+    if (lower.includes('hostel') || lower.includes('warden')) {
+      return 'Hostel Warden (छात्रावास अधीक्षक)';
+    }
+    if (lower.includes('state service') || lower.includes('prelims') || lower.includes('pre')) {
+      return 'State Service Examination (Prelims)';
+    }
+    return 'Teacher Recruitment 2026';
   }, [sampleExam]);
 
-  // Questions State (with auto-generated unique IDs)
-  const [questionsList, setQuestionsList] = useState<BulkImportQuestion[]>(() => {
-    const catPrefix = initialCategory === 'CGPSC' ? 'CGPSC' : initialCategory === 'CENTRAL_EXAMS' ? 'CENTRAL' : 'CGSSB';
-    return initialRecords.map((item, idx) => {
-      const sno = Number(item['S.No.'] || (idx + 1));
-      const year = Number(item.Year || sampleYear);
-      const generatedUniqueId = item.uniqueQuestionId || `${catPrefix}-${year}-Q${String(sno).padStart(3, '0')}`;
-      return {
-        ...item,
-        'S.No.': sno,
-        Year: year,
-        Examname: item.Examname || sampleExam,
-        uniqueQuestionId: generatedUniqueId,
-      };
-    });
-  });
-
-  // Paper Configuration State
+  // Ingestion Configuration State
+  const [paperNature, setPaperNature] = useState<'pyp' | 'mock'>(initialNature);
+  const [authority, setAuthority] = useState<string>(initialAuthority);
   const [category, setCategory] = useState<ExamCategory>(initialCategory);
+  const [subCategory, setSubCategory] = useState<string>(initialSubCategory);
+  const [postName, setPostName] = useState<string>(() => {
+    const lower = sampleExam.toLowerCase();
+    if (lower.includes('lecturer') || lower.includes('vyakhyata')) return 'CG Lecturer 2026';
+    if (lower.includes('assistant') || lower.includes('sahayak')) return 'CG Assistant Teacher 2026';
+    if (lower.includes('teacher') || lower.includes('shikshak')) return 'CG Teacher 2026';
+    return 'CG Lecturer 2026';
+  });
+  const [vacancies, setVacancies] = useState<string>('');
+
   const [examTitle, setExamTitle] = useState<string>(() => {
-    if (sampleExam.toUpperCase().includes('CGPSC')) {
-      return `CGPSC State Service Prelims Paper-I (General Studies) ${sampleYear}`;
-    }
-    if (sampleExam.toUpperCase().includes('PATWARI')) {
-      return `CGSSB Patwari Official Question Paper ${sampleYear}`;
-    }
-    return `${sampleExam} Official Solved Paper ${sampleYear}`;
+    if (sampleExam && sampleExam !== 'CG Exam') return sampleExam;
+    return `${authority} Solved Paper ${sampleYear}`;
   });
   const [examYear, setExamYear] = useState<number>(sampleYear);
-  const [durationMinutes, setDurationMinutes] = useState<number>(initialCategory === 'CGPSC' ? 120 : 180);
-  const [negativeMarkingRatio, setNegativeMarkingRatio] = useState<string>(
-    initialCategory === 'CGPSC' ? '-⅓rd (0.667 Marks per wrong answer)' : '-⅓rd (0.33 Marks)'
-  );
+  const [durationMinutes, setDurationMinutes] = useState<number>(() => {
+    if (firstQ?.idealTimeSeconds && firstQ.idealTimeSeconds > 0) {
+      return Math.round((initialRecords.length * firstQ.idealTimeSeconds) / 60) || 120;
+    }
+    return initialCategory === 'CGPSC' ? 120 : 120;
+  });
+  const [negativeMarkingRatio, setNegativeMarkingRatio] = useState<string>(() => {
+    if (firstQ?.negativeMarks) {
+      return `-${firstQ.negativeMarks} Marks per wrong answer`;
+    }
+    return initialCategory === 'CGPSC' ? '-⅓rd (0.667 Marks per wrong answer)' : '-¼th (0.25 Marks per wrong answer)';
+  });
   const [paperSummary, setPaperSummary] = useState<string>(
-    `Official past paper simulation containing ${initialRecords.length} bilingual questions, authentic answer keys, and detailed solutions.`
+    `${paperNature === 'mock' ? 'High-yield mock simulation test' : 'Official past paper simulation'} containing ${initialRecords.length} questions, authentic answer keys, and detailed bilingual solutions.`
   );
+
+  // Compute available hierarchy records across existing database and imported questions
+  const computedHierarchyRecords = useMemo(() => {
+    if (allRecords && allRecords.length > 0) return allRecords;
+    return extractHierarchyFromApp(existingTests, existingPYPs, initialRecords);
+  }, [allRecords, existingTests, existingPYPs, initialRecords]);
+
+  // Handle Multi-level hierarchy change with auto-population
+  const handleHierarchyChange = (newVal: ExamHierarchyValue, matchedRecord?: HierarchyRecord) => {
+    setAuthority(newVal.authority);
+    setSubCategory(newVal.category);
+    if (newVal.postName) setPostName(newVal.postName);
+    setExamTitle(newVal.examName);
+
+    const mappedCat = mapAuthorityToExamCategory(newVal.authority);
+    setCategory(mappedCat);
+
+    // Auto-populate parameters if user matched an existing registered record
+    if (matchedRecord) {
+      if (matchedRecord.postName) setPostName(matchedRecord.postName);
+      if (matchedRecord.year) setExamYear(matchedRecord.year);
+      if (matchedRecord.durationMinutes) setDurationMinutes(matchedRecord.durationMinutes);
+      if (matchedRecord.negativeMarkingRatio) setNegativeMarkingRatio(matchedRecord.negativeMarkingRatio);
+      if (matchedRecord.vacancies) setVacancies(matchedRecord.vacancies);
+      if (matchedRecord.paperSummary) setPaperSummary(matchedRecord.paperSummary);
+    }
+  };
+
+  // Questions State
+  const [questionsList, setQuestionsList] = useState<Question[]>(initialRecords);
 
   // Search & Pagination in Questions Tab
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,62 +221,19 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
 
   // Editing Single Question Modal/Drawer State
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editFormData, setEditFormData] = useState<BulkImportQuestion | null>(null);
-
-  // When Category or Year changes, offer to harmonize unique IDs
-  const handleCategoryChange = (newCat: ExamCategory) => {
-    setCategory(newCat);
-    const catPrefix = newCat === 'CGPSC' ? 'CGPSC' : newCat === 'CENTRAL_EXAMS' ? 'CENTRAL' : 'CGSSB';
-    
-    // Auto-adjust default duration & negative ratio
-    if (newCat === 'CGPSC') {
-      setDurationMinutes(120);
-      setNegativeMarkingRatio('-⅓rd (0.667 Marks per wrong answer)');
-    } else if (newCat === 'CENTRAL_EXAMS') {
-      setDurationMinutes(120);
-      setNegativeMarkingRatio('-¼th (0.25 / 0.50 Marks)');
-    } else {
-      setDurationMinutes(180);
-      setNegativeMarkingRatio('-⅓rd (0.33 Marks)');
-    }
-
-    // Harmonize unique IDs
-    setQuestionsList(prev =>
-      prev.map(q => {
-        const sno = Number(q['S.No.']);
-        return {
-          ...q,
-          uniqueQuestionId: `${catPrefix}-${examYear}-Q${String(sno).padStart(3, '0')}`,
-        };
-      })
-    );
-  };
-
-  const handleYearChange = (newYear: number) => {
-    setExamYear(newYear);
-    const catPrefix = category === 'CGPSC' ? 'CGPSC' : category === 'CENTRAL_EXAMS' ? 'CENTRAL' : 'CGSSB';
-    setQuestionsList(prev =>
-      prev.map(q => {
-        const sno = Number(q['S.No.']);
-        return {
-          ...q,
-          Year: newYear,
-          uniqueQuestionId: `${catPrefix}-${newYear}-Q${String(sno).padStart(3, '0')}`,
-        };
-      })
-    );
-  };
+  const [editFormData, setEditFormData] = useState<Question | null>(null);
 
   // Filtered Questions List for Viewing/Editing
   const filteredQuestions = useMemo(() => {
     if (!searchQuery.trim()) return questionsList;
     const q = searchQuery.toLowerCase();
     return questionsList.filter(item => {
-      const qH = String(item['Question(Hindi)'] || '').toLowerCase();
-      const qE = String(item['Question(english)'] || '').toLowerCase();
-      const uId = String(item.uniqueQuestionId || '').toLowerCase();
-      const sno = String(item['S.No.'] || '');
-      return qH.includes(q) || qE.includes(q) || uId.includes(q) || sno === q;
+      const qH = String(item.questionHindi || '').toLowerCase();
+      const qE = String(item.questionText || item.question || '').toLowerCase();
+      const uId = String(item.id || item.uniqueQuestionId || '').toLowerCase();
+      const topic = String(item.topic || '').toLowerCase();
+      const ch = String(item.chapter || item.chapterName || '').toLowerCase();
+      return qH.includes(q) || qE.includes(q) || uId.includes(q) || topic.includes(q) || ch.includes(q);
     });
   }, [questionsList, searchQuery]);
 
@@ -193,7 +261,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
   };
 
   const deleteQuestion = (indexToDelete: number) => {
-    if (window.confirm(`Are you sure you want to remove Question #${questionsList[indexToDelete]['S.No.']} from this paper?`)) {
+    if (window.confirm(`Are you sure you want to remove Question #${indexToDelete + 1} (${questionsList[indexToDelete].id}) from this paper?`)) {
       setQuestionsList(prev => prev.filter((_, i) => i !== indexToDelete));
     }
   };
@@ -202,42 +270,52 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
   const subjectsWeightage = useMemo(() => {
     const count = questionsList.length;
     if (count === 0) return [];
-    if (category === 'CGPSC') {
-      return [
-        { subject: 'Chhattisgarh General Studies', questionCount: Math.round(count * 0.5), percentage: 50 },
-        { subject: 'Indian History & Constitution', questionCount: Math.round(count * 0.25), percentage: 25 },
-        { subject: 'Geography, Economy & Current Affairs', questionCount: Math.round(count * 0.25), percentage: 25 },
-      ];
-    }
-    if (category === 'CENTRAL_EXAMS') {
-      return [
-        { subject: 'General Awareness & GK', questionCount: Math.round(count * 0.4), percentage: 40 },
-        { subject: 'Quantitative Aptitude & Reasoning', questionCount: Math.round(count * 0.4), percentage: 40 },
-        { subject: 'General English / Comprehension', questionCount: Math.round(count * 0.2), percentage: 20 },
-      ];
-    }
-    return [
-      { subject: 'Chhattisgarh Special Knowledge', questionCount: Math.round(count * 0.35), percentage: 35 },
-      { subject: 'Quantitative & Reasoning', questionCount: Math.round(count * 0.35), percentage: 35 },
-      { subject: 'Computer & Language (Hindi/Chhattisgarhi)', questionCount: Math.round(count * 0.3), percentage: 30 },
-    ];
-  }, [category, questionsList.length]);
+
+    const map: Record<string, number> = {};
+    questionsList.forEach(q => {
+      const subj = q.subject || 'General Studies';
+      map[subj] = (map[subj] || 0) + 1;
+    });
+
+    return Object.entries(map)
+      .map(([subject, qCount]) => ({
+        subject,
+        questionCount: qCount,
+        percentage: Math.round((qCount / count) * 100),
+      }))
+      .sort((a, b) => b.questionCount - a.questionCount);
+  }, [questionsList]);
 
   const marks = category === 'CGPSC' ? questionsList.length * 2 : questionsList.length;
 
   const handlePublish = () => {
+    const taggedQuestions = questionsList.map(q => ({
+      ...q,
+      authority,
+      subCategory: subCategory.trim() || 'Teacher Recruitment 2026',
+      postName: postName.trim() || 'CG Lecturer 2026',
+      examName: examTitle.trim() || `${authority} ${subCategory} Exam`,
+      year: examYear,
+    }));
+
     onConfirm(
       {
-        title: examTitle.trim() || `${category} ${examYear} Official Paper`,
+        paperNature,
+        title: examTitle.trim() || `${authority} ${subCategory} Exam`,
+        authority,
         examCategory: category,
+        subCategory: subCategory.trim() || 'Teacher Recruitment 2026',
+        postName: postName.trim() || 'CG Lecturer 2026',
+        examName: examTitle.trim() || `${authority} ${subCategory} Exam`,
         year: examYear,
         durationMinutes,
         marks,
         negativeMarkingRatio,
         paperSummary: paperSummary.trim(),
         subjectsWeightage,
+        vacancies: vacancies.trim() || undefined,
       },
-      questionsList
+      taggedQuestions
     );
   };
 
@@ -247,20 +325,23 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-800 bg-slate-950/80 gap-3 shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+            <div className={`p-2.5 rounded-xl border ${paperNature === 'mock' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-base sm:text-lg font-bold text-white">
-                  PYP Ingestion & Examination Studio
+                  Exam & Test Series Ingestion Studio
                 </h2>
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold">
-                  {questionsList.length} Questions
+                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold border ${paperNature === 'mock' ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'}`}>
+                  {questionsList.length} Questions Loaded
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                  {paperNature === 'mock' ? '🎯 Mock Series' : '📜 Official PYP'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Review questions, assign unique IDs, configure official exam attributes, and publish directly as a live test.
+                Classify paper, select recruitment authority & sub-category, verify questions, and publish as a live interactive test.
               </p>
             </div>
           </div>
@@ -315,78 +396,79 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                 <div className="border-b border-slate-800 pb-2">
                   <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                     <Tag className="w-4 h-4 text-emerald-400" />
-                    <span>Exam Categorization & Attributes</span>
+                    <span>Exam Categorization & Hierarchy</span>
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Categorize the examination into CGPSC, CGSSB, or Central Exam, and set duration & negative marking rules.
+                    Select paper nature, recruitment drive, authority, and official exam parameters.
                   </p>
                 </div>
 
-                {/* 1. Category Selection Pills */}
+                {/* 1. Paper Nature: Mock Test vs PYP */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    Target Exam Authority / Category <span className="text-rose-400">*</span>
+                    1. Paper Nature (प्रकृति) <span className="text-rose-400">*</span>
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => handleCategoryChange('CGPSC')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition cursor-pointer ${
-                        category === 'CGPSC'
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-300 ring-1 ring-blue-500'
+                      onClick={() => {
+                        setPaperNature('mock');
+                        setPaperSummary(`High-yield mock simulation test containing ${questionsList.length} questions, authentic answer keys, and detailed bilingual solutions.`);
+                      }}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center space-x-2 transition cursor-pointer ${
+                        paperNature === 'mock'
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 ring-1 ring-cyan-400 shadow-sm'
                           : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                       }`}
                     >
-                      <span className="text-sm font-extrabold">CGPSC</span>
-                      <span className="text-[10px] opacity-80">State Service</span>
+                      <Sparkles className="w-4 h-4 text-cyan-400" />
+                      <span>🎯 Mock Test (Test Series)</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => handleCategoryChange('CGSSB')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition cursor-pointer ${
-                        category === 'CGSSB'
-                          ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500'
+                      onClick={() => {
+                        setPaperNature('pyp');
+                        setPaperSummary(`Official past paper simulation containing ${questionsList.length} questions, authentic answer keys, and detailed bilingual solutions.`);
+                      }}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center space-x-2 transition cursor-pointer ${
+                        paperNature === 'pyp'
+                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400 shadow-sm'
                           : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                       }`}
                     >
-                      <span className="text-sm font-extrabold">CGSSB</span>
-                      <span className="text-[10px] opacity-80">Vyapam Board</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleCategoryChange('CENTRAL_EXAMS')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition cursor-pointer ${
-                        category === 'CENTRAL_EXAMS'
-                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                      }`}
-                    >
-                      <span className="text-sm font-extrabold">Central Exam</span>
-                      <span className="text-[10px] opacity-80">SSC / Railways</span>
+                      <Award className="w-4 h-4 text-emerald-400" />
+                      <span>📜 Official PYP (Past Exam)</span>
                     </button>
                   </div>
                 </div>
 
-                {/* 2. Exam Title */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Official Exam Paper Title <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={examTitle}
-                    onChange={e => setExamTitle(e.target.value)}
-                    placeholder="e.g. CGPSC State Service Prelims Paper-I 2024"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-semibold"
+                {/* 2. Multi-Level Exam Hierarchy (Authority > Category > Exam Name) */}
+                <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-200 flex items-center space-x-1.5">
+                      <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>2. Exam Hierarchy (Authority &gt; Drive &gt; Cadre &gt; Specific Exam)</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">Searchable dropdowns with auto-population</span>
+                  </div>
+
+                  <ExamHierarchySelector
+                    value={{
+                      authority,
+                      category: subCategory,
+                      postName,
+                      examName: examTitle,
+                    }}
+                    onChange={handleHierarchyChange}
+                    allRecords={computedHierarchyRecords}
                   />
                 </div>
 
-                {/* 3. Year & Duration */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* 5. Year, Duration & Vacancies */}
+                <div className="grid grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Exam Year
                     </label>
                     <input
@@ -394,13 +476,13 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                       min={2000}
                       max={2030}
                       value={examYear}
-                      onChange={e => handleYearChange(Number(e.target.value) || 2024)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono font-bold"
+                      onChange={e => setExamYear(Number(e.target.value) || 2026)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono font-bold"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
-                      Duration (Minutes)
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Duration (Mins)
                     </label>
                     <input
                       type="number"
@@ -409,12 +491,24 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                       step={15}
                       value={durationMinutes}
                       onChange={e => setDurationMinutes(Number(e.target.value) || 120)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono font-bold"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Vacancies (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={vacancies}
+                      onChange={e => setVacancies(e.target.value)}
+                      placeholder="e.g. 252 Posts"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-medium"
                     />
                   </div>
                 </div>
 
-                {/* 4. Negative Marking Ratio */}
+                {/* 6. Negative Marking Ratio */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1">
                     Negative Marking Rule
@@ -423,12 +517,12 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                     type="text"
                     value={negativeMarkingRatio}
                     onChange={e => setNegativeMarkingRatio(e.target.value)}
-                    placeholder="e.g. -⅓rd (0.33 Marks)"
+                    placeholder="e.g. -0.25 (¼th per wrong answer)"
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-rose-400 focus:outline-none focus:border-emerald-500 font-semibold"
                   />
                 </div>
 
-                {/* 5. Paper Summary */}
+                {/* 7. Paper Summary */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1">
                     Paper Summary / Description
@@ -437,58 +531,61 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                     rows={2}
                     value={paperSummary}
                     onChange={e => setPaperSummary(e.target.value)}
-                    placeholder="Describe the paper syllabus, sections, or recruitment drive..."
+                    placeholder="Describe syllabus, topics covered, or target recruitment drive..."
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
-
-                <div className="pt-2 flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/80">
-                  <span className="flex items-center space-x-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Unique Question IDs auto-harmonized to: <code className="text-emerald-400 font-mono font-bold">{category}-{examYear}-Q###</code></span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('questions')}
-                    className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer text-[11px]"
-                  >
-                    View & Edit Questions →
-                  </button>
-                </div>
               </div>
 
-              {/* Right Column: LIVE PREVIEW CARD (EXACTLY AS IN USER'S SCREENSHOT) */}
+              {/* Right Column: LIVE PREVIEW CARD */}
               <div className="lg:col-span-6 space-y-3">
                 <div className="flex items-center justify-between px-1">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Live Preview Card (As seen in PYP Catalog & Live Test)</span>
+                    <span>Live Preview Card (As seen in Live Test Catalog)</span>
                   </span>
                   <span className="text-[10px] text-emerald-400 font-mono font-semibold">Real-time Reactive</span>
                 </div>
 
-                {/* The Exact Card Replica from User Image */}
+                {/* The Reactive Card Replica */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl ring-1 ring-slate-800/80">
                   <div>
-                    {/* Card Top Pill & Exam Year */}
+                    {/* Card Top Badges */}
                     <div className="flex items-center justify-between mb-2">
-                      <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-emerald-400 border border-slate-700">
-                        {category}
-                      </span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${paperNature === 'mock' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'}`}>
+                          {paperNature === 'mock' ? '🎯 MOCK TEST' : '📜 OFFICIAL PYP'}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                          {authority || category}
+                        </span>
+                        {subCategory && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                            {subCategory}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-slate-400 flex items-center space-x-1 font-semibold">
                         <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Exam Year: {examYear}</span>
+                        <span>Year: {examYear}</span>
                       </span>
                     </div>
 
                     {/* Card Title */}
                     <h3 className="text-base font-bold text-white leading-snug">
-                      {examTitle || 'Official Question Paper'}
+                      {examTitle || 'Exam Simulation Paper'}
                     </h3>
+
+                    {vacancies && (
+                      <p className="text-xs text-emerald-400 font-bold mt-1 flex items-center space-x-1">
+                        <Briefcase className="w-3.5 h-3.5" />
+                        <span>Total Announced Posts: {vacancies}</span>
+                      </p>
+                    )}
 
                     {/* Card Summary */}
                     <p className="text-xs text-slate-300 mt-1.5 leading-relaxed line-clamp-3">
-                      {paperSummary || 'Actual question paper conducted by official examination board.'}
+                      {paperSummary || 'Actual practice questions conducted by official examination board.'}
                     </p>
 
                     {/* Specs Box: Questions, Duration, Negative */}
@@ -512,7 +609,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                     {/* Subject Weightages Breakdown */}
                     <div className="mt-3.5 text-xs space-y-1.5">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                        Subject Weightages
+                        Detected Subject Weightages
                       </span>
                       {subjectsWeightage.slice(0, 3).map((sw, i) => (
                         <div key={i} className="flex justify-between items-center text-[11px] text-slate-300">
@@ -527,18 +624,22 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                   <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
                     <button
                       type="button"
-                      disabled
-                      className="p-2 text-slate-500 rounded-lg text-xs flex items-center space-x-1 cursor-not-allowed opacity-60"
+                      onClick={() => setActiveTab('questions')}
+                      className="text-xs text-slate-400 hover:text-white transition flex items-center space-x-1 cursor-pointer"
                     >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Remove</span>
+                      <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Review & Edit All {questionsList.length} Questions</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={handlePublish}
                       disabled={isImporting || questionsList.length === 0}
-                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer ${
+                        paperNature === 'mock'
+                          ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
+                          : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                      }`}
                     >
                       {isImporting ? (
                         <>
@@ -547,8 +648,8 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                         </>
                       ) : (
                         <>
-                          <Layers className="w-3.5 h-3.5" />
-                          <span>Publish as Mock Test</span>
+                          <Play className="w-3.5 h-3.5 fill-slate-950" />
+                          <span>Publish {paperNature === 'mock' ? 'Mock Test' : 'Official PYP'}</span>
                         </>
                       )}
                     </button>
@@ -558,10 +659,10 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                 <div className="p-3 bg-blue-950/25 border border-blue-500/25 rounded-xl text-xs text-blue-300 space-y-1">
                   <div className="font-bold flex items-center space-x-1.5 text-blue-200">
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Instant Mock Test Generation Included</span>
+                    <span>Instant Live Test Creation Included</span>
                   </div>
                   <p className="text-[11px] text-blue-300/80 leading-relaxed">
-                    Clicking "Publish" automatically generates both the Previous Year Paper entry and an interactive Mock Test. Aspirants can click "Give Test" to sit the full exam with timed negative marking right away!
+                    Publishing registers all {questionsList.length} questions in the Question Bank, generates the exam catalog card under <strong>{subCategory}</strong>, and enables full interactive test taking with instant scoring and negative marking.
                   </p>
                 </div>
               </div>
@@ -582,20 +683,20 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                       setSearchQuery(e.target.value);
                       setCurrentPage(1);
                     }}
-                    placeholder="Search by question text, Unique ID, or S.No..."
+                    placeholder="Search by question text, Unique ID, or chapter..."
                     className="w-full pl-9 pr-3.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
 
                 <div className="flex items-center space-x-3 text-xs text-slate-400">
                   <span>
-                    Showing <strong className="text-white">{paginatedQuestions.length}</strong> of{' '}
-                    <strong className="text-white">{questionsList.length}</strong> questions
+                    Showing <strong className="text-emerald-400 font-bold">{paginatedQuestions.length}</strong> of {filteredQuestions.length} questions
                   </span>
                   {searchQuery && (
                     <button
+                      type="button"
                       onClick={() => setSearchQuery('')}
-                      className="text-emerald-400 hover:underline text-[11px]"
+                      className="text-rose-400 hover:underline text-xs"
                     >
                       Clear search
                     </button>
@@ -606,39 +707,51 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
               {/* Questions Grid/List */}
               <div className="space-y-3">
                 {paginatedQuestions.map((qItem, pageIdx) => {
-                  const originalIndex = questionsList.findIndex(
-                    q => q.uniqueQuestionId === qItem.uniqueQuestionId || q['S.No.'] === qItem['S.No.']
-                  );
+                  const originalIndex = questionsList.findIndex(q => q.id === qItem.id);
+                  const qType: QuestionType = qItem.questionType || qItem.type || 'mcq';
+                  const isMatching = qType === 'matching' || (Array.isArray(qItem.columnA) && qItem.columnA.length > 0);
+                  const isAssertionReason = qType === 'assertion_reason' || Boolean(qItem.assertion);
+                  const isMultiStatement = qType === 'multi_statement' || (Array.isArray(qItem.statements) && qItem.statements.length > 0);
+
+                  const stemEnglish = qItem.question || qItem.questionText || qItem.text || '';
+                  const stemHindi = qItem.questionHindi || '';
+                  const showHindi = stemHindi && stemHindi.trim() !== stemEnglish.trim();
 
                   return (
                     <div
-                      key={qItem.uniqueQuestionId || pageIdx}
-                      className="bg-slate-950/50 border border-slate-800 rounded-xl p-4 space-y-3 hover:border-slate-700 transition"
+                      key={qItem.id || pageIdx}
+                      className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3 hover:border-slate-750 transition"
                     >
                       {/* Top Meta Line: S.No, Unique ID, Exam & Edit Button */}
                       <div className="flex items-center justify-between border-b border-slate-850 pb-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="w-6 h-6 rounded-full bg-slate-800 text-emerald-400 font-bold text-xs flex items-center justify-center font-mono">
-                            {qItem['S.No.']}
+                            {(currentPage - 1) * PAGE_SIZE + pageIdx + 1}
                           </span>
                           <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-[11px] font-bold">
-                            {qItem.uniqueQuestionId}
-                          </span>
-                          <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                            {qItem.Examname} ({qItem.Year})
+                            {qItem.id}
                           </span>
 
-                          {/* Chapter Badge */}
-                          <span className="px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[10px] font-medium flex items-center space-x-1">
-                            <span>अध्याय:</span>
-                            <span className="font-semibold">{qItem.chapterName || qItem.chapter || 'Auto-linked'}</span>
+                          {/* Question Type Badge */}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            isMatching
+                              ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                              : isAssertionReason
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : isMultiStatement
+                              ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}>
+                            {isMatching ? 'Matching List' : isAssertionReason ? 'Assertion-Reason' : isMultiStatement ? 'Multi-Statement' : 'MCQ'}
                           </span>
 
-                          {/* Repeated indicator if present */}
-                          {(qItem.timesRepeated || qItem.repeatedInExams) && (
-                            <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold flex items-center space-x-1">
-                              <span>🔥 Repeated</span>
-                              {qItem.timesRepeated && <span>({qItem.timesRepeated}x)</span>}
+                          {/* Subject & Chapter Badge */}
+                          <span className="px-2 py-0.5 rounded bg-slate-850 border border-slate-750 text-slate-300 text-[10px] font-medium">
+                            {qItem.subject}
+                          </span>
+                          {(qItem.chapter || qItem.chapterName) && (
+                            <span className="px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[10px] font-medium hidden sm:inline">
+                              {qItem.chapter || qItem.chapterName}
                             </span>
                           )}
                         </div>
@@ -647,7 +760,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                           <button
                             type="button"
                             onClick={() => openEditQuestion(originalIndex)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 hover:border-emerald-500/40 text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-emerald-400 border border-slate-700 hover:border-emerald-500/40 text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                             <span>Edit Question</span>
@@ -655,7 +768,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                           <button
                             type="button"
                             onClick={() => deleteQuestion(originalIndex)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
                             title="Delete question"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -663,63 +776,156 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Question Text (Hindi & English) */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        {qItem['Question(Hindi)'] && (
-                          <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/60">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                              Hindi Question
-                            </span>
-                            <p className="text-white font-medium leading-relaxed">
-                              {qItem['Question(Hindi)']}
-                            </p>
-                          </div>
+                      {/* Question Stem */}
+                      <div className="space-y-1.5 text-xs sm:text-sm">
+                        {stemEnglish && (
+                          <p className="text-white font-medium leading-relaxed">
+                            {stemEnglish}
+                          </p>
                         )}
-                        {qItem['Question(english)'] && (
-                          <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/60">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                              English Question
-                            </span>
-                            <p className="text-slate-300 font-medium leading-relaxed">
-                              {qItem['Question(english)']}
-                            </p>
-                          </div>
+                        {showHindi && (
+                          <p className="text-emerald-300/90 font-medium leading-relaxed border-l-2 border-emerald-500/40 pl-3 py-0.5 text-xs">
+                            {stemHindi}
+                          </p>
                         )}
                       </div>
 
+                      {/* MATCHING LIST DISPLAY (Column A & Column B) */}
+                      {isMatching && Array.isArray(qItem.columnA) && Array.isArray(qItem.columnB) && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-900/80 border border-purple-500/30 my-2">
+                          {/* Column A */}
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block border-b border-purple-500/20 pb-1">
+                              Column I (सूची-I)
+                            </span>
+                            {qItem.columnA.map((item, idx) => (
+                              <div key={idx} className="flex items-start space-x-2 text-xs text-slate-200">
+                                <span className="w-5 h-5 rounded bg-purple-500/20 text-purple-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                                  {item.id || idx + 1}
+                                </span>
+                                <span>{item.text || item.textHindi || String(item)}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Column B */}
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider block border-b border-purple-500/20 pb-1">
+                              Column II (सूची-II)
+                            </span>
+                            {qItem.columnB.map((item, idx) => (
+                              <div key={idx} className="flex items-start space-x-2 text-xs text-slate-200">
+                                <span className="w-5 h-5 rounded bg-purple-500/20 text-purple-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                                  {item.id || String.fromCharCode(65 + idx)}
+                                </span>
+                                <span>{item.text || item.textHindi || String(item)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ASSERTION & REASON DISPLAY */}
+                      {isAssertionReason && (qItem.assertion || qItem.reason) && (
+                        <div className="space-y-2 p-3 rounded-xl bg-slate-900/80 border border-amber-500/30 my-2 text-xs">
+                          {qItem.assertion && (
+                            <div className="flex items-start space-x-2.5">
+                              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-black text-[10px] shrink-0 mt-0.5 border border-amber-500/40">
+                                Assertion (A)
+                              </span>
+                              <div className="text-slate-100 font-medium leading-relaxed">
+                                {qItem.assertion}
+                                {qItem.assertionHindi && qItem.assertionHindi !== qItem.assertion && (
+                                  <div className="text-emerald-300/80 text-[11px] mt-0.5">{qItem.assertionHindi}</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {qItem.reason && (
+                            <div className="flex items-start space-x-2.5 pt-1.5 border-t border-slate-800">
+                              <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-black text-[10px] shrink-0 mt-0.5 border border-cyan-500/40">
+                                Reason (R)
+                              </span>
+                              <div className="text-slate-100 font-medium leading-relaxed">
+                                {qItem.reason}
+                                {qItem.reasonHindi && qItem.reasonHindi !== qItem.reason && (
+                                  <div className="text-emerald-300/80 text-[11px] mt-0.5">{qItem.reasonHindi}</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* MULTI-STATEMENT DISPLAY */}
+                      {isMultiStatement && Array.isArray(qItem.statements) && qItem.statements.length > 0 && (
+                        <div className="space-y-2 p-3 rounded-xl bg-slate-900/80 border border-sky-500/30 my-2 text-xs">
+                          <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider block border-b border-sky-500/20 pb-1">
+                            Statements (कथन)
+                          </span>
+                          <div className="space-y-2">
+                            {qItem.statements.map((stmt, sIdx) => (
+                              <div key={sIdx} className="flex items-start space-x-2 text-slate-200">
+                                <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-300 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                                  {stmt.id || sIdx + 1}
+                                </span>
+                                <div>
+                                  <p>{stmt.text || (typeof stmt === 'string' ? stmt : '')}</p>
+                                  {stmt.textHindi && stmt.textHindi !== stmt.text && (
+                                    <p className="text-emerald-300/80 text-[11px] mt-0.5">{stmt.textHindi}</p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Options Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                        {(['A', 'B', 'C', 'D'] as const).map(optKey => {
-                          const optText = qItem[`option_${optKey}` as keyof BulkImportQuestion];
-                          const isCorrect = String(qItem.answer).toUpperCase().trim() === optKey;
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs pt-1">
+                        {qItem.options.map(opt => {
+                          const optKey = opt.label || opt.id || '';
+                          const isCorrect = String(qItem.correctOption || qItem.correctAnswer).toUpperCase().trim() === String(optKey).toUpperCase().trim();
 
                           return (
                             <div
                               key={optKey}
-                              className={`p-2 rounded-lg border flex items-start space-x-2 ${
+                              className={`p-2.5 rounded-xl border flex items-start space-x-2 transition ${
                                 isCorrect
-                                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-semibold'
-                                  : 'bg-slate-900/40 border-slate-800 text-slate-300'
+                                  ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200 font-semibold shadow-sm'
+                                  : 'bg-slate-900/50 border-slate-800 text-slate-300'
                               }`}
                             >
                               <span
-                                className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
-                                  isCorrect ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+                                className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
+                                  isCorrect ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-400 border border-slate-700'
                                 }`}
                               >
                                 {optKey}
                               </span>
-                              <span className="truncate">{String(optText || '—')}</span>
+                              <div className="overflow-hidden">
+                                <span className="truncate block font-medium">{opt.text}</span>
+                                {opt.textHindi && opt.textHindi !== opt.text && (
+                                  <span className="text-[10px] text-slate-400 truncate block mt-0.5">{opt.textHindi}</span>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
                       </div>
 
                       {/* Explanation */}
-                      {qItem.explaination && (
-                        <div className="bg-slate-900/30 p-2 rounded-lg border border-slate-850 text-[11px] text-slate-400 flex items-start space-x-1.5">
-                          <span className="font-bold text-amber-400 shrink-0">Explanation:</span>
-                          <span className="line-clamp-2">{qItem.explaination}</span>
+                      {(qItem.explanation || qItem.explanationHindi) && (
+                        <div className="bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/80 text-[11px] text-slate-300 space-y-1">
+                          <span className="font-bold text-amber-400 block text-[10px] uppercase tracking-wider">
+                            Step-by-step Solution:
+                          </span>
+                          {qItem.explanation && <p>{qItem.explanation}</p>}
+                          {qItem.explanationHindi && qItem.explanationHindi !== qItem.explanation && (
+                            <p className="text-emerald-300/80 text-[11px] pt-1 border-t border-slate-800/60 mt-1">
+                              {qItem.explanationHindi}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -738,7 +944,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                       type="button"
                       disabled={currentPage === 1}
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-750 flex items-center space-x-1 cursor-pointer"
                     >
                       <ChevronLeft className="w-3.5 h-3.5" />
                       <span>Previous</span>
@@ -747,7 +953,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                       type="button"
                       disabled={currentPage === totalPages}
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-750 flex items-center space-x-1 cursor-pointer"
                     >
                       <span>Next</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -766,7 +972,10 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>
                 Ready to publish <strong className="text-white">{questionsList.length}</strong> questions under{' '}
-                <strong className="text-emerald-400">{category}</strong>
+                <strong className="text-emerald-400">{category}</strong> › <strong className="text-purple-400">{subCategory}</strong> as{' '}
+                <strong className={paperNature === 'mock' ? 'text-cyan-400' : 'text-emerald-400'}>
+                  {paperNature === 'mock' ? 'Mock Test' : 'Official PYP'}
+                </strong>
               </span>
             </span>
           </div>
@@ -776,7 +985,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isImporting}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition cursor-pointer disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 transition cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
@@ -785,17 +994,21 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
               type="button"
               onClick={handlePublish}
               disabled={isImporting || questionsList.length === 0}
-              className="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 transition shadow-lg shadow-emerald-500/20 flex items-center space-x-2 cursor-pointer disabled:opacity-50"
+              className={`px-5 py-2.5 rounded-xl text-xs font-black transition shadow-lg flex items-center space-x-2 cursor-pointer disabled:opacity-50 ${
+                paperNature === 'mock'
+                  ? 'bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-400 text-slate-950 hover:from-cyan-400 hover:to-teal-300 shadow-cyan-500/20'
+                  : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
+              }`}
             >
               {isImporting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Publishing Exam & Mock Test...</span>
+                  <span>Publishing Exam & Test Series...</span>
                 </>
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-slate-950" />
-                  <span>Publish PYP Exam & Create Live Test</span>
+                  <span>Publish {paperNature === 'mock' ? 'Mock Test' : 'PYP Exam'} & Create Live Test</span>
                 </>
               )}
             </button>
@@ -811,7 +1024,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
               <div className="flex items-center space-x-2">
                 <Edit3 className="w-4 h-4 text-emerald-400" />
                 <h3 className="text-sm font-bold text-white">
-                  Edit Question #{editFormData['S.No.']} ({editFormData.uniqueQuestionId})
+                  Edit Question ({editFormData.id})
                 </h3>
               </div>
               <button
@@ -826,144 +1039,96 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
             </div>
 
             <div className="space-y-3.5 text-xs max-h-[70vh] overflow-y-auto pr-1">
-              {/* S.No. and Unique ID */}
+              {/* Question Type and Unique ID */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">S.No.</label>
-                  <input
-                    type="number"
-                    value={editFormData['S.No.']}
+                  <label className="block text-slate-300 font-bold mb-1">Question Type</label>
+                  <select
+                    value={editFormData.questionType || editFormData.type || 'mcq'}
                     onChange={e =>
-                      setEditFormData({ ...editFormData, 'S.No.': Number(e.target.value) || 1 })
+                      setEditFormData({ ...editFormData, questionType: e.target.value as QuestionType, type: e.target.value as QuestionType })
                     }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-mono font-bold"
-                  />
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-semibold"
+                  >
+                    <option value="mcq">Standard MCQ</option>
+                    <option value="matching">Matching List (Column A & B)</option>
+                    <option value="assertion_reason">Assertion - Reason</option>
+                    <option value="multi_statement">Multi-Statement</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">Unique Question ID</label>
                   <input
                     type="text"
-                    value={editFormData.uniqueQuestionId || ''}
+                    value={editFormData.id || ''}
                     onChange={e =>
-                      setEditFormData({ ...editFormData, uniqueQuestionId: e.target.value })
+                      setEditFormData({ ...editFormData, id: e.target.value, uniqueQuestionId: e.target.value })
                     }
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-emerald-400 font-mono font-bold"
                   />
                 </div>
               </div>
 
-              {/* Chapter & Repetition Tracking */}
-              <div className="grid grid-cols-2 gap-3 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/80">
-                <div>
-                  <label className="block text-purple-300 font-bold mb-1 flex items-center space-x-1">
-                    <span>Chapter / Topic (अध्याय)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. History of Chhattisgarh"
-                    value={editFormData.chapterName || editFormData.chapter || ''}
-                    onChange={e =>
-                      setEditFormData({
-                        ...editFormData,
-                        chapterName: e.target.value,
-                        chapter: e.target.value,
-                      })
-                    }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-purple-200 placeholder-slate-600 font-medium"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    Leave blank to auto-link via syllabus taxonomy
-                  </span>
-                </div>
-                <div>
-                  <label className="block text-amber-300 font-bold mb-1 flex items-center space-x-1">
-                    <span>Repeated in Exams (पुनरावृत्ति)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. CGPSC 2021, Patwari 2022"
-                    value={
-                      Array.isArray(editFormData.repeatedInExams)
-                        ? editFormData.repeatedInExams.join(', ')
-                        : editFormData.repeatedInExams || ''
-                    }
-                    onChange={e =>
-                      setEditFormData({
-                        ...editFormData,
-                        repeatedInExams: e.target.value,
-                      })
-                    }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-amber-200 placeholder-slate-600 font-medium"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    Comma-separated list or auto-detected by text
-                  </span>
-                </div>
-              </div>
-
-              {/* Question Hindi */}
+              {/* Question English */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Question (Hindi)</label>
+                <label className="block text-slate-300 font-bold mb-1">Question Stem (English)</label>
                 <textarea
                   rows={2}
-                  value={editFormData['Question(Hindi)']}
+                  value={editFormData.questionText || editFormData.question || ''}
                   onChange={e =>
-                    setEditFormData({ ...editFormData, 'Question(Hindi)': e.target.value })
+                    setEditFormData({ ...editFormData, questionText: e.target.value, question: e.target.value })
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
                 />
               </div>
 
-              {/* Question English */}
+              {/* Question Hindi */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Question (English)</label>
+                <label className="block text-slate-300 font-bold mb-1">Question Stem (Hindi)</label>
                 <textarea
                   rows={2}
-                  value={editFormData['Question(english)']}
+                  value={editFormData.questionHindi || ''}
                   onChange={e =>
-                    setEditFormData({ ...editFormData, 'Question(english)': e.target.value })
+                    setEditFormData({ ...editFormData, questionHindi: e.target.value })
                   }
+                  placeholder="Optional Hindi translation of the question stem..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
                 />
               </div>
 
               {/* Options A, B, C, D */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Option A</label>
-                  <input
-                    type="text"
-                    value={editFormData.option_A}
-                    onChange={e => setEditFormData({ ...editFormData, option_A: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Option B</label>
-                  <input
-                    type="text"
-                    value={editFormData.option_B}
-                    onChange={e => setEditFormData({ ...editFormData, option_B: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Option C</label>
-                  <input
-                    type="text"
-                    value={editFormData.option_C}
-                    onChange={e => setEditFormData({ ...editFormData, option_C: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Option D</label>
-                  <input
-                    type="text"
-                    value={editFormData.option_D}
-                    onChange={e => setEditFormData({ ...editFormData, option_D: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
-                  />
+              <div className="space-y-2">
+                <label className="block text-slate-300 font-bold">Options (विकल्प)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {editFormData.options.map((opt, optIdx) => (
+                    <div key={optIdx} className="bg-slate-950 p-2 rounded-lg border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-400 font-mono text-[11px]">Option {opt.label || opt.id}</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={opt.text}
+                        onChange={e => {
+                          const updated = [...editFormData.options];
+                          updated[optIdx] = { ...updated[optIdx], text: e.target.value };
+                          setEditFormData({ ...editFormData, options: updated });
+                        }}
+                        placeholder="English text..."
+                        className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-white text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={opt.textHindi || ''}
+                        onChange={e => {
+                          const updated = [...editFormData.options];
+                          updated[optIdx] = { ...updated[optIdx], textHindi: e.target.value };
+                          setEditFormData({ ...editFormData, options: updated });
+                        }}
+                        placeholder="Hindi text (optional)..."
+                        className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-slate-300 text-xs"
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -977,10 +1142,10 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                     <button
                       key={opt}
                       type="button"
-                      onClick={() => setEditFormData({ ...editFormData, answer: opt })}
+                      onClick={() => setEditFormData({ ...editFormData, correctOption: opt, correctAnswer: opt })}
                       className={`p-2 rounded-lg border font-bold text-center transition cursor-pointer ${
-                        String(editFormData.answer).toUpperCase().trim() === opt
-                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 ring-2 ring-emerald-400'
+                        String(editFormData.correctOption || editFormData.correctAnswer).toUpperCase().trim() === opt
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 ring-2 ring-emerald-400 font-black'
                           : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
                       }`}
                     >
@@ -992,12 +1157,12 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
 
               {/* Explanation */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Explanation</label>
+                <label className="block text-slate-300 font-bold mb-1">Explanation (Solution)</label>
                 <textarea
                   rows={2}
-                  value={editFormData.explaination}
+                  value={editFormData.explanation || ''}
                   onChange={e =>
-                    setEditFormData({ ...editFormData, explaination: e.target.value })
+                    setEditFormData({ ...editFormData, explanation: e.target.value })
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
                 />
@@ -1018,7 +1183,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
               <button
                 type="button"
                 onClick={saveEditedQuestion}
-                className="px-4 py-1.5 rounded-lg text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 flex items-center space-x-1"
+                className="px-4 py-1.5 rounded-lg text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 flex items-center space-x-1 cursor-pointer"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>Save Question</span>

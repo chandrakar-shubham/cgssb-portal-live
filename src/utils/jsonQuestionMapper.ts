@@ -1,5 +1,6 @@
 import { Question, QuestionOption, QuestionType, SubjectCategory, DifficultyLevel, ExamCategory } from '../types';
 import { autoClassifyChapter } from './pypEngine';
+import { extractStatementsFromStem } from './statementParser';
 
 /**
  * Raw input format matching your external PDF-to-JSON converter
@@ -100,21 +101,114 @@ export function mapRawJsonToQuestion(raw: RawJsonQuestionInput, index: number = 
     }
   }
 
+  // Question Stems
+  const stemEnglish = String(raw['Question(English)'] || raw['Question(english)'] || raw.questionEnglish || raw.question || raw.questionText || raw.text || '').trim();
+  const stemHindi = String(raw['Question(Hindi)'] || raw.questionHindi || raw.textHindi || '').trim();
+  const combinedStem = `${stemEnglish} ${stemHindi}`.toLowerCase();
+
+  // Column A and Column B resolution (handles array, stringified JSON, newline text, and key aliases)
+  const parseColumnItems = (val: any, prefix: '1' | 'A'): any[] | undefined => {
+    if (!val) return undefined;
+    if (Array.isArray(val) && val.length > 0) {
+      return val.map((item, idx) => {
+        if (typeof item === 'string') {
+          const id = prefix === '1' ? String(idx + 1) : String.fromCharCode(65 + idx);
+          return { id, text: item, textHindi: item };
+        }
+        return {
+          id: String(item.id || (prefix === '1' ? idx + 1 : String.fromCharCode(65 + idx))),
+          text: String(item.text || item.textEnglish || item.title || ''),
+          textHindi: String(item.textHindi || item.text || item.textEnglish || ''),
+        };
+      });
+    }
+    if (typeof val === 'string' && val.trim().length > 0) {
+      const trimmed = val.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parseColumnItems(parsed, prefix);
+        } catch {
+          // ignore json parse failure
+        }
+      }
+      // Newline-separated list
+      const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        return lines.map((line, idx) => {
+          const id = prefix === '1' ? String(idx + 1) : String.fromCharCode(65 + idx);
+          const clean = line.replace(/^[0-9A-Za-z]+[\.\:\)\-]\s*/, '');
+          return { id, text: clean || line, textHindi: clean || line };
+        });
+      }
+    }
+    return undefined;
+  };
+
+  const rawColA = raw.columnA || (raw as any)['Column A'] || (raw as any)['ColumnA'] || (raw as any).column_a || (raw as any).column1 || (raw as any)['List-I'] || (raw as any)['List I'] || (raw as any).list1 || (raw as any).listA;
+  const rawColB = raw.columnB || (raw as any)['Column B'] || (raw as any)['ColumnB'] || (raw as any).column_b || (raw as any).column2 || (raw as any)['List-II'] || (raw as any)['List II'] || (raw as any).list2 || (raw as any).listB;
+  const columnA = parseColumnItems(rawColA, '1');
+  const columnB = parseColumnItems(rawColB, 'A');
+
+  // Assertion and Reason resolution (handles key aliases and inline extraction)
+  let assertionEn = String(raw.assertion || (raw as any).Assertion || (raw as any)['Assertion (A)'] || (raw as any)['Assertion [A]'] || (raw as any).assertion_en || (raw as any).assertionText || '').trim();
+  let assertionHi = String(raw.assertionHindi || (raw as any).assertion_hi || (raw as any)['अभिकथन'] || (raw as any)['अभिकथन (A)'] || assertionEn).trim();
+  let reasonEn = String(raw.reason || (raw as any).Reason || (raw as any)['Reason (R)'] || (raw as any)['Reason [R]'] || (raw as any).reason_en || (raw as any).reasonText || '').trim();
+  let reasonHi = String(raw.reasonHindi || (raw as any).reason_hi || (raw as any)['कारण'] || (raw as any)['कारण (R)'] || reasonEn).trim();
+
+  if (!assertionEn && !reasonEn) {
+    const inlineMatch = (stemEnglish || stemHindi).match(/(.*?)(?:Assertion|अभिकथन)\s*[\(\[]A[\)\]]?[:\s]+(.*?)(?:Reason|कारण)\s*[\(\[]R[\)\]]?[:\s]+(.*)/i);
+    if (inlineMatch) {
+      assertionEn = inlineMatch[2].trim();
+      reasonEn = inlineMatch[3].trim();
+      if (!assertionHi) assertionHi = assertionEn;
+      if (!reasonHi) reasonHi = reasonEn;
+    }
+  }
+
   // Question Type: 'mcq' | 'matching' | 'assertion_reason' | 'multi_statement'
   // Supports both questionType and type aliases
   let questionType: QuestionType = 'mcq';
   const rawType = String(raw.QuestionType || raw.questionType || raw.type || '').toLowerCase();
-  if (rawType.includes('match') || Array.isArray(raw.columnA)) {
+  if (
+    rawType.includes('match') ||
+    Boolean(columnA && columnB) ||
+    combinedStem.includes('match the') ||
+    combinedStem.includes('सुमेलित') ||
+    combinedStem.includes('list-i') ||
+    combinedStem.includes('सूची-i')
+  ) {
     questionType = 'matching';
-  } else if (rawType.includes('assertion') || rawType.includes('reason') || Boolean(raw.assertion)) {
+  } else if (
+    rawType.includes('assertion') ||
+    rawType.includes('reason') ||
+    Boolean(assertionEn || reasonEn) ||
+    (combinedStem.includes('assertion') && combinedStem.includes('reason')) ||
+    (combinedStem.includes('अभिकथन') && combinedStem.includes('कारण')) ||
+    combinedStem.includes('labelled as assertion') ||
+    combinedStem.includes('labelled as reason')
+  ) {
     questionType = 'assertion_reason';
-  } else if (rawType.includes('statement') || rawType.includes('multi') || (Array.isArray(raw.statements) && raw.statements.length > 0)) {
-    questionType = 'multi_statement';
   }
 
-  // Question Stems
-  const stemEnglish = String(raw['Question(English)'] || raw['Question(english)'] || raw.questionEnglish || raw.question || raw.questionText || raw.text || '').trim();
-  const stemHindi = String(raw['Question(Hindi)'] || raw.questionHindi || raw.textHindi || '').trim();
+  // Multi-statement segment auto-detection if not structured in raw input
+  let finalStatements = raw.statements;
+  const parsedEn = stemEnglish ? extractStatementsFromStem(stemEnglish) : null;
+  const parsedHi = stemHindi ? extractStatementsFromStem(stemHindi) : null;
+
+  if (rawType.includes('statement') || rawType.includes('multi') || (Array.isArray(raw.statements) && raw.statements.length > 0)) {
+    questionType = 'multi_statement';
+  } else if (questionType !== 'assertion_reason' && questionType !== 'matching' && (parsedEn?.hasSegments || parsedHi?.hasSegments)) {
+    questionType = 'multi_statement';
+    const primary = parsedEn?.hasSegments ? parsedEn : parsedHi!;
+    const secondary = parsedEn?.hasSegments ? parsedHi : null;
+    finalStatements = primary.segments.map((seg, idx) => ({
+      id: seg.id,
+      label: seg.label,
+      text: seg.text,
+      textHindi: secondary?.segments[idx]?.text || seg.text,
+    }));
+  }
 
   // Language mode
   const questionLanguage = stemEnglish && stemHindi ? 'both' : stemHindi ? 'hi' : 'en';
@@ -227,13 +321,13 @@ export function mapRawJsonToQuestion(raw: RawJsonQuestionInput, index: number = 
     explanationHindi,
     idealTimeSeconds: Number(raw.idealTimeSeconds) || idealSeconds,
     pypAppearances: Array.isArray(raw.pypAppearances) ? raw.pypAppearances : (examName ? [{ examName, year }] : []),
-    statements: raw.statements,
-    columnA: raw.columnA,
-    columnB: raw.columnB,
-    assertion: raw.assertion,
-    assertionHindi: raw.assertionHindi,
-    reason: raw.reason,
-    reasonHindi: raw.reasonHindi,
+    statements: finalStatements,
+    columnA,
+    columnB,
+    assertion: assertionEn || undefined,
+    assertionHindi: assertionHi || assertionEn || undefined,
+    reason: reasonEn || undefined,
+    reasonHindi: reasonHi || reasonEn || undefined,
   };
 }
 

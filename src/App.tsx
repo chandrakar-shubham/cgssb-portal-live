@@ -39,6 +39,7 @@ import {
   migrateLegacyAttempt,
   runTaxonomyMigration
 } from './utils/taxonomyMigration';
+import { extractHierarchyFromApp } from './utils/examHierarchy';
 import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
 
 function MainApp() {
@@ -663,6 +664,7 @@ function MainApp() {
             <AdminPYPManager
               pypPapers={pypPapers}
               tests={tests}
+              questions={questions}
               onAddPYP={handleAddPYP}
               onDeletePYP={handleDeletePYP}
               onConvertPYPToMockTest={handleConvertPYPToMockTest}
@@ -670,6 +672,17 @@ function MainApp() {
               onStartTest={handleStartTest}
               onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
               onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
+              onUpdateTest={handleUpdateTest}
+              onSaveCompletedTest={(updatedTest, updatedQuestions) => {
+                handleUpdateTest(updatedTest.id, updatedTest);
+                setQuestions(prev => {
+                  const updatedMap = new Map(updatedQuestions.map(q => [q.id, q]));
+                  const existingIds = new Set(prev.map(q => q.id));
+                  const newQuestions = updatedQuestions.filter(q => !existingIds.has(q.id));
+                  const merged = prev.map(q => updatedMap.has(q.id) ? updatedMap.get(q.id)! : q);
+                  return dedupeById([...newQuestions, ...merged]);
+                });
+              }}
             />
           )}
 
@@ -679,6 +692,7 @@ function MainApp() {
               onAddQuestion={handleAddQuestion}
               onUpdateQuestion={handleUpdateQuestion}
               onDeleteQuestion={handleDeleteQuestion}
+              allHierarchyRecords={extractHierarchyFromApp(tests, pypPapers, questions)}
             />
           )}
 
@@ -692,12 +706,23 @@ function MainApp() {
           {adminActiveTab === 'admin-tests' && (
             <AdminTestCatalog
               tests={tests}
+              questions={questions}
               onStartTest={handleStartTest}
               onTogglePublishTest={handleTogglePublishTest}
               onUpdateTest={handleUpdateTest}
               onDeleteTest={handleDeleteTest}
               onAddTest={handleAddTest}
               onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
+              onSaveCompletedTest={(updatedTest, updatedQuestions) => {
+                handleUpdateTest(updatedTest.id, updatedTest);
+                setQuestions(prev => {
+                  const updatedMap = new Map(updatedQuestions.map(q => [q.id, q]));
+                  const existingIds = new Set(prev.map(q => q.id));
+                  const newQuestions = updatedQuestions.filter(q => !existingIds.has(q.id));
+                  const merged = prev.map(q => updatedMap.has(q.id) ? updatedMap.get(q.id)! : q);
+                  return dedupeById([...newQuestions, ...merged]);
+                });
+              }}
             />
           )}
 
