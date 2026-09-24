@@ -16,9 +16,12 @@ import {
   Zap,
   BarChart2,
   Lock,
-  Code2
+  Code2,
+  Server,
+  GitBranch
 } from 'lucide-react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
+import { APP_BUILD_INFO } from '../utils/buildInfo';
 
 interface AdminCMSDashboardProps {
   tests: MockTest[];
@@ -290,6 +293,39 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
               <span>Explore All Questions & Syllabus</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+          </div>
+
+          {/* System & Build Status Card */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                <Server className="w-4 h-4 text-emerald-400" />
+                <span>Production Build Info</span>
+              </h2>
+              <span className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Live Active</span>
+              </span>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                <span className="text-slate-400">Build Number</span>
+                <span className="font-mono font-bold text-emerald-300">{APP_BUILD_INFO.buildNumber}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                <span className="text-slate-400">App Version</span>
+                <span className="font-mono font-bold text-indigo-300">v{APP_BUILD_INFO.version}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                <span className="text-slate-400">Commit SHA</span>
+                <span className="font-mono text-slate-300">{APP_BUILD_INFO.commitSha}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5">
+                <span className="text-slate-400">Build Date</span>
+                <span className="font-mono text-slate-300">{APP_BUILD_INFO.buildTime}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

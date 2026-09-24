@@ -26,7 +26,16 @@ import {
   Timer,
   Trophy,
   Sparkles,
-  Bookmark
+  Bookmark,
+  Layers,
+  BarChart2,
+  PieChart,
+  LayoutGrid,
+  CheckCircle,
+  ArrowRight,
+  SlidersHorizontal,
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { QuestionRenderer } from './QuestionRenderer';
 import { LanguageToggle } from './LanguageToggle';
@@ -83,6 +92,8 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [bookmarkKey, setBookmarkKey] = useState(0);
   const [paletteMobileOpen, setPaletteMobileOpen] = useState(false);
+  const [isSectionSidebarOpen, setIsSectionSidebarOpen] = useState(true);
+  const [paletteViewMode, setPaletteViewMode] = useState<'grid' | 'sections'>('grid');
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -103,6 +114,50 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   }, [questions, currentSection]);
 
   const activeQuestion = sectionQuestions[currentQuestionIndex] || sectionQuestions[0] || questions[0];
+
+  // Calculate live section-wise breakdown & summary statistics
+  const sectionSummaries = useMemo(() => {
+    return test.sections.map((sec, idx) => {
+      const secQIds = sec.questionIds || [];
+      const secQs = questions.filter(q => secQIds.includes(q.id));
+
+      let answered = 0;
+      let unanswered = 0;
+      let marked = 0;
+      let notVisited = 0;
+
+      secQIds.forEach(qId => {
+        const status = questionStatuses[qId] || 'not_visited';
+        if (status === 'answered' || status === 'answered_and_marked') {
+          answered++;
+        } else if (status === 'unanswered') {
+          unanswered++;
+        } else if (status === 'marked_for_review') {
+          marked++;
+        } else {
+          notVisited++;
+        }
+      });
+
+      const total = secQIds.length || secQs.length || 0;
+      const progressPercent = total > 0 ? Math.round((answered / total) * 100) : 0;
+      const dominantSubject = secQs[0]?.subject || sec.name;
+
+      return {
+        index: idx,
+        id: sec.id,
+        name: sec.name,
+        dominantSubject,
+        total,
+        answered,
+        unanswered,
+        marked,
+        notVisited,
+        progressPercent,
+        isCurrent: idx === currentSectionIndex
+      };
+    });
+  }, [test.sections, questions, questionStatuses, currentSectionIndex]);
 
   // Helper to commit time on current active question
   const recordActiveQuestionTime = () => {
@@ -366,35 +421,180 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
       </header>
 
       {/* 2. SECTION SWITCHER SUB-HEADER */}
-      <div className="bg-slate-900/60 border-b border-slate-800/80 px-4 sm:px-6 py-2 flex items-center justify-between overflow-x-auto scrollbar-none">
-        <div className="flex items-center space-x-2">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline mr-2">
+      <div className="bg-slate-900/80 border-b border-slate-800 px-3 sm:px-6 py-2 flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+        <div className="flex items-center space-x-2 shrink-0">
+          <button
+            onClick={() => setIsSectionSidebarOpen(!isSectionSidebarOpen)}
+            className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition border cursor-pointer ${
+              isSectionSidebarOpen
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
+            }`}
+            title="Toggle Section Summary Sidebar"
+          >
+            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Section Sidebar</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/30 text-emerald-200">
+              {sectionSummaries.length}
+            </span>
+          </button>
+
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline mr-1">
             Sections:
           </span>
-          {test.sections.map((sec, idx) => (
-            <button
-              key={sec.id}
-              onClick={() => selectSection(idx)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap ${
-                currentSectionIndex === idx
-                  ? 'bg-emerald-500 text-slate-950 shadow-md font-extrabold'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
-              }`}
-            >
-              {sec.name} ({sec.questionIds.length})
-            </button>
-          ))}
+
+          <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5">
+            {test.sections.map((sec, idx) => {
+              const summary = sectionSummaries[idx];
+              const isCurrent = currentSectionIndex === idx;
+              return (
+                <button
+                  key={sec.id}
+                  onClick={() => selectSection(idx)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap flex items-center space-x-1.5 cursor-pointer ${
+                    isCurrent
+                      ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                  }`}
+                >
+                  <span>{sec.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-extrabold ${
+                    isCurrent ? 'bg-slate-950/40 text-white' : 'bg-slate-900 text-slate-400'
+                  }`}>
+                    {summary ? `${summary.answered}/${summary.total}` : sec.questionIds.length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="text-[11px] text-slate-400 font-semibold hidden md:block">
-          Question {currentQuestionIndex + 1} of {sectionQuestions.length} in this section
+        <div className="text-[11px] text-slate-400 font-semibold hidden md:flex items-center space-x-2 shrink-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Question {currentQuestionIndex + 1} of {sectionQuestions.length} in this section</span>
         </div>
       </div>
 
-      {/* 3. MAIN WORKSPACE + PALETTE LAYOUT */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* 3. MAIN WORKSPACE + SECTION SIDEBAR + PALETTE LAYOUT */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* LEFT SECTION SUMMARY SIDEBAR (Collapsible Desktop) */}
+        {isSectionSidebarOpen && (
+          <aside className="w-72 bg-slate-900/95 backdrop-blur-md border-r border-slate-800 flex flex-col justify-between p-3.5 z-20 shrink-0 hidden lg:flex">
+            <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1">
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                      Section Summary
+                    </h3>
+                    <p className="text-[10px] text-slate-400">Subject Overview & Jump</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSectionSidebarOpen(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                  title="Collapse Sidebar"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Overall Progress Widget */}
+              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-medium">Exam Attempted</span>
+                  <span className="font-bold text-emerald-400 font-mono">
+                    {answeredCount} / {questions.length} ({questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0}%)
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
+                    style={{ width: `${questions.length > 0 ? (answeredCount / questions.length) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* List of Section Summary Cards */}
+              <div className="space-y-2">
+                {sectionSummaries.map((secSummary) => {
+                  const isCurrent = secSummary.isCurrent;
+                  return (
+                    <div
+                      key={secSummary.id}
+                      onClick={() => selectSection(secSummary.index)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                        isCurrent
+                          ? 'bg-emerald-950/40 border-emerald-500/60 shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/40'
+                          : 'bg-slate-950/50 border-slate-800/80 hover:bg-slate-800/60 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            {isCurrent && (
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                            )}
+                            <h4 className={`text-xs font-bold truncate ${isCurrent ? 'text-emerald-300' : 'text-slate-200'}`}>
+                              {secSummary.name}
+                            </h4>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block truncate mt-0.5">
+                            {secSummary.dominantSubject}
+                          </span>
+                        </div>
+
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-black shrink-0 ${
+                          isCurrent ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'
+                        }`}>
+                          {secSummary.total} Qs
+                        </span>
+                      </div>
+
+                      {/* Section Progress Bar */}
+                      <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-400 transition-all duration-300"
+                          style={{ width: `${secSummary.progressPercent}%` }}
+                        />
+                      </div>
+
+                      {/* Status Pills Grid */}
+                      <div className="grid grid-cols-4 gap-1 text-[9px] font-mono font-bold text-center">
+                        <div className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 py-0.5 rounded" title="Answered">
+                          {secSummary.answered} <span className="text-[8px] font-sans">Ans</span>
+                        </div>
+                        <div className="bg-rose-500/15 border border-rose-500/30 text-rose-300 py-0.5 rounded" title="Unanswered">
+                          {secSummary.unanswered} <span className="text-[8px] font-sans">Unans</span>
+                        </div>
+                        <div className="bg-purple-500/15 border border-purple-500/30 text-purple-300 py-0.5 rounded" title="Marked for Review">
+                          {secSummary.marked} <span className="text-[8px] font-sans">Rev</span>
+                        </div>
+                        <div className="bg-slate-800 border border-slate-700 text-slate-400 py-0.5 rounded" title="Not Visited">
+                          {secSummary.notVisited} <span className="text-[8px] font-sans">Left</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Quick Section Switcher Tip */}
+            <div className="pt-3 border-t border-slate-800/80 text-[10px] text-slate-400 flex items-center justify-between">
+              <span>Click any section card to jump</span>
+              <ArrowRight className="w-3 h-3 text-emerald-400" />
+            </div>
+          </aside>
+        )}
+
         {/* Workspace: Question Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-between">
+        <main className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8 flex flex-col justify-between">
           <div className="max-w-3xl mx-auto w-full space-y-6">
             {/* Question Header meta with Unique IDs, Question Timer & Topper Benchmark */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
@@ -542,7 +742,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleMarkForReview}
-                className="px-3.5 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-bold transition flex items-center space-x-1.5"
+                className="px-3.5 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
               >
                 <Flag className="w-3.5 h-3.5 text-purple-400" />
                 <span>Mark for Review & Next</span>
@@ -550,7 +750,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
               <button
                 onClick={handleClearResponse}
                 disabled={responses[activeQuestion.id] == null}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none text-slate-300 text-xs font-semibold transition border border-slate-700 flex items-center space-x-1.5"
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none text-slate-300 text-xs font-semibold transition border border-slate-700 flex items-center space-x-1.5 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Clear</span>
@@ -565,7 +765,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                   }
                 }}
                 disabled={currentQuestionIndex === 0}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none text-slate-300 text-xs font-bold transition border border-slate-700 flex items-center space-x-1"
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none text-slate-300 text-xs font-bold transition border border-slate-700 flex items-center space-x-1 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>Previous</span>
@@ -573,7 +773,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
 
               <button
                 onClick={handleSaveAndNext}
-                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs sm:text-sm font-black transition shadow-md shadow-emerald-500/20 flex items-center space-x-1.5"
+                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs sm:text-sm font-black transition shadow-md shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer"
               >
                 <span>Save & Next</span>
                 <ChevronRight className="w-4 h-4" />
@@ -582,107 +782,198 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
           </div>
         </main>
 
-        {/* 4. RIGHT-SIDE QUESTION PALETTE (Desktop + Mobile Drawer) */}
+        {/* 4. RIGHT-SIDE QUESTION PALETTE + SECTION SUMMARY SWITCHER */}
         <aside
           className={`fixed md:static inset-y-0 right-0 z-40 w-80 bg-slate-900 border-l border-slate-800 p-4 flex flex-col justify-between transition-transform duration-300 md:translate-x-0 ${
             paletteMobileOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:translate-x-0'
           }`}
         >
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                Question Palette
-              </h2>
+          <div className="overflow-y-auto custom-scrollbar pr-0.5">
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+              {/* Palette Mode Switcher Tabs */}
+              <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => setPaletteViewMode('grid')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                    paletteViewMode === 'grid'
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Question Grid</span>
+                </button>
+                <button
+                  onClick={() => setPaletteViewMode('sections')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                    paletteViewMode === 'sections'
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Sections ({sectionSummaries.length})</span>
+                </button>
+              </div>
+
               <button
                 onClick={() => setPaletteMobileOpen(false)}
-                className="md:hidden text-slate-400 text-xs font-bold"
+                className="md:hidden text-slate-400 hover:text-white p-1"
               >
-                ✕ Close
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Visual Status Indicators Legend */}
-            <div className="grid grid-cols-2 gap-2 my-4 text-[11px]">
-              <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
-                <span className="w-5 h-5 rounded bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">
-                  {answeredCount}
-                </span>
-                <span className="text-slate-300 font-medium">Answered</span>
-              </div>
-              <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
-                <span className="w-5 h-5 rounded bg-rose-500 text-white font-bold flex items-center justify-center text-[10px]">
-                  {unansweredCount}
-                </span>
-                <span className="text-slate-300 font-medium">Unanswered</span>
-              </div>
-              <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
-                <span className="w-5 h-5 rounded bg-purple-500 text-white font-bold flex items-center justify-center text-[10px]">
-                  {markedCount}
-                </span>
-                <span className="text-slate-300 font-medium">Review</span>
-              </div>
-              <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
-                <span className="w-5 h-5 rounded bg-slate-700 text-slate-300 font-bold flex items-center justify-center text-[10px]">
-                  {notVisitedCount}
-                </span>
-                <span className="text-slate-300 font-medium">Not Visited</span>
-              </div>
-            </div>
+            {/* TAB 1: QUESTION GRID VIEW */}
+            {paletteViewMode === 'grid' && (
+              <>
+                {/* Visual Status Indicators Legend */}
+                <div className="grid grid-cols-2 gap-2 my-4 text-[11px]">
+                  <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
+                    <span className="w-5 h-5 rounded bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">
+                      {answeredCount}
+                    </span>
+                    <span className="text-slate-300 font-medium">Answered</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
+                    <span className="w-5 h-5 rounded bg-rose-500 text-white font-bold flex items-center justify-center text-[10px]">
+                      {unansweredCount}
+                    </span>
+                    <span className="text-slate-300 font-medium">Unanswered</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
+                    <span className="w-5 h-5 rounded bg-purple-500 text-white font-bold flex items-center justify-center text-[10px]">
+                      {markedCount}
+                    </span>
+                    <span className="text-slate-300 font-medium">Review</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-slate-800/70 p-2 rounded-lg border border-slate-700/50">
+                    <span className="w-5 h-5 rounded bg-slate-700 text-slate-300 font-bold flex items-center justify-center text-[10px]">
+                      {notVisitedCount}
+                    </span>
+                    <span className="text-slate-300 font-medium">Not Visited</span>
+                  </div>
+                </div>
 
-            {/* Questions Grid Matrix */}
-            <div className="mt-2">
-              <span className="text-[11px] font-bold text-slate-400 block mb-2">
-                Section: {currentSection.name}
-              </span>
-              <div className="grid grid-cols-5 gap-2 max-h-72 overflow-y-auto pr-1">
-                {sectionQuestions.map((q: Question, idx: number) => {
-                  const status = questionStatuses[q.id] || 'not_visited';
-                  const isCurrent = idx === currentQuestionIndex;
+                {/* Questions Grid Matrix */}
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-slate-300 truncate max-w-[170px]">
+                      {currentSection.name}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                      {sectionQuestions.length} Questions
+                    </span>
+                  </div>
 
-                  let badgeClass = 'bg-slate-700 text-slate-300';
-                  if (status === 'answered') {
-                    badgeClass = 'bg-emerald-500 text-slate-950 font-black shadow-sm';
-                  } else if (status === 'unanswered') {
-                    badgeClass = 'bg-rose-500 text-white font-bold';
-                  } else if (status === 'marked_for_review') {
-                    badgeClass = 'bg-purple-500 text-white font-bold';
-                  } else if (status === 'answered_and_marked') {
-                    badgeClass = 'bg-purple-600 text-white border-2 border-emerald-400 font-bold';
-                  }
+                  <div className="grid grid-cols-5 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                    {sectionQuestions.map((q: Question, idx: number) => {
+                      const status = questionStatuses[q.id] || 'not_visited';
+                      const isCurrent = idx === currentQuestionIndex;
 
+                      let badgeClass = 'bg-slate-700 text-slate-300';
+                      if (status === 'answered') {
+                        badgeClass = 'bg-emerald-500 text-slate-950 font-black shadow-sm';
+                      } else if (status === 'unanswered') {
+                        badgeClass = 'bg-rose-500 text-white font-bold';
+                      } else if (status === 'marked_for_review') {
+                        badgeClass = 'bg-purple-500 text-white font-bold';
+                      } else if (status === 'answered_and_marked') {
+                        badgeClass = 'bg-purple-600 text-white border-2 border-emerald-400 font-bold';
+                      }
+
+                      return (
+                        <button
+                          key={q.id}
+                          onClick={() => {
+                            selectQuestion(idx);
+                            setPaletteMobileOpen(false);
+                          }}
+                          className={`h-9 rounded-lg text-xs font-bold transition flex items-center justify-center relative cursor-pointer ${badgeClass} ${
+                            isCurrent ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-105' : 'hover:opacity-90'
+                          }`}
+                        >
+                          {idx + 1}
+                          {status === 'answered_and_marked' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 absolute top-0.5 right-0.5"></span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* TAB 2: SECTIONS SUMMARY BREAKDOWN VIEW */}
+            {paletteViewMode === 'sections' && (
+              <div className="my-3 space-y-2.5">
+                <div className="text-[11px] text-slate-400 flex items-center justify-between pb-1 border-b border-slate-800">
+                  <span>Sections Overview</span>
+                  <span className="font-bold text-emerald-400 font-mono">{sectionSummaries.length} Total</span>
+                </div>
+
+                {sectionSummaries.map((s) => {
+                  const isCurrent = s.isCurrent;
                   return (
-                    <button
-                      key={q.id}
+                    <div
+                      key={s.id}
                       onClick={() => {
-                        selectQuestion(idx);
+                        selectSection(s.index);
+                        setPaletteViewMode('grid');
                         setPaletteMobileOpen(false);
                       }}
-                      className={`h-9 rounded-lg text-xs font-bold transition flex items-center justify-center relative ${badgeClass} ${
-                        isCurrent ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-105' : 'hover:opacity-90'
+                      className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                        isCurrent
+                          ? 'bg-emerald-950/40 border-emerald-500/60 ring-1 ring-emerald-500/40'
+                          : 'bg-slate-950/60 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700'
                       }`}
                     >
-                      {idx + 1}
-                      {status === 'answered_and_marked' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 absolute top-0.5 right-0.5"></span>
-                      )}
-                    </button>
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div className="min-w-0">
+                          <h4 className={`text-xs font-bold truncate ${isCurrent ? 'text-emerald-300' : 'text-slate-200'}`}>
+                            {s.name}
+                          </h4>
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            {s.dominantSubject}
+                          </span>
+                        </div>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-black shrink-0 ${
+                          isCurrent ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'
+                        }`}>
+                          {s.total} Qs
+                        </span>
+                      </div>
+
+                      <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-400 transition-all duration-300"
+                          style={{ width: `${s.progressPercent}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="text-emerald-400 font-bold">{s.answered} answered</span>
+                        <span className="text-slate-400">{s.progressPercent}% done</span>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            </div>
+            )}
           </div>
 
           {/* Bottom Palette Action */}
-          <div className="pt-4 border-t border-slate-800 space-y-2">
+          <div className="pt-4 border-t border-slate-800 space-y-2 shrink-0">
             <button
               onClick={() => setShowSubmitModal(true)}
-              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition shadow-lg shadow-emerald-500/20 active:scale-95"
+              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer"
             >
               Submit Test Paper
             </button>
             <button
               onClick={onExit}
-              className="w-full py-1.5 text-slate-400 hover:text-rose-400 text-xs font-semibold"
+              className="w-full py-1.5 text-slate-400 hover:text-rose-400 text-xs font-semibold cursor-pointer"
             >
               Cancel / Exit to Dashboard
             </button>

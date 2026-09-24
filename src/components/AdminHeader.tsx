@@ -13,8 +13,16 @@ import {
   Menu,
   X,
   Server,
-  Database
+  Database,
+  GitCommit,
+  Info
 } from 'lucide-react';
+import { APP_BUILD_INFO } from '../utils/buildInfo';
+
+// Compile-time Vite globals defined in vite.config.ts
+declare const __APP_BUILD_NUMBER__: string | undefined;
+declare const __APP_BUILD_TIME__: string | undefined;
+declare const __APP_COMMIT_SHA__: string | undefined;
 
 interface AdminHeaderProps {
   activeTab: string;
@@ -31,6 +39,12 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 }) => {
   const { adminUser, adminLogout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showBuildDetails, setShowBuildDetails] = useState(false);
+
+  // Directly access global constants with safe fallbacks
+  const currentBuildNumber = typeof __APP_BUILD_NUMBER__ !== 'undefined' ? __APP_BUILD_NUMBER__ : APP_BUILD_INFO.buildNumber;
+  const currentBuildTime = typeof __APP_BUILD_TIME__ !== 'undefined' ? __APP_BUILD_TIME__ : APP_BUILD_INFO.buildTime;
+  const currentCommitSha = typeof __APP_COMMIT_SHA__ !== 'undefined' ? __APP_COMMIT_SHA__ : APP_BUILD_INFO.commitSha;
 
   const navItems = [
     { id: 'admin-overview', label: 'CMS Dashboard', icon: LayoutDashboard },
@@ -59,6 +73,15 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Controller Portal
                 </span>
+                {/* Build No. Badge */}
+                <button
+                  onClick={() => setShowBuildDetails(!showBuildDetails)}
+                  title={`Click to view build details\nBuild: ${currentBuildNumber}\nSHA: ${currentCommitSha}\nCompiled: ${currentBuildTime}`}
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>{currentBuildNumber}</span>
+                </button>
               </div>
               <span className="text-[10px] text-slate-400 font-mono hidden sm:block leading-none mt-0.5">
                 https://darkorange-chimpanzee-661223.hostingersite.com/admin
@@ -187,6 +210,58 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Build Details Modal */}
+      {showBuildDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-indigo-800/80 rounded-2xl p-6 max-w-md w-full shadow-2xl shadow-indigo-950/50 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-bold text-white text-base">Production Build Metadata</h3>
+              </div>
+              <button
+                onClick={() => setShowBuildDetails(false)}
+                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
+                <span className="text-slate-400">Build Number</span>
+                <span className="font-mono font-bold text-emerald-400">{currentBuildNumber}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
+                <span className="text-slate-400">App Version</span>
+                <span className="font-mono font-bold text-indigo-300">v{APP_BUILD_INFO.version}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
+                <span className="text-slate-400">Git Commit SHA</span>
+                <span className="font-mono font-bold text-slate-300">{currentCommitSha}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
+                <span className="text-slate-400">Compiled Time</span>
+                <span className="font-mono text-slate-300">{currentBuildTime}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
+                <span className="text-slate-400">Target Host</span>
+                <span className="font-bold text-blue-400">{APP_BUILD_INFO.targetPlatform}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowBuildDetails(false)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </header>

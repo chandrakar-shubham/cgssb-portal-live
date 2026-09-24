@@ -1,4 +1,22 @@
 import { MockTest, PreviousYearPaper, Question, ExamCategory } from '../types';
+import {
+  CG_MASTER_SYLLABUS,
+  CG_EXAM_HIERARCHICAL_SYLLABUS,
+  CGSSB_EXAM_SCHEMES,
+  CGMasterModule,
+  CGMasterChapter,
+  CGMasterTopic,
+  ExamCategoryHierarchy,
+  ExamSubjectHierarchy,
+  getExamCategoryHierarchy,
+  getSyllabusForExam,
+  getModuleById,
+  getChapterById,
+  getChaptersForModule,
+  getTopicsForChapter,
+  getAllSubjects,
+  flattenSyllabusHierarchy
+} from '../data/cgMasterSyllabus';
 
 export interface HierarchyRecord {
   authority: string;            // Level 1: e.g. "CGSSB", "CGPSC"
@@ -602,3 +620,154 @@ export function mapAuthorityToExamCategory(authority: string): ExamCategory {
   }
   return 'CGSSB';
 }
+
+/**
+ * Traverses and returns the category syllabus hierarchy for a given exam authority or specific exam name.
+ */
+export function getSyllabusForAuthority(authority: string, examNameOrCategory?: string): ExamCategoryHierarchy {
+  if (examNameOrCategory) {
+    return getSyllabusForExam(examNameOrCategory, authority);
+  }
+  return getSyllabusForExam(authority, authority);
+}
+
+/**
+ * Returns the relevant CGMasterModules for an exam authority/category.
+ */
+export function getSyllabusModulesForAuthority(authority: string, examNameOrCategory?: string): CGMasterModule[] {
+  const hierarchy = getSyllabusForAuthority(authority, examNameOrCategory);
+  const subjectIds = new Set(hierarchy.subjects.map(s => s.subjectId));
+  
+  const filtered = CG_MASTER_SYLLABUS.filter(m => subjectIds.has(m.id));
+  return filtered.length > 0 ? filtered : [...CG_MASTER_SYLLABUS];
+}
+
+/**
+ * Traverses syllabus subjects and their chapters/subtopics for a specific hierarchy level.
+ * Dynamically resolves the specific marks distribution and topics according to the exam syllabus.
+ */
+export function getSubjectsForExamHierarchy(
+  authority: string,
+  category?: string,
+  examName?: string
+): ExamSubjectHierarchy[] {
+  const hierarchy = getSyllabusForExam(examName || category || authority, authority);
+  return hierarchy.subjects;
+}
+
+/**
+ * Helper to lookup and retrieve all chapters and topics for any given subject ID or name.
+ */
+export function getSubjectChaptersAndTopics(subjectIdOrName: string): { chapterId: string; chapterName: string; topics: string[] }[] {
+  const norm = subjectIdOrName.toLowerCase().trim();
+  const mod = CG_MASTER_SYLLABUS.find(m => 
+    m.id.toLowerCase() === norm || 
+    m.nameEn.toLowerCase().includes(norm) || 
+    m.nameHi.includes(norm) ||
+    (m.nameHindi && m.nameHindi.includes(norm))
+  );
+
+  if (!mod) {
+    // Return all chapters across all modules if no match found
+    return CG_MASTER_SYLLABUS.flatMap(m => 
+      m.chapters.map(c => ({
+        chapterId: c.id,
+        chapterName: c.nameHindi || c.name,
+        topics: c.topics.map(t => (typeof t === 'string' ? t : t.name))
+      }))
+    );
+  }
+
+  return mod.chapters.map(c => ({
+    chapterId: c.id,
+    chapterName: c.nameHindi || c.name,
+    topics: c.topics.map(t => (typeof t === 'string' ? t : t.name))
+  }));
+}
+
+/**
+ * Intelligently matches and assigns structured syllabus metadata to an exam question or test row.
+ */
+export function assignHierarchySyllabus(
+  authority: string,
+  subjectInput: string,
+  topicInput?: string
+): {
+  moduleId: string;
+  subjectName: string;
+  chapterId: string;
+  chapterName: string;
+  topicName: string;
+  verified: boolean;
+} {
+  const normSub = (subjectInput || '').toLowerCase().trim();
+  const normTopic = (topicInput || '').toLowerCase().trim();
+
+  // 1. Find matching module
+  let matchedMod = CG_MASTER_SYLLABUS.find(m => 
+    m.id.toLowerCase() === normSub ||
+    m.nameEn.toLowerCase().includes(normSub) ||
+    m.nameHi.includes(normSub) ||
+    (m.nameHindi && m.nameHindi.includes(normSub))
+  );
+
+  if (!matchedMod) {
+    const authorityHierarchy = getSyllabusForAuthority(authority);
+    const defaultSubjectId = authorityHierarchy.subjects[0]?.subjectId || 'cg-gk';
+    matchedMod = CG_MASTER_SYLLABUS.find(m => m.id === defaultSubjectId) || CG_MASTER_SYLLABUS[0];
+  }
+
+  // 2. Find matching chapter inside the module
+  let matchedChapter = matchedMod.chapters.find(c => 
+    c.id.toLowerCase() === normTopic ||
+    c.name.toLowerCase().includes(normTopic) ||
+    (c.nameHindi && c.nameHindi.includes(normTopic))
+  );
+
+  if (!matchedChapter) {
+    // Check if topic matches any nested subtopic string
+    for (const ch of matchedMod.chapters) {
+      const hasTopic = ch.topics.some(t => {
+        const str = typeof t === 'string' ? t : t.name;
+        return str.toLowerCase().includes(normTopic);
+      });
+      if (hasTopic) {
+        matchedChapter = ch;
+        break;
+      }
+    }
+  }
+
+  if (!matchedChapter) {
+    matchedChapter = matchedMod.chapters[0];
+  }
+
+  const topicName = topicInput && topicInput.trim() 
+    ? topicInput.trim() 
+    : (matchedChapter?.nameHindi || matchedChapter?.name || 'General');
+
+  return {
+    moduleId: matchedMod.id,
+    subjectName: matchedMod.nameHi || matchedMod.nameEn,
+    chapterId: matchedChapter.id,
+    chapterName: matchedChapter.nameHindi || matchedChapter.name,
+    topicName,
+    verified: Boolean(matchedMod && matchedChapter)
+  };
+}
+
+// Re-export master syllabus utilities for convenience
+export {
+  CG_MASTER_SYLLABUS,
+  CG_EXAM_HIERARCHICAL_SYLLABUS,
+  CGSSB_EXAM_SCHEMES,
+  getSyllabusForExam,
+  getExamCategoryHierarchy,
+  getModuleById,
+  getChapterById,
+  getChaptersForModule,
+  getTopicsForChapter,
+  getAllSubjects,
+  flattenSyllabusHierarchy
+};
+

@@ -8,7 +8,17 @@ import {
 } from '../types';
 import { normalizeSubjectName } from './taxonomyMigration';
 
-export type ExamPreset = 'CGSSB' | 'CGPSC' | 'HOSTEL_WARDEN' | 'CG_TEACHER';
+export type ExamPreset = 
+  | 'CGSSB' 
+  | 'CGPSC' 
+  | 'HOSTEL_WARDEN' 
+  | 'PATWARI' 
+  | 'REVENUE_INSPECTOR' 
+  | 'ADO' 
+  | 'AGDO_DEO' 
+  | 'APEX_BANK' 
+  | 'LABOUR_INSPECTOR' 
+  | 'CG_TEACHER';
 
 export interface ExamPresetConfig {
   name: string;
@@ -37,18 +47,66 @@ export const EXAM_PRESETS: Record<ExamPreset, ExamPresetConfig> = {
     defaultModule: 'cg_special'
   },
   HOSTEL_WARDEN: {
-    name: 'CGSSB Hostel Warden (छात्रावास अधीक्षक)',
+    name: 'CGSSB Hostel Warden (छात्रावास अधीक्षक - 100 Marks)',
     category: 'CGSSB',
     marksPerQ: 1.0,
     negativeMarksPerQ: 0.25,
-    durationMinutes: 150,
+    durationMinutes: 120,
     defaultModule: 'computer'
   },
-  CG_TEACHER: {
-    name: 'CG Teacher Eligibility / Atmanand Recruitment',
-    category: 'SWAMI_ATMANAND',
+  PATWARI: {
+    name: 'CGSSB Patwari Selection Exam (150 Marks)',
+    category: 'CGSSB',
     marksPerQ: 1.0,
     negativeMarksPerQ: 0.33,
+    durationMinutes: 180,
+    defaultModule: 'cg_special'
+  },
+  REVENUE_INSPECTOR: {
+    name: 'CGSSB Revenue Inspector (RI - 150 Marks)',
+    category: 'CGSSB',
+    marksPerQ: 1.0,
+    negativeMarksPerQ: 0.33,
+    durationMinutes: 180,
+    defaultModule: 'cg_special'
+  },
+  ADO: {
+    name: 'CGSSB Assistant Development Extension Officer (ADO - 150 Marks)',
+    category: 'CGSSB',
+    marksPerQ: 1.0,
+    negativeMarksPerQ: 0.33,
+    durationMinutes: 180,
+    defaultModule: 'cg_special'
+  },
+  AGDO_DEO: {
+    name: 'CGSSB Assistant Grade-3 & DEO (100 Marks)',
+    category: 'CGSSB',
+    marksPerQ: 1.0,
+    negativeMarksPerQ: 0.25,
+    durationMinutes: 120,
+    defaultModule: 'computer'
+  },
+  APEX_BANK: {
+    name: 'CG Apex Bank / Cooperative Bank (100 Marks)',
+    category: 'CGSSB',
+    marksPerQ: 1.0,
+    negativeMarksPerQ: 0.25,
+    durationMinutes: 120,
+    defaultModule: 'cg_special'
+  },
+  LABOUR_INSPECTOR: {
+    name: 'CGSSB Labour Inspector Exam (150 Marks)',
+    category: 'CGSSB',
+    marksPerQ: 1.0,
+    negativeMarksPerQ: 0.33,
+    durationMinutes: 180,
+    defaultModule: 'cg_special'
+  },
+  CG_TEACHER: {
+    name: 'CG Teacher Eligibility / Atmanand Recruitment (150 Marks)',
+    category: 'SWAMI_ATMANAND',
+    marksPerQ: 1.0,
+    negativeMarksPerQ: 0.25,
     durationMinutes: 150,
     defaultModule: 'cdp_education'
   }

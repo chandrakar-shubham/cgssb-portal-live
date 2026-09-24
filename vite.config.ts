@@ -4,9 +4,22 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const now = new Date();
+  const buildDateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const buildNumber = process.env.GITHUB_RUN_NUMBER 
+    ? `CI-${process.env.GITHUB_RUN_NUMBER}` 
+    : `B-${buildDateStr}-${Math.floor(now.getTime() / 1000) % 10000}`;
+  const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'main-live';
+  const buildTime = now.toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }) + ' UTC';
+
   return {
     base: '/',
     plugins: [react(), tailwindcss()],
+    define: {
+      __APP_BUILD_NUMBER__: JSON.stringify(buildNumber),
+      __APP_BUILD_TIME__: JSON.stringify(buildTime),
+      __APP_COMMIT_SHA__: JSON.stringify(commitSha),
+    },
     resolve: {
       alias: {
         '@': path.resolve('.'),

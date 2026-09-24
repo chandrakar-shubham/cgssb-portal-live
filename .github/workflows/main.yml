@@ -1,0 +1,79 @@
+name: CI Build Integrity & Verification
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Manual verification reason'
+        required: false
+        default: 'Pre-deployment verification'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build & Integrity Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci || npm install --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
+
+      - name: 🔍 Static Type Check & Linting
+        run: |
+          echo "Running TypeScript strict verification (tsc --noEmit)..."
+          npm run lint
+
+      - name: 🏗️ Execute Production Bundle Build
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          BUILD_TIME: ${{ github.event.head_commit.timestamp }}
+          NODE_ENV: production
+        run: |
+          echo "Compiling client frontend & server backend..."
+          npm run build
+
+      - name: 🛡️ Verify Production Artifacts Integrity
+        run: |
+          echo "Checking essential deployment artifacts..."
+          test -f dist/index.html || { echo "❌ dist/index.html is missing!"; exit 1; }
+          test -f dist/server.cjs || { echo "❌ dist/server.cjs is missing!"; exit 1; }
+          test -f dist/version.json || { echo "❌ dist/version.json is missing!"; exit 1; }
+          test -f dist/.htaccess || { echo "❌ dist/.htaccess is missing!"; exit 1; }
+          test -f dist/package.json || { echo "❌ dist/package.json is missing!"; exit 1; }
+          
+          echo "✅ All required production artifacts verified successfully!"
+          ls -la dist/
+
+      - name: 📤 Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build-dist-${{ github.sha }}
+          path: dist/
+          retention-days: 7
