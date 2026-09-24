@@ -4,20 +4,16 @@ const path = require('path');
 async function runBuild() {
   console.log('🚀 Starting CGSSB Production Build Process...');
 
-  // 1. Ensure index.html has the valid Vite source module
+  // 1. Ensure index.html has the valid Vite source module before compiling
   const mainScriptTag = '<script type="module" src="/src/main.tsx"></script>';
-  let indexHtml = fs.readFileSync('index.html', 'utf-8');
-  if (!indexHtml.includes('/src/main.tsx')) {
-    console.log('🔄 Restoring /src/main.tsx entry point in index.html...');
-    if (fs.existsSync('index.source.html')) {
-      indexHtml = fs.readFileSync('index.source.html', 'utf-8');
-    } else {
+  if (fs.existsSync('index.source.html')) {
+    fs.copyFileSync('index.source.html', 'index.html');
+  } else {
+    let indexHtml = fs.readFileSync('index.html', 'utf-8');
+    if (!indexHtml.includes('/src/main.tsx')) {
       indexHtml = indexHtml.replace(/<script type="module" crossorigin src="\/assets\/app-[^"]+"><\/script>/, mainScriptTag);
+      fs.writeFileSync('index.html', indexHtml);
     }
-    fs.writeFileSync('index.html', indexHtml);
-  }
-
-  if (!fs.existsSync('index.source.html')) {
     fs.writeFileSync('index.source.html', indexHtml);
   }
 
@@ -54,13 +50,16 @@ async function runBuild() {
   }
 
   // 6. Generate version.json
+  const now = new Date();
+  const istTime = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
   const versionInfo = {
     version: '2.5.0',
     commitSha: process.env.GITHUB_SHA || 'dev-build',
-    buildTime: process.env.BUILD_TIME || new Date().toISOString(),
+    buildTime: process.env.BUILD_TIME || istTime,
     platform: 'Hostinger & AI Studio Cloud'
   };
   fs.writeFileSync('dist/version.json', JSON.stringify(versionInfo, null, 2));
+  fs.writeFileSync('version.json', JSON.stringify(versionInfo, null, 2));
 
   // 7. Generate static aliases in dist/assets
   if (fs.existsSync('dist/assets')) {
@@ -74,9 +73,25 @@ async function runBuild() {
     if (cssFile) {
       fs.copyFileSync(path.join('dist/assets', cssFile), path.join('dist/assets', 'index.css'));
     }
+
+    // Copy compiled assets to root assets/ so root directory serves directly on Hostinger
+    fs.mkdirSync('assets', { recursive: true });
+    for (const file of fs.readdirSync('dist/assets')) {
+      const srcFile = path.join('dist/assets', file);
+      if (fs.statSync(srcFile).isFile()) {
+        fs.copyFileSync(srcFile, path.join('assets', file));
+      }
+    }
   }
 
-  // 8. Runtime package.json in dist for Hostinger Node.js Application Manager
+  // 8. Copy compiled dist/index.html to root index.html
+  // This guarantees that if Hostinger Git pulls the repository, index.html is the production bundle!
+  if (fs.existsSync('dist/index.html')) {
+    fs.copyFileSync('dist/index.html', 'index.html');
+    console.log('✅ Synced production index.html to repository root successfully.');
+  }
+
+  // 9. Runtime package.json in dist for Hostinger Node.js Application Manager
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
   const runtimePkg = {
     name: pkg.name || 'cgssb-portal',
@@ -90,7 +105,7 @@ async function runBuild() {
   };
   fs.writeFileSync('dist/package.json', JSON.stringify(runtimePkg, null, 2));
 
-  console.log('✅ Build complete! All dist artifacts verified.');
+  console.log('✅ Build complete! All root & dist artifacts verified.');
 }
 
 runBuild().catch(err => {
