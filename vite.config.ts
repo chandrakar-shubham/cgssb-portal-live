@@ -5,11 +5,10 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   const now = new Date();
-  const buildDateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const buildNumber = process.env.GITHUB_RUN_NUMBER 
-    ? `CI-${process.env.GITHUB_RUN_NUMBER}` 
-    : `B-${buildDateStr}-${Math.floor(now.getTime() / 1000) % 10000}`;
   const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'main-live';
+  const buildNumber = process.env.GITHUB_RUN_NUMBER 
+    ? `v2.5.0-build.${process.env.GITHUB_RUN_NUMBER}` 
+    : 'v2.5.0-prod';
   const buildTime = now.toLocaleString('en-IN', { 
     timeZone: 'Asia/Kolkata', 
     day: '2-digit', 
