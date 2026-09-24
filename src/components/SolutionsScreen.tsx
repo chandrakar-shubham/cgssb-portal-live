@@ -27,8 +27,16 @@ import {
   BookOpen,
   Filter,
   Trophy,
-  Sparkles
+  Sparkles,
+  Bookmark
 } from 'lucide-react';
+import {
+  isQuestionBookmarked,
+  toggleBookmark,
+  saveBookmarkNote,
+  getBookmark,
+  BOOKMARKS_CHANGED_EVENT
+} from '../utils/bookmarkStorage';
 
 interface SolutionsScreenProps {
   attempt: TestAttempt;
@@ -47,6 +55,7 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
   const [filterSolution, setFilterSolution] = useState<'all' | 'correct' | 'incorrect' | 'unattempted'>('all');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [expandedExplanation, setExpandedExplanation] = useState<Record<string, boolean>>({});
+  const [, setBookmarkKey] = useState(0);
 
   // Ensure sector analysis is completely migrated and reflects separate non-conjoined taxonomy
   const resolvedSectors: SectorAnalysis[] = useMemo(() => {
@@ -644,6 +653,26 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
                     </div>
 
                     <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          toggleBookmark(q.id, {
+                            sourceTestTitle: attempt.testTitle,
+                            subject: q.subject,
+                          });
+                          setBookmarkKey(k => k + 1);
+                        }}
+                        className={`px-2 py-0.5 rounded-lg border text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                          isQuestionBookmarked(q.id)
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-slate-800 text-slate-400 hover:text-white border-slate-700'
+                        }`}
+                        title={isQuestionBookmarked(q.id) ? 'Remove Bookmark' : 'Star & Bookmark Question'}
+                      >
+                        <Bookmark className={`w-3.5 h-3.5 ${isQuestionBookmarked(q.id) ? 'fill-amber-400 text-amber-400' : ''}`} />
+                        <span className="text-[10px] hidden sm:inline">{isQuestionBookmarked(q.id) ? 'Starred' : 'Star'}</span>
+                      </button>
+
                       {isCorrect ? (
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center space-x-1">
                           <CheckCircle className="w-3.5 h-3.5" />

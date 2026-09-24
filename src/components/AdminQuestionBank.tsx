@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue, useEffect } from 'react';
 import { Question, DifficultyLevel, ExamCategory, PYQAppearance } from '../types';
 import { HIERARCHY_TREE } from '../mockData';
 import { ExamHierarchySelector, ExamHierarchyValue } from './ExamHierarchySelector';
+import { AdminQuestionEditModal } from './AdminQuestionEditModal';
 import {
   HierarchyRecord,
   extractHierarchyFromApp,
@@ -99,64 +100,31 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   // Copied ID indicator
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Modal State
+  // Modal State & Editing Question (managed by isolated AdminQuestionEditModal)
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
 
-  // Form State
-  const [formData, setFormData] = useState<{
-    id: string;
-    originType: 'mock' | 'pyq';
-    chapter: string;
-    subject: string;
-    topic: string;
-    subtopic: string;
-    difficulty: DifficultyLevel;
-    authority: string;
-    category: ExamCategory;
-    subCategory: string;
-    postName?: string;
-    examName: string;
-    questionText: string;
-    questionHindi: string;
-    options: { id: 'A' | 'B' | 'C' | 'D'; text: string; textHindi: string }[];
-    correctOption: 'A' | 'B' | 'C' | 'D';
-    marks: number;
-    negativeMarks: number;
-    explanation: string;
-    explanationHindi: string;
-    pypAppearances: PYQAppearance[];
-  }>({
-    id: '',
-    originType: 'mock',
-    chapter: '',
-    subject: HIERARCHY_TREE[0].subject,
-    topic: HIERARCHY_TREE[0].topics[0].name,
-    subtopic: HIERARCHY_TREE[0].topics[0].subtopics[0],
-    difficulty: 'Medium',
-    authority: 'CGSSB',
-    category: 'CGSSB',
-    subCategory: 'Teacher Recruitment 2026',
-    examName: 'CG English Lecturer 2026',
-    questionText: '',
-    questionHindi: '',
-    options: [
-      { id: 'A', text: '', textHindi: '' },
-      { id: 'B', text: '', textHindi: '' },
-      { id: 'C', text: '', textHindi: '' },
-      { id: 'D', text: '', textHindi: '' },
-    ],
-    correctOption: 'A',
-    marks: 1.0,
-    negativeMarks: 0.333,
-    explanation: '',
-    explanationHindi: '',
-    pypAppearances: [],
-  });
+  // Pagination & Search Debounce to keep typing at 60fps+
+  const deferredSearch = useDeferredValue(search);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 25;
 
-  // Current Subject and Topic objects for cascading dropdowns
-  const currentSubjectObj = HIERARCHY_TREE.find(s => s.subject === formData.subject) || HIERARCHY_TREE[0];
-  const currentTopicObj = currentSubjectObj.topics.find(t => t.name === formData.topic) || currentSubjectObj.topics[0];
+  // Reset pagination on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    selectedSubject,
+    selectedTopic,
+    selectedSubtopic,
+    selectedChapter,
+    selectedDifficulty,
+    selectedCategory,
+    selectedAuthority,
+    selectedSubCategory,
+    bankSegment,
+    pyqFilter,
+    deferredSearch,
+  ]);
 
   // Helper to generate a unique question ID
   const generateUniqueId = (prefix = 'q-cg') => {
@@ -172,120 +140,23 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
 
   // Open Add Modal
   const handleOpenAddModal = () => {
-    setEditingQuestionId(null);
-    const initialOrigin: 'mock' | 'pyq' = bankSegment === 'PYQ' ? 'pyq' : 'mock';
-    setFormData({
-      id: generateUniqueId('q-cg'),
-      originType: initialOrigin,
-      chapter: '',
-      subject: HIERARCHY_TREE[0].subject,
-      topic: HIERARCHY_TREE[0].topics[0].name,
-      subtopic: HIERARCHY_TREE[0].topics[0].subtopics[0],
-      difficulty: 'Medium',
-      authority: 'CGSSB',
-      category: 'CGSSB',
-      subCategory: 'Teacher Recruitment 2026',
-      postName: 'CG Lecturer 2026',
-      examName: 'CG English Lecturer 2026',
-      questionText: '',
-      questionHindi: '',
-      options: [
-        { id: 'A', text: '', textHindi: '' },
-        { id: 'B', text: '', textHindi: '' },
-        { id: 'C', text: '', textHindi: '' },
-        { id: 'D', text: '', textHindi: '' },
-      ],
-      correctOption: 'A',
-      marks: 1.0,
-      negativeMarks: 0.333,
-      explanation: '',
-      explanationHindi: '',
-      pypAppearances: [
-        {
-          examName: 'CG English Lecturer 2026',
-          year: 2026,
-          shift: 'Morning Shift',
-        },
-      ],
-    });
+    setEditingQuestion(null);
     setIsModalOpen(true);
   };
 
   // Open Edit Modal
   const handleOpenEditModal = (q: Question) => {
-    setEditingQuestionId(q.id);
-
-    // Normalize appearances
-    let appearances: PYQAppearance[] = [];
-    if (q.pypAppearances && q.pypAppearances.length > 0) {
-      appearances = [...q.pypAppearances];
-    } else if (q.pypSource) {
-      appearances = [{ examName: q.pypSource, year: 2022 }];
-    }
-
-    const isPyq = q.originType === 'pyq' || appearances.length > 0 || Boolean(q.pypSource);
-
-    setFormData({
-      id: q.id,
-      originType: isPyq ? 'pyq' : 'mock',
-      chapter: q.chapter || q.chapterName || '',
-      subject: q.subject || 'Chhattisgarh General Studies',
-      topic: q.topic || 'General',
-      subtopic: q.subtopic || 'General',
-      difficulty: q.difficulty || 'Medium',
-      authority: q.authority || (q.category as string) || 'CGSSB',
-      category: (q.category as ExamCategory) || 'CGSSB',
-      subCategory: q.subCategory || 'Teacher Recruitment 2026',
-      postName: q.postName || 'CG Lecturer 2026',
-      examName: q.examName || q.pypSource || '',
-      questionText: q.questionText || q.question || '',
-      questionHindi: q.questionHindi || '',
-      options: (q.options || []).map((o, idx) => ({
-        id: (o.id || o.label || ['A', 'B', 'C', 'D'][idx] || 'A') as 'A' | 'B' | 'C' | 'D',
-        text: o.text || '',
-        textHindi: o.textHindi || '',
-      })),
-      correctOption: q.correctOption || 'A',
-      marks: q.marks || 1.0,
-      negativeMarks: q.negativeMarks || 0.333,
-      explanation: q.explanation || '',
-      explanationHindi: q.explanationHindi || '',
-      pypAppearances: appearances,
-    });
+    setEditingQuestion(q);
     setIsModalOpen(true);
   };
 
-  // Multi-Level Exam Hierarchy change in Question Modal
-  const handleModalHierarchyChange = (val: ExamHierarchyValue, matchedRecord?: HierarchyRecord) => {
-    setFormData(prev => {
-      const nextCat = mapAuthorityToExamCategory(val.authority);
-      const appearances = [...prev.pypAppearances];
-      if (val.examName && appearances.length === 0) {
-        appearances.push({
-          examName: val.examName,
-          year: matchedRecord?.year || 2026,
-          shift: 'Official Paper',
-        });
-      } else if (val.examName && appearances.length > 0) {
-        appearances[0] = {
-          ...appearances[0],
-          examName: val.examName,
-          year: matchedRecord?.year || appearances[0].year,
-        };
-      }
-      return {
-        ...prev,
-        authority: val.authority,
-        subCategory: val.category,
-        postName: val.postName || matchedRecord?.postName || prev.postName || 'CG Lecturer 2026',
-        examName: val.examName,
-        category: nextCat,
-        negativeMarks: matchedRecord?.negativeMarkingRatio
-          ? (matchedRecord.negativeMarkingRatio.includes('0.66') || matchedRecord.negativeMarkingRatio.includes('0.67') ? 0.667 : 0.25)
-          : prev.negativeMarks,
-        pypAppearances: appearances,
-      };
-    });
+  // Save Modal Action
+  const handleSaveModal = (payload: Partial<Question>, editingId?: string) => {
+    if (editingId) {
+      onUpdateQuestion(editingId, payload);
+    } else {
+      onAddQuestion(payload);
+    }
   };
 
   // Clone Question Action
@@ -298,67 +169,6 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       createdAt: new Date().toISOString().split('T')[0],
     };
     onAddQuestion(clonedQ);
-  };
-
-  // Form Submit
-  const handleSubmitForm = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.questionText.trim()) return;
-
-    const trimmedChapter = formData.chapter.trim();
-    const payload: Partial<Question> = {
-      ...formData,
-      originType: formData.originType,
-      id: formData.id.trim() || generateUniqueId('q-cg'),
-      authority: formData.authority,
-      category: formData.category,
-      subCategory: formData.subCategory,
-      postName: formData.postName,
-      examName: formData.examName,
-      chapter: trimmedChapter || undefined,
-      chapterName: trimmedChapter || undefined,
-      // Keep pypSource backwards compatible with first appearance or examName
-      pypSource: formData.pypAppearances.length > 0
-        ? `${formData.pypAppearances[0].examName} ${formData.pypAppearances[0].year}`
-        : (formData.examName || ''),
-    };
-
-    if (editingQuestionId) {
-      onUpdateQuestion(editingQuestionId, payload);
-    } else {
-      onAddQuestion(payload);
-    }
-    setIsModalOpen(false);
-  };
-
-  // Add another exam appearance to the form
-  const handleAddAppearance = () => {
-    setFormData(prev => ({
-      ...prev,
-      pypAppearances: [
-        ...prev.pypAppearances,
-        {
-          examName: 'CGPSC State Service Prelims (Paper-I GS)',
-          year: 2022,
-          shift: '',
-        },
-      ],
-    }));
-  };
-
-  const handleRemoveAppearance = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      pypAppearances: prev.pypAppearances.filter((_, i) => i !== index),
-    }));
-  };
-
-  const handleUpdateAppearance = (index: number, field: keyof PYQAppearance, value: any) => {
-    setFormData(prev => {
-      const updated = [...prev.pypAppearances];
-      updated[index] = { ...updated[index], [field]: value };
-      return { ...prev, pypAppearances: updated };
-    });
   };
 
   // Statistics Calculations
@@ -438,7 +248,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       else if (pyqFilter === 'PRACTICE') matchPyq = appCount === 0;
 
       // Search matching text, unique ID, Hindi, chapter, topic, subtopic, or any exam/year appearance
-      const s = search.toLowerCase().trim();
+      const s = deferredSearch.toLowerCase().trim();
       const matchSearch =
         !s ||
         q.id.toLowerCase().includes(s) ||
@@ -462,7 +272,13 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
 
       return matchSubject && matchTopic && matchSubtopic && matchChapter && matchDifficulty && matchCategory && matchPyq && matchSearch;
     });
-  }, [questions, selectedSubject, selectedTopic, selectedSubtopic, selectedChapter, selectedDifficulty, selectedCategory, bankSegment, pyqFilter, search]);
+  }, [questions, selectedSubject, selectedTopic, selectedSubtopic, selectedChapter, selectedDifficulty, selectedCategory, selectedAuthority, selectedSubCategory, bankSegment, pyqFilter, deferredSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / PAGE_SIZE));
+  const paginatedQuestions = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredQuestions.slice(start, start + PAGE_SIZE);
+  }, [filteredQuestions, currentPage]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -939,7 +755,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
           </div>
 
           <div className="text-xs text-slate-400">
-            Showing <strong className="text-emerald-400 font-bold">{filteredQuestions.length}</strong> of {questions.length} questions
+            Showing <strong className="text-emerald-400 font-bold">{filteredQuestions.length > 0 ? (currentPage - 1) * PAGE_SIZE + 1 : 0}</strong> - <strong className="text-emerald-400 font-bold">{Math.min(currentPage * PAGE_SIZE, filteredQuestions.length)}</strong> of <strong className="text-white font-bold">{filteredQuestions.length}</strong> questions
           </div>
         </div>
       </div>
@@ -970,7 +786,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
             </button>
           </div>
         ) : (
-          filteredQuestions.map((q, idx) => {
+          paginatedQuestions.map((q, idx) => {
             const appearances = q.pypAppearances || (q.pypSource ? [{ examName: q.pypSource, year: 2022 }] : []);
             const isRepeated = appearances.length > 1;
             const isPyq = q.originType === 'pyq' || appearances.length > 0 || Boolean(q.pypSource);
@@ -1318,509 +1134,86 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
         )}
       </div>
 
-      {/* ADD / EDIT QUESTION MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 shadow-2xl my-8 space-y-5">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-white flex items-center space-x-2">
-                  <FolderTree className="w-5 h-5 text-emerald-400" />
-                  <span>{editingQuestionId ? 'Edit Question in Bank' : 'Add New Question to Taxonomic Bank'}</span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Configure hierarchy, marking rules, unique ID, and all PYQ exam appearances.
-                </p>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700"
-              >
-                ✕ Close
-              </button>
-            </div>
+      {/* PAGINATION TOOLBAR */}
+      {filteredQuestions.length > PAGE_SIZE && (
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+          <div className="text-xs text-slate-400">
+            Page <strong className="text-white font-bold">{currentPage}</strong> of <strong className="text-white font-bold">{totalPages}</strong>
+            <span className="mx-2 text-slate-600">•</span>
+            <span>{filteredQuestions.length} Total Matching Questions</span>
+          </div>
 
-            <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
-              {/* Question Origin Classification: Official PYQ vs Mock Practice */}
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
-                <label className="block text-slate-300 font-bold flex items-center space-x-1.5">
-                  <Tag className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Question Origin Classification *</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div
-                    onClick={() => setFormData({ ...formData, originType: 'pyq' })}
-                    className={`p-3 rounded-xl border transition cursor-pointer flex items-start space-x-2.5 ${
-                      formData.originType === 'pyq'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-amber-500/30'
-                    }`}
-                  >
-                    <History className={`w-4 h-4 mt-0.5 shrink-0 ${formData.originType === 'pyq' ? 'text-amber-400' : 'text-slate-500'}`} />
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center space-x-1.5">
-                        <span>Official PYQ</span>
-                        {formData.originType === 'pyq' && (
-                          <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded">SELECTED</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                        Sourced directly from official CGPSC or CG Vyapam past year exam papers.
-                      </p>
-                    </div>
-                  </div>
+          <div className="flex items-center space-x-1.5">
+            <button
+              type="button"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                currentPage === 1
+                  ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-800'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+              }`}
+            >
+              ‹ Previous
+            </button>
 
-                  <div
-                    onClick={() => setFormData({ ...formData, originType: 'mock' })}
-                    className={`p-3 rounded-xl border transition cursor-pointer flex items-start space-x-2.5 ${
-                      formData.originType === 'mock'
-                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-500/10'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-emerald-500/30'
-                    }`}
-                  >
-                    <Sparkles className={`w-4 h-4 mt-0.5 shrink-0 ${formData.originType === 'mock' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center space-x-1.5">
-                        <span>Mock Test Series Item</span>
-                        {formData.originType === 'mock' && (
-                          <span className="text-[9px] bg-emerald-500 text-slate-950 font-black px-1.5 py-0.2 rounded">SELECTED</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                        Curated practice questions for mock test series, sectionals & chapter tests.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
 
-              {/* Unique ID & Multi-Level Exam Hierarchy */}
-              <div className="bg-slate-850 p-3.5 rounded-xl border border-slate-800 space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-slate-300 font-bold">
-                      Unique Question ID <span className="text-emerald-400">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, id: generateUniqueId('q-cg') })}
-                      className="text-[10px] text-emerald-400 hover:underline flex items-center space-x-1"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Auto-Generate</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={formData.id}
-                    onChange={e => setFormData({ ...formData, id: e.target.value })}
-                    placeholder="e.g. q-cg-1024 or QID-VYAPAM-01"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-
-                {/* Multi-Level Exam Hierarchy: Authority > Category > Exam Name */}
-                <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-200 flex items-center space-x-1.5">
-                      <Tag className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Exam Hierarchy (Authority &gt; Drive &gt; Cadre &gt; Specific Exam)</span>
-                    </label>
-                    <span className="text-[10px] text-slate-400">Searchable dropdowns with auto-population</span>
-                  </div>
-
-                  <ExamHierarchySelector
-                    value={{
-                      authority: formData.authority,
-                      category: formData.subCategory,
-                      postName: formData.postName,
-                      examName: formData.examName,
-                    }}
-                    onChange={handleModalHierarchyChange}
-                    allRecords={computedHierarchyRecords}
-                  />
-                </div>
-              </div>
-
-              {/* Taxonomic Selectors: Subject -> Topic -> Subtopic */}
-              <div className="space-y-1.5">
-                <label className="block text-slate-300 font-bold">
-                  Taxonomic Hierarchy (Subject → Topic → Subtopic) <span className="text-emerald-400">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <span className="text-[10px] text-slate-400 mb-0.5 block">1. Subject</span>
-                    <select
-                      value={formData.subject}
-                      onChange={e => {
-                        const newSubj = e.target.value;
-                        const subjObj = HIERARCHY_TREE.find(s => s.subject === newSubj) || HIERARCHY_TREE[0];
-                        setFormData({
-                          ...formData,
-                          subject: newSubj,
-                          topic: subjObj.topics[0].name,
-                          subtopic: subjObj.topics[0].subtopics[0],
-                        });
-                      }}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                    >
-                      {HIERARCHY_TREE.map(s => (
-                        <option key={s.subject} value={s.subject}>
-                          {s.subject}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-400 mb-0.5 block">2. Topic</span>
-                    <select
-                      value={formData.topic}
-                      onChange={e => {
-                        const newTopic = e.target.value;
-                        const topicObj = currentSubjectObj.topics.find(t => t.name === newTopic) || currentSubjectObj.topics[0];
-                        setFormData({
-                          ...formData,
-                          topic: newTopic,
-                          subtopic: topicObj.subtopics[0] || 'General',
-                        });
-                      }}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                    >
-                      {currentSubjectObj.topics.map(t => (
-                        <option key={t.name} value={t.name}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-400 mb-0.5 block">3. Subtopic</span>
-                    <select
-                      value={formData.subtopic}
-                      onChange={e => setFormData({ ...formData, subtopic: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                    >
-                      {currentTopicObj.subtopics.map(st => (
-                        <option key={st} value={st}>
-                          {st}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Curriculum Chapter Field */}
-              <div className="bg-slate-850 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-bold flex items-center space-x-1.5">
-                    <BookOpen className="w-4 h-4 text-purple-400" />
-                    <span>Curriculum Chapter (पाठ्यक्रम अध्याय)</span>
-                  </label>
-                  <span className="text-[11px] text-slate-400 font-normal">Optional curriculum grouping</span>
-                </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    list="chapter-suggestions-list"
-                    value={formData.chapter}
-                    onChange={e => setFormData({ ...formData, chapter: e.target.value })}
-                    placeholder="e.g. अध्याय 1: छत्तीसगढ़ का सामान्य परिचय, Chapter 3: Ancient Dynasties..."
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-purple-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 text-xs"
-                  />
-                  <datalist id="chapter-suggestions-list">
-                    {existingChapters.map(ch => (
-                      <option key={ch} value={ch} />
-                    ))}
-                  </datalist>
-                </div>
-                {existingChapters.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[10px] text-slate-500 font-medium">Existing Chapters:</span>
-                    {existingChapters.slice(0, 5).map(ch => (
-                      <button
-                        type="button"
-                        key={ch}
-                        onClick={() => setFormData({ ...formData, chapter: ch })}
-                        className="px-2 py-0.5 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[10px] font-semibold transition truncate max-w-[200px]"
-                        title={ch}
-                      >
-                        {ch}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Difficulty & Marking Scheme */}
-              <div className="grid grid-cols-3 gap-3 bg-slate-850 p-3.5 rounded-xl border border-slate-800">
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1">Difficulty Tag</label>
-                  <select
-                    value={formData.difficulty}
-                    onChange={e => setFormData({ ...formData, difficulty: e.target.value as any })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1">Positive Marks (+)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={formData.marks}
-                    onChange={e => setFormData({ ...formData, marks: parseFloat(e.target.value) || 1 })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1">Negative Penalty (-)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.negativeMarks}
-                    onChange={e => setFormData({ ...formData, negativeMarks: parseFloat(e.target.value) || 0.333 })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                  />
-                </div>
-              </div>
-
-              {/* PYQ Appearances (All Exams and Years Asked) */}
-              <div className="bg-slate-850 p-4 rounded-xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="block text-slate-200 font-bold flex items-center space-x-1.5">
-                      <History className="w-4 h-4 text-emerald-400" />
-                      <span>PYQ Provenance (Exams & Years Question Was Asked)</span>
-                    </label>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      If this question appeared in multiple exams over the years, add all appearances below.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddAppearance}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30 text-[11px] font-bold flex items-center space-x-1 transition"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add Exam & Year</span>
-                  </button>
-                </div>
-
-                {formData.pypAppearances.length === 0 ? (
-                  <div className="text-center py-3 border border-dashed border-slate-700 rounded-xl text-slate-400">
-                    <p>No PYQ appearances specified (this will be marked as a Standard Practice item).</p>
-                    <button
-                      type="button"
-                      onClick={handleAddAppearance}
-                      className="mt-1 text-emerald-400 hover:underline font-bold text-xs"
-                    >
-                      + Tag as a Previous Year Question (PYQ)
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {formData.pypAppearances.map((app, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-slate-900 border border-slate-700 p-2.5 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2 items-center"
-                      >
-                        {/* Exam Name Selector / Input */}
-                        <div className="sm:col-span-6">
-                          <span className="text-[10px] text-slate-400 block mb-0.5">Exam Name</span>
-                          <input
-                            type="text"
-                            list="exam-presets"
-                            value={app.examName}
-                            onChange={e => handleUpdateAppearance(idx, 'examName', e.target.value)}
-                            placeholder="e.g. CGPSC SSE Prelims Paper-I"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs"
-                          />
-                          <datalist id="exam-presets">
-                            {CG_EXAM_PRESETS.map(preset => (
-                              <option key={preset} value={preset} />
-                            ))}
-                          </datalist>
-                        </div>
-
-                        {/* Year */}
-                        <div className="sm:col-span-3">
-                          <span className="text-[10px] text-slate-400 block mb-0.5">Exam Year</span>
-                          <select
-                            value={app.year}
-                            onChange={e => handleUpdateAppearance(idx, 'year', parseInt(e.target.value) || 2023)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs font-mono"
-                          >
-                            {RECENT_YEARS.map(yr => (
-                              <option key={yr} value={yr}>
-                                {yr}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Shift / Paper */}
-                        <div className="sm:col-span-2">
-                          <span className="text-[10px] text-slate-400 block mb-0.5">Shift / Paper</span>
-                          <input
-                            type="text"
-                            value={app.shift || ''}
-                            onChange={e => handleUpdateAppearance(idx, 'shift', e.target.value)}
-                            placeholder="e.g. GS Shift 1"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs"
-                          />
-                        </div>
-
-                        {/* Delete Button */}
-                        <div className="sm:col-span-1 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveAppearance(idx)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950 transition"
-                            title="Remove this appearance"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Question Text (English & Hindi) */}
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    Question Text (English) <span className="text-emerald-400">*</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    required
-                    placeholder="Enter standard question statement..."
-                    value={formData.questionText}
-                    onChange={e => setFormData({ ...formData, questionText: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    Question Text (Hindi Translation - Optional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="प्रश्न का हिंदी विवरण दर्ज करें..."
-                    value={formData.questionHindi}
-                    onChange={e => setFormData({ ...formData, questionHindi: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-
-              {/* Options A, B, C, D */}
-              <div className="space-y-2">
-                <label className="block text-slate-300 font-bold">Options (A, B, C, D)</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {formData.options.map((opt, i) => (
-                    <div key={opt.id} className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-400">Option {opt.id}</span>
-                        <label className="flex items-center space-x-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="correctOpt"
-                            checked={formData.correctOption === opt.id}
-                            onChange={() => setFormData({ ...formData, correctOption: opt.id })}
-                            className="accent-emerald-500"
-                          />
-                          <span className="text-[10px] text-slate-300 font-bold">Correct Key</span>
-                        </label>
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        placeholder={`Option ${opt.id} text (English)`}
-                        value={opt.text}
-                        onChange={e => {
-                          const updatedOpts = [...formData.options];
-                          updatedOpts[i].text = e.target.value;
-                          setFormData({ ...formData, options: updatedOpts });
-                        }}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder={`Option ${opt.id} text (Hindi)`}
-                        value={opt.textHindi}
-                        onChange={e => {
-                          const updatedOpts = [...formData.options];
-                          updatedOpts[i].textHindi = e.target.value;
-                          setFormData({ ...formData, options: updatedOpts });
-                        }}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Step-by-Step Explanation */}
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    Step-by-Step Explanation & Justification (English)
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="Provide detailed justification of the right answer..."
-                    value={formData.explanation}
-                    onChange={e => setFormData({ ...formData, explanation: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    Step-by-Step Explanation (Hindi - Optional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="उत्तर का हिंदी में विस्तृत विश्लेषण..."
-                    value={formData.explanationHindi}
-                    onChange={e => setFormData({ ...formData, explanationHindi: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-400"
-                  />
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+              return (
                 <button
+                  key={pageNum}
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-8 h-8 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    currentPage === pageNum
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+                  }`}
                 >
-                  Cancel
+                  {pageNum}
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition"
-                >
-                  {editingQuestionId ? 'Save Changes' : 'Save Question to Bank'}
-                </button>
-              </div>
-            </form>
+              );
+            })}
+
+            <button
+              type="button"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                currentPage === totalPages
+                  ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-800'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+              }`}
+            >
+              Next ›
+            </button>
           </div>
         </div>
       )}
+
+      {/* ISOLATED ADD / EDIT QUESTION MODAL */}
+      <AdminQuestionEditModal
+        isOpen={isModalOpen}
+        editingQuestion={editingQuestion}
+        defaultOrigin={bankSegment === 'PYQ' ? 'pyq' : 'mock'}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingQuestion(null);
+        }}
+        onSave={handleSaveModal}
+        existingChapters={existingChapters}
+        allHierarchyRecords={computedHierarchyRecords}
+      />
     </div>
   );
 };

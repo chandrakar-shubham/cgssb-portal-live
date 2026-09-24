@@ -12,19 +12,22 @@ import {
   LogOut,
   Menu,
   X,
-  Server
+  Server,
+  Database
 } from 'lucide-react';
 
 interface AdminHeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onNavigateToStudent: () => void;
+  onOpenToolsModal?: () => void;
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
   activeTab,
   setActiveTab,
   onNavigateToStudent,
+  onOpenToolsModal,
 }) => {
   const { adminUser, adminLogout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -89,6 +92,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
           {/* Right Action Controls */}
           <div className="flex items-center space-x-2 shrink-0">
+            {/* DB Backup & Tools Button */}
+            {onOpenToolsModal && (
+              <button
+                onClick={onOpenToolsModal}
+                title="Database Snapshots, Quality Scanner & PDF Generator"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/60 hover:border-indigo-500 transition shadow-sm cursor-pointer"
+              >
+                <Database className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">DB Tools & PDF</span>
+              </button>
+            )}
+
             {/* View Student Portal Button */}
             <button
               onClick={onNavigateToStudent}

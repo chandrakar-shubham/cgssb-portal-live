@@ -86,6 +86,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGridBuilderOpen, setIsGridBuilderOpen] = useState(false);
   const [isAIExtractorOpen, setIsAIExtractorOpen] = useState(false);
+  const [builderInitialQuestions, setBuilderInitialQuestions] = useState<Question[]>([]);
   const [convertedNotice, setConvertedNotice] = useState<string | null>(null);
   const [editingTest, setEditingTest] = useState<MockTest | null>(null);
 
@@ -1009,28 +1010,76 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
       {/* Manual Grid Builder Modal */}
       {isGridBuilderOpen && (
         <ManualGridBuilder
-          onClose={() => setIsGridBuilderOpen(false)}
+          onClose={() => {
+            setIsGridBuilderOpen(false);
+            setBuilderInitialQuestions([]);
+          }}
           onSavePaper={(paper) => {
+            const paperId = paper.id || `pyp-${Date.now()}`;
+            const testId = `test-from-${paperId}`;
+            const qList = paper.questions || [];
+
+            // 1. Add questions to bank
+            if (qList.length > 0 && onQuestionsAdded) {
+              onQuestionsAdded(qList);
+            }
+
+            // 2. Add to PYP Papers vault
             onAddPYP({
+              id: paperId,
               title: paper.title,
               examCategory: paper.category === 'CGPSC' ? 'CGPSC' : 'CGSSB',
-              year: paper.year,
-              totalQuestions: paper.totalQuestions,
-              durationMinutes: paper.durationMinutes,
-              marks: paper.totalMarks,
+              year: paper.year || 2024,
+              totalQuestions: paper.totalQuestions || qList.length,
+              durationMinutes: paper.durationMinutes || 120,
+              marks: paper.totalMarks || (paper.category === 'CGPSC' ? qList.length * 2 : qList.length),
               negativeMarkingRatio: paper.category.includes('CGPSC') ? '1/3rd (0.67)' : '1/3rd (0.333)',
               paperSummary: `Comprehensive ${paper.totalQuestions}-question paper aligned with official CG syllabus. Includes full bilingual explanations.`,
+              linkedQuestionIds: qList.map((q: any) => q.id),
+              linkedMockTestId: testId,
               subjectsWeightage: [
-                { subject: 'Chhattisgarh General Studies', questionCount: Math.round(paper.totalQuestions * 0.4), percentage: 40 },
-                { subject: 'Quantitative Aptitude', questionCount: Math.round(paper.totalQuestions * 0.3), percentage: 30 },
-                { subject: 'Computer Knowledge', questionCount: Math.round(paper.totalQuestions * 0.3), percentage: 30 },
+                { subject: 'Chhattisgarh General Studies', questionCount: Math.round((paper.totalQuestions || qList.length) * 0.4), percentage: 40 },
+                { subject: 'Quantitative Aptitude', questionCount: Math.round((paper.totalQuestions || qList.length) * 0.3), percentage: 30 },
+                { subject: 'Computer Knowledge', questionCount: Math.round((paper.totalQuestions || qList.length) * 0.3), percentage: 30 },
               ],
             });
+
+            // 3. Add to Mock Tests so it immediately appears in Student Dashboard & Admin Test Catalog!
+            if (onTestAdded) {
+              const newMockTest: MockTest = {
+                id: testId,
+                title: `${paper.title} (Official Simulation)`,
+                category: paper.category === 'CGPSC' ? 'CGPSC' : 'CGSSB',
+                authority: paper.category === 'CGPSC' ? 'CGPSC' : 'CGSSB',
+                description: `Official past paper simulation. Converted from archived examination ${paper.year || 2024}.`,
+                durationMinutes: paper.durationMinutes || 120,
+                questionCount: paper.totalQuestions || qList.length,
+                marksPerQuestion: paper.marksPerQuestion || (paper.category === 'CGPSC' ? 2.0 : 1.0),
+                negativeMarksPerQuestion: paper.negativeMarksPerQuestion || (paper.category === 'CGPSC' ? 0.667 : 0.333),
+                isPYP: true,
+                pypYear: paper.year || 2024,
+                pypExamName: paper.title,
+                sections: paper.sections || [
+                  {
+                    id: `sec-${paperId}`,
+                    name: 'Official Question Paper',
+                    questionIds: qList.map((q: any) => q.id),
+                  },
+                ],
+                attemptsCount: 0,
+                isPublished: true,
+                difficultyDistribution: { easy: 35, medium: 45, hard: 20 },
+                createdAt: new Date().toISOString().split('T')[0],
+              };
+              onTestAdded(newMockTest);
+            }
+
             setIsGridBuilderOpen(false);
+            setBuilderInitialQuestions([]);
             setConvertedNotice(paper.title);
             setTimeout(() => setConvertedNotice(null), 3500);
           }}
-          existingQuestions={[]}
+          existingQuestions={builderInitialQuestions}
         />
       )}
 
@@ -1038,7 +1087,8 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
       {isAIExtractorOpen && (
         <AIPYPExtractorModal
           onClose={() => setIsAIExtractorOpen(false)}
-          onExtracted={() => {
+          onExtracted={(extracted) => {
+            setBuilderInitialQuestions(extracted || []);
             setIsAIExtractorOpen(false);
             setIsGridBuilderOpen(true);
           }}

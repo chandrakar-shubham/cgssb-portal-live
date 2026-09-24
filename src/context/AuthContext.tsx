@@ -7,6 +7,7 @@ interface AuthContextType {
   login: (email: string, role?: UserRole, name?: string) => void;
   loginWithGoogle: (googleData: { email: string; name: string; avatar?: string }) => void;
   loginWithPhoneOtp: (phone: string, otp: string, name?: string) => void;
+  updateUserProfile: (updates: Partial<User>) => void;
   logout: () => void;
   deductCredits: (amount: number) => boolean;
   addCredits: (amount: number) => void;
@@ -23,9 +24,19 @@ const DEFAULT_STUDENT_USER: User = {
   id: 'u-student-01',
   name: 'Rameshwar Dewangan',
   email: 'rameshwar@cgssbtest.com',
+  phone: '9827012345',
   role: 'student',
   credits: 350,
   registeredAt: '2024-01-15',
+  targetExam: 'CGPSC State Service 2026',
+  targetYear: 2026,
+  district: 'Raipur',
+  categoryReservation: 'OBC',
+  gender: 'Male',
+  education: 'Graduate (B.Sc. / B.Ed.)',
+  medium: 'Hindi',
+  bio: 'Targeting Top 50 in CGPSC State Service 2026. Consistent daily mock practice!',
+  dailyGoalQuestions: 50,
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -143,6 +154,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserProfile = (updates: Partial<User>) => {
+    if (!user) return;
+    setUser(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        ...updates,
+      };
+    });
+  };
+
   const logout = () => {
     setUser(null);
   };
@@ -202,6 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         loginWithGoogle,
         loginWithPhoneOtp,
+        updateUserProfile,
         activateProPass,
         logout,
         deductCredits,

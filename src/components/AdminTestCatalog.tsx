@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useDeferredValue } from 'react';
 import {
   MockTest,
   ExamCategory,
@@ -51,6 +51,7 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ExamCategory | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [editingTest, setEditingTest] = useState<MockTest | null>(null);
   const [isNewTestModalOpen, setIsNewTestModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -61,8 +62,11 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
 
   const filteredTests = tests.filter(test => {
     const matchesCategory = selectedCategory === 'ALL' || test.category === selectedCategory;
-    const matchesSearch = test.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (test.description && test.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    const s = deferredSearchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !s ||
+      test.title.toLowerCase().includes(s) ||
+      (test.description && test.description.toLowerCase().includes(s));
     return matchesCategory && matchesSearch;
   });
 

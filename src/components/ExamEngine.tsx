@@ -25,11 +25,13 @@ import {
   Hash,
   Timer,
   Trophy,
-  Sparkles
+  Sparkles,
+  Bookmark
 } from 'lucide-react';
 import { QuestionRenderer } from './QuestionRenderer';
 import { LanguageToggle } from './LanguageToggle';
 import { useLanguage } from '../context/LanguageContext';
+import { isQuestionBookmarked, toggleBookmark, BOOKMARKS_CHANGED_EVENT } from '../utils/bookmarkStorage';
 
 interface ExamEngineProps {
   test: MockTest;
@@ -79,6 +81,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [isTimeOutModal, setIsTimeOutModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [bookmarkKey, setBookmarkKey] = useState(0);
   const [paletteMobileOpen, setPaletteMobileOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -440,9 +443,31 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
               </div>
 
               <div className="flex items-center space-x-2 text-xs font-semibold shrink-0">
-                <span className="text-emerald-400">+{activeQuestion.marks}</span>
-                <span className="text-slate-600">/</span>
-                <span className="text-rose-400">-{activeQuestion.negativeMarks}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleBookmark(activeQuestion.id, {
+                      sourceTestTitle: test.title,
+                      subject: activeQuestion.subject,
+                    });
+                    setBookmarkKey(k => k + 1);
+                  }}
+                  className={`px-2 py-1 rounded-lg border text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                    isQuestionBookmarked(activeQuestion.id)
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                      : 'bg-slate-800 text-slate-400 hover:text-white border-slate-700'
+                  }`}
+                  title={isQuestionBookmarked(activeQuestion.id) ? 'Remove Bookmark' : 'Star & Bookmark this Question'}
+                >
+                  <Bookmark className={`w-3.5 h-3.5 ${isQuestionBookmarked(activeQuestion.id) ? 'fill-amber-400 text-amber-400' : ''}`} />
+                  <span className="text-[10px] hidden sm:inline">{isQuestionBookmarked(activeQuestion.id) ? 'Starred' : 'Star'}</span>
+                </button>
+
+                <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800">
+                  <span className="text-emerald-400">+{activeQuestion.marks}</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-rose-400">-{activeQuestion.negativeMarks}</span>
+                </div>
               </div>
             </div>
 

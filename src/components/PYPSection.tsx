@@ -42,7 +42,16 @@ export const PYPSection: React.FC<PYPSectionProps> = ({
       if (!paper || !paper.id) return false;
       if (seen.has(paper.id)) return false;
       seen.add(paper.id);
-      return selectedCategory === 'ALL' || paper.examCategory === selectedCategory;
+      const paperCat = String(paper.examCategory || 'CGSSB').toUpperCase().trim();
+      const selCat = String(selectedCategory || 'ALL').toUpperCase().trim();
+      return (
+        selCat === 'ALL' ||
+        paperCat === selCat ||
+        (selCat === 'CGPSC' && paperCat.includes('PSC')) ||
+        (selCat === 'CGSSB' && (paperCat.includes('SSB') || paperCat.includes('VYAPAM') || paperCat.includes('TEACHER') || paperCat.includes('PATWARI'))) ||
+        (selCat === 'SWAMI_ATMANAND' && (paperCat.includes('ATMANAND') || paperCat.includes('SAGES'))) ||
+        (selCat === 'CENTRAL_EXAMS' && (paperCat.includes('CENTRAL') || paperCat.includes('SSC') || paperCat.includes('RAIL')))
+      );
     });
   }, [pypPapers, selectedCategory]);
 
@@ -153,9 +162,36 @@ Visit https://cgssbtest.com for online mock test simulation.
         ))}
       </div>
 
+      {/* Empty State */}
+      {filteredPapers.length === 0 && (
+        <div className="text-center py-14 bg-slate-900/60 rounded-3xl border border-slate-800 p-8 space-y-4">
+          <BookOpen className="w-12 h-12 text-slate-600 mx-auto" />
+          <div>
+            <h3 className="text-base font-bold text-white">No previous year papers in this category</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+              {pypPapers.length > 0
+                ? `You have ${pypPapers.length} paper${pypPapers.length === 1 ? '' : 's'} archived in other exam categories.`
+                : 'No previous year papers uploaded yet.'}
+            </p>
+          </div>
+          {pypPapers.length > 0 && selectedCategory !== 'ALL' && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => onSelectCategory('ALL')}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-sm cursor-pointer"
+              >
+                Show All Previous Papers ({pypPapers.length} Papers)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* PYP Papers Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-        {filteredPapers.map(paper => (
+      {filteredPapers.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          {filteredPapers.map(paper => (
           <div
             key={paper.id}
             className="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition shadow-md"
@@ -243,6 +279,7 @@ Visit https://cgssbtest.com for online mock test simulation.
           </div>
         ))}
       </div>
+      )}
 
       {/* Paper Weightage Details Modal */}
       {activePaperForAnalysis && (

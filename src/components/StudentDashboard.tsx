@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ExamCategory, MockTest } from '../types';
 import { EXAM_PATTERNS } from '../mockData';
@@ -40,7 +40,7 @@ export type TestSegment = 'ALL' | 'MOCK' | 'PYP' | 'PRO';
 interface StudentDashboardProps {
   tests: MockTest[];
   onStartTest: (test: MockTest) => void;
-  onSelectCategory: (category: ExamCategory) => void;
+  onSelectCategory: (category: ExamCategory | 'ALL') => void;
   selectedCategory: ExamCategory | 'ALL';
   onUpdateTest?: (testId: string, updates: Partial<MockTest>) => void;
   onDeleteTest?: (testId: string) => void;
@@ -63,6 +63,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [displayMode, setDisplayMode] = useState<'nested' | 'grid'>('nested');
   const [adminPublishFilter, setAdminPublishFilter] = useState<'all' | 'published' | 'draft'>('all');
   const [selectedPatternModal, setSelectedPatternModal] = useState<ExamCategory | null>(null);
@@ -158,13 +159,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       if (testSegment === 'PYP' && !isPyp) return false;
       if (testSegment === 'PRO' && !test.isPro) return false;
 
-      const matchesCategory = selectedCategory === 'ALL' || test.category === selectedCategory;
+      const testCat = String(test.category || 'CGSSB').toUpperCase().trim();
+      const selCat = String(selectedCategory || 'ALL').toUpperCase().trim();
+      const matchesCategory =
+        selCat === 'ALL' ||
+        testCat === selCat ||
+        (selCat === 'CGPSC' && testCat.includes('PSC')) ||
+        (selCat === 'CGSSB' && (testCat.includes('SSB') || testCat.includes('VYAPAM') || testCat.includes('TEACHER') || testCat.includes('PATWARI'))) ||
+        (selCat === 'SWAMI_ATMANAND' && (testCat.includes('ATMANAND') || testCat.includes('SAGES'))) ||
+        (selCat === 'CENTRAL_EXAMS' && (testCat.includes('CENTRAL') || testCat.includes('SSC') || testCat.includes('RAIL')));
+      const s = deferredSearchTerm.toLowerCase().trim();
       const matchesSearch =
-        test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        test.description.toLowerCase().includes(searchTerm.toLowerCase());
+        !s ||
+        test.title.toLowerCase().includes(s) ||
+        test.description.toLowerCase().includes(s);
       return matchesCategory && matchesSearch;
     });
-  }, [tests, processedTests, isAdmin, adminPublishFilter, testSegment, selectedCategory, searchTerm]);
+  }, [tests, processedTests, isAdmin, adminPublishFilter, testSegment, selectedCategory, deferredSearchTerm]);
 
   // Admin stats
   const totalPublishedCount = useMemo(() => {
@@ -838,12 +849,47 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       {/* Empty State */}
       {filteredTests.length === 0 && (
-        <div className="text-center py-16 bg-slate-900/60 rounded-3xl border border-slate-800 p-8">
-          <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-white">No mock tests found</h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            Try adjusting your search keywords or select a different examination category above.
-          </p>
+        <div className="text-center py-14 bg-slate-900/60 rounded-3xl border border-slate-800 p-8 space-y-4">
+          <BookOpen className="w-12 h-12 text-slate-600 mx-auto" />
+          <div>
+            <h3 className="text-base font-bold text-white">No mock tests match this filter</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+              {tests.length > 0
+                ? `You have ${tests.length} test${tests.length === 1 ? '' : 's'} in your database, but none match the current filter (${selectedCategory !== 'ALL' ? `Category: ${selectedCategory}, ` : ''}Segment: ${testSegment}${searchTerm ? `, Search: "${searchTerm}"` : ''}).`
+                : 'No mock tests have been uploaded yet. Head to Admin Portal > PYP Manager to upload your tests!'}
+            </p>
+          </div>
+          {tests.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              {selectedCategory !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => onSelectCategory('ALL')}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-sm cursor-pointer"
+                >
+                  Show All Exams ({tests.length} Tests)
+                </button>
+              )}
+              {testSegment !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setTestSegment('ALL')}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition cursor-pointer"
+                >
+                  Reset Segment (View All Types)
+                </button>
+              )}
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 transition cursor-pointer"
+                >
+                  Clear Search Term
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

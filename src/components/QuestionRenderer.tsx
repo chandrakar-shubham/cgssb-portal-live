@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { Question, QuestionOption, QuestionType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
-import { Table, CheckCircle2, SplitSquareVertical, HelpCircle, FileText, Check, History, Sparkles, Flame } from 'lucide-react';
+import { Table, CheckCircle2, SplitSquareVertical, HelpCircle, FileText, Check, History, Sparkles, Flame, ShieldAlert, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import { extractStatementsFromStem, ParsedStemSegments } from '../utils/statementParser';
+import { FormattedMathText } from '../utils/mathRenderer';
 
 interface QuestionRendererProps {
   question: Question;
@@ -507,7 +508,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     if (!hasSegments || segments.length === 0) {
       return (
         <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
-          {activeContent.stem}
+          <FormattedMathText text={activeContent.stem} />
         </p>
       );
     }
@@ -516,7 +517,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       <div className="space-y-4">
         {intro && (
           <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
-            {intro}
+            <FormattedMathText text={intro} />
           </p>
         )}
 
@@ -530,7 +531,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 {stmt.label}
               </div>
               <p className="font-medium leading-relaxed pt-0.5 text-slate-100">
-                {stmt.text}
+                <FormattedMathText text={stmt.text} />
               </p>
             </div>
           ))}
@@ -608,6 +609,23 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
             </p>
           )
         )}
+
+        {/* Optional Diagram / Map / Formula Illustration */}
+        {question.imageUrl && (
+          <div className="mt-4 pt-3 border-t border-slate-800">
+            <div className="bg-slate-950 p-2 rounded-xl border border-slate-800 max-w-lg mx-auto flex flex-col items-center">
+              <img
+                src={question.imageUrl}
+                alt="Question Figure / Diagram"
+                className="max-h-64 rounded-lg object-contain"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 flex items-center">
+                <ImageIcon className="w-3 h-3 mr-1" />
+                चित्र / मानचित्र (Diagram / Map Reference)
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. Options Grid */}
@@ -661,7 +679,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
 
                 {/* Option Text */}
                 <div className="flex-1 text-sm sm:text-base font-medium leading-relaxed text-slate-200 pt-0.5">
-                  {optionText}
+                  <FormattedMathText text={optionText} />
                 </div>
               </button>
             );
@@ -688,6 +706,43 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 </span>
               )}
             </div>
+
+            {/* Official Key Tracking / Amended Key Badges */}
+            {question.isCancelled && (
+              <div className="bg-purple-950/40 border border-purple-500/40 rounded-xl p-3 flex items-start space-x-2.5 text-xs text-purple-200">
+                <ShieldAlert className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-purple-300 block">Question Cancelled by Examination Board (विलोपित प्रश्न)</span>
+                  <span className="text-[11px] text-purple-200/90">
+                    Disputed / flawed question cancelled by CGPSC / CG Vyapam. Full bonus marks (+{question.marks || 1}) were awarded to all candidates in the final result.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!question.isCancelled && question.modelKey && question.finalAmendedKey && question.modelKey !== question.finalAmendedKey && (
+              <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 flex items-start space-x-2.5 text-xs text-amber-200">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="flex items-center space-x-2 font-bold text-amber-300">
+                    <span>Official Answer Key Revision (संशोधित उत्तर कुंजी)</span>
+                    <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] border border-amber-500/40">Verified</span>
+                  </div>
+                  <div className="text-[11px] text-amber-200/90 mt-0.5 flex items-center space-x-2">
+                    <span>Preliminary Model Key was: <strong className="text-amber-300 font-mono">[{question.modelKey}]</strong></span>
+                    <span>➔</span>
+                    <span>Amended in Final Official Key to: <strong className="text-emerald-400 font-mono">[{question.finalAmendedKey}]</strong></span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!question.isCancelled && question.modelKey && (!question.finalAmendedKey || question.modelKey === question.finalAmendedKey) && (
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 text-[11px] text-slate-400">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Preliminary Model Key: <strong className="text-slate-200 font-mono">Option {question.modelKey}</strong> (Verified Unchanged in Final Key)</span>
+              </div>
+            )}
 
             {/* Official Exam Provenance in Solution Mode */}
             {(() => {
@@ -733,12 +788,14 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
 
             <div className="space-y-2.5 text-sm text-slate-200 leading-relaxed pt-1">
               {expEn && (
-                <p className="whitespace-pre-line">{expEn}</p>
+                <div className="whitespace-pre-line">
+                  <FormattedMathText text={expEn} />
+                </div>
               )}
               {expHi && expHi !== expEn && (
-                <p className="text-emerald-300/95 font-medium leading-relaxed border-t border-slate-800/80 pt-2 text-xs sm:text-sm whitespace-pre-line">
-                  {expHi}
-                </p>
+                <div className="text-emerald-300/95 font-medium leading-relaxed border-t border-slate-800/80 pt-2 text-xs sm:text-sm whitespace-pre-line">
+                  <FormattedMathText text={expHi} />
+                </div>
               )}
               {!expEn && !expHi && (
                 <p className="text-slate-400 italic text-xs">Explanation not provided for this question.</p>

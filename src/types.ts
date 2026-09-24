@@ -12,6 +12,16 @@ export interface User {
   avatar?: string;
   token?: string;
   registeredAt: string;
+  // Extended Student Profile Fields
+  targetExam?: string;             // e.g. "CGPSC State Service", "CG Vyapam Hostel Warden", "CG Shikshak 2026"
+  targetYear?: number;             // e.g. 2026
+  district?: string;               // e.g. "Raipur", "Bilaspur", "Durg", "Bastar", "Surguja"
+  categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
+  gender?: 'Male' | 'Female' | 'Other';
+  education?: string;              // e.g. "Graduate / B.Ed."
+  medium?: 'Hindi' | 'English';
+  bio?: string;                    // e.g. "Aspiring CGPSC Deputy Collector 2026"
+  dailyGoalQuestions?: number;      // e.g. 50
 }
 
 export type ExamCategory = 'CGSSB' | 'CGPSC' | 'SWAMI_ATMANAND' | 'CENTRAL_EXAMS';
@@ -95,6 +105,11 @@ export interface Question {
 
   correctOption: 'A' | 'B' | 'C' | 'D';
   correctAnswer?: 'A' | 'B' | 'C' | 'D'; // Backward-compatibility alias
+  modelKey?: 'A' | 'B' | 'C' | 'D';      // Official preliminary model key
+  finalAmendedKey?: 'A' | 'B' | 'C' | 'D'; // Final amended official key (e.g. CGPSC / Vyapam)
+  isCancelled?: boolean;                 // Marked cancelled by board - bonus marks
+  imageUrl?: string;                     // Diagram or geography map URL
+  diagramSvg?: string;                   // Inline SVG diagram
   explanation: string;              // English
   explanationHindi?: string;         // Hindi
 
@@ -114,6 +129,26 @@ export interface Question {
   chapter?: string;
   keyFactHindi?: string;
   createdAt?: string;
+}
+
+export interface QuestionBookmark {
+  questionId: string;
+  createdAt: string;
+  note?: string;
+  sourceTestTitle?: string;
+  subject?: string;
+}
+
+export interface MistakeRecord {
+  questionId: string;
+  testId: string;
+  testTitle: string;
+  attemptDate: string;
+  selectedOption: string | null;
+  correctOption: string;
+  subject: string;
+  isSkipped: boolean;
+  resolved?: boolean;
 }
 
 export type ExamPaper = MockTest;

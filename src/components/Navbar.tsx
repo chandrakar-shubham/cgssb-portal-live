@@ -12,19 +12,26 @@ import {
   User as UserIcon,
   Crown,
   Award,
-  Sparkles
+  Sparkles,
+  AlertTriangle,
+  Bookmark,
+  Layers
 } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenAuthModal: () => void;
+  onOpenProfile?: () => void;
+  mistakesCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   onOpenAuthModal,
+  onOpenProfile,
+  mistakesCount = 0,
 }) => {
   const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -34,6 +41,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'cgpsc', label: 'CGPSC Hub', icon: Award, highlightColor: 'text-rose-400' },
     { id: 'cgssb', label: 'CGSSB Hub', icon: Sparkles, highlightColor: 'text-teal-400' },
     { id: 'pyp', label: 'PYP Bank', icon: FileText },
+    { id: 'mistakes', label: 'Mistakes', icon: AlertTriangle, badge: mistakesCount > 0 ? mistakesCount : undefined, highlightColor: 'text-rose-400' },
+    { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark, highlightColor: 'text-amber-400' },
+    { id: 'chhattisgarh-deck', label: 'CG Flashcards', icon: Sparkles, highlightColor: 'text-teal-300' },
     { id: 'pass', label: 'Pass Pro', icon: Crown, isProBadge: true },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];
@@ -101,6 +111,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     }`}
                   />
                   <span>{item.label}</span>
+                  {item.badge != null && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white">
+                      {item.badge}
+                    </span>
+                  )}
                   {item.isProBadge && !isActive && (
                     <span className="px-1 py-0.2 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                       PRO
@@ -133,13 +148,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
 
-            {/* User Session Action */}
+            {/* User Session Action with Profile Click */}
             {user ? (
               <div className="flex items-center space-x-1.5">
-                <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700/60 text-xs text-slate-200">
-                  <UserIcon className="w-3 h-3 text-emerald-400" />
-                  <span className="font-semibold max-w-[100px] truncate">{user.name}</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={onOpenProfile}
+                  title="View & Edit Profile Target Exam, District, Goals"
+                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-emerald-500/50 text-xs text-slate-200 transition cursor-pointer group"
+                >
+                  {user.avatar ? (
+                    <img src={user.avatar} alt="Avatar" className="w-5 h-5 rounded-full object-cover" />
+                  ) : (
+                    <UserIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span className="font-bold max-w-[90px] truncate group-hover:text-emerald-300">{user.name}</span>
+                </button>
                 <button
                   onClick={logout}
                   title="Logout student session"
@@ -195,6 +219,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="flex items-center space-x-2.5">
                     <Icon className="w-4 h-4" />
                     <span>{item.label}</span>
+                    {item.badge != null && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white">
+                        {item.badge}
+                      </span>
+                    )}
                   </div>
                   {item.isProBadge && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-400/20 text-amber-300 border border-amber-400/30">

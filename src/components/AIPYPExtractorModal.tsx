@@ -107,7 +107,7 @@ export const AIPYPExtractorModal: React.FC<AIPYPExtractorModalProps> = ({
           chapterName: currentCh.nameHindi,
           subject: currentMod.name,
           topic: currentCh.nameHindi,
-          subtopic: currentCh.subTopics[0] || 'General Subtopic',
+          subtopic: currentCh.subTopics?.[0] || currentCh.nameHindi || 'General Subtopic',
           difficulty: i % 3 === 0 ? 'Hard' : i % 2 === 0 ? 'Medium' : 'Easy',
           marks: p.marksPerQ,
           negativeMarks: p.negativeMarksPerQ,

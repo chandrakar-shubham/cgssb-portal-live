@@ -24,6 +24,11 @@ import { ExamInstructionsScreen } from './components/ExamInstructionsScreen';
 import { CGPSCHeroPage } from './components/CGPSCHeroPage';
 import { CGSSBHeroPage } from './components/CGSSBHeroPage';
 import { TestPassSection } from './components/TestPassSection';
+import { MistakeNotebook } from './components/MistakeNotebook';
+import { BookmarksManager } from './components/BookmarksManager';
+import { ChhattisgarhiRevisionModule } from './components/ChhattisgarhiRevisionModule';
+import { StudentProfileModal } from './components/StudentProfileModal';
+import { AdminToolsAndBackupsModal } from './components/AdminToolsAndBackupsModal';
 import {
   MockTest,
   Question,
@@ -74,6 +79,15 @@ function MainApp() {
     if (path.includes('analytics') || hash.includes('analytics')) {
       return { route: 'student', tab: 'analytics' };
     }
+    if (path.includes('mistakes') || hash.includes('mistakes')) {
+      return { route: 'student', tab: 'mistakes' };
+    }
+    if (path.includes('bookmarks') || hash.includes('bookmarks')) {
+      return { route: 'student', tab: 'bookmarks' };
+    }
+    if (path.includes('chhattisgarh') || hash.includes('chhattisgarh') || path.includes('flashcards')) {
+      return { route: 'student', tab: 'chhattisgarh-deck' };
+    }
     return { route: 'student', tab: 'tests' };
   };
 
@@ -88,6 +102,9 @@ function MainApp() {
       case 'pass': return '/pass';
       case 'pyp': return '/pyp';
       case 'analytics': return '/analytics';
+      case 'mistakes': return '/mistakes';
+      case 'bookmarks': return '/bookmarks';
+      case 'chhattisgarh-deck': return '/chhattisgarhi-revision';
       default: return '/test-series';
     }
   };
@@ -99,6 +116,9 @@ function MainApp() {
       case 'pass': return 'CG Exam Pass Pro - Unlimited Test Series Access | CGSSB Test';
       case 'pyp': return 'CGPSC & Vyapam Previous Year Papers (PYQ Bank) | CGSSB Test';
       case 'analytics': return 'Performance Analytics & Simulated Rank | CGSSB Test';
+      case 'mistakes': return 'Mistake Notebook & Error Log (कमज़ोर विषय री-टेस्ट) | CGSSB Test';
+      case 'bookmarks': return 'Starred Questions & Personal Notes (बुकमार्क) | CGSSB Test';
+      case 'chhattisgarh-deck': return 'Chhattisgarhi Language & GK Flashcards Revision | CGSSB Test';
       default: return 'CGSSB & CGPSC Test Portal | Mock Tests & PYP Archive';
     }
   };
@@ -160,6 +180,8 @@ function MainApp() {
 
   // Student Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isAdminToolsModalOpen, setIsAdminToolsModalOpen] = useState(false);
 
   // Pre-Flight Exam Instructions State (TCS iON Screen)
   const [preFlightTest, setPreFlightTest] = useState<MockTest | null>(null);
@@ -648,6 +670,42 @@ function MainApp() {
     }).catch(() => {});
   };
 
+  // MISTAKE RETEST ENGINE HANDLER
+  const handleStartMistakeTest = (test: MockTest, mistakeQuestions: Question[]) => {
+    if (!test || !mistakeQuestions || mistakeQuestions.length === 0) return;
+    setQuestions(prev => dedupeById([...mistakeQuestions, ...prev]));
+    setActiveExamTest(test);
+  };
+
+  // BOOKMARK PRACTICE HANDLER
+  const handleStartBookmarkPractice = (test: MockTest, bookmarkedQuestions: Question[]) => {
+    if (!test || !bookmarkedQuestions || bookmarkedQuestions.length === 0) return;
+    setQuestions(prev => dedupeById([...bookmarkedQuestions, ...prev]));
+    setActiveExamTest(test);
+  };
+
+  // RESTORE SNAPSHOT HANDLER
+  const handleRestoreSnapshot = (data: { tests: MockTest[]; questions: Question[]; pypPapers: PreviousYearPaper[] }) => {
+    if (data.tests) setTests(dedupeById(data.tests));
+    if (data.questions) setQuestions(dedupeById(data.questions.map(migrateLegacyQuestion)));
+    if (data.pypPapers) setPypPapers(dedupeById(data.pypPapers));
+  };
+
+  // LIVE UNRESOLVED MISTAKES COUNT FOR NAVBAR BADGE
+  const unresolvedMistakesCount = React.useMemo(() => {
+    const qMap = new Map(questions.map(q => [q.id, q]));
+    const missedQIds = new Set<string>();
+    attempts.forEach(att => {
+      Object.entries(att.responses).forEach(([qid, userAns]) => {
+        const q = qMap.get(qid);
+        if (q && userAns !== q.correctOption) {
+          missedQIds.add(qid);
+        }
+      });
+    });
+    return missedQIds.size;
+  }, [attempts, questions]);
+
   // =========================================================================
   // VIEW 0: PRE-FLIGHT EXAM INSTRUCTIONS SCREEN (TCS iON CONSOLE)
   // =========================================================================
@@ -738,6 +796,7 @@ function MainApp() {
           activeTab={adminActiveTab}
           setActiveTab={setAdminActiveTab}
           onNavigateToStudent={navigateToStudent}
+          onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
         />
 
         <main className="flex-1">
@@ -855,6 +914,8 @@ function MainApp() {
         activeTab={studentActiveTab}
         setActiveTab={setStudentActiveTab}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
+        mistakesCount={unresolvedMistakesCount}
       />
 
       <main className="flex-1">
@@ -919,6 +980,33 @@ function MainApp() {
             onReviewAttempt={attempt => setActiveAttemptReview(attempt)}
             onExploreTests={() => setStudentActiveTab('tests')}
           />
+        )}
+
+        {studentActiveTab === 'mistakes' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <MistakeNotebook
+              attempts={attempts}
+              questions={questions}
+              onStartMistakeTest={handleStartMistakeTest}
+              onExploreTests={() => setStudentActiveTab('tests')}
+            />
+          </div>
+        )}
+
+        {studentActiveTab === 'bookmarks' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <BookmarksManager
+              questions={questions}
+              onStartPractice={handleStartBookmarkPractice}
+              onExploreTests={() => setStudentActiveTab('tests')}
+            />
+          </div>
+        )}
+
+        {studentActiveTab === 'chhattisgarh-deck' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <ChhattisgarhiRevisionModule />
+          </div>
         )}
       </main>
 
@@ -1038,6 +1126,23 @@ function MainApp() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      {/* Student Profile & Target Setting Modal */}
+      <StudentProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      {/* Admin Central Tools, DB Backups & PDF Generator Modal */}
+      <AdminToolsAndBackupsModal
+        isOpen={isAdminToolsModalOpen}
+        onClose={() => setIsAdminToolsModalOpen(false)}
+        tests={tests}
+        questions={questions}
+        pypPapers={pypPapers}
+        attempts={attempts}
+        onRestoreSnapshot={handleRestoreSnapshot}
       />
     </div>
   );
