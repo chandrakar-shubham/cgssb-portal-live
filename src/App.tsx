@@ -203,11 +203,32 @@ function MainApp() {
     return result;
   }
 
+  // Helper to deduplicate and merge initial items with saved local state
+  function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[]): T[] {
+    const map = new Map<string, T>();
+    // 1. First populate all built-in latest catalog items
+    initial.forEach(item => {
+      if (item && item.id) map.set(item.id, item);
+    });
+    // 2. Add/overlay saved items
+    saved.forEach(item => {
+      if (item && item.id) {
+        map.set(item.id, item);
+      }
+    });
+    return Array.from(map.values());
+  }
+
   // App Data State (Synced with localStorage and backend endpoints)
   const [tests, setTests] = useState<MockTest[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_tests');
-      if (saved) return dedupeById(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return mergeWithInitial(INITIAL_MOCK_TESTS, parsed);
+        }
+      }
     } catch {}
     return INITIAL_MOCK_TESTS;
   });
@@ -218,7 +239,8 @@ function MainApp() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return dedupeById(parsed.map(migrateLegacyQuestion));
+          const migrated = parsed.map(migrateLegacyQuestion);
+          return mergeWithInitial(INITIAL_QUESTIONS, migrated);
         }
       }
     } catch {}
@@ -228,7 +250,12 @@ function MainApp() {
   const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
     try {
       const saved = localStorage.getItem('cgssb_pyp');
-      if (saved) return dedupeById(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return mergeWithInitial(INITIAL_PYP_PAPERS, parsed);
+        }
+      }
     } catch {}
     return INITIAL_PYP_PAPERS;
   });

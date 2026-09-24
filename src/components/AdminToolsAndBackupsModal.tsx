@@ -589,18 +589,34 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                 </div>
               </div>
 
-              {/* Restore Section */}
+              {/* Restore & Purge Section */}
               <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 space-y-3">
                 <div>
-                  <h3 className="text-sm font-bold text-white">Restore from Backup Snapshot</h3>
-                  <p className="text-xs text-slate-400">Restore or sync database from a previously downloaded JSON snapshot file.</p>
+                  <h3 className="text-sm font-bold text-white">Restore & Sync Options</h3>
+                  <p className="text-xs text-slate-400">Restore database from a previously downloaded JSON snapshot file or purge local browser storage to load the fresh server catalog.</p>
                 </div>
-                <div className="pt-2">
+                <div className="flex flex-wrap items-center gap-3 pt-2">
                   <label className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 cursor-pointer transition space-x-2">
                     <Upload className="w-4 h-4" />
                     <span>Select Snapshot File (.json)</span>
                     <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
                   </label>
+
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Reset all mock tests and question banks to factory default? Any unexported local drafts will be overwritten.')) {
+                        localStorage.removeItem('cgssb_tests');
+                        localStorage.removeItem('cgssb_questions');
+                        localStorage.removeItem('cgssb_pyp');
+                        localStorage.removeItem('kavya_custom_hierarchy_v2');
+                        window.location.reload();
+                      }
+                    }}
+                    className="inline-flex items-center px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold border border-rose-500/30 transition space-x-2 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Purge Local Storage & Reload Master Catalog</span>
+                  </button>
                 </div>
               </div>
             </div>
