@@ -52,16 +52,23 @@ jobs:
           echo "✅ All required build artifacts verified successfully!"
           cat dist/version.json
 
-      - name: Validate Hostinger Secrets
+      - name: Check Hostinger FTP Secrets
+        id: check_secrets
         run: |
-          if [ -z "${{ secrets.HOSTINGER_FTP_SERVER }}" ] || [ -z "${{ secrets.HOSTINGER_FTP_USERNAME }}" ] || [ -z "${{ secrets.HOSTINGER_FTP_PASSWORD }}" ]; then
-            echo "❌ Missing Hostinger FTP secrets in GitHub Repository Secrets!"
-            echo "Ensure HOSTINGER_FTP_SERVER, HOSTINGER_FTP_USERNAME, and HOSTINGER_FTP_PASSWORD are created in Settings -> Secrets and variables -> Actions."
-            exit 1
+          if [ -n "${{ secrets.HOSTINGER_FTP_SERVER }}" ] && [ -n "${{ secrets.HOSTINGER_FTP_USERNAME }}" ] && [ -n "${{ secrets.HOSTINGER_FTP_PASSWORD }}" ]; then
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Hostinger FTP secrets are configured. Proceeding with FTP deployment."
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Hostinger Secrets Not Configured::Hostinger FTP credentials (HOSTINGER_FTP_SERVER, HOSTINGER_FTP_USERNAME, HOSTINGER_FTP_PASSWORD) are not yet set in GitHub repository secrets. Build artifacts were generated and verified successfully."
+            echo "💡 To enable automatic FTP deployment:"
+            echo "1. Go to your GitHub repository -> Settings -> Secrets and variables -> Actions."
+            echo "2. Add HOSTINGER_FTP_SERVER, HOSTINGER_FTP_USERNAME, and HOSTINGER_FTP_PASSWORD."
+            echo "3. Optionally add HOSTINGER_SERVER_DIR (default: 'public_html/')."
           fi
-          echo "✅ Hostinger FTP secrets are present."
 
       - name: Deploy to Hostinger via FTP
+        if: steps.check_secrets.outputs.has_secrets == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.HOSTINGER_FTP_SERVER }}
@@ -79,6 +86,7 @@ jobs:
             **/.git*/**
 
       - name: Post-Deploy Health Check
+        if: steps.check_secrets.outputs.has_secrets == 'true'
         continue-on-error: true
         run: |
           echo "Checking live deployment at https://darkorange-chimpanzee-661223.hostingersite.com/api/version"

@@ -3,59 +3,69 @@
   RewriteEngine On
   RewriteBase /
 
-  # 1. Ensure index.html takes precedence over Hostinger default.php or index.php
-  DirectoryIndex index.html index.php
+  # 1. DirectoryIndex: prioritize compiled dist/index.html, then root index.html, then index.php
+  DirectoryIndex dist/index.html index.html index.php
 
   # 2. Block direct access to environment & secret repository files
   <FilesMatch "^\.env|^\.git|package\.json|tsconfig\.json|server\.ts">
     Require all denied
   </FilesMatch>
 
-  # 3. Serve real existing files and directories directly without rewriting
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
-
-  # 4. If asset exists in dist/assets/ but was requested as /assets/
+  # 3. Route /assets/* to dist/assets/* if dist/assets exists (Git clone deployment)
   RewriteCond %{DOCUMENT_ROOT}/assets/$1 !-f
   RewriteCond %{DOCUMENT_ROOT}/dist/assets/$1 -f
   RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
 
-  # 5. Route any sub-path asset requests (e.g. /admin/assets/*, /exams/assets/*) to root assets or dist assets
-  RewriteCond %{DOCUMENT_ROOT}/assets/$1 -f
-  RewriteRule ^.*?assets/(.*)$ assets/$1 [L]
-
+  # 4. Route nested asset requests (e.g. /admin/assets/*) to dist or root assets
   RewriteCond %{DOCUMENT_ROOT}/dist/assets/$1 -f
-  RewriteRule ^.*?assets/(.*)$ dist/assets/$1 [L]
+  RewriteRule ^.+?/assets/(.*)$ dist/assets/$1 [L]
+
+  RewriteCond %{DOCUMENT_ROOT}/assets/$1 -f
+  RewriteRule ^.+?/assets/(.*)$ assets/$1 [L]
+
+  # 5. Serve real existing files and directories directly without rewriting
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
 
   # 6. Fallback for hashed app script if an older client requests an obsolete hash:
-  # Route missing app-*.js to assets/index.js if available
+  # Route missing app-*.js to dist/assets/index.js or assets/index.js if available
+  RewriteCond %{DOCUMENT_ROOT}/dist/assets/$1 !-f
+  RewriteCond %{DOCUMENT_ROOT}/dist/assets/index.js -f
+  RewriteRule ^assets/app-.*\.js$ dist/assets/index.js [L]
+
   RewriteCond %{DOCUMENT_ROOT}/assets/$1 !-f
   RewriteCond %{DOCUMENT_ROOT}/assets/index.js -f
   RewriteRule ^assets/app-.*\.js$ assets/index.js [L]
 
-  # 7. Prevent rewriting missing static assets to index.html (returns clean 404 instead of HTML)
+  # 7. Prevent rewriting missing static assets (images, fonts, scripts) to HTML
   RewriteCond %{REQUEST_URI} \.(js|mjs|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|map)$ [NC]
   RewriteRule ^ - [R=404,L]
 
   # 8. Single Page Application (SPA) routing:
-  # Fallback non-file routes to root index.html, or dist/index.html if root is missing
-  RewriteCond %{DOCUMENT_ROOT}/index.html -f
-  RewriteRule ^ index.html [L]
-
+  # If dist/index.html exists (Hostinger Git repo clone mode), route all SPA routes to dist/index.html
   RewriteCond %{DOCUMENT_ROOT}/dist/index.html -f
   RewriteRule ^ dist/index.html [L]
+
+  # Otherwise fallback to root index.html (FTP deploy mode where dist/ contents are deployed directly to public_html)
+  RewriteCond %{DOCUMENT_ROOT}/index.html -f
+  RewriteRule ^ index.html [L]
 </IfModule>
 
 # -------------------------------------------------------------
-# Caching: Prevent caching of index.html so updates reflect instantly
+# Caching & LiteSpeed: Prevent caching of index.html so updates reflect instantly
 # -------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  # Disable LiteSpeed web server cache for root HTML pages
+  RewriteRule ^(index\.html)?$ - [E=Cache-Control:no-cache]
+</IfModule>
+
 <IfModule mod_headers.c>
-  <FilesMatch "index\.html$">
+  <FilesMatch "(index\.html|version\.json)$">
     Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
     Header set Pragma "no-cache"
-    Header set Expires 0
-    Header set X-LiteSpeed-Cache-Control "no-cache"
+    Header set Expires "0"
+    Header set X-LiteSpeed-Cache-Control "no-cache, no-store"
   </FilesMatch>
   <FilesMatch "\.(js|css|woff2|woff|ttf|png|jpg|jpeg|svg|webp)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
@@ -73,3 +83,4 @@
   AddType font/woff2 .woff2
   AddType font/woff .woff
 </IfModule>
+
