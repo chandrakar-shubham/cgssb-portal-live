@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -17,13 +18,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: 'npm'
 
       - name: Install Dependencies
         run: |
           if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+            npm ci || npm install --legacy-peer-deps
           else
             npm install --legacy-peer-deps
           fi
@@ -35,6 +36,7 @@ jobs:
       - name: Build Production Bundle
         env:
           GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
           BUILD_TIME: ${{ github.event.head_commit.timestamp }}
         run: |
           npm run build

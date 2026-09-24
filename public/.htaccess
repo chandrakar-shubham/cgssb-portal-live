@@ -48,14 +48,19 @@
 </IfModule>
 
 # -------------------------------------------------------------
-# Caching: Prevent caching of index.html so updates reflect instantly
+# Caching & LiteSpeed: Prevent caching of index.html so updates reflect instantly
 # -------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  # Disable LiteSpeed web server cache for root HTML pages
+  RewriteRule ^(index\.html)?$ - [E=Cache-Control:no-cache]
+</IfModule>
+
 <IfModule mod_headers.c>
-  <FilesMatch "index\.html$">
+  <FilesMatch "(index\.html|version\.json)$">
     Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
     Header set Pragma "no-cache"
-    Header set Expires 0
-    Header set X-LiteSpeed-Cache-Control "no-cache"
+    Header set Expires "0"
+    Header set X-LiteSpeed-Cache-Control "no-cache, no-store"
   </FilesMatch>
   <FilesMatch "\.(js|css|woff2|woff|ttf|png|jpg|jpeg|svg|webp)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
