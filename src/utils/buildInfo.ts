@@ -23,7 +23,7 @@ export const APP_BUILD_INFO: AppBuildInfo = {
     : `B-${currentYear}${currentMonth}${currentDay}-01`,
   buildTime: typeof __APP_BUILD_TIME__ !== 'undefined'
     ? __APP_BUILD_TIME__
-    : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST',
   commitSha: typeof __APP_COMMIT_SHA__ !== 'undefined'
     ? __APP_COMMIT_SHA__
     : 'prod-main',

@@ -1135,11 +1135,11 @@ function MainApp() {
               <span className="text-emerald-400 font-semibold">Chhattisgarh State Exam Preparation Platform</span>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               <button
                 onClick={navigateToAdmin}
                 title="Official Exam Controller Administration (/admin)"
-                className="text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5 py-1 px-2.5 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700"
+                className="text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5 py-1 px-2.5 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700 text-xs"
               >
                 <Lock className="w-3 h-3 text-indigo-400" />
                 <span>Staff & Admin Portal</span>

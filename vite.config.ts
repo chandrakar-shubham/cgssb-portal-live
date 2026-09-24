@@ -10,7 +10,15 @@ export default defineConfig(() => {
     ? `CI-${process.env.GITHUB_RUN_NUMBER}` 
     : `B-${buildDateStr}-${Math.floor(now.getTime() / 1000) % 10000}`;
   const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'main-live';
-  const buildTime = now.toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }) + ' UTC';
+  const buildTime = now.toLocaleString('en-IN', { 
+    timeZone: 'Asia/Kolkata', 
+    day: '2-digit', 
+    month: 'short', 
+    year: 'numeric', 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    hour12: true 
+  }) + ' IST';
 
   return {
     base: '/',
