@@ -26,7 +26,8 @@ import {
   Hash,
   BookOpen,
   Filter,
-  Trophy
+  Trophy,
+  Sparkles
 } from 'lucide-react';
 
 interface SolutionsScreenProps {
@@ -614,6 +615,19 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
                         <span>{mockQId}</span>
                       </span>
 
+                      {/* Origin Provenance Badge */}
+                      {q.originType === 'pyq' || appearances.length > 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold border border-amber-500/40 flex items-center space-x-1">
+                          <History className="w-3 h-3 text-amber-400" />
+                          <span>OFFICIAL PYQ</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[10px] font-bold border border-indigo-500/40 flex items-center space-x-1">
+                          <Sparkles className="w-3 h-3 text-indigo-400" />
+                          <span>MOCK QUESTION</span>
+                        </span>
+                      )}
+
                       {/* Master Bank Question ID */}
                       <span className="px-2 py-0.5 rounded bg-slate-850 text-slate-400 font-mono text-[10px] border border-slate-700" title="Question Bank ID">
                         Bank QID: {q.id}
@@ -688,6 +702,19 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
                       </div>
                       <span className="text-[10px] text-slate-400 uppercase tracking-wider shrink-0">
                         Official Exam History
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Mock Item Notice if not PYQ */}
+                  {appearances.length === 0 && (
+                    <div className="p-2.5 rounded-xl border border-indigo-500/20 bg-indigo-950/20 text-indigo-200 text-xs flex items-center space-x-2">
+                      <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[10px] flex items-center space-x-1 shrink-0">
+                        <Sparkles className="w-3 h-3 text-indigo-400" />
+                        <span>MOCK TEST ITEM</span>
+                      </span>
+                      <span className="text-[11px] text-slate-300">
+                        Curated mock question designed for syllabus mastery and exam-hall simulation.
                       </span>
                     </div>
                   )}

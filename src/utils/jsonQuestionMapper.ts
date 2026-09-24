@@ -320,6 +320,7 @@ export function mapRawJsonToQuestion(raw: RawJsonQuestionInput, index: number = 
     explanation,
     explanationHindi,
     idealTimeSeconds: Number(raw.idealTimeSeconds) || idealSeconds,
+    originType: 'pyq',
     pypAppearances: Array.isArray(raw.pypAppearances) ? raw.pypAppearances : (examName ? [{ examName, year }] : []),
     statements: finalStatements,
     columnA,

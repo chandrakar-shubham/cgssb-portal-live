@@ -120,6 +120,7 @@ export const AdminAITestCreator: React.FC<AdminAITestCreatorProps> = ({
     const mockGeneratedQuestions: Question[] = [
       {
         id: `ai-q-${Date.now()}-1`,
+        originType: 'mock',
         subject: selectedSubjects[0] || 'Chhattisgarh General Studies',
         topic: 'History & Culture',
         subtopic: 'Kalchuri Dynasty',
@@ -142,6 +143,7 @@ export const AdminAITestCreator: React.FC<AdminAITestCreatorProps> = ({
       },
       {
         id: `ai-q-${Date.now()}-2`,
+        originType: 'mock',
         subject: selectedSubjects[1] || 'Computer Knowledge',
         topic: 'Operating Systems & Office',
         subtopic: 'MS Excel & Database',

@@ -17,8 +17,13 @@ import { AdminAITestCreator } from './components/AdminAITestCreator';
 import { AdminTestCatalog } from './components/AdminTestCatalog';
 import { AdminAndroidAPIManager } from './components/AdminAndroidAPIManager';
 import { AdminPortalLogin } from './components/AdminPortalLogin';
+import { AdminCMSDashboard } from './components/AdminCMSDashboard';
 import { AdminHeader } from './components/AdminHeader';
 import { AuthModal } from './components/AuthModal';
+import { ExamInstructionsScreen } from './components/ExamInstructionsScreen';
+import { CGPSCHeroPage } from './components/CGPSCHeroPage';
+import { CGSSBHeroPage } from './components/CGSSBHeroPage';
+import { TestPassSection } from './components/TestPassSection';
 import {
   MockTest,
   Question,
@@ -45,27 +50,82 @@ import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
 function MainApp() {
   const { user, deductCredits, isAdminAuthenticated } = useAuth();
 
-  // Route State: Strictly separated 'student' vs 'admin'
-  const [currentRoute, setCurrentRoute] = useState<'student' | 'admin'>(() => {
-    if (typeof window === 'undefined') return 'student';
+  // Route & SEO State
+  const parseRouteFromLocation = (): { route: 'student' | 'admin'; tab: string } => {
+    if (typeof window === 'undefined') return { route: 'student', tab: 'tests' };
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
+
     if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
-      return 'admin';
+      return { route: 'admin', tab: 'admin-pyp' };
     }
-    return 'student';
-  });
+    if (path.includes('cgpsc') || hash.includes('cgpsc')) {
+      return { route: 'student', tab: 'cgpsc' };
+    }
+    if (path.includes('cgssb') || hash.includes('cgssb') || path.includes('vyapam') || hash.includes('vyapam')) {
+      return { route: 'student', tab: 'cgssb' };
+    }
+    if (path.includes('pass') || hash.includes('pass')) {
+      return { route: 'student', tab: 'pass' };
+    }
+    if (path.includes('pyp') || hash.includes('pyp')) {
+      return { route: 'student', tab: 'pyp' };
+    }
+    if (path.includes('analytics') || hash.includes('analytics')) {
+      return { route: 'student', tab: 'analytics' };
+    }
+    return { route: 'student', tab: 'tests' };
+  };
+
+  const initialRoute = parseRouteFromLocation();
+  const [currentRoute, setCurrentRoute] = useState<'student' | 'admin'>(initialRoute.route);
+  const [studentActiveTab, setStudentActiveTabState] = useState<string>(initialRoute.tab);
+
+  const getTabPath = (tab: string) => {
+    switch (tab) {
+      case 'cgpsc': return '/exams/cgpsc';
+      case 'cgssb': return '/exams/cgssb';
+      case 'pass': return '/pass';
+      case 'pyp': return '/pyp';
+      case 'analytics': return '/analytics';
+      default: return '/test-series';
+    }
+  };
+
+  const getPageTitle = (tab: string) => {
+    switch (tab) {
+      case 'cgpsc': return 'CGPSC Prelims & Forest Service Mock Tests 2026 | CGSSB Test';
+      case 'cgssb': return 'CG Vyapam Hostel Warden, Patwari & RI Tests 2026 | CGSSB Test';
+      case 'pass': return 'CG Exam Pass Pro - Unlimited Test Series Access | CGSSB Test';
+      case 'pyp': return 'CGPSC & Vyapam Previous Year Papers (PYQ Bank) | CGSSB Test';
+      case 'analytics': return 'Performance Analytics & Simulated Rank | CGSSB Test';
+      default: return 'CGSSB & CGPSC Test Portal | Mock Tests & PYP Archive';
+    }
+  };
+
+  // Navigates and updates browser URL + document title for SEO
+  const setStudentActiveTab = (tab: string) => {
+    setStudentActiveTabState(tab);
+    setCurrentRoute('student');
+    const targetPath = getTabPath(tab);
+    if (window.location.pathname !== targetPath) {
+      try {
+        window.history.pushState({}, '', targetPath);
+      } catch {
+        window.location.hash = `#${targetPath}`;
+      }
+    }
+    document.title = getPageTitle(tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Track browser forward / back button and hash changes
   useEffect(() => {
     const handleLocationChange = () => {
-      const path = window.location.pathname.toLowerCase();
-      const hash = window.location.hash.toLowerCase();
-      if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
-        setCurrentRoute('admin');
-      } else {
-        setCurrentRoute('student');
-      }
+      const { route, tab } = parseRouteFromLocation();
+      setCurrentRoute(route);
+      setStudentActiveTabState(tab);
+      document.title = route === 'admin' ? 'Admin Portal & CMS | CGSSB Test' : getPageTitle(tab);
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -84,31 +144,25 @@ function MainApp() {
         window.location.hash = '#/admin';
       }
     }
+    document.title = 'Admin Portal & CMS | CGSSB Test';
     setCurrentRoute('admin');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateToStudent = () => {
-    if (window.location.pathname !== '/') {
-      try {
-        window.history.pushState({}, '', '/');
-      } catch {
-        window.location.hash = '';
-      }
-    }
-    setCurrentRoute('student');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setStudentActiveTab('tests');
   };
 
-  // Student Navigation State
-  const [studentActiveTab, setStudentActiveTab] = useState<string>('tests');
   const [selectedCategory, setSelectedCategory] = useState<ExamCategory | 'ALL'>('ALL');
 
   // Admin Navigation State (Strictly for admin tabs)
-  const [adminActiveTab, setAdminActiveTab] = useState<string>('admin-pyp');
+  const [adminActiveTab, setAdminActiveTab] = useState<string>('admin-overview');
 
   // Student Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Pre-Flight Exam Instructions State (TCS iON Screen)
+  const [preFlightTest, setPreFlightTest] = useState<MockTest | null>(null);
 
   // Active Exam Session & Review
   const [activeExamTest, setActiveExamTest] = useState<MockTest | null>(null);
@@ -240,13 +294,24 @@ function MainApp() {
     loadData();
   }, []);
 
-  // START TEST HANDLER
+  // START TEST HANDLER (Routes through TCS iON Pre-Flight Screen)
   const handleStartTest = (test: MockTest) => {
+    // If test is marked as Pro and candidate does not have pass
+    if (test.isPro && !user?.hasProPass) {
+      setStudentActiveTab('pass');
+      return;
+    }
+    setActiveAttemptReview(null);
+    setPreFlightTest(test);
+  };
+
+  const handleConfirmStartExam = (chosenLanguage: 'hi' | 'en') => {
+    if (!preFlightTest) return;
     if (user?.role === 'student') {
       deductCredits(10);
     }
-    setActiveAttemptReview(null);
-    setActiveExamTest(test);
+    setActiveExamTest(preFlightTest);
+    setPreFlightTest(null);
   };
 
   // PRACTICE PYP AS TEST HANDLER
@@ -262,6 +327,9 @@ function MainApp() {
       id: `pyp-test-${paper.id}`,
       title: `${paper.title} (Real Exam Simulation)`,
       category: paper.examCategory,
+      isPYP: true,
+      originType: 'pyq',
+      pypYear: paper.year,
       description: `Official past paper simulation. Converted from archived examination ${paper.year}.`,
       durationMinutes: paper.durationMinutes,
       questionCount: relevantQs.length > 0 ? relevantQs.length : paper.totalQuestions,
@@ -581,6 +649,19 @@ function MainApp() {
   };
 
   // =========================================================================
+  // VIEW 0: PRE-FLIGHT EXAM INSTRUCTIONS SCREEN (TCS iON CONSOLE)
+  // =========================================================================
+  if (preFlightTest) {
+    return (
+      <ExamInstructionsScreen
+        test={preFlightTest}
+        onStartExam={handleConfirmStartExam}
+        onCancel={() => setPreFlightTest(null)}
+      />
+    );
+  }
+
+  // =========================================================================
   // VIEW 1: ACTIVE FULLSCREEN EXAM SESSION
   // =========================================================================
   if (activeExamTest) {
@@ -660,6 +741,16 @@ function MainApp() {
         />
 
         <main className="flex-1">
+          {adminActiveTab === 'admin-overview' && (
+            <AdminCMSDashboard
+              tests={tests}
+              questions={questions}
+              pypPapers={pypPapers}
+              attempts={attempts}
+              onNavigateTab={tab => setAdminActiveTab(tab)}
+            />
+          )}
+
           {adminActiveTab === 'admin-pyp' && (
             <AdminPYPManager
               pypPapers={pypPapers}
@@ -780,6 +871,38 @@ function MainApp() {
           />
         )}
 
+        {studentActiveTab === 'cgpsc' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <CGPSCHeroPage
+              tests={tests}
+              pypPapers={pypPapers}
+              onStartTest={handleStartTest}
+              onPracticePYP={handlePracticePaper}
+              onExplorePass={() => setStudentActiveTab('pass')}
+            />
+          </div>
+        )}
+
+        {studentActiveTab === 'cgssb' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <CGSSBHeroPage
+              tests={tests}
+              pypPapers={pypPapers}
+              onStartTest={handleStartTest}
+              onPracticePYP={handlePracticePaper}
+              onExplorePass={() => setStudentActiveTab('pass')}
+            />
+          </div>
+        )}
+
+        {studentActiveTab === 'pass' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <TestPassSection
+              onExploreTests={() => setStudentActiveTab('tests')}
+            />
+          </div>
+        )}
+
         {studentActiveTab === 'pyp' && (
           <PYPSection
             pypPapers={pypPapers}
@@ -799,28 +922,114 @@ function MainApp() {
         )}
       </main>
 
-      {/* Student Portal Footer */}
-      <footer className="bg-slate-900 border-t border-slate-800 py-6 mt-12 text-xs text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-extrabold text-white">
-              CGSSB <span className="text-emerald-400">Test</span>
-            </span>
-            <span className="text-slate-600">•</span>
-            <span>cgssbtest.com</span>
-            <span className="text-slate-600">•</span>
-            <span className="text-emerald-400 font-semibold">Chhattisgarh State Exam Preparation</span>
+      {/* Student Portal Footer with SEO Links */}
+      <footer className="bg-slate-900 border-t border-slate-800 py-8 mt-12 text-xs text-slate-400">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pb-6 border-b border-slate-800">
+            <div>
+              <h4 className="font-extrabold text-white text-xs uppercase tracking-wider mb-2">Exams & Test Series</h4>
+              <ul className="space-y-1.5 text-slate-400">
+                <li>
+                  <button onClick={() => setStudentActiveTab('cgpsc')} className="hover:text-emerald-400 transition text-left">
+                    CGPSC State Services (SSE)
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setStudentActiveTab('cgssb')} className="hover:text-emerald-400 transition text-left">
+                    CG Vyapam Hostel Warden
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setStudentActiveTab('cgssb')} className="hover:text-emerald-400 transition text-left">
+                    CG Vyapam Patwari & RI
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setStudentActiveTab('tests')} className="hover:text-emerald-400 transition text-left">
+                    All Full-Length Mock Tests
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-extrabold text-white text-xs uppercase tracking-wider mb-2">Study Material</h4>
+              <ul className="space-y-1.5 text-slate-400">
+                <li>
+                  <button onClick={() => setStudentActiveTab('pyp')} className="hover:text-emerald-400 transition text-left">
+                    Official PYP Papers (2012-2024)
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setStudentActiveTab('pyp')} className="hover:text-emerald-400 transition text-left">
+                    Chhattisgarhi Bhasha Grammar
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setStudentActiveTab('tests')} className="hover:text-emerald-400 transition text-left">
+                    Hostel Warden Computer 50 Qs
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-extrabold text-white text-xs uppercase tracking-wider mb-2">Pass & Monetization</h4>
+              <ul className="space-y-1.5 text-slate-400">
+                <li>
+                  <button onClick={() => setStudentActiveTab('pass')} className="hover:text-amber-400 font-bold transition text-left">
+                    CG Exam Pass Pro (₹99 / ₹299)
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setStudentActiveTab('pass')} className="hover:text-amber-400 transition text-left">
+                    Yearly Unlimited Access
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setStudentActiveTab('analytics')} className="hover:text-emerald-400 transition text-left">
+                    All-India Rank & Percentile
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-extrabold text-white text-xs uppercase tracking-wider mb-2">Authority & Admin</h4>
+              <ul className="space-y-1.5 text-slate-400">
+                <li>
+                  <button onClick={navigateToAdmin} className="hover:text-indigo-400 transition text-left flex items-center space-x-1">
+                    <Lock className="w-3 h-3 text-indigo-400" />
+                    <span>Staff & Admin Portal (/admin)</span>
+                  </button>
+                </li>
+                <li className="text-slate-500">TCS iON Computer-Based Testing</li>
+                <li className="text-slate-500">Bilingual Engine (Hindi/English)</li>
+              </ul>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={navigateToAdmin}
-              title="Official Exam Controller Administration (/admin)"
-              className="text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5 py-1 px-2.5 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700"
-            >
-              <Lock className="w-3 h-3 text-indigo-400" />
-              <span>Staff & Admin Portal</span>
-            </button>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-extrabold text-white">
+                CGSSB <span className="text-emerald-400">Test</span>
+              </span>
+              <span className="text-slate-600">•</span>
+              <span>cgssbtest.com</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-emerald-400 font-semibold">Chhattisgarh State Exam Preparation Platform</span>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={navigateToAdmin}
+                title="Official Exam Controller Administration (/admin)"
+                className="text-slate-400 hover:text-slate-200 transition flex items-center space-x-1.5 py-1 px-2.5 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700"
+              >
+                <Lock className="w-3 h-3 text-indigo-400" />
+                <span>Staff & Admin Portal</span>
+              </button>
+            </div>
           </div>
         </div>
       </footer>

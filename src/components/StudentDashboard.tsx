@@ -29,8 +29,13 @@ import {
   X,
   FolderTree,
   UserCheck,
-  LayoutGrid
+  LayoutGrid,
+  Crown,
+  Lock,
+  History
 } from 'lucide-react';
+
+export type TestSegment = 'ALL' | 'MOCK' | 'PYP' | 'PRO';
 
 interface StudentDashboardProps {
   tests: MockTest[];
@@ -65,6 +70,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [isCreatingTest, setIsCreatingTest] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [testSegment, setTestSegment] = useState<TestSegment>('ALL');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -85,6 +91,41 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return deduplicateAndConsolidateTests(tests);
   }, [tests]);
 
+  // Statistics for Segment Tabs
+  const segmentStats = useMemo(() => {
+    const listToCount = (isAdmin ? tests : processedTests).filter(t => {
+      if (!t || !t.id) return false;
+      if (!isAdmin && t.isPublished === false) return false;
+      if (selectedCategory !== 'ALL' && t.category !== selectedCategory) return false;
+      return true;
+    });
+
+    let mockCount = 0;
+    let pypCount = 0;
+    let proCount = 0;
+
+    listToCount.forEach(t => {
+      const isPyp = Boolean(
+        t.isPYP ||
+        t.originType === 'pyq' ||
+        t.pypYear ||
+        t.title.toLowerCase().includes('pyp') ||
+        t.title.toLowerCase().includes('previous year') ||
+        t.title.toLowerCase().includes('official')
+      );
+      if (isPyp) pypCount++;
+      else mockCount++;
+      if (t.isPro) proCount++;
+    });
+
+    return {
+      all: listToCount.length,
+      mock: mockCount,
+      pyp: pypCount,
+      pro: proCount,
+    };
+  }, [tests, processedTests, isAdmin, selectedCategory]);
+
   const filteredTests = useMemo(() => {
     const listToFilter = isAdmin ? tests : processedTests;
     const seen = new Set<string>();
@@ -103,13 +144,27 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         if (adminPublishFilter === 'draft' && test.isPublished !== false) return false;
       }
 
+      const isPyp = Boolean(
+        test.isPYP ||
+        test.originType === 'pyq' ||
+        test.pypYear ||
+        test.title.toLowerCase().includes('pyp') ||
+        test.title.toLowerCase().includes('previous year') ||
+        test.title.toLowerCase().includes('official')
+      );
+
+      // Segment filter
+      if (testSegment === 'MOCK' && isPyp) return false;
+      if (testSegment === 'PYP' && !isPyp) return false;
+      if (testSegment === 'PRO' && !test.isPro) return false;
+
       const matchesCategory = selectedCategory === 'ALL' || test.category === selectedCategory;
       const matchesSearch =
         test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         test.description.toLowerCase().includes(searchTerm.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [tests, processedTests, isAdmin, adminPublishFilter, selectedCategory, searchTerm]);
+  }, [tests, processedTests, isAdmin, adminPublishFilter, testSegment, selectedCategory, searchTerm]);
 
   // Admin stats
   const totalPublishedCount = useMemo(() => {
@@ -237,6 +292,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const renderTestCard = (test: MockTest) => {
     const pattern = EXAM_PATTERNS[test.category];
     const isPublished = test.isPublished !== false;
+    const isPypTest = Boolean(
+      test.isPYP ||
+      test.originType === 'pyq' ||
+      test.pypYear ||
+      test.title.toLowerCase().includes('pyp') ||
+      test.title.toLowerCase().includes('previous year') ||
+      test.title.toLowerCase().includes('official')
+    );
 
     return (
       <div
@@ -254,6 +317,30 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-950 border border-slate-800 text-emerald-400">
                 {test.examName || pattern?.shortName || test.category}
               </span>
+
+              {/* Provenance Badge: Official PYP vs Fresh Mock */}
+              {isPypTest ? (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500/15 text-amber-300 border border-amber-500/40 flex items-center space-x-1 shadow-sm">
+                  <History className="w-2.5 h-2.5 text-amber-400" />
+                  <span>OFFICIAL PYP {test.pypYear ? `(${test.pypYear})` : ''}</span>
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/40 flex items-center space-x-1 shadow-sm">
+                  <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
+                  <span>FULL MOCK TEST</span>
+                </span>
+              )}
+
+              {test.isPro ? (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center space-x-1">
+                  <Crown className="w-2.5 h-2.5 fill-amber-400" />
+                  <span>PRO PASS</span>
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  FREE STARTER
+                </span>
+              )}
               {/* Admin Status Pill */}
               {isAdmin && (
                 <span
@@ -378,13 +465,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
 
           {/* Primary Start / Test Button */}
-          <button
-            onClick={() => onStartTest(test)}
-            className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-sm active:scale-95 cursor-pointer"
-          >
-            <Play className="w-3.5 h-3.5 fill-slate-950" />
-            <span>{isAdmin ? 'Test Exam Simulation' : 'Start Test'}</span>
-          </button>
+          {test.isPro && !user?.hasProPass && !isAdmin ? (
+            <button
+              onClick={() => onStartTest(test)}
+              className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-slate-950 font-black text-xs flex items-center justify-center space-x-1.5 transition shadow-sm active:scale-95 cursor-pointer"
+            >
+              <Crown className="w-3.5 h-3.5 fill-slate-950" />
+              <span>Unlock with CG Pass (₹99)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => onStartTest(test)}
+              className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-sm active:scale-95 cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-slate-950" />
+              <span>{isAdmin ? 'Test Exam Simulation' : 'Start Test (TCS iON)'}</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -623,6 +720,71 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </button>
         </div>
       )}
+
+      {/* Test Series & PYP Segment Bar */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-1.5 flex flex-wrap gap-1.5 items-center justify-between text-xs shadow-md">
+        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setTestSegment('ALL')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+              testSegment === 'ALL'
+                ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
+            <span>All Tests</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-700/60 font-mono">{segmentStats.all}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTestSegment('MOCK')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+              testSegment === 'MOCK'
+                ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/50 shadow-sm'
+                : 'text-slate-400 hover:text-indigo-300'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Full Mock Tests</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-500/30 font-mono">{segmentStats.mock}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTestSegment('PYP')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+              testSegment === 'PYP'
+                ? 'bg-amber-600/30 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'text-slate-400 hover:text-amber-300'
+            }`}
+          >
+            <History className="w-3.5 h-3.5 text-amber-400" />
+            <span>Official PYP Papers</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-950 text-amber-300 border border-amber-500/30 font-mono">{segmentStats.pyp}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTestSegment('PRO')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+              testSegment === 'PRO'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                : 'text-slate-400 hover:text-amber-400'
+            }`}
+          >
+            <Crown className="w-3.5 h-3.5 fill-amber-400" />
+            <span>Pass Pro Only</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950/20 font-mono">{segmentStats.pro}</span>
+          </button>
+        </div>
+
+        <span className="text-[11px] text-slate-400 font-medium px-2 hidden lg:inline">
+          Showing {filteredTests.length} {testSegment === 'MOCK' ? 'Mock Tests' : testSegment === 'PYP' ? 'Official PYPs' : testSegment === 'PRO' ? 'Pass Pro Tests' : 'Available Tests'}
+        </span>
+      </div>
 
       {/* Search & Filter Header with View Mode Switcher */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">

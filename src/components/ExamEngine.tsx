@@ -24,7 +24,8 @@ import {
   History,
   Hash,
   Timer,
-  Trophy
+  Trophy,
+  Sparkles
 } from 'lucide-react';
 import { QuestionRenderer } from './QuestionRenderer';
 import { LanguageToggle } from './LanguageToggle';
@@ -485,6 +486,19 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                 </div>
                 <span className="text-[10px] text-slate-400 uppercase tracking-wider shrink-0">
                   Past Examination Question
+                </span>
+              </div>
+            )}
+
+            {/* Mock Test Provenance Banner when not PYQ */}
+            {activeAppearances.length === 0 && (
+              <div className="p-2.5 rounded-xl border border-indigo-500/20 bg-indigo-950/20 text-indigo-200 text-xs flex items-center space-x-2">
+                <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[10px] flex items-center space-x-1 shrink-0">
+                  <Sparkles className="w-3 h-3 text-indigo-400" />
+                  <span>MOCK TEST QUESTION</span>
+                </span>
+                <span className="text-[11px] text-slate-300">
+                  Curated strictly according to official {test.category || 'exam'} syllabus pattern & difficulty.
                 </span>
               </div>
             )}

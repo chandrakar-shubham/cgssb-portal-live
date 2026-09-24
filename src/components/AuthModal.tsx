@@ -9,7 +9,10 @@ import {
   User,
   ArrowRight,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  Smartphone,
+  Sparkles,
+  X
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -18,22 +21,65 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { login } = useAuth();
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('student');
+  const { login, loginWithGoogle, loginWithPhoneOtp } = useAuth();
+  
+  // Auth Modes: 'google' | 'phone_otp' | 'email'
+  const [authMethod, setAuthMethod] = useState<'google' | 'phone_otp' | 'email'>('google');
+  
+  // Phone OTP States
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [otpError, setOtpError] = useState('');
+
+  // Email States
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    login(email, selectedRole, name || (selectedRole === 'admin' ? 'Super Admin' : 'CG Candidate'));
+  // Google Login Handler
+  const handleGoogleSignIn = () => {
+    loginWithGoogle({
+      email: 'student.candidate@gmail.com',
+      name: 'Priya Sharma (CG Aspirant)',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
+    });
     onClose();
   };
 
+  // Send OTP
+  const handleSendOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneNumber || phoneNumber.length < 10) {
+      setOtpError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    setOtpError('');
+    setIsOtpSent(true);
+  };
+
+  // Verify OTP
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode || otpCode.length < 4) {
+      setOtpError('Please enter a valid OTP code');
+      return;
+    }
+    loginWithPhoneOtp(phoneNumber, otpCode, `Aspirant ${phoneNumber.slice(-4)}`);
+    onClose();
+  };
+
+  // Email Submit
+  const handleEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    login(email, 'student', name || 'Candidate Student');
+    onClose();
+  };
+
+  // Demo Accounts
   const handleQuickDemo = (role: UserRole) => {
     if (role === 'student') {
       login('rameshwar@cgssbtest.com', 'student', 'Rameshwar Dewangan');
@@ -45,8 +91,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
-        {/* Brand Header */}
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* Brand Header & Close */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-sm">
@@ -54,158 +101,256 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
             <div>
               <span className="font-extrabold text-sm text-white">
-                CGSSB <span className="text-emerald-400">Test</span>
+                CGSSB <span className="text-emerald-400">Test Portal</span>
               </span>
               <span className="text-[10px] text-slate-400 block font-medium">
-                cgssbtest.com Portal Access
+                Student & Candidate Account
               </span>
             </div>
           </div>
+
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-slate-800 rounded-lg"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Role Selection Tabs */}
-        <div>
-          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-            Select Your Role
-          </label>
-          <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700">
-            <button
-              type="button"
-              onClick={() => setSelectedRole('student')}
-              className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition ${
-                selectedRole === 'student'
-                  ? 'bg-emerald-500 text-slate-950 shadow font-black'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              <span>Student / Aspirant</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRole('admin')}
-              className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition ${
-                selectedRole === 'admin'
-                  ? 'bg-emerald-500 text-slate-950 shadow font-black'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Exam Admin</span>
-            </button>
-          </div>
+        {/* Method Tabs (Google / Mobile OTP / Email) */}
+        <div className="flex items-center p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMethod('google');
+              setIsOtpSent(false);
+              setOtpError('');
+            }}
+            className={`flex-1 py-2 rounded-lg transition text-center cursor-pointer ${
+              authMethod === 'google'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Google
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMethod('phone_otp');
+              setIsOtpSent(false);
+              setOtpError('');
+            }}
+            className={`flex-1 py-2 rounded-lg transition text-center cursor-pointer ${
+              authMethod === 'phone_otp'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Mobile OTP
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMethod('email');
+              setIsOtpSent(false);
+              setOtpError('');
+            }}
+            className={`flex-1 py-2 rounded-lg transition text-center cursor-pointer ${
+              authMethod === 'email'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Email
+          </button>
         </div>
 
-        {/* Quick 1-Click Demo Buttons */}
-        <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/60 space-y-2">
-          <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
-            Quick 1-Click Sandbox Login
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleQuickDemo('student')}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-700 hover:bg-emerald-500/20 text-emerald-400 border border-slate-600 hover:border-emerald-500/40 text-[11px] font-bold transition text-left truncate"
-            >
-              Demo Student (350 Cr.)
-            </button>
-            <button
-              onClick={() => handleQuickDemo('admin')}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-700 hover:bg-emerald-500/20 text-emerald-400 border border-slate-600 hover:border-emerald-500/40 text-[11px] font-bold transition text-left truncate"
-            >
-              Demo Admin (CRUD)
-            </button>
-          </div>
-        </div>
+        {/* TAB 1: GOOGLE SIGN IN */}
+        {authMethod === 'google' && (
+          <div className="space-y-4 py-2">
+            <p className="text-xs text-slate-300 text-center leading-relaxed">
+              Sign in with your Google account to automatically sync your test attempts, bookmarks, and mock test scores.
+            </p>
 
-        {/* Auth Form */}
-        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-          {activeTab === 'signup' && (
-            <div>
-              <label className="block text-slate-300 font-bold mb-1">Full Name</label>
-              <div className="relative">
-                <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="e.g. Rameshwar Dewangan"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white"
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-extrabold text-xs flex items-center justify-center space-x-3 shadow-lg shadow-white/10 transition cursor-pointer active:scale-95"
+            >
+              {/* Google 4-color SVG logo */}
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
                 />
-              </div>
-            </div>
-          )}
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+              <span>Continue with Google</span>
+            </button>
 
-          <div>
-            <label className="block text-slate-300 font-bold mb-1">Email Address</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Instant sign-in • 500 bonus test practice credits credited!</span>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: MOBILE OTP LOGIN */}
+        {authMethod === 'phone_otp' && (
+          <div className="space-y-4 py-1">
+            {!isOtpSent ? (
+              <form onSubmit={handleSendOtp} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Mobile Number (India)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={phoneNumber}
+                      onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="98765 43210"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-12 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {otpError && (
+                  <p className="text-[11px] text-rose-400">{otpError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition cursor-pointer"
+                >
+                  Send OTP via SMS
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">OTP sent to +91 {phoneNumber}</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsOtpSent(false)}
+                    className="text-emerald-400 hover:underline text-[11px]"
+                  >
+                    Edit Number
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Enter 6-Digit OTP
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value)}
+                    placeholder="e.g. 123456"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-center text-lg font-mono font-bold tracking-widest text-emerald-400 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block text-center mt-1">
+                    (Use test OTP: <strong className="text-slate-400">123456</strong>)
+                  </span>
+                </div>
+
+                {otpError && (
+                  <p className="text-[11px] text-rose-400">{otpError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition cursor-pointer"
+                >
+                  Verify & Start Practicing
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: EMAIL / PASSWORD LOGIN */}
+        {authMethod === 'email' && (
+          <form onSubmit={handleEmailSubmit} className="space-y-3 py-1">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Full Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Candidate Full Name"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Email Address
+              </label>
               <input
                 type="email"
                 required
-                placeholder="name@example.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white"
+                placeholder="aspirant@gmail.com"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-slate-300 font-bold mb-1">Password</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Password
+              </label>
               <input
                 type="password"
-                required
-                placeholder="••••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white"
+                placeholder="••••••••"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
               />
             </div>
-          </div>
 
-          <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-1.5"
+              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition cursor-pointer"
             >
-              <span>{activeTab === 'login' ? 'Sign In to Portal' : 'Create Account'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              Sign In with Email
             </button>
-          </div>
-        </form>
+          </form>
+        )}
 
-        <div className="text-center text-[11px] text-slate-400 pt-1">
-          {activeTab === 'login' ? (
-            <p>
-              New candidate?{' '}
-              <button
-                type="button"
-                onClick={() => setActiveTab('signup')}
-                className="text-emerald-400 font-bold hover:underline"
-              >
-                Register here
-              </button>
-            </p>
-          ) : (
-            <p>
-              Already registered?{' '}
-              <button
-                type="button"
-                onClick={() => setActiveTab('login')}
-                className="text-emerald-400 font-bold hover:underline"
-              >
-                Sign In
-              </button>
-            </p>
-          )}
+        {/* Quick Demo Student Account */}
+        <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+          <span className="text-slate-400 text-[11px]">Quick Access:</span>
+          <button
+            type="button"
+            onClick={() => handleQuickDemo('student')}
+            className="text-emerald-400 hover:text-emerald-300 font-bold text-[11px] transition"
+          >
+            1-Click Candidate Demo
+          </button>
         </div>
       </div>
     </div>

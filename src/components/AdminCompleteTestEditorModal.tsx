@@ -343,6 +343,7 @@ export const AdminCompleteTestEditorModal: React.FC<AdminCompleteTestEditorModal
     const newQuestion: Question = {
       id: newQId,
       uniqueQuestionId: newQId,
+      originType: test.isPYP ? 'pyq' : 'mock',
       authority,
       category,
       examName: title,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   ShieldCheck,
+  LayoutDashboard,
   FolderTree,
   FileText,
   Sparkles,
@@ -29,10 +30,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { id: 'admin-pyp', label: 'PYP Manager & Ingestion', icon: FileText },
-    { id: 'admin-questions', label: 'Question Bank', icon: FolderTree },
-    { id: 'admin-ai', label: 'AI Mock Creator', icon: Sparkles },
+    { id: 'admin-overview', label: 'CMS Dashboard', icon: LayoutDashboard },
     { id: 'admin-tests', label: 'Live Test Catalog', icon: Layers },
+    { id: 'admin-questions', label: 'Question Bank', icon: FolderTree },
+    { id: 'admin-pyp', label: 'PYP Manager', icon: FileText },
+    { id: 'admin-ai', label: 'AI Mock Creator', icon: Sparkles },
     { id: 'admin-android-api', label: 'Android REST API', icon: Smartphone, highlight: true },
   ];
 

@@ -85,6 +85,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedAuthority, setSelectedAuthority] = useState<string>('ALL');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>('ALL');
+  const [bankSegment, setBankSegment] = useState<'ALL' | 'PYQ' | 'MOCK'>('ALL');
   const [pyqFilter, setPyqFilter] = useState<'ALL' | 'REPEATED' | 'SINGLE_PYQ' | 'PRACTICE'>('ALL');
 
   const computedHierarchyRecords = useMemo(() => {
@@ -105,6 +106,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   // Form State
   const [formData, setFormData] = useState<{
     id: string;
+    originType: 'mock' | 'pyq';
     chapter: string;
     subject: string;
     topic: string;
@@ -126,6 +128,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     pypAppearances: PYQAppearance[];
   }>({
     id: '',
+    originType: 'mock',
     chapter: '',
     subject: HIERARCHY_TREE[0].subject,
     topic: HIERARCHY_TREE[0].topics[0].name,
@@ -170,8 +173,10 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   // Open Add Modal
   const handleOpenAddModal = () => {
     setEditingQuestionId(null);
+    const initialOrigin: 'mock' | 'pyq' = bankSegment === 'PYQ' ? 'pyq' : 'mock';
     setFormData({
       id: generateUniqueId('q-cg'),
+      originType: initialOrigin,
       chapter: '',
       subject: HIERARCHY_TREE[0].subject,
       topic: HIERARCHY_TREE[0].topics[0].name,
@@ -218,8 +223,11 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
       appearances = [{ examName: q.pypSource, year: 2022 }];
     }
 
+    const isPyq = q.originType === 'pyq' || appearances.length > 0 || Boolean(q.pypSource);
+
     setFormData({
       id: q.id,
+      originType: isPyq ? 'pyq' : 'mock',
       chapter: q.chapter || q.chapterName || '',
       subject: q.subject || 'Chhattisgarh General Studies',
       topic: q.topic || 'General',
@@ -300,6 +308,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     const trimmedChapter = formData.chapter.trim();
     const payload: Partial<Question> = {
       ...formData,
+      originType: formData.originType,
       id: formData.id.trim() || generateUniqueId('q-cg'),
       authority: formData.authority,
       category: formData.category,
@@ -355,22 +364,27 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
   // Statistics Calculations
   const stats = useMemo(() => {
     const total = questions.length;
+    let pyqCount = 0;
+    let mockCount = 0;
     let repeatedPyqCount = 0;
     let singlePyqCount = 0;
-    let practiceCount = 0;
 
     questions.forEach(q => {
-      const appearances = q.pypAppearances?.length || (q.pypSource ? 1 : 0);
-      if (appearances > 1) {
-        repeatedPyqCount++;
-      } else if (appearances === 1) {
-        singlePyqCount++;
+      const isPyq = q.originType === 'pyq' || (q.pypAppearances && q.pypAppearances.length > 0) || Boolean(q.pypSource);
+      if (isPyq) {
+        pyqCount++;
+        const appearances = q.pypAppearances?.length || (q.pypSource ? 1 : 0);
+        if (appearances > 1) {
+          repeatedPyqCount++;
+        } else {
+          singlePyqCount++;
+        }
       } else {
-        practiceCount++;
+        mockCount++;
       }
     });
 
-    return { total, repeatedPyqCount, singlePyqCount, practiceCount };
+    return { total, pyqCount, mockCount, repeatedPyqCount, singlePyqCount, practiceCount: mockCount };
   }, [questions]);
 
   // Extract all existing unique chapters for datalist suggestions & filtering
@@ -389,6 +403,11 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
     return questions.filter(q => {
       if (!q || !q.id || seen.has(q.id)) return false;
       seen.add(q.id);
+
+      // Bank Segment filter (All vs Official PYQ vs Mock Test questions)
+      const isPyq = q.originType === 'pyq' || (q.pypAppearances && q.pypAppearances.length > 0) || Boolean(q.pypSource);
+      if (bankSegment === 'PYQ' && !isPyq) return false;
+      if (bankSegment === 'MOCK' && isPyq) return false;
 
       const matchSubject = selectedSubject === 'ALL' || q.subject === selectedSubject;
       const matchTopic = selectedTopic === 'ALL' || q.topic === selectedTopic;
@@ -443,7 +462,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
 
       return matchSubject && matchTopic && matchSubtopic && matchChapter && matchDifficulty && matchCategory && matchPyq && matchSearch;
     });
-  }, [questions, selectedSubject, selectedTopic, selectedSubtopic, selectedChapter, selectedDifficulty, selectedCategory, pyqFilter, search]);
+  }, [questions, selectedSubject, selectedTopic, selectedSubtopic, selectedChapter, selectedDifficulty, selectedCategory, bankSegment, pyqFilter, search]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -490,9 +509,92 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
         </div>
       </div>
 
+      {/* SEPARATION OF MOCK AND PYQ SEGMENT TABS */}
+      <div className="bg-slate-900/95 border border-slate-800 p-2.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xl">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              setBankSegment('ALL');
+              setPyqFilter('ALL');
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer ${
+              bankSegment === 'ALL'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <FolderTree className="w-4 h-4" />
+            <span>All Question Bank</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-950/60 font-mono font-black">
+              {stats.total}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setBankSegment('PYQ')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer ${
+              bankSegment === 'PYQ'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/30'
+                : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/20'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>Official PYQ Repository</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${bankSegment === 'PYQ' ? 'bg-slate-950 text-amber-300' : 'bg-amber-500/20 text-amber-300'}`}>
+              {stats.pyqCount} Qs
+            </span>
+          </button>
+
+          <button
+            onClick={() => setBankSegment('MOCK')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer ${
+              bankSegment === 'MOCK'
+                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/30'
+                : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/20'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Mock Test Series Bank</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${bankSegment === 'MOCK' ? 'bg-slate-950 text-emerald-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+              {stats.mockCount} Qs
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center space-x-2 text-xs text-slate-400 px-2 shrink-0">
+          {bankSegment === 'PYQ' && (
+            <span className="text-amber-400 font-semibold flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>Viewing Genuine Official Exam Papers (CGPSC & Vyapam)</span>
+            </span>
+          )}
+          {bankSegment === 'MOCK' && (
+            <span className="text-emerald-400 font-semibold flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Viewing Curated Mock Test Questions & Practice Items</span>
+            </span>
+          )}
+          {bankSegment === 'ALL' && (
+            <span className="text-slate-400">
+              Showing Complete Unified Inventory
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* KPI Stats Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div 
+          onClick={() => {
+            setBankSegment('ALL');
+            setPyqFilter('ALL');
+          }}
+          className={`p-4 rounded-xl border transition cursor-pointer ${
+            bankSegment === 'ALL' && pyqFilter === 'ALL'
+              ? 'bg-indigo-600/15 border-indigo-500/60 shadow-md shadow-indigo-600/10'
+              : 'bg-slate-900 border-slate-800 hover:border-indigo-500/40'
+          }`}
+        >
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Questions</span>
           <div className="flex items-baseline space-x-2 mt-1">
             <span className="text-2xl font-black text-white">{stats.total}</span>
@@ -501,65 +603,65 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
         </div>
 
         <div
-          onClick={() => setPyqFilter(pyqFilter === 'REPEATED' ? 'ALL' : 'REPEATED')}
+          onClick={() => setBankSegment(bankSegment === 'PYQ' ? 'ALL' : 'PYQ')}
           className={`p-4 rounded-xl border transition cursor-pointer ${
-            pyqFilter === 'REPEATED'
-              ? 'bg-amber-500/10 border-amber-500/50 shadow-md shadow-amber-500/10'
-              : 'bg-slate-900 border-slate-800 hover:border-amber-500/30'
+            bankSegment === 'PYQ'
+              ? 'bg-amber-500/15 border-amber-500/60 shadow-md shadow-amber-500/10'
+              : 'bg-slate-900 border-slate-800 hover:border-amber-500/40'
           }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-1">
-              <Flame className="w-3.5 h-3.5 text-amber-400" />
-              <span>Multi-Exam PYQs</span>
+              <History className="w-3.5 h-3.5 text-amber-400" />
+              <span>Official PYQs</span>
             </span>
-            {pyqFilter === 'REPEATED' && <span className="text-[9px] bg-amber-500 text-slate-950 font-bold px-1.5 py-0.2 rounded">ACTIVE</span>}
+            {bankSegment === 'PYQ' && <span className="text-[9px] bg-amber-500 text-slate-950 font-bold px-1.5 py-0.2 rounded">ACTIVE</span>}
           </div>
           <div className="flex items-baseline space-x-2 mt-1">
-            <span className="text-2xl font-black text-amber-400">{stats.repeatedPyqCount}</span>
-            <span className="text-xs text-slate-400">asked 2+ times</span>
+            <span className="text-2xl font-black text-amber-400">{stats.pyqCount}</span>
+            <span className="text-xs text-slate-400">from papers</span>
           </div>
         </div>
 
         <div
-          onClick={() => setPyqFilter(pyqFilter === 'SINGLE_PYQ' ? 'ALL' : 'SINGLE_PYQ')}
+          onClick={() => setBankSegment(bankSegment === 'MOCK' ? 'ALL' : 'MOCK')}
           className={`p-4 rounded-xl border transition cursor-pointer ${
-            pyqFilter === 'SINGLE_PYQ'
-              ? 'bg-emerald-500/10 border-emerald-500/50 shadow-md shadow-emerald-500/10'
-              : 'bg-slate-900 border-slate-800 hover:border-emerald-500/30'
+            bankSegment === 'MOCK'
+              ? 'bg-emerald-500/15 border-emerald-500/60 shadow-md shadow-emerald-500/10'
+              : 'bg-slate-900 border-slate-800 hover:border-emerald-500/40'
           }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1">
-              <History className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Single Exam PYQs</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Mock Series Items</span>
             </span>
-            {pyqFilter === 'SINGLE_PYQ' && <span className="text-[9px] bg-emerald-500 text-slate-950 font-bold px-1.5 py-0.2 rounded">ACTIVE</span>}
+            {bankSegment === 'MOCK' && <span className="text-[9px] bg-emerald-500 text-slate-950 font-bold px-1.5 py-0.2 rounded">ACTIVE</span>}
           </div>
           <div className="flex items-baseline space-x-2 mt-1">
-            <span className="text-2xl font-black text-emerald-400">{stats.singlePyqCount}</span>
-            <span className="text-xs text-slate-400">official exams</span>
+            <span className="text-2xl font-black text-emerald-400">{stats.mockCount}</span>
+            <span className="text-xs text-slate-400">curated test items</span>
           </div>
         </div>
 
         <div
-          onClick={() => setPyqFilter(pyqFilter === 'PRACTICE' ? 'ALL' : 'PRACTICE')}
+          onClick={() => setPyqFilter(pyqFilter === 'REPEATED' ? 'ALL' : 'REPEATED')}
           className={`p-4 rounded-xl border transition cursor-pointer ${
-            pyqFilter === 'PRACTICE'
-              ? 'bg-cyan-500/10 border-cyan-500/50 shadow-md shadow-cyan-500/10'
-              : 'bg-slate-900 border-slate-800 hover:border-cyan-500/30'
+            pyqFilter === 'REPEATED'
+              ? 'bg-purple-500/15 border-purple-500/60 shadow-md shadow-purple-500/10'
+              : 'bg-slate-900 border-slate-800 hover:border-purple-500/40'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center space-x-1">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Practice Items</span>
+            <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider flex items-center space-x-1">
+              <Flame className="w-3.5 h-3.5 text-purple-400" />
+              <span>Multi-Exam Repeats</span>
             </span>
-            {pyqFilter === 'PRACTICE' && <span className="text-[9px] bg-cyan-500 text-slate-950 font-bold px-1.5 py-0.2 rounded">ACTIVE</span>}
+            {pyqFilter === 'REPEATED' && <span className="text-[9px] bg-purple-500 text-white font-bold px-1.5 py-0.2 rounded">ACTIVE</span>}
           </div>
           <div className="flex items-baseline space-x-2 mt-1">
-            <span className="text-2xl font-black text-cyan-400">{stats.practiceCount}</span>
-            <span className="text-xs text-slate-400">curated</span>
+            <span className="text-2xl font-black text-purple-400">{stats.repeatedPyqCount}</span>
+            <span className="text-xs text-slate-400">asked 2+ times</span>
           </div>
         </div>
       </div>
@@ -871,6 +973,7 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
           filteredQuestions.map((q, idx) => {
             const appearances = q.pypAppearances || (q.pypSource ? [{ examName: q.pypSource, year: 2022 }] : []);
             const isRepeated = appearances.length > 1;
+            const isPyq = q.originType === 'pyq' || appearances.length > 0 || Boolean(q.pypSource);
 
             return (
               <div
@@ -896,6 +999,25 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
                         )}
                       </button>
                     </div>
+
+                    {/* Question Origin Badge (Separation of PYQ and Mock) */}
+                    {isPyq ? (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500/15 text-amber-300 border border-amber-500/40 flex items-center space-x-1 shadow-sm">
+                        <History className="w-3.5 h-3.5 text-amber-400" />
+                        <span>OFFICIAL PYQ</span>
+                        {q.year && <span className="font-mono text-amber-200">({q.year})</span>}
+                        {isRepeated && (
+                          <span className="ml-1 px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px]">
+                            {appearances.length}x Repeated
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1 shadow-sm">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>MOCK PRACTICE ITEM</span>
+                      </span>
+                    )}
 
                     {/* Taxonomic Breadcrumb */}
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -1220,6 +1342,59 @@ export const AdminQuestionBank: React.FC<AdminQuestionBankProps> = ({
             </div>
 
             <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
+              {/* Question Origin Classification: Official PYQ vs Mock Practice */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                <label className="block text-slate-300 font-bold flex items-center space-x-1.5">
+                  <Tag className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Question Origin Classification *</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setFormData({ ...formData, originType: 'pyq' })}
+                    className={`p-3 rounded-xl border transition cursor-pointer flex items-start space-x-2.5 ${
+                      formData.originType === 'pyq'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-amber-500/30'
+                    }`}
+                  >
+                    <History className={`w-4 h-4 mt-0.5 shrink-0 ${formData.originType === 'pyq' ? 'text-amber-400' : 'text-slate-500'}`} />
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center space-x-1.5">
+                        <span>Official PYQ</span>
+                        {formData.originType === 'pyq' && (
+                          <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded">SELECTED</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                        Sourced directly from official CGPSC or CG Vyapam past year exam papers.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setFormData({ ...formData, originType: 'mock' })}
+                    className={`p-3 rounded-xl border transition cursor-pointer flex items-start space-x-2.5 ${
+                      formData.originType === 'mock'
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-500/10'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-emerald-500/30'
+                    }`}
+                  >
+                    <Sparkles className={`w-4 h-4 mt-0.5 shrink-0 ${formData.originType === 'mock' ? 'text-emerald-400' : 'text-slate-500'}`} />
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center space-x-1.5">
+                        <span>Mock Test Series Item</span>
+                        {formData.originType === 'mock' && (
+                          <span className="text-[9px] bg-emerald-500 text-slate-950 font-black px-1.5 py-0.2 rounded">SELECTED</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                        Curated practice questions for mock test series, sectionals & chapter tests.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Unique ID & Multi-Level Exam Hierarchy */}
               <div className="bg-slate-850 p-3.5 rounded-xl border border-slate-800 space-y-3">
                 <div>

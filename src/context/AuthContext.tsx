@@ -5,9 +5,12 @@ interface AuthContextType {
   // Student Auth
   user: User | null;
   login: (email: string, role?: UserRole, name?: string) => void;
+  loginWithGoogle: (googleData: { email: string; name: string; avatar?: string }) => void;
+  loginWithPhoneOtp: (phone: string, otp: string, name?: string) => void;
   logout: () => void;
   deductCredits: (amount: number) => boolean;
   addCredits: (amount: number) => void;
+  activateProPass: (planName: string) => void;
 
   // Admin Auth (Strictly Separated)
   adminUser: User | null;
@@ -77,10 +80,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       role: 'student', // Student login is always student
       credits: 350,
+      hasProPass: user?.hasProPass || false,
+      proPassPlan: user?.proPassPlan,
       registeredAt: new Date().toISOString().split('T')[0],
       token: `jwt-student-${Date.now()}`,
     };
     setUser(newUser);
+  };
+
+  const loginWithGoogle = (googleData: { email: string; name: string; avatar?: string }) => {
+    const newUser: User = {
+      id: `u-g-${Date.now()}`,
+      name: googleData.name || 'Google Aspirant',
+      email: googleData.email,
+      role: 'student',
+      credits: 500,
+      hasProPass: user?.hasProPass || false,
+      proPassPlan: user?.proPassPlan,
+      avatar: googleData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+      registeredAt: new Date().toISOString().split('T')[0],
+      token: `jwt-google-${Date.now()}`,
+    };
+    setUser(newUser);
+  };
+
+  const loginWithPhoneOtp = (phone: string, otp: string, name?: string) => {
+    const newUser: User = {
+      id: `u-p-${Date.now()}`,
+      name: name || `Candidate ${phone.slice(-4)}`,
+      email: `${phone}@student.cgssbtest.com`,
+      phone: phone,
+      role: 'student',
+      credits: 500,
+      hasProPass: user?.hasProPass || false,
+      proPassPlan: user?.proPassPlan,
+      registeredAt: new Date().toISOString().split('T')[0],
+      token: `jwt-phone-${Date.now()}`,
+    };
+    setUser(newUser);
+  };
+
+  const activateProPass = (planName: string) => {
+    if (user) {
+      setUser({
+        ...user,
+        hasProPass: true,
+        proPassPlan: planName,
+        credits: user.credits + 1000,
+      });
+    } else {
+      const newUser: User = {
+        id: `u-${Date.now()}`,
+        name: 'Pro Pass Candidate',
+        email: 'candidate@cgssbtest.com',
+        role: 'student',
+        credits: 1500,
+        hasProPass: true,
+        proPassPlan: planName,
+        registeredAt: new Date().toISOString().split('T')[0],
+      };
+      setUser(newUser);
+    }
   };
 
   const logout = () => {
@@ -140,6 +200,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         login,
+        loginWithGoogle,
+        loginWithPhoneOtp,
+        activateProPass,
         logout,
         deductCredits,
         addCredits,

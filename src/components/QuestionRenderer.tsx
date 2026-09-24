@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Question, QuestionOption, QuestionType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
-import { Table, CheckCircle2, SplitSquareVertical, HelpCircle, FileText, Check } from 'lucide-react';
+import { Table, CheckCircle2, SplitSquareVertical, HelpCircle, FileText, Check, History, Sparkles, Flame } from 'lucide-react';
 import { extractStatementsFromStem, ParsedStemSegments } from '../utils/statementParser';
 
 interface QuestionRendererProps {
@@ -545,10 +545,45 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       <div className="bg-slate-900/80 p-5 sm:p-6 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden">
         {/* Type indicator banner */}
         <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800/80 text-xs">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
             <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold uppercase tracking-wider text-[10px] border border-slate-700">
               {resolvedType.replace('_', ' ')}
             </span>
+
+            {/* Provenance Badge */}
+            {(() => {
+              const isPyq = question.originType === 'pyq' || (question.pypAppearances && question.pypAppearances.length > 0) || Boolean(question.pypSource);
+              const appearances = question.pypAppearances || (question.pypSource ? [{ examName: question.pypSource, year: 2022 }] : []);
+              const isRepeated = appearances.length > 1;
+
+              if (isPyq) {
+                return (
+                  <div className="flex items-center space-x-1.5">
+                    <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold uppercase tracking-wider text-[10px] border border-amber-500/40 flex items-center space-x-1">
+                      <History className="w-3 h-3 text-amber-400" />
+                      <span>OFFICIAL PYQ</span>
+                      {appearances[0]?.year && (
+                        <span className="font-mono text-amber-200">({appearances[0].year})</span>
+                      )}
+                    </span>
+                    {isRepeated && (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30 flex items-center space-x-1">
+                        <Flame className="w-2.5 h-2.5 text-purple-400" />
+                        <span className="hidden sm:inline">Repeated in {appearances.length} Exams</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 font-bold uppercase tracking-wider text-[10px] border border-indigo-500/30 flex items-center space-x-1">
+                  <Sparkles className="w-3 h-3 text-indigo-400" />
+                  <span>MOCK QUESTION</span>
+                </span>
+              );
+            })()}
+
             {activeContent.isFixedLanguage && (
               <span className="text-[11px] text-amber-400/90 font-medium flex items-center space-x-1">
                 <span>•</span>
@@ -653,6 +688,49 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 </span>
               )}
             </div>
+
+            {/* Official Exam Provenance in Solution Mode */}
+            {(() => {
+              const isPyq = question.originType === 'pyq' || (question.pypAppearances && question.pypAppearances.length > 0) || Boolean(question.pypSource);
+              const appearances = question.pypAppearances || (question.pypSource ? [{ examName: question.pypSource, year: 2022 }] : []);
+
+              if (isPyq && appearances.length > 0) {
+                return (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-1.5 text-xs">
+                    <div className="flex items-center space-x-2 text-amber-300 font-bold text-xs">
+                      <History className="w-4 h-4 text-amber-400" />
+                      <span>Official Past Year Examination Provenance (वास्तविक परीक्षा संदर्भ):</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {appearances.map((app, aIdx) => (
+                        <span
+                          key={aIdx}
+                          className="px-2.5 py-1 rounded-lg bg-slate-950 border border-amber-500/40 text-amber-200 text-xs font-medium flex items-center space-x-1.5 shadow-sm"
+                        >
+                          <span className="font-bold text-white">{app.examName}</span>
+                          {app.year && <span className="font-mono text-emerald-400 font-bold">({app.year})</span>}
+                          {app.shift && <span className="text-slate-400 text-[11px]">• {app.shift}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (!isPyq) {
+                return (
+                  <div className="bg-indigo-500/10 border border-indigo-500/25 rounded-xl p-2.5 flex items-center space-x-2 text-xs text-indigo-300">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span className="text-[11px]">
+                      Mock Test Series Practice Item — crafted specifically per CGPSC & CG Vyapam latest syllabus trends.
+                    </span>
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
+
             <div className="space-y-2.5 text-sm text-slate-200 leading-relaxed pt-1">
               {expEn && (
                 <p className="whitespace-pre-line">{expEn}</p>

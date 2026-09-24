@@ -4,8 +4,11 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: UserRole;
   credits: number;
+  hasProPass?: boolean;
+  proPassPlan?: string;
   avatar?: string;
   token?: string;
   registeredAt: string;
@@ -99,6 +102,7 @@ export interface Question {
   idealTimeSeconds?: number;        // Topper / benchmark time in seconds (e.g. 45s)
 
   // Provenance & PYQ relations
+  originType?: 'mock' | 'pyq';
   pypSource?: string;
   examSource?: string;
   pypAppearances?: PYQAppearance[];
@@ -141,6 +145,8 @@ export interface MockTest {
   marksPerQuestion: number;
   negativeMarksPerQuestion: number;
   isPYP?: boolean;
+  originType?: 'pyq' | 'mock';
+  isPro?: boolean;
   pypYear?: number;
   pypExamName?: string;
   sections: MockTestSection[];
