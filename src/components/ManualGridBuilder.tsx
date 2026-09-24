@@ -383,7 +383,7 @@ export const ManualGridBuilder: React.FC<ManualGridBuilderProps> = ({
       )}
 
       {/* Main Interactive Table Body */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4">
         {rows.map((row, idx) => {
           const currentModule = CG_MASTER_SYLLABUS.find(m => m.id === row.moduleId) || CG_MASTER_SYLLABUS[0];
           const chapters = currentModule.chapters;
@@ -409,23 +409,23 @@ export const ManualGridBuilder: React.FC<ManualGridBuilderProps> = ({
 
                 <div className="flex items-center gap-3">
                   <select
-                    value={row.moduleId || 'cg_special'}
+                    value={row.moduleId || 'cg-gk'}
                     onChange={e => {
                       const modId = e.target.value;
                       const mod = CG_MASTER_SYLLABUS.find(m => m.id === modId);
                       const defaultCh = mod?.chapters[0];
                       handleUpdateRow(idx, 'moduleId', modId);
-                      handleUpdateRow(idx, 'subject', mod?.name);
+                      handleUpdateRow(idx, 'subject', mod?.nameHi || mod?.nameEn);
                       if (defaultCh) {
                         handleUpdateRow(idx, 'chapterId', defaultCh.id);
-                        handleUpdateRow(idx, 'chapterName', defaultCh.nameHindi);
-                        handleUpdateRow(idx, 'topic', defaultCh.nameHindi);
+                        handleUpdateRow(idx, 'chapterName', defaultCh.nameHindi || defaultCh.name);
+                        handleUpdateRow(idx, 'topic', defaultCh.nameHindi || defaultCh.name);
                       }
                     }}
                     className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-300 outline-none"
                   >
                     {CG_MASTER_SYLLABUS.map(m => (
-                      <option key={m.id} value={m.id}>{m.nameHindi}</option>
+                      <option key={m.id} value={m.id}>{m.nameHi || m.nameHindi || m.nameEn}</option>
                     ))}
                   </select>
 
@@ -436,14 +436,14 @@ export const ManualGridBuilder: React.FC<ManualGridBuilderProps> = ({
                       const ch = chapters.find(c => c.id === chId);
                       handleUpdateRow(idx, 'chapterId', chId);
                       if (ch) {
-                        handleUpdateRow(idx, 'chapterName', ch.nameHindi);
-                        handleUpdateRow(idx, 'topic', ch.nameHindi);
+                        handleUpdateRow(idx, 'chapterName', ch.nameHindi || ch.name);
+                        handleUpdateRow(idx, 'topic', ch.nameHindi || ch.name);
                       }
                     }}
                     className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-purple-300 border-purple-500/30 outline-none max-w-xs"
                   >
                     {chapters.map(ch => (
-                      <option key={ch.id} value={ch.id}>{ch.nameHindi}</option>
+                      <option key={ch.id} value={ch.id}>{ch.nameHindi || ch.name}</option>
                     ))}
                   </select>
 

@@ -791,7 +791,7 @@ function MainApp() {
 
     // Authenticated Admin Dashboard
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
         <AdminHeader
           activeTab={adminActiveTab}
           setActiveTab={setAdminActiveTab}
@@ -909,7 +909,7 @@ function MainApp() {
   // VIEW 4: STUDENT / CANDIDATE PORTAL (/)
   // =========================================================================
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
       <Navbar
         activeTab={studentActiveTab}
         setActiveTab={setStudentActiveTab}

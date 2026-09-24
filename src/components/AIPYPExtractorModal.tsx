@@ -104,16 +104,16 @@ export const AIPYPExtractorModal: React.FC<AIPYPExtractorModalProps> = ({
           correctAnswer: detectedAns,
           moduleId: currentMod.id,
           chapterId: currentCh.id,
-          chapterName: currentCh.nameHindi,
-          subject: currentMod.name,
-          topic: currentCh.nameHindi,
-          subtopic: currentCh.subTopics?.[0] || currentCh.nameHindi || 'General Subtopic',
+          chapterName: currentCh.nameHindi || currentCh.name,
+          subject: currentMod.nameHi || currentMod.nameEn || currentMod.name || 'General',
+          topic: currentCh.nameHindi || currentCh.name,
+          subtopic: (Array.isArray(currentCh.topics) && typeof currentCh.topics[0] === 'string' ? currentCh.topics[0] : currentCh.subTopics?.[0]) || currentCh.nameHindi || currentCh.name || 'General Subtopic',
           difficulty: i % 3 === 0 ? 'Hard' : i % 2 === 0 ? 'Medium' : 'Easy',
           marks: p.marksPerQ,
           negativeMarks: p.negativeMarksPerQ,
-          explanation: `Official rationale aligned with ${currentCh.nameHindi} standard syllabus.`,
-          explanationHindi: `छत्तीसगढ़ व्यापम / लोक सेवा आयोग द्वारा मान्य आधिकारिक मॉडल उत्तर अनुसार: ${currentCh.nameHindi} से संबंधित तथ्य।`,
-          keyFactHindi: `${currentCh.nameHindi}: परीक्षा में बार-बार पूछे जाने वाला प्रमुख बिंदु।`,
+          explanation: `Official rationale aligned with ${currentCh.nameHindi || currentCh.name} standard syllabus.`,
+          explanationHindi: `छत्तीसगढ़ व्यापम / लोक सेवा आयोग द्वारा मान्य आधिकारिक मॉडल उत्तर अनुसार: ${currentCh.nameHindi || currentCh.name} से संबंधित तथ्य।`,
+          keyFactHindi: `${currentCh.nameHindi || currentCh.name}: परीक्षा में बार-बार पूछे जाने वाला प्रमुख बिंदु।`,
           repeatedInExams: pastAppearances,
           similarQuestionIds: similar.map(s => s.id),
           year: examYear,
@@ -134,11 +134,11 @@ export const AIPYPExtractorModal: React.FC<AIPYPExtractorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-8">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-emerald-500 flex items-center justify-center text-slate-950 font-black">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-emerald-500 flex items-center justify-center text-slate-950 font-black shrink-0">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
@@ -148,9 +148,9 @@ export const AIPYPExtractorModal: React.FC<AIPYPExtractorModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-xs font-bold"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 

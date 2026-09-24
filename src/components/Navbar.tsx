@@ -82,49 +82,51 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Student Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center space-x-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800/80">
-            {studentNav.map(item => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                    isActive
-                      ? item.id === 'pass'
-                        ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md shadow-amber-500/20'
-                        : item.id === 'cgpsc'
-                        ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
-                        : 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
-                  }`}
-                >
-                  <Icon
-                    className={`w-3.5 h-3.5 ${
+          {/* Student Desktop Navigation Links - Flexible & Scroll-safe */}
+          <div className="hidden lg:flex items-center min-w-0 flex-1 justify-center px-2">
+            <nav className="flex items-center space-x-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800/80 overflow-x-auto no-scrollbar max-w-full">
+              {studentNav.map(item => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`px-2.5 xl:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                       isActive
-                        ? 'text-current'
-                        : item.isProBadge
-                        ? 'text-amber-400'
-                        : item.highlightColor || 'text-emerald-400'
+                        ? item.id === 'pass'
+                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md shadow-amber-500/20'
+                          : item.id === 'cgpsc'
+                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
+                          : 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
                     }`}
-                  />
-                  <span>{item.label}</span>
-                  {item.badge != null && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white">
-                      {item.badge}
-                    </span>
-                  )}
-                  {item.isProBadge && !isActive && (
-                    <span className="px-1 py-0.2 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      PRO
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+                  >
+                    <Icon
+                      className={`w-3.5 h-3.5 ${
+                        isActive
+                          ? 'text-current'
+                          : item.isProBadge
+                          ? 'text-amber-400'
+                          : item.highlightColor || 'text-emerald-400'
+                      }`}
+                    />
+                    <span>{item.label}</span>
+                    {item.badge != null && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white">
+                        {item.badge}
+                      </span>
+                    )}
+                    {item.isProBadge && !isActive && (
+                      <span className="px-1 py-0.2 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        PRO
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
           {/* Right Action Controls for Students */}
           <div className="flex items-center space-x-2 shrink-0">

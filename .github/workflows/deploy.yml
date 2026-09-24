@@ -18,10 +18,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install --legacy-peer-deps
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
 
       - name: Build Production Bundle
         env:
@@ -30,9 +34,9 @@ jobs:
         run: |
           npm run build
           # Ensure .htaccess from public/ is definitely present in dist/
-          cp public/.htaccess dist/.htaccess
+          test -f dist/.htaccess || cp public/.htaccess dist/.htaccess 2>/dev/null || cp .htaccess dist/.htaccess 2>/dev/null || true
           # Provide runtime package.json in dist for Node.js manager
-          node -e "const pkg=require('./package.json'); delete pkg.devDependencies; fs.writeFileSync('dist/package.json', JSON.stringify(pkg, null, 2))"
+          node -e "const fs=require('fs'); const pkg=require('./package.json'); delete pkg.devDependencies; fs.writeFileSync('dist/package.json', JSON.stringify(pkg, null, 2))"
           # Ensure Passenger restart trigger is touched
           mkdir -p dist/tmp
           touch dist/tmp/restart.txt
