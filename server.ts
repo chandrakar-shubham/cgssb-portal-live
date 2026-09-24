@@ -1598,6 +1598,26 @@ Respond strictly with a JSON object having key "questions" containing an array o
       appType: 'spa',
     });
     app.use(vite.middlewares);
+
+    // In dev mode, serve index.source.html via vite transform so root index.html
+    // stays permanently compiled for direct Hostinger Git sync without going blank!
+    app.use('*', async (req, res, next) => {
+      if (req.originalUrl.startsWith('/api')) return next();
+      if (req.method === 'GET' && (req.headers.accept?.includes('text/html') || req.path === '/' || req.path.endsWith('.html'))) {
+        try {
+          const sourcePath = fs.existsSync(path.resolve('index.source.html'))
+            ? path.resolve('index.source.html')
+            : path.resolve('index.html');
+          const rawTemplate = fs.readFileSync(sourcePath, 'utf-8');
+          const transformedHtml = await vite.transformIndexHtml(req.originalUrl, rawTemplate);
+          res.status(200).set({ 'Content-Type': 'text/html' }).end(transformedHtml);
+          return;
+        } catch (e) {
+          return next(e);
+        }
+      }
+      next();
+    });
   } else {
     // Dynamic static directory discovery:
     // Handles cases where dist is a subfolder, OR where dist contents were deployed directly into the web root
