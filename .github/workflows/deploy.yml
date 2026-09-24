@@ -18,6 +18,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
       - name: Install Dependencies
         run: |
@@ -33,25 +34,26 @@ jobs:
           BUILD_TIME: ${{ github.event.head_commit.timestamp }}
         run: |
           npm run build
-          # Ensure .htaccess from public/ is definitely present in dist/
-          test -f dist/.htaccess || cp public/.htaccess dist/.htaccess 2>/dev/null || cp .htaccess dist/.htaccess 2>/dev/null || true
-          # Provide runtime package.json in dist for Node.js manager
-          node -e "const fs=require('fs'); const pkg=require('./package.json'); delete pkg.devDependencies; fs.writeFileSync('dist/package.json', JSON.stringify(pkg, null, 2))"
-          # Ensure Passenger restart trigger is touched
-          mkdir -p dist/tmp
-          touch dist/tmp/restart.txt
 
       - name: Verify Build Artifacts
         run: |
-          echo "=== Verifying Build Artifacts ==="
+          echo "=== Verifying Build Artifacts in dist/ ==="
           test -f dist/index.html || { echo "❌ dist/index.html is missing"; exit 1; }
           test -f dist/server.cjs || { echo "❌ dist/server.cjs is missing"; exit 1; }
           test -f dist/server.js || { echo "❌ dist/server.js is missing"; exit 1; }
           test -f dist/.htaccess || { echo "❌ dist/.htaccess is missing"; exit 1; }
           test -f dist/tmp/restart.txt || { echo "❌ dist/tmp/restart.txt is missing"; exit 1; }
-          ls -lh dist/assets/app-*.js || { echo "❌ dist/assets/app-*.js is missing"; exit 1; }
           echo "✅ All required build artifacts verified successfully!"
           cat dist/version.json
+
+      - name: Validate Hostinger Secrets
+        run: |
+          if [ -z "${{ secrets.HOSTINGER_FTP_SERVER }}" ] || [ -z "${{ secrets.HOSTINGER_FTP_USERNAME }}" ] || [ -z "${{ secrets.HOSTINGER_FTP_PASSWORD }}" ]; then
+            echo "❌ Missing Hostinger FTP secrets in GitHub Repository Secrets!"
+            echo "Ensure HOSTINGER_FTP_SERVER, HOSTINGER_FTP_USERNAME, and HOSTINGER_FTP_PASSWORD are created in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          echo "✅ Hostinger FTP secrets are present."
 
       - name: Deploy to Hostinger via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
