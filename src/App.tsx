@@ -273,10 +273,24 @@ function MainApp() {
     return INITIAL_ATTEMPTS;
   });
 
-  // Run taxonomy migration in localStorage on initial mount
+  // Run taxonomy migration & ensure all latest mock tests are synced on initial mount
   useEffect(() => {
     runTaxonomyMigration(INITIAL_QUESTIONS, INITIAL_ATTEMPTS);
+    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev));
+    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev));
+    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev));
   }, []);
+
+  const handleSyncDefaultCatalog = () => {
+    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev));
+    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev));
+    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev));
+    try {
+      localStorage.setItem('cgssb_tests', JSON.stringify(mergeWithInitial(INITIAL_MOCK_TESTS, tests)));
+      localStorage.setItem('cgssb_questions', JSON.stringify(mergeWithInitial(INITIAL_QUESTIONS, questions)));
+      localStorage.setItem('cgssb_pyp', JSON.stringify(mergeWithInitial(INITIAL_PYP_PAPERS, pypPapers)));
+    } catch {}
+  };
 
   // Sync to localStorage with quota protection
   useEffect(() => {
@@ -834,6 +848,7 @@ function MainApp() {
               pypPapers={pypPapers}
               attempts={attempts}
               onNavigateTab={tab => setAdminActiveTab(tab)}
+              onSyncDefaultCatalog={handleSyncDefaultCatalog}
             />
           )}
 

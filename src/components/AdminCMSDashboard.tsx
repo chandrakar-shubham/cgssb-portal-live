@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Layers,
   FolderTree,
@@ -18,7 +18,8 @@ import {
   Lock,
   Code2,
   Server,
-  GitBranch
+  GitBranch,
+  RefreshCw
 } from 'lucide-react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
@@ -29,6 +30,7 @@ interface AdminCMSDashboardProps {
   pypPapers: PreviousYearPaper[];
   attempts?: TestAttempt[];
   onNavigateTab: (tabId: string) => void;
+  onSyncDefaultCatalog?: () => void;
 }
 
 export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
@@ -37,10 +39,20 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
   pypPapers,
   attempts = [],
   onNavigateTab,
+  onSyncDefaultCatalog,
 }) => {
+  const [syncedToast, setSyncedToast] = useState(false);
   const publishedTests = tests.filter(t => t.isPublished !== false);
   const proTests = tests.filter(t => t.isPro);
   const freeTests = tests.filter(t => !t.isPro);
+
+  const handleSyncClick = () => {
+    if (onSyncDefaultCatalog) {
+      onSyncDefaultCatalog();
+      setSyncedToast(true);
+      setTimeout(() => setSyncedToast(false), 2500);
+    }
+  };
 
   // Subject breakdown for questions
   const subjectCounts = questions.reduce<Record<string, number>>((acc, q) => {
@@ -72,7 +84,17 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
           </div>
 
           {/* Quick Action Buttons */}
-          <div className="flex flex-wrap gap-2.5 shrink-0">
+          <div className="flex flex-wrap gap-2.5 shrink-0 items-center">
+            {onSyncDefaultCatalog && (
+              <button
+                onClick={handleSyncClick}
+                title="Sync all built-in latest tests & questions from codebase into local view"
+                className="px-4 py-2.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-emerald-600/20 active:scale-95 cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncedToast ? 'animate-spin' : ''}`} />
+                <span>{syncedToast ? 'Catalog Synced!' : 'Sync Latest Catalog'}</span>
+              </button>
+            )}
             <button
               onClick={() => onNavigateTab('admin-tests')}
               className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
