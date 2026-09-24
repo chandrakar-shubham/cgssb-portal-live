@@ -86,16 +86,25 @@ function ensureDataDir() {
 
 function loadDatabase(): DatabaseShape {
   ensureDataDir();
+  const mergeById = <T extends { id: string }>(initial: T[], saved?: T[]): T[] => {
+    const map = new Map<string, T>();
+    initial.forEach(item => { if (item && item.id) map.set(item.id, item); });
+    if (Array.isArray(saved)) {
+      saved.forEach(item => { if (item && item.id) map.set(item.id, item); });
+    }
+    return Array.from(map.values());
+  };
+
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       console.log(`✅ Loaded DB from ${DB_FILE}`);
       return {
-        questions: parsed.questions || [...INITIAL_QUESTIONS],
-        mockTests: parsed.mockTests || [...INITIAL_MOCK_TESTS],
-        pypPapers: parsed.pypPapers || [...INITIAL_PYP_PAPERS],
-        attempts: parsed.attempts || [...SAMPLE_USER_ATTEMPTS],
+        questions: mergeById(INITIAL_QUESTIONS, parsed.questions),
+        mockTests: mergeById(INITIAL_MOCK_TESTS, parsed.mockTests),
+        pypPapers: mergeById(INITIAL_PYP_PAPERS, parsed.pypPapers),
+        attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [...SAMPLE_USER_ATTEMPTS],
       };
     }
   } catch (err) {
