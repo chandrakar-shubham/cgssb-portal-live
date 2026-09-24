@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "cp index.source.html index.html 2>/dev/null || true; tsx server.ts",
-    "build": "cp index.source.html index.html && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && cp dist/index.html ./index.html && mkdir -p assets && cp -rf dist/assets/* assets/ && cp dist/assets/app-*.js assets/index.js && cp dist/assets/index-*.css assets/index.css",
+    "build": "cp index.source.html index.html && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && cp dist/server.cjs dist/server.js && mkdir -p dist/tmp && touch dist/tmp/restart.txt && node -e \"const fs=require('fs'); fs.writeFileSync('dist/version.json', JSON.stringify({commitSha: process.env.GITHUB_SHA || 'local-build', buildTime: process.env.BUILD_TIME || new Date().toISOString()}, null, 2))\" && cp dist/index.html ./index.html 2>/dev/null || true",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

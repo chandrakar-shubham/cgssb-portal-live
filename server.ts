@@ -42,6 +42,30 @@ const getDirname = () => {
 const appFilename = getFilename();
 const appDirname = getDirname();
 
+const SERVER_BOOT_TIME = new Date().toISOString();
+
+function getBuildInfo() {
+  let commitSha = process.env.GITHUB_SHA || 'unknown';
+  let buildTime = process.env.BUILD_TIME || 'unknown';
+
+  const versionCandidates = [
+    path.join(process.cwd(), 'dist', 'version.json'),
+    path.join(process.cwd(), 'version.json'),
+    path.join(appDirname, 'version.json'),
+  ];
+  for (const f of versionCandidates) {
+    if (fs.existsSync(f)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(f, 'utf-8'));
+        if (raw.commitSha && commitSha === 'unknown') commitSha = raw.commitSha;
+        if (raw.buildTime && buildTime === 'unknown') buildTime = raw.buildTime;
+        break;
+      } catch (_) {}
+    }
+  }
+  return { commitSha, buildTime };
+}
+
 // ==================== PERSISTENT STORAGE ====================
 // Path to a JSON file that survives server restarts
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
@@ -162,10 +186,12 @@ async function startServer() {
 
   // 1b. Version & Deployment Verification Endpoint
   app.get('/api/version', (req, res) => {
+    const { commitSha, buildTime } = getBuildInfo();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json({
-      commitSha: process.env.GITHUB_SHA || 'unknown',
-      buildTime: process.env.BUILD_TIME || 'unknown',
-      serverStartedAt: new Date().toISOString(),
+      commitSha,
+      buildTime,
+      serverStartedAt: SERVER_BOOT_TIME,
       nodeVersion: process.version,
       env: process.env.NODE_ENV || 'development',
       dataFile: DB_FILE,
@@ -1573,26 +1599,62 @@ Respond strictly with a JSON object having key "questions" containing an array o
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    console.log(`📁 Serving static files from: ${distPath}`);
+    // Dynamic static directory discovery:
+    // Handles cases where dist is a subfolder, OR where dist contents were deployed directly into the web root
+    const possibleStaticDirs = [
+      path.join(process.cwd(), 'dist'),
+      process.cwd(),
+      appDirname,
+      path.join(appDirname, 'dist'),
+    ];
 
-    if (!fs.existsSync(distPath)) {
-      console.error(`❌ dist folder NOT FOUND at ${distPath}`);
+    const staticDir = possibleStaticDirs.find(d =>
+      fs.existsSync(path.join(d, 'index.html')) && fs.existsSync(path.join(d, 'assets'))
+    ) || possibleStaticDirs.find(d =>
+      fs.existsSync(path.join(d, 'index.html'))
+    ) || path.join(process.cwd(), 'dist');
+
+    console.log(`📁 Serving static files from: ${staticDir}`);
+
+    if (!fs.existsSync(staticDir)) {
+      console.error(`❌ Static folder NOT FOUND at ${staticDir}`);
     }
 
-    app.use(express.static(distPath));
+    // Explicitly serve hashed assets with 1-year immutable caching
+    const assetsPath = path.join(staticDir, 'assets');
+    if (fs.existsSync(assetsPath)) {
+      app.use('/assets', express.static(assetsPath, {
+        maxAge: '1y',
+        immutable: true,
+      }));
+    }
 
-    // SPA fallback — serve index.html for any non-API route
+    // Serve all other static files, ensuring HTML files are NEVER cached
+    app.use(express.static(staticDir, {
+      index: false, // Don't automatically send index.html with generic headers
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+      },
+    }));
+
+    // SPA fallback — serve index.html for any non-API route with anti-caching headers
     app.get('*', (req, res) => {
       // Don't intercept API routes
       if (req.path.startsWith('/api/')) {
         return res.status(404).json({ success: false, error: 'API route not found' });
       }
-      const indexPath = path.join(distPath, 'index.html');
+      const indexPath = path.join(staticDir, 'index.html');
       if (fs.existsSync(indexPath)) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         res.sendFile(indexPath);
       } else {
-        res.status(500).send('Frontend not built. Please run npm run build.');
+        res.status(500).send('Frontend not built. index.html not found. Run npm run build.');
       }
     });
   }
