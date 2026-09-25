@@ -98,6 +98,13 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
               </button>
             )}
             <button
+              onClick={() => onNavigateTab('admin-cms-series')}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs flex items-center space-x-2 transition shadow-lg shadow-amber-600/20 active:scale-95 cursor-pointer"
+            >
+              <Crown className="w-4 h-4 fill-slate-950" />
+              <span>Series & Bundle Studio</span>
+            </button>
+            <button
               onClick={() => onNavigateTab('admin-database')}
               className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
             >

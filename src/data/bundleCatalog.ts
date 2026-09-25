@@ -37,6 +37,34 @@ export interface BundleTestItem {
   mockTestRef?: MockTest;
 }
 
+export interface BundleImportantDates {
+  notificationDate?: string;
+  formStartDate?: string;
+  formEndDate?: string;
+  admitCardDate?: string;
+  examDate?: string;
+  resultDate?: string;
+  correctionLastDate?: string;
+  status?: 'upcoming' | 'ongoing' | 'admit_card_out' | 'exam_completed' | 'result_declared';
+}
+
+export interface BundleEligibility {
+  minAge?: number;
+  maxAge?: number;
+  ageRelaxation?: string;
+  qualification?: string;
+  domicile?: string;
+  experience?: string;
+  otherRules?: string[];
+}
+
+export interface BundleOfficialLinks {
+  applyUrl?: string;
+  notificationPdfUrl?: string;
+  officialWebsiteUrl?: string;
+  syllabusPdfUrl?: string;
+}
+
 export interface TestSeriesBundle {
   id: string;
   slug: string;
@@ -63,6 +91,18 @@ export interface TestSeriesBundle {
   features: string[];
   testItems: BundleTestItem[];
   faqs: Array<{ question: string; answer: string }>;
+  importantDates?: BundleImportantDates;
+  eligibility?: BundleEligibility;
+  officialLinks?: BundleOfficialLinks;
+  chapterTests?: BundleTestItem[];
+  pypTests?: BundleTestItem[];
+  mockTests?: BundleTestItem[];
+  isDraft?: boolean;
+  seoMeta?: {
+    title?: string;
+    description?: string;
+    keywords?: string[];
+  };
 }
 
 export const OFFICIAL_BUNDLES_CATALOG: TestSeriesBundle[] = [
@@ -290,6 +330,94 @@ export const OFFICIAL_BUNDLES_CATALOG: TestSeriesBundle[] = [
         answer: 'Yes! All incorrectly answered questions are automatically added to your personal "Mistake Notebook" where you can launch dedicated re-tests.',
       },
     ],
+    importantDates: {
+      notificationDate: '15 Jan 2026',
+      formStartDate: '01 Feb 2026',
+      formEndDate: '28 Feb 2026',
+      correctionLastDate: '03 Mar 2026',
+      admitCardDate: '10 Apr 2026',
+      examDate: '26 Apr 2026',
+      resultDate: '30 May 2026',
+      status: 'ongoing'
+    },
+    eligibility: {
+      minAge: 21,
+      maxAge: 35,
+      ageRelaxation: 'Up to 5 years for SC/ST/OBC & Women candidates as per Chhattisgarh state reservation norms (Max 40-45 years).',
+      qualification: 'Higher Secondary (10+2) with min 50% marks + 2-year D.El.Ed / B.El.Ed / D.Ed (Special Education) + Qualified CG-TET or CTET (Paper 1).',
+      domicile: 'Candidate must be a Bonafide Resident / Domicile of Chhattisgarh State.',
+      experience: 'Not mandatory. Fresh graduates and teachers eligible.',
+      otherRules: [
+        'CG-TET / CTET Paper-1 passing certificate is strictly required at document verification.',
+        'Age calculation baseline is 1st January of the recruitment year.',
+        'Candidates awaiting final semester D.El.Ed results must present passing marksheet prior to counseling.'
+      ]
+    },
+    officialLinks: {
+      applyUrl: 'https://vyapam.cgstate.gov.in/online-application',
+      notificationPdfUrl: 'https://vyapam.cgstate.gov.in/notifications/assistant-teacher-2026.pdf',
+      officialWebsiteUrl: 'https://vyapam.cgstate.gov.in',
+      syllabusPdfUrl: 'https://vyapam.cgstate.gov.in/syllabus/assistant-teacher-detailed.pdf'
+    },
+    chapterTests: [
+      {
+        id: 'test-ch-cdp-01',
+        title: 'Chapter 01: Child Growth, Genetics & Heredity Principles',
+        titleHindi: 'अध्याय 01: बाल विकास की अवधारणा एवं अधिगम से उसका संबंध',
+        type: 'sectional',
+        questionCount: 20,
+        durationMinutes: 20,
+        marks: 20,
+        isFreePreview: true,
+        attemptsCount: 1420
+      },
+      {
+        id: 'test-ch-math-01',
+        title: 'Chapter 02: Number System, LCM, HCF & Primary Fractions',
+        titleHindi: 'अध्याय 02: संख्या प्रणाली, लघुत्तम समापवर्त्य एवं भिन्न',
+        type: 'sectional',
+        questionCount: 20,
+        durationMinutes: 25,
+        marks: 20,
+        isFreePreview: false,
+        attemptsCount: 980
+      },
+      {
+        id: 'test-ch-evs-01',
+        title: 'Chapter 03: Ecosystem, Biodiversity & Chhattisgarh Flora',
+        titleHindi: 'अध्याय 03: पर्यावरण अध्ययन, पारिस्थितिकी तंत्र एवं छत्तीसगढ़ की वनस्पति',
+        type: 'sectional',
+        questionCount: 20,
+        durationMinutes: 20,
+        marks: 20,
+        isFreePreview: false,
+        attemptsCount: 840
+      }
+    ],
+    pypTests: [
+      {
+        id: 'pyp-asst-teacher-2023',
+        title: 'CG Vyapam Assistant Teacher (SEAT) 2023 Official Paper',
+        titleHindi: 'छत्तीसगढ़ सहायक शिक्षक भर्ती परीक्षा 2023 मूल प्रश्नपत्र',
+        type: 'pyp',
+        questionCount: 150,
+        durationMinutes: 150,
+        marks: 150,
+        isFreePreview: true,
+        attemptsCount: 5210
+      },
+      {
+        id: 'pyp-asst-teacher-2019',
+        title: 'CG Vyapam Assistant Teacher (SEAT) 2019 Official Paper',
+        titleHindi: 'छत्तीसगढ़ सहायक शिक्षक भर्ती परीक्षा 2019 मूल प्रश्नपत्र',
+        type: 'pyp',
+        questionCount: 150,
+        durationMinutes: 150,
+        marks: 150,
+        isFreePreview: false,
+        attemptsCount: 3840
+      }
+    ]
   },
 
   // =========================================================================

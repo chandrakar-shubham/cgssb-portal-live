@@ -1,7 +1,7 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * CGSSB Portal - Release v2.5.1
+ * CGSSB Portal - Release v2.5.2
  */
 
 import React, { useState, useEffect } from 'react';
@@ -38,6 +38,7 @@ import { AdminCMSPostManager } from './components/AdminCMSPostManager';
 import { DynamicPostRenderer } from './components/DynamicPostRenderer';
 import { AdminCMSTestSeriesManager } from './components/AdminCMSTestSeriesManager';
 import { AdminCMSThemeCustomizer } from './components/AdminCMSThemeCustomizer';
+import { AdminBundleStudio } from './components/AdminBundleStudio';
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import {
@@ -1045,6 +1046,22 @@ function MainApp() {
               attempts={attempts}
               onRestoreSnapshot={handleRestoreSnapshot}
               onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
+            />
+          )}
+
+          {adminActiveTab === 'admin-cms-series' && (
+            <AdminBundleStudio
+              availableTests={tests}
+              availableQuestions={questions}
+              onNavigateToPreview={(bundle) => {
+                setCurrentRoute('student');
+                setStudentActiveTabState('tests');
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
+                }
+              }}
+              onTestsAdded={(newTests) => setTests(prev => dedupeById([...newTests, ...prev]))}
+              onQuestionsAdded={(newQs) => setQuestions(prev => dedupeById([...newQs, ...prev]))}
             />
           )}
 

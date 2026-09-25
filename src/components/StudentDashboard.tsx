@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useDeferredValue } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ExamCategory, MockTest } from '../types';
 import { EXAM_PATTERNS } from '../mockData';
@@ -36,6 +36,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
+import { getStoredBundles, findBundleBySlugOrId } from '../utils/bundleStore';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
@@ -86,11 +87,41 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [testSegment, setTestSegment] = useState<TestSegment>('ALL');
 
   // Bundle Portal View & State
-  const [selectedBundle, setSelectedBundle] = useState<TestSeriesBundle | null>(null);
+  const [bundles, setBundles] = useState<TestSeriesBundle[]>(() => getStoredBundles());
+  const [selectedBundle, setSelectedBundle] = useState<TestSeriesBundle | null>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      const hash = window.location.hash;
+      const seriesMatch = path.match(/\/series\/([a-zA-Z0-9_-]+)/) || hash.match(/#series-([a-zA-Z0-9_-]+)/);
+      if (seriesMatch && seriesMatch[1]) {
+        const stored = getStoredBundles();
+        return findBundleBySlugOrId(seriesMatch[1], stored) || null;
+      }
+    }
+    return null;
+  });
   const [portalDisplayMode, setPortalDisplayMode] = useState<'bundles' | 'individual' | 'leaderboard'>('bundles');
   const [bundleAuthorityFilter, setBundleAuthorityFilter] = useState<'ALL' | 'CGSSB' | 'CGPSC'>('ALL');
   const [enrolledBundleIds, setEnrolledBundleIds] = useState<string[]>([]);
   const [leaderboardSelectedTestId, setLeaderboardSelectedTestId] = useState<string>('');
+
+  useEffect(() => {
+    setBundles(getStoredBundles());
+  }, []);
+
+  const handleOpenBundleDetail = (bundle: TestSeriesBundle) => {
+    setSelectedBundle(bundle);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
+    }
+  };
+
+  const handleBackFromBundleDetail = () => {
+    setSelectedBundle(null);
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', '/test-series');
+    }
+  };
 
   // User Target Exam State
   const [userTarget, setUserTarget] = useState<string>(() => {
@@ -653,7 +684,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         <BundleDetailPage
           bundle={selectedBundle}
           availableTests={processedTests}
-          onBack={() => setSelectedBundle(null)}
+          onBack={handleBackFromBundleDetail}
           onStartTest={onStartTest}
           onExplorePass={onExplorePass || (() => {})}
           isEnrolled={enrolledBundleIds.includes(selectedBundle.id)}
@@ -881,7 +912,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Test Series ({OFFICIAL_BUNDLES_CATALOG.length})</span>
+              <span>Test Series ({bundles.length})</span>
             </button>
 
             <button
@@ -937,7 +968,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800/80'
                     }`}
                   >
-                    All Bundles ({OFFICIAL_BUNDLES_CATALOG.length})
+                    All Bundles ({bundles.length})
                   </button>
                   <button
                     onClick={() => setBundleAuthorityFilter('CGSSB')}
@@ -947,7 +978,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         : 'text-slate-400 hover:text-emerald-400 bg-slate-900 border border-slate-800/80'
                     }`}
                   >
-                    <span>CGSSB / Vyapam ({OFFICIAL_BUNDLES_CATALOG.filter(b => b.authority === 'CGSSB').length})</span>
+                    <span>CGSSB / Vyapam ({bundles.filter(b => b.authority === 'CGSSB').length})</span>
                   </button>
                   <button
                     onClick={() => setBundleAuthorityFilter('CGPSC')}
@@ -957,7 +988,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         : 'text-slate-400 hover:text-rose-400 bg-slate-900 border border-slate-800/80'
                     }`}
                   >
-                    <span>CGPSC SSE ({OFFICIAL_BUNDLES_CATALOG.filter(b => b.authority === 'CGPSC').length})</span>
+                    <span>CGPSC SSE ({bundles.filter(b => b.authority === 'CGPSC').length})</span>
                   </button>
                 </div>
 
@@ -968,12 +999,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
               {/* Compact Bundles Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {OFFICIAL_BUNDLES_CATALOG.filter(b => bundleAuthorityFilter === 'ALL' || b.authority === bundleAuthorityFilter).map(bundle => (
+                {bundles.filter(b => bundleAuthorityFilter === 'ALL' || b.authority === bundleAuthorityFilter).map(bundle => (
                   <BundleCompactCard
                     key={bundle.id}
                     bundle={bundle}
-                    onOpenBundle={setSelectedBundle}
-                    onEnrollNow={b => setSelectedBundle(b)}
+                    onOpenBundle={handleOpenBundleDetail}
+                    onEnrollNow={handleOpenBundleDetail}
                     onStartFreeTest={b => {
                       const freeItem = b.testItems.find(t => t.isFreePreview) || b.testItems[0];
                       if (freeItem) {
