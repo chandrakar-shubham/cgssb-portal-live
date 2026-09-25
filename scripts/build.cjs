@@ -75,7 +75,7 @@ async function runBuild() {
 
   // 6. Generate version.json
   const versionInfo = {
-    version: '2.5.0',
+    version: '2.5.1',
     buildId: uniqueBuildTag,
     commitSha: commitSha,
     buildTime: istTime,

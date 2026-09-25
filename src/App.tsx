@@ -1,6 +1,7 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * CGSSB Portal - Release v2.5.1
  */
 
 import React, { useState, useEffect } from 'react';

@@ -17,7 +17,7 @@ const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
 const currentDay = String(new Date().getDate()).padStart(2, '0');
 
 export const APP_BUILD_INFO: AppBuildInfo = {
-  version: '2.5.0',
+  version: '2.5.1',
   buildNumber: typeof __APP_BUILD_NUMBER__ !== 'undefined' 
     ? __APP_BUILD_NUMBER__ 
     : 'B#DEV-LOCAL',
