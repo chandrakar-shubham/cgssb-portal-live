@@ -19,6 +19,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { getBookmarks } from '../utils/bookmarkStorage';
+import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
 
 interface StudentProfileModalProps {
   isOpen: boolean;
@@ -181,10 +182,14 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             <span className="text-base font-black text-amber-400 mt-0.5 block">{bookmarkCount}</span>
           </div>
           <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-400 block font-medium">Credit Balance</span>
-            <span className="text-base font-black text-emerald-400 mt-0.5 block flex items-center">
-              <Zap className="w-3.5 h-3.5 mr-1 fill-emerald-400" />
-              {user.credits} Pts
+            <span className="text-[10px] text-slate-400 block font-medium">All-Access Pass</span>
+            <span className="text-sm font-black text-amber-300 mt-0.5 block flex items-center">
+              <Crown className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400 shrink-0" />
+              {isUserPassActive(user)
+                ? calculateDaysRemaining(user?.passExpiresAt) > 0
+                  ? `${calculateDaysRemaining(user?.passExpiresAt)} Days Left`
+                  : 'Active'
+                : 'Free Tier'}
             </span>
           </div>
         </div>

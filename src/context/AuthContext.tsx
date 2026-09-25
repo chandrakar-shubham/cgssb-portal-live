@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
+import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
 
 interface AuthContextType {
   // Student Auth
@@ -11,7 +12,8 @@ interface AuthContextType {
   logout: () => void;
   deductCredits: (amount: number) => boolean;
   addCredits: (amount: number) => void;
-  activateProPass: (planName: string) => void;
+  activateProPass: (planType: 'monthly' | 'yearly' | string, customName?: string) => void;
+  transferPassDevice: () => void;
 
   // Admin Auth (Strictly Separated)
   adminUser: User | null;
@@ -27,6 +29,10 @@ const DEFAULT_STUDENT_USER: User = {
   phone: '9827012345',
   role: 'student',
   credits: 350,
+  hasProPass: true,
+  proPassPlan: 'Yearly All-Access Pass (365 Days)',
+  passDurationDays: 365,
+  passExpiresAt: new Date(Date.now() + 320 * 24 * 60 * 60 * 1000).toISOString(), // Active with 320 days
   registeredAt: '2024-01-15',
   targetExam: 'CGPSC State Service 2026',
   targetYear: 2026,
@@ -131,27 +137,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(newUser);
   };
 
-  const activateProPass = (planName: string) => {
+  const activateProPass = (planTypeOrName: 'monthly' | 'yearly' | string, customName?: string) => {
+    const isMonthly = planTypeOrName.toLowerCase().includes('monthly') || planTypeOrName === 'monthly';
+    const planKey = isMonthly ? 'monthly' : 'yearly';
+    const tenure = createPassTenure(planKey);
+    const device = getOrCreateDeviceId();
+    const finalPlanName = customName || (isMonthly ? 'Monthly All-Access Pass (30 Days)' : 'Yearly All-Access Pass (365 Days)');
+
     if (user) {
       setUser({
         ...user,
         hasProPass: true,
-        proPassPlan: planName,
-        credits: user.credits + 1000,
+        proPassPlan: finalPlanName,
+        passDurationDays: tenure.days,
+        passExpiresAt: tenure.expiresAt,
+        boundDeviceId: device.id,
+        boundDeviceName: device.name,
       });
     } else {
       const newUser: User = {
         id: `u-${Date.now()}`,
-        name: 'Pro Pass Candidate',
-        email: 'candidate@cgssbtest.com',
+        name: 'Pass Subscriber Aspirant',
+        email: 'aspirant@cgssbtest.com',
         role: 'student',
-        credits: 1500,
         hasProPass: true,
-        proPassPlan: planName,
+        proPassPlan: finalPlanName,
+        passDurationDays: tenure.days,
+        passExpiresAt: tenure.expiresAt,
+        boundDeviceId: device.id,
+        boundDeviceName: device.name,
         registeredAt: new Date().toISOString().split('T')[0],
       };
       setUser(newUser);
     }
+  };
+
+  const transferPassDevice = () => {
+    if (!user) return;
+    const currentDevice = getOrCreateDeviceId();
+    setUser({
+      ...user,
+      boundDeviceId: currentDevice.id,
+      boundDeviceName: currentDevice.name,
+    });
   };
 
   const updateUserProfile = (updates: Partial<User>) => {
@@ -207,14 +235,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deductCredits = (amount: number): boolean => {
     if (!user) return false;
-    if (user.credits < amount) return false;
-    setUser({ ...user, credits: user.credits - amount });
+    const currentCredits = user.credits ?? 0;
+    if (currentCredits < amount) return false;
+    setUser({ ...user, credits: currentCredits - amount });
     return true;
   };
 
   const addCredits = (amount: number) => {
     if (!user) return;
-    setUser({ ...user, credits: user.credits + amount });
+    setUser({ ...user, credits: (user.credits ?? 0) + amount });
   };
 
   return (
@@ -226,6 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithPhoneOtp,
         updateUserProfile,
         activateProPass,
+        transferPassDevice,
         logout,
         deductCredits,
         addCredits,

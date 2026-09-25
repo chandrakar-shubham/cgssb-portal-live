@@ -37,6 +37,8 @@ import { AdminCMSPostManager } from './components/AdminCMSPostManager';
 import { DynamicPostRenderer } from './components/DynamicPostRenderer';
 import { AdminCMSTestSeriesManager } from './components/AdminCMSTestSeriesManager';
 import { AdminCMSThemeCustomizer } from './components/AdminCMSThemeCustomizer';
+import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
+import { ArrowLeft, Trophy } from 'lucide-react';
 import {
   CMSPage,
   CMSPost,
@@ -84,6 +86,9 @@ function MainApp() {
     if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
       return { route: 'admin', tab: 'admin-pyp' };
     }
+    if (path.includes('leaderboard') || hash.includes('leaderboard')) {
+      return { route: 'student', tab: 'leaderboard' };
+    }
     if (path.includes('cgpsc') || hash.includes('cgpsc')) {
       return { route: 'student', tab: 'cgpsc' };
     }
@@ -120,6 +125,7 @@ function MainApp() {
 
   const getTabPath = (tab: string) => {
     switch (tab) {
+      case 'leaderboard': return '/leaderboard';
       case 'cgpsc': return '/exams/cgpsc';
       case 'cgssb': return '/exams/cgssb';
       case 'pass': return '/pass';
@@ -135,6 +141,7 @@ function MainApp() {
 
   const getPageTitle = (tab: string) => {
     switch (tab) {
+      case 'leaderboard': return 'State-Wide Live Merit Leaderboard & Percentile Ranks | CGSSB Test';
       case 'cgpsc': return 'CGPSC Prelims & Forest Service Mock Tests 2026 | CGSSB Test';
       case 'cgssb': return 'CG Vyapam Hostel Warden, Patwari & RI Tests 2026 | CGSSB Test';
       case 'pass': return 'CG Exam Pass Pro - Unlimited Test Series Access | CGSSB Test';
@@ -1156,18 +1163,45 @@ function MainApp() {
         mistakesCount={unresolvedMistakesCount}
       />
 
-      <main className="flex-1">
+      <main className="flex-1 pb-20 md:pb-8">
         {studentActiveTab === 'tests' && (
           <StudentDashboard
             tests={tests}
             onStartTest={handleStartTest}
             onSelectCategory={cat => setSelectedCategory(cat)}
             selectedCategory={selectedCategory}
+            onExplorePass={() => setStudentActiveTab('pass')}
+            onOpenLeaderboardPage={() => setStudentActiveTab('leaderboard')}
             onTogglePublishTest={handleTogglePublishTest}
             onUpdateTest={handleUpdateTest}
             onDeleteTest={handleDeleteTest}
             onAddTest={handleAddTest}
           />
+        )}
+
+        {studentActiveTab === 'leaderboard' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            <div className="flex items-center justify-between gap-4">
+              <button
+                onClick={() => setStudentActiveTab('tests')}
+                className="inline-flex items-center space-x-2 text-xs sm:text-sm font-bold text-slate-400 hover:text-white transition px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-emerald-400" />
+                <span>Back to Dashboard</span>
+              </button>
+
+              <div className="flex items-center space-x-2 text-xs font-black text-amber-300 bg-amber-950/40 border border-amber-800/40 px-3.5 py-1.5 rounded-xl">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <span>CGSSB & CGPSC State Merit Portal</span>
+              </div>
+            </div>
+
+            <LiveTestLeaderboard
+              tests={tests}
+              onStartTest={handleStartTest}
+              onExplorePass={() => setStudentActiveTab('pass')}
+            />
+          </div>
         )}
 
         {studentActiveTab === 'cgpsc' && (
@@ -1330,16 +1364,11 @@ function MainApp() {
             </div>
 
             <div>
-              <h4 className="font-extrabold text-white text-xs uppercase tracking-wider mb-2">Authority & Admin</h4>
+              <h4 className="font-extrabold text-white text-xs uppercase tracking-wider mb-2">Examination Standard</h4>
               <ul className="space-y-1.5 text-slate-400">
-                <li>
-                  <button onClick={navigateToAdmin} className="hover:text-indigo-400 transition text-left flex items-center space-x-1">
-                    <Lock className="w-3 h-3 text-indigo-400" />
-                    <span>Staff & Admin Portal (/admin)</span>
-                  </button>
-                </li>
-                <li className="text-slate-500">TCS iON Computer-Based Testing</li>
-                <li className="text-slate-500">Bilingual Engine (Hindi/English)</li>
+                <li className="text-slate-400 font-medium">TCS iON Computer-Based CBT Simulation</li>
+                <li className="text-slate-400 font-medium">Bilingual Questions (Hindi & English)</li>
+                <li className="text-slate-400 font-medium">Official -1/4 & -1/3 State Negative Marking</li>
               </ul>
             </div>
           </div>

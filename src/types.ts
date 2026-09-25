@@ -6,9 +6,13 @@ export interface User {
   email: string;
   phone?: string;
   role: UserRole;
-  credits: number;
+  credits?: number; // legacy optional (credit system removed in favor of tenure pass)
   hasProPass?: boolean;
-  proPassPlan?: string;
+  proPassPlan?: 'monthly' | 'yearly' | string;
+  passExpiresAt?: string; // ISO date string of pass expiry
+  passDurationDays?: number; // 30 or 365
+  boundDeviceId?: string; // Device ID bound to this pass (One Device, One Pass)
+  boundDeviceName?: string; // e.g. "Android Chrome", "Windows PC"
   avatar?: string;
   token?: string;
   registeredAt: string;
@@ -24,7 +28,7 @@ export interface User {
   dailyGoalQuestions?: number;      // e.g. 50
 }
 
-export type ExamCategory = 'CGSSB' | 'CGPSC' | 'SWAMI_ATMANAND' | 'CENTRAL_EXAMS';
+export type ExamCategory = 'CGSSB' | 'CGPSC' | 'SWAMI_ATMANAND' | 'CENTRAL_EXAMS' | 'TEACHER_RECRUITMENT';
 
 export interface ExamPatternConfig {
   id: ExamCategory;

@@ -1,4 +1,4 @@
-import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from './types/cms';
+import type { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from './types/cms.ts';
 
 export const INITIAL_CMS_SETTINGS: CMSSiteSettings = {
   siteName: 'CGSSB Test Portal',

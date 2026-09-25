@@ -28,8 +28,10 @@ import {
   Filter,
   Trophy,
   Sparkles,
-  Bookmark
+  Bookmark,
+  Share2
 } from 'lucide-react';
+import { SocialShareModal } from './SocialShareModal';
 import {
   isQuestionBookmarked,
   toggleBookmark,
@@ -55,6 +57,7 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
   const [filterSolution, setFilterSolution] = useState<'all' | 'correct' | 'incorrect' | 'unattempted'>('all');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [expandedExplanation, setExpandedExplanation] = useState<Record<string, boolean>>({});
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [, setBookmarkKey] = useState(0);
 
   // Ensure sector analysis is completely migrated and reflects separate non-conjoined taxonomy
@@ -135,18 +138,25 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
 
         <div className="flex items-center space-x-2">
           <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 text-xs font-black transition shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer"
+          >
+            <Share2 className="w-3.5 h-3.5 fill-slate-950" />
+            <span>Share Scorecard</span>
+          </button>
+          <button
             onClick={() => window.print()}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition border border-slate-700"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition border border-slate-700 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print Scorecard</span>
+            <span>Print</span>
           </button>
           <button
             onClick={onReattempt}
-            className="flex items-center space-x-1.5 px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-md shadow-emerald-500/20 active:scale-95"
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Re-attempt Test</span>
+            <span>Re-attempt</span>
           </button>
         </div>
       </div>
@@ -175,10 +185,10 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
 
           {/* Simulated Rank & Percentile Trophy Block */}
           <div className="flex items-center space-x-3 bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 shadow-inner">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-slate-950 shadow-md">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-slate-950 shadow-md shrink-0">
               <Award className="w-6 h-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-[10px] text-slate-400 font-semibold block uppercase tracking-wider">
                 Simulated All-India Rank
               </span>
@@ -186,9 +196,19 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
                 <span className="text-2xl font-black text-white">#{attempt.simulatedRank}</span>
                 <span className="text-xs text-slate-400">/ {attempt.totalParticipants.toLocaleString()} candidates</span>
               </div>
-              <span className="text-[11px] text-emerald-400 font-bold">
-                {attempt.percentile} Percentile
-              </span>
+              <div className="flex items-center space-x-2 mt-0.5">
+                <span className="text-[11px] text-emerald-400 font-bold">
+                  {attempt.percentile} Percentile
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="text-[10px] font-bold text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 px-2 py-0.5 rounded border border-amber-500/30 transition flex items-center space-x-1 cursor-pointer"
+                >
+                  <Share2 className="w-3 h-3 text-amber-400" />
+                  <span>Share</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -804,6 +824,12 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
           </div>
         </div>
       )}
+      {/* Social Performance Share Modal */}
+      <SocialShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        attempt={attempt}
+      />
     </div>
   );
 };

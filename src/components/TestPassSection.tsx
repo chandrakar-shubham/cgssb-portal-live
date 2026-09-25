@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   Check,
@@ -12,309 +12,480 @@ import {
   CheckCircle2,
   HelpCircle,
   Clock,
-  ArrowRight
+  ArrowRight,
+  QrCode,
+  Smartphone,
+  X,
+  Loader2,
+  Download,
+  GraduationCap,
+  Laptop,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
+import {
+  getOrCreateDeviceId,
+  calculateDaysRemaining,
+  checkDeviceAuthorization,
+  isUserPassActive
+} from '../utils/devicePassManager';
 
 interface TestPassSectionProps {
   onExploreTests: () => void;
 }
 
-export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests }) => {
-  const { user, activateProPass } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<'yearly' | 'monthly' | 'lifetime'>('yearly');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [activatedSuccess, setActivatedSuccess] = useState<string | null>(null);
+export interface PassTier {
+  id: 'monthly' | 'yearly';
+  name: string;
+  hindiTitle: string;
+  price: number;
+  originalPrice: number;
+  durationDays: number;
+  durationLabel: string;
+  badge?: string;
+  isPopular?: boolean;
+  savingsTag: string;
+  description: string;
+  features: string[];
+  recommendedFor: string;
+}
 
-  const handleActivate = (planName: string) => {
-    setIsProcessing(true);
+export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests }) => {
+  const { user, activateProPass, transferPassDevice } = useAuth();
+  const [selectedTier, setSelectedTier] = useState<PassTier | null>(null);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<'qr' | 'processing' | 'success'>('qr');
+  const [activeUpiApp, setActiveUpiApp] = useState<'phonepe' | 'gpay' | 'paytm' | 'bhim'>('phonepe');
+  const [transferSuccessMsg, setTransferSuccessMsg] = useState<string | null>(null);
+
+  const deviceCheck = useMemo(() => checkDeviceAuthorization(user), [user]);
+  const daysLeft = useMemo(() => calculateDaysRemaining(user?.passExpiresAt), [user?.passExpiresAt]);
+  const isPassActive = useMemo(() => isUserPassActive(user), [user]);
+
+  const passTiers: PassTier[] = [
+    {
+      id: 'monthly',
+      name: 'Monthly All-Access Pass',
+      hindiTitle: 'मासिक ऑल-एक्सेस पास (30 दिन)',
+      price: 199,
+      originalPrice: 299,
+      durationDays: 30,
+      durationLabel: '30 Days Complete Validity',
+      savingsTag: 'Save ₹100',
+      description: 'Full unrestricted access to every mock test, PYQ paper, and bundle across all Chhattisgarh exams for 30 days.',
+      recommendedFor: 'Targeted Revision & Last-Minute Exam Sprint',
+      features: [
+        'Unlocks ALL 42+ Mock Tests & Previous Year Papers (PYP)',
+        'CG शिक्षक भर्ती 2026 (Assistant Teacher, Teacher, Lecturer)',
+        'CGPSC SSE Prelims 2026 (GS Paper 1 + CSAT Paper 2)',
+        'CGSSB Vyapam (Hostel Warden, Patwari, RI, ADEO)',
+        'CG Police Sub-Inspector (SI) & SAGES Mocks',
+        'Bilingual (Hindi / English) TCS iON CBT Engine',
+        'State-Level Percentile & District Merit Ranking',
+        'Mistake Notebook & AI Analytics',
+      ],
+    },
+    {
+      id: 'yearly',
+      name: 'Yearly All-Access Pass',
+      hindiTitle: 'वार्षिक संपूर्ण महा-पास (365 दिन)',
+      price: 599,
+      originalPrice: 1199,
+      durationDays: 365,
+      durationLabel: '365 Days (1 Full Year Validity)',
+      badge: '🔥 50% FLAT OFF OFFER • BEST VALUE',
+      isPopular: true,
+      savingsTag: 'Save ₹600 (Only ₹1.6 / Day)',
+      description: 'The ultimate year-long subscription for serious candidates preparing across all upcoming 2026 exams in Chhattisgarh.',
+      recommendedFor: 'Complete Year-Round Preparation Across Multiple Exams',
+      features: [
+        'Everything in Monthly Pass with 365 Days Uninterrupted Access',
+        'Unlimited Mock Test Attempts & Retakes with Zero Ads',
+        'Full 3-Cadre CG Teacher Recruitment 2026 Master Series',
+        'Full CGPSC State Service Prelims 2026 Test Series',
+        'Full CG Vyapam 2026 Combined Test Series',
+        'High-Yield CG Special GK & Current Affairs 2026 Boosters',
+        'Printable PDF Question Papers with Bilingual Detailed Solutions',
+        'Priority Access to all Newly Added Tests throughout the year',
+        'One-Time Payment • No Monthly Hassle or Credits Required',
+      ],
+    },
+  ];
+
+  const handleOpenCheckout = (tier: PassTier) => {
+    setSelectedTier(tier);
+    setPaymentStep('qr');
+    setIsCheckoutOpen(true);
+  };
+
+  const handleSimulatePayment = () => {
+    setPaymentStep('processing');
     setTimeout(() => {
-      activateProPass(planName);
-      setIsProcessing(false);
-      setActivatedSuccess(planName);
-    }, 800);
+      if (selectedTier) {
+        activateProPass(selectedTier.id, `${selectedTier.name} (₹${selectedTier.price})`);
+      }
+      setPaymentStep('success');
+    }, 1200);
+  };
+
+  const handleTransferDevice = () => {
+    transferPassDevice();
+    setTransferSuccessMsg('Pass successfully transferred to this device!');
+    setTimeout(() => setTransferSuccessMsg(null), 3500);
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-12 pb-16 font-sans selection:bg-amber-400 selection:text-slate-950">
+    <div className="max-w-5xl mx-auto space-y-10 pb-16 font-sans selection:bg-amber-400 selection:text-slate-950">
       
       {/* 1. Hero Pass Banner */}
-      <section className="text-center space-y-4 pt-4">
-        <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold shadow-sm">
-          <Crown className="w-3.5 h-3.5 fill-amber-400" />
-          <span>Testbook-Grade Commercial Test Series Pass</span>
+      <section className="text-center space-y-4 pt-2">
+        <div className="inline-flex items-center space-x-2 text-xs font-semibold text-amber-400">
+          <Crown className="w-4 h-4 fill-amber-400" />
+          <span className="uppercase tracking-wider">Unified All-Access Pass</span>
+          <span aria-hidden="true">·</span>
+          <span className="text-slate-400">No Single Exam Restrictions · 100% Full Access</span>
         </div>
 
         <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-          Unlock 100+ Tests with <br className="hidden sm:inline" />
+          One Pass. All Exams. Pure Practice. <br className="hidden sm:inline" />
           <span className="bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500 bg-clip-text text-transparent">
-            CG Exam Pass Pro
+            Tenure Validity with Unlimited Tests
           </span>
         </h1>
 
         <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-          One single membership unlocks comprehensive test series for <strong>CGPSC State Services, CG Vyapam Hostel Warden, Patwari, RI, and Teacher Recruitment</strong> with All-India ranking simulation.
+          No complicated credits or exam-by-exam purchase. One simple pass unlocks every test for <strong>CG शिक्षक भर्ती (All 3 Cadres)</strong>, <strong>CGPSC Prelims</strong>, and <strong>CG Vyapam</strong> for your chosen validity.
         </p>
 
-        {user?.hasProPass && (
-          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-sm font-bold animate-pulse">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Active Subscription: {user.proPassPlan || 'Pro Pass Active'} • Unlimited Access</span>
+        {/* Active Pass Status Pill */}
+        {isPassActive && (
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-500/15 border-2 border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-bold shadow-lg shadow-emerald-500/10">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>Active Plan: {user?.proPassPlan || 'All-Access Pass'}</span>
+            <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-lg border border-emerald-500/30 font-mono">
+              {daysLeft > 0 ? `${daysLeft} Days Remaining` : 'Active'}
+            </span>
           </div>
         )}
       </section>
 
-      {/* 2. Pricing Tiers */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-        
-        {/* Tier 1: Monthly Pass */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl relative">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-white">Monthly Pass</h3>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-300">
-                30 Days
-              </span>
-            </div>
-
-            <div className="flex items-baseline space-x-2">
-              <span className="text-3xl sm:text-4xl font-black text-white">₹99</span>
-              <span className="text-xs text-slate-400 line-through">₹299</span>
-              <span className="text-xs text-emerald-400 font-bold">66% Off</span>
-            </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Ideal for quick revision and testing your readiness right before the exam date.
-            </p>
-
-            <ul className="space-y-2.5 text-xs text-slate-300 pt-2 border-t border-slate-800">
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Access to all 100+ Mock Tests</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Bilingual Hindi & English Solutions</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>TCS iON Realistic Exam Interface</span>
-              </li>
-              <li className="flex items-center space-x-2 text-slate-500">
-                <Lock className="w-3.5 h-3.5 shrink-0" />
-                <span>Limited AI Smart Test generation</span>
-              </li>
-            </ul>
-          </div>
-
-          <button
-            onClick={() => handleActivate('Monthly Pass (₹99)')}
-            disabled={isProcessing}
-            className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition cursor-pointer"
-          >
-            {user?.hasProPass ? 'Extend for ₹99' : 'Get Monthly Pass'}
-          </button>
-        </div>
-
-        {/* Tier 2: Yearly Pro Pass (BEST VALUE - Highlighted) */}
-        <div className="bg-gradient-to-b from-slate-900 to-amber-950/40 border-2 border-amber-500/80 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-2xl relative scale-105 z-10">
-          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-[11px] px-3.5 py-1 rounded-full uppercase tracking-wider shadow-md">
-            Most Popular • 75% Off
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-black text-amber-300 flex items-center space-x-2">
-                <Crown className="w-5 h-5 fill-amber-400 text-amber-400" />
-                <span>Yearly Pro Pass</span>
-              </h3>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                365 Days
-              </span>
-            </div>
-
-            <div className="flex items-baseline space-x-2">
-              <span className="text-4xl sm:text-5xl font-black text-white">₹299</span>
-              <span className="text-sm text-slate-400 line-through">₹1,199</span>
-              <span className="text-xs text-amber-400 font-bold">Best Value</span>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Complete full-year preparation for all upcoming 2026 notifications: CGPSC Prelims, CG Vyapam RI, Patwari, and Teacher Bharti.
-            </p>
-
-            <ul className="space-y-2.5 text-xs text-slate-200 pt-2 border-t border-slate-800">
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="font-bold text-white">Unlimited Access to All Tests & PYPs</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Simulated All-India Rank & Percentile</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Chhattisgarhi Special GK & Language Drills</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>AI Smart Question Generator Access</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Printable PDF Question Papers</span>
-              </li>
-            </ul>
-          </div>
-
-          <button
-            onClick={() => handleActivate('Yearly Pro Pass (₹299)')}
-            disabled={isProcessing}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs hover:brightness-110 shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95"
-          >
-            {user?.hasProPass ? 'Renew Yearly Pass (₹299)' : 'Unlock Yearly Pro Pass (₹299)'}
-          </button>
-        </div>
-
-        {/* Tier 3: Lifetime / 2-Year Pass */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl relative">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-white">Lifetime Pass</h3>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-300">
-                2 Years
-              </span>
-            </div>
-
-            <div className="flex items-baseline space-x-2">
-              <span className="text-3xl sm:text-4xl font-black text-white">₹499</span>
-              <span className="text-xs text-slate-400 line-through">₹1,999</span>
-              <span className="text-xs text-emerald-400 font-bold">75% Off</span>
-            </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed">
-              For dedicated aspirants preparing across multiple recruitment cycles through 2027.
-            </p>
-
-            <ul className="space-y-2.5 text-xs text-slate-300 pt-2 border-t border-slate-800">
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Everything in Yearly Pro Pass</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>All Future 2026-2027 Test Series Included</span>
-              </li>
-              <li className="flex items-center space-x-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Priority Doubt Support in Discussions</span>
-              </li>
-            </ul>
-          </div>
-
-          <button
-            onClick={() => handleActivate('Lifetime Pass (₹499)')}
-            disabled={isProcessing}
-            className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition cursor-pointer"
-          >
-            {user?.hasProPass ? 'Extend to Lifetime' : 'Get Lifetime Pass (₹499)'}
-          </button>
-        </div>
-      </div>
-
-      {/* 3. Activation Success Modal / Banner */}
-      {activatedSuccess && (
-        <div className="bg-emerald-950/80 border border-emerald-500 p-5 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
-              ✓
+      {/* 2. Device Security & "One Device, One Pass" Guarantee Banner */}
+      <section className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start space-x-3.5">
+            <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-400 border border-amber-500/20 shrink-0 mt-0.5">
+              <Smartphone className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="text-base font-black text-white">Pro Pass Activated Successfully!</h4>
-              <p className="text-xs text-emerald-300">
-                You now have full unrestricted access to all 100+ tests and previous papers.
+              <div className="flex items-center space-x-2">
+                <h3 className="font-bold text-white text-sm sm:text-base">One Device, One Pass Security</h3>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
+                  Device Protected
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1 max-w-xl leading-relaxed">
+                Your pass is secured to your primary study device (<strong>{deviceCheck.currentDevice.name}</strong>). This protects your practice data, test progress, and bookmarks while preventing unauthorized account sharing.
               </p>
+              {transferSuccessMsg && (
+                <div className="mt-2 text-xs font-bold text-emerald-400 flex items-center space-x-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{transferSuccessMsg}</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <button
-            onClick={onExploreTests}
-            className="px-5 py-2.5 bg-emerald-500 text-slate-950 rounded-xl font-bold text-xs hover:bg-emerald-400 transition cursor-pointer"
-          >
-            Start Practicing Mocks Now →
-          </button>
+          <div className="shrink-0 flex items-center space-x-2 self-start md:self-center">
+            {user?.hasProPass && user?.boundDeviceId && user.boundDeviceId !== deviceCheck.currentDevice.id ? (
+              <button
+                type="button"
+                onClick={handleTransferDevice}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition flex items-center space-x-1.5 shadow cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Switch Pass to This Device</span>
+              </button>
+            ) : (
+              <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-1.5 font-mono">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Device Linked & Protected</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Pricing Tiers Grid (Monthly ₹199 vs Yearly ₹599) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-stretch max-w-4xl mx-auto">
+        {passTiers.map(tier => {
+          const isSelected = selectedTier?.id === tier.id;
+          return (
+            <div
+              key={tier.id}
+              className={`rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-2xl relative transition-all ${
+                tier.isPopular
+                  ? 'bg-gradient-to-b from-slate-900 via-amber-950/40 to-slate-900 border-2 border-amber-500/80 shadow-amber-950/30 md:-translate-y-2'
+                  : 'bg-slate-900/90 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              {/* Optional Popular Pill Banner */}
+              {tier.badge && (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-[11px] px-4 py-1 rounded-full uppercase tracking-wider shadow-lg whitespace-nowrap">
+                  {tier.badge}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {/* Title & Subtitle */}
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xl sm:text-2xl font-black text-white">
+                      {tier.name}
+                    </h3>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      {tier.savingsTag}
+                    </span>
+                  </div>
+                  <span className="text-xs text-amber-300/90 font-medium block mt-1">
+                    {tier.hindiTitle}
+                  </span>
+                  <div className="flex items-center space-x-1.5 text-xs text-slate-400 font-mono mt-2 bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-800 w-fit">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{tier.durationLabel}</span>
+                  </div>
+                </div>
+
+                {/* Pricing Box */}
+                <div className="flex items-baseline space-x-2.5 pt-2 border-t border-slate-800">
+                  <span className="text-4xl sm:text-5xl font-black text-white">
+                    ₹{tier.price}
+                  </span>
+                  <span className="text-base text-slate-500 line-through">
+                    ₹{tier.originalPrice}
+                  </span>
+                  <span className="text-xs text-emerald-400 font-black bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30">
+                    {Math.round(((tier.originalPrice - tier.price) / tier.originalPrice) * 100)}% Off
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {tier.description}
+                </p>
+
+                {/* Features List */}
+                <div className="pt-2 border-t border-slate-800 space-y-2.5">
+                  <span className="text-xs font-bold text-slate-200 block">
+                    What is unlocked with this pass:
+                  </span>
+                  <ul className="space-y-2.5 text-xs text-slate-300">
+                    {tier.features.map((feature, idx) => (
+                      <li key={idx} className="flex items-start space-x-2">
+                        <Check className={`w-4 h-4 mt-0.5 shrink-0 ${tier.isPopular ? 'text-amber-400' : 'text-emerald-400'}`} />
+                        <span className="leading-snug">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <button
+                type="button"
+                onClick={() => handleOpenCheckout(tier)}
+                className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm transition flex items-center justify-center space-x-2 shadow-lg cursor-pointer ${
+                  tier.isPopular
+                    ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 hover:brightness-110 shadow-amber-500/25'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                }`}
+              >
+                <span>{isPassActive ? `Renew / Extend @ ₹${tier.price}` : `Get ${tier.name} @ ₹${tier.price}`}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 4. Value Proposition Guarantees */}
+      <section className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-center sm:text-left">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-3 sm:space-y-0 sm:space-x-3.5">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <GraduationCap className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-white">All Exams Included</h4>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              Never buy another test pass. One active pass gives 100% access to all current and upcoming tests.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-3 sm:space-y-0 sm:space-x-3.5">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0">
+            <Award className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-white">Authentic Vyapam & CGPSC Pattern</h4>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              TCS iON CBT engine simulation with real state negative marking and bilingual explanations.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-3 sm:space-y-0 sm:space-x-3.5">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
+            <Download className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-white">Printable Revision PDFs</h4>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              Active pass holders can download test papers and official answer keys for quick offline revision.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Interactive UPI / QR Checkout Modal */}
+      {isCheckoutOpen && selectedTier && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            
+            {/* Close */}
+            <button
+              type="button"
+              onClick={() => setIsCheckoutOpen(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Modal Header */}
+            <div>
+              <div className="flex items-center space-x-2 text-xs font-semibold text-amber-400 mb-1">
+                <Crown className="w-3.5 h-3.5 fill-amber-400" />
+                <span>Instant Pass Activation • {selectedTier.durationLabel}</span>
+              </div>
+              <h3 className="text-xl font-black text-white">
+                {selectedTier.name}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Special Offer: <strong className="text-emerald-400 font-bold">₹{selectedTier.price}</strong> (Saved ₹{selectedTier.originalPrice - selectedTier.price})
+              </p>
+            </div>
+
+            {/* Step: QR Code View */}
+            {paymentStep === 'qr' && (
+              <div className="space-y-4">
+                
+                {/* QR Code Container */}
+                <div className="p-4 bg-white rounded-2xl flex flex-col items-center justify-center space-y-2 shadow-inner">
+                  <div className="w-40 h-40 bg-slate-100 rounded-xl border border-slate-300 flex flex-col items-center justify-center relative p-2">
+                    <QrCode className="w-32 h-32 text-slate-900" />
+                    <span className="text-[9px] font-mono text-slate-600 bg-white px-1.5 rounded border border-slate-200 absolute bottom-1">
+                      UPI ID: cgssbtest@upi
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold text-slate-800 text-center">
+                    Scan with any UPI App to Pay ₹{selectedTier.price}
+                  </span>
+                </div>
+
+                {/* UPI App Selector */}
+                <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setActiveUpiApp('phonepe')}
+                    className={`p-2 rounded-xl border transition cursor-pointer ${
+                      activeUpiApp === 'phonepe' ? 'bg-purple-600/20 border-purple-500 text-purple-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    PhonePe
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveUpiApp('gpay')}
+                    className={`p-2 rounded-xl border transition cursor-pointer ${
+                      activeUpiApp === 'gpay' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    Google Pay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveUpiApp('paytm')}
+                    className={`p-2 rounded-xl border transition cursor-pointer ${
+                      activeUpiApp === 'paytm' ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    Paytm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveUpiApp('bhim')}
+                    className={`p-2 rounded-xl border transition cursor-pointer ${
+                      activeUpiApp === 'bhim' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    BHIM UPI
+                  </button>
+                </div>
+
+                {/* Instant Verification Button */}
+                <button
+                  type="button"
+                  onClick={handleSimulatePayment}
+                  className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>I Have Paid ₹{selectedTier.price} • Activate Instantly</span>
+                </button>
+              </div>
+            )}
+
+            {/* Step: Processing Verification */}
+            {paymentStep === 'processing' && (
+              <div className="py-8 flex flex-col items-center justify-center space-y-3 text-center">
+                <Loader2 className="w-10 h-10 text-amber-400 animate-spin" />
+                <h4 className="font-bold text-white text-sm">
+                  Verifying UPI Transaction & Linking Device...
+                </h4>
+                <p className="text-xs text-slate-400 max-w-xs">
+                  Activating {selectedTier.name} for {selectedTier.durationDays} days on this device.
+                </p>
+              </div>
+            )}
+
+            {/* Step: Success */}
+            {paymentStep === 'success' && (
+              <div className="py-6 flex flex-col items-center justify-center space-y-3 text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center">
+                  <Check className="w-6 h-6 stroke-[3]" />
+                </div>
+                <h4 className="font-black text-white text-lg">
+                  Pass Activated Successfully!
+                </h4>
+                <p className="text-xs text-slate-300 max-w-xs">
+                  Your <strong>{selectedTier.name}</strong> is active for {selectedTier.durationDays} days. All tests across CG Teacher, CGPSC, and Vyapam are unlocked!
+                </p>
+                <div className="pt-3 w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCheckoutOpen(false);
+                      onExploreTests();
+                    }}
+                    className="w-full py-3 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs transition cursor-pointer shadow-lg shadow-emerald-500/20"
+                  >
+                    Start Practicing Tests Now
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       )}
 
-      {/* 4. Feature Comparison Matrix */}
-      <section className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4">
-        <h3 className="text-base font-black text-white flex items-center space-x-2">
-          <Award className="w-5 h-5 text-amber-400" />
-          <span>Plan Comparison (Free vs Pro Pass)</span>
-        </h3>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400">
-                <th className="py-3 px-4">Feature</th>
-                <th className="py-3 px-4">Free Aspirant</th>
-                <th className="py-3 px-4 text-amber-400 font-bold">Pro Pass Member</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
-              <tr>
-                <td className="py-3 px-4 font-semibold text-white">Full-Length Mock Tests</td>
-                <td className="py-3 px-4">2 Free Starter Mocks</td>
-                <td className="py-3 px-4 text-emerald-400 font-bold">Unlimited (100+ Tests)</td>
-              </tr>
-              <tr>
-                <td className="py-3 px-4 font-semibold text-white">Official Previous Year Papers</td>
-                <td className="py-3 px-4">Included (Free)</td>
-                <td className="py-3 px-4 text-emerald-400 font-bold">Included + Detailed Notes</td>
-              </tr>
-              <tr>
-                <td className="py-3 px-4 font-semibold text-white">TCS iON Pre-Flight Exam Interface</td>
-                <td className="py-3 px-4">Yes</td>
-                <td className="py-3 px-4 text-emerald-400 font-bold">Yes (All Tests)</td>
-              </tr>
-              <tr>
-                <td className="py-3 px-4 font-semibold text-white">All-India Simulated Rank & Percentile</td>
-                <td className="py-3 px-4">Basic</td>
-                <td className="py-3 px-4 text-emerald-400 font-bold">Full Deep Analytics</td>
-              </tr>
-              <tr>
-                <td className="py-3 px-4 font-semibold text-white">Bilingual Language Switching (Hindi/English)</td>
-                <td className="py-3 px-4">Yes</td>
-                <td className="py-3 px-4 text-emerald-400 font-bold">Yes</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* 5. Frequently Asked Questions */}
-      <section className="space-y-4">
-        <h3 className="text-base font-black text-white flex items-center space-x-2">
-          <HelpCircle className="w-5 h-5 text-slate-400" />
-          <span>Frequently Asked Questions</span>
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl space-y-1">
-            <h4 className="font-bold text-white">Can I switch between Hindi and English during the test?</h4>
-            <p className="text-slate-400">
-              Yes, you can toggle between Hindi and English anytime during the test with 1-click on the top header.
-            </p>
-          </div>
-
-          <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl space-y-1">
-            <h4 className="font-bold text-white">Are questions aligned with the latest 2026 syllabus?</h4>
-            <p className="text-slate-400">
-              All mock tests follow exact official weightage and negative marking rules for CGPSC (+2/-0.66) and CG Vyapam (+1/-0.33).
-            </p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 };

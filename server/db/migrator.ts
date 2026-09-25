@@ -1,13 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import { getPool, isMysqlActive, testConnection, dbConfig } from './connection';
+import { getPool, isMysqlActive, testConnection, dbConfig } from './connection.ts';
 import {
   saveQuestion,
   saveMockTest,
   savePypPaper,
   saveTestAttempt,
   getLocalSnapshot,
-} from './repository';
+} from './repository.ts';
 
 export async function bootstrapAndMigrate(): Promise<{ success: boolean; message: string; stats?: any }> {
   console.log(`🔌 Initializing Database in [${dbConfig.mode.toUpperCase()}] mode...`);

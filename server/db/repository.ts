@@ -1,20 +1,20 @@
 import fs from 'fs';
 import path from 'path';
-import { getPool, isMysqlActive, dbConfig } from './connection';
-import {
+import { getPool, isMysqlActive, dbConfig } from './connection.ts';
+import type {
   Question,
   MockTest,
   PreviousYearPaper,
   TestAttempt,
   ExamCategory,
   SectorAnalysis
-} from '../../src/types';
+} from '../../src/types.ts';
 import {
   INITIAL_QUESTIONS,
   INITIAL_MOCK_TESTS,
   INITIAL_PYP_PAPERS,
   SAMPLE_USER_ATTEMPTS
-} from '../../src/mockData';
+} from '../../src/mockData.ts';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'cgssb-db.json');
@@ -741,13 +741,13 @@ function mapRowToAttempt(r: any): TestAttempt {
 
 // ----------------- NO-CODE CMS REPOSITORY -----------------
 
-import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../../src/types/cms';
+import type { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../../src/types/cms.ts';
 import {
   INITIAL_CMS_SETTINGS,
   INITIAL_CMS_PAGES,
   INITIAL_CMS_POSTS,
   INITIAL_CMS_SERIES_PACKS
-} from '../../src/defaultCmsData';
+} from '../../src/defaultCmsData.ts';
 
 let cmsPagesDb: CMSPage[] = [...INITIAL_CMS_PAGES];
 let cmsPostsDb: CMSPost[] = [...INITIAL_CMS_POSTS];

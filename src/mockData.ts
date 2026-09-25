@@ -1,4 +1,4 @@
-import {
+import type {
   ExamCategory,
   ExamPatternConfig,
   Question,
@@ -6,7 +6,7 @@ import {
   PreviousYearPaper,
   HierarchicalSubjectNode,
   TestAttempt
-} from './types';
+} from './types.ts';
 
 export const EXAM_PATTERNS: Record<ExamCategory, ExamPatternConfig> = {
   CGSSB: {
@@ -64,6 +64,20 @@ export const EXAM_PATTERNS: Record<ExamCategory, ExamPatternConfig> = {
     color: '#F59E0B',
     badge: 'Coming Soon',
     isComingSoon: true,
+  },
+  TEACHER_RECRUITMENT: {
+    id: 'TEACHER_RECRUITMENT',
+    name: 'Chhattisgarh Teacher Recruitment 2026 (शिक्षक, सहायक शिक्षक एवं व्याख्याता भर्ती)',
+    shortName: 'CG Teacher 2026',
+    totalQuestions: 150,
+    durationMinutes: 150,
+    marksPerCorrect: 1.0,
+    negativeMarksRatio: 0.25,
+    negativeMarksPerWrong: 0.25,
+    description: 'Official CG School Education recruitment scheme: 150 questions across 3 Cadres (Assistant Teacher Class 1-5, Subject Teacher Class 6-8, Lecturer Class 9-12) with -0.25 negative marking.',
+    color: '#10B981',
+    badge: '150 Qs • +1 • -0.25 • 150 Mins',
+    isComingSoon: false,
   },
 };
 

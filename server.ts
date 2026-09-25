@@ -8,8 +8,8 @@ import dotenv from 'dotenv';
 import {
   EXAM_PATTERNS,
   HIERARCHY_TREE,
-} from './src/mockData';
-import {
+} from './src/mockData.ts';
+import type {
   Question,
   MockTest,
   PreviousYearPaper,
@@ -17,7 +17,7 @@ import {
   SectorAnalysis,
   ExamCategory,
   PYQAppearance
-} from './src/types';
+} from './src/types.ts';
 import {
   getAllQuestions,
   getQuestionById,
@@ -47,9 +47,9 @@ import {
   deleteCmsSeriesPack,
   getCmsSettings,
   saveCmsSettings,
-} from './server/db/repository';
-import { bootstrapAndMigrate } from './server/db/migrator';
-import { dbConfig, isMysqlActive } from './server/db/connection';
+} from './server/db/repository.ts';
+import { bootstrapAndMigrate } from './server/db/migrator.ts';
+import { dbConfig, isMysqlActive } from './server/db/connection.ts';
 
 dotenv.config();
 
@@ -1684,7 +1684,12 @@ Respond strictly with a JSON object having key "questions" containing an array o
   });
 
   // Mount Vite middleware for dev or static for production
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.K_SERVICE) ||
+    fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'));
+
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

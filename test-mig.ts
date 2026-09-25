@@ -1,0 +1,1 @@
+import { bootstrapAndMigrate } from "./server/db/migrator.ts"; console.log("SUCCESS:", typeof bootstrapAndMigrate);

@@ -97,35 +97,6 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             </div>
           </div>
 
-          {/* Desktop Nav Items */}
-          <nav className="hidden xl:flex items-center space-x-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
-            {navItems.map(item => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                    isActive
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : item.highlight
-                      ? 'text-emerald-400 hover:text-emerald-300 hover:bg-slate-800/80'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : item.highlight ? 'text-emerald-400' : 'text-indigo-400'}`} />
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'}`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
           {/* Right Action Controls */}
           <div className="flex items-center space-x-2 shrink-0">
             {/* DB Backup & Tools Button */}

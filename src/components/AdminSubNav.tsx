@@ -98,7 +98,7 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
           </div>
 
           {/* Right: Categorized Navigation Quick Switcher Pills */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none py-1">
+          <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar touch-scroll py-1 max-w-full">
             {navGroups.map(group => (
               <div key={group.groupName} className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800/80 shrink-0">
                 {group.items.map(item => {
