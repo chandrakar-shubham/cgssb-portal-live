@@ -1,4 +1,6 @@
 # 🏛️ CGSSB & CGPSC Exam Prep Portal & Content Management System
+[![Release](https://img.shields.io/badge/release-v2.5.1-emerald.svg)](https://github.com/chandrakar-shubham/cgssb-portal-live)
+[![Build](https://img.shields.io/badge/build-B%23260925.1414-blue.svg)](https://github.com/chandrakar-shubham/cgssb-portal-live)
 
 An enterprise-grade, high-concurrency Mock Test, Question Bank & Official Previous Year Paper (PYP) platform designed for **CGSSB (Chhattisgarh State Staff Selection Board / Vyapam)** and **CGPSC (Chhattisgarh Public Service Commission)** examinations.
 
