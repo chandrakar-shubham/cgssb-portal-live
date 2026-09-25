@@ -20,13 +20,13 @@ export const APP_BUILD_INFO: AppBuildInfo = {
   version: '2.5.0',
   buildNumber: typeof __APP_BUILD_NUMBER__ !== 'undefined' 
     ? __APP_BUILD_NUMBER__ 
-    : 'v2.5.0-prod',
+    : 'B#DEV-LOCAL',
   buildTime: typeof __APP_BUILD_TIME__ !== 'undefined'
     ? __APP_BUILD_TIME__
-    : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST',
+    : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) + ' IST',
   commitSha: typeof __APP_COMMIT_SHA__ !== 'undefined'
     ? __APP_COMMIT_SHA__
-    : 'main-live',
+    : 'dev-local',
   environment: typeof process !== 'undefined' && process.env?.NODE_ENV === 'production' ? 'production' : 'live-preview',
   targetPlatform: 'Hostinger & Cloud'
 };

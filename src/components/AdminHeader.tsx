@@ -215,32 +215,41 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             </div>
 
             <div className="space-y-2.5 text-xs">
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-slate-400">Build Number</span>
-                <span className="font-mono font-bold text-emerald-400">{currentBuildNumber}</span>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40">
+                <span className="text-emerald-300 font-semibold">Live Build Tag</span>
+                <span className="font-mono font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded text-xs">{currentBuildNumber}</span>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-slate-400">App Version</span>
-                <span className="font-mono font-bold text-indigo-300">v{APP_BUILD_INFO.version}</span>
+                <span className="text-slate-400">Release Fingerprint</span>
+                <span className="font-mono font-bold text-indigo-300">{currentCommitSha}</span>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-slate-400">Git Commit SHA</span>
-                <span className="font-mono font-bold text-slate-300">{currentCommitSha}</span>
+                <span className="text-slate-400">Exact Compiled Time</span>
+                <span className="font-mono text-emerald-400 font-semibold">{currentBuildTime}</span>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-slate-400">Compiled Time</span>
-                <span className="font-mono text-slate-300">{currentBuildTime}</span>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-slate-400">Target Host</span>
-                <span className="font-bold text-blue-400">{APP_BUILD_INFO.targetPlatform}</span>
+                <span className="text-slate-400">App Version & Platform</span>
+                <span className="font-bold text-blue-400">v{APP_BUILD_INFO.version} • {APP_BUILD_INFO.targetPlatform}</span>
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
+            <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-800/50 text-[11px] text-indigo-200/80 leading-relaxed">
+              💡 <span className="font-semibold text-indigo-200">Hostinger Update Tip:</span> If Hostinger displays an earlier timestamp than this preview, flush LiteSpeed cache in Hostinger hPanel and perform a hard refresh (<code className="text-amber-300 font-mono">Ctrl+Shift+R</code>).
+            </div>
+
+            <div className="pt-2 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`Build: ${currentBuildNumber}\nFingerprint: ${currentCommitSha}\nCompiled: ${currentBuildTime}\nHost: ${APP_BUILD_INFO.targetPlatform}`);
+                  alert('Build metadata copied to clipboard!');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition cursor-pointer"
+              >
+                Copy Info
+              </button>
               <button
                 onClick={() => setShowBuildDetails(false)}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer shadow-md shadow-indigo-600/30"
               >
                 Close
               </button>

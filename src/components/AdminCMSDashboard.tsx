@@ -455,24 +455,24 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
 
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400">Build Number</span>
-                <span className="font-mono font-bold text-emerald-300">{APP_BUILD_INFO.buildNumber}</span>
+                <span className="text-slate-400">Live Build Tag</span>
+                <span className="font-mono font-bold text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded">{APP_BUILD_INFO.buildNumber}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                <span className="text-slate-400">Release SHA</span>
+                <span className="font-mono text-slate-300 font-semibold">{APP_BUILD_INFO.commitSha}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                <span className="text-slate-400">Exact Build Timestamp</span>
+                <span className="font-mono text-emerald-400 font-medium">{APP_BUILD_INFO.buildTime}</span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
                 <span className="text-slate-400">App Version</span>
                 <span className="font-mono font-bold text-indigo-300">v{APP_BUILD_INFO.version}</span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400">Commit SHA</span>
-                <span className="font-mono text-slate-300">{APP_BUILD_INFO.commitSha}</span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
                 <span className="text-slate-400">Database Engine</span>
                 <span className="font-mono font-bold text-teal-300">MySQL 8.0+ / utf8mb4</span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400">Build Date</span>
-                <span className="font-mono text-slate-300">{APP_BUILD_INFO.buildTime}</span>
               </div>
             </div>
 

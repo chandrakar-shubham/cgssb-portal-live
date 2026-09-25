@@ -5,19 +5,28 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   const now = new Date();
-  const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'main-live';
+  const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const timeCode = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  const uniqueBuildTag = process.env.BUILD_ID || `B#${dateCode}.${timeCode.slice(0, 4)}`;
+  
+  const commitSha = process.env.GITHUB_SHA 
+    ? process.env.GITHUB_SHA.slice(0, 7) 
+    : (process.env.COMMIT_SHA || `sha-${Date.now().toString(16).slice(-6)}`);
+
   const buildNumber = process.env.GITHUB_RUN_NUMBER 
-    ? `v2.5.0-build.${process.env.GITHUB_RUN_NUMBER}` 
-    : 'v2.5.0-prod';
-  const buildTime = now.toLocaleString('en-IN', { 
+    ? `v2.5.0-run.${process.env.GITHUB_RUN_NUMBER} (${uniqueBuildTag})` 
+    : uniqueBuildTag;
+
+  const buildTime = process.env.BUILD_TIME || (now.toLocaleString('en-IN', { 
     timeZone: 'Asia/Kolkata', 
     day: '2-digit', 
     month: 'short', 
     year: 'numeric', 
     hour: '2-digit', 
-    minute: '2-digit', 
+    minute: '2-digit',
+    second: '2-digit',
     hour12: true 
-  }) + ' IST';
+  }) + ' IST');
 
   return {
     base: '/',
