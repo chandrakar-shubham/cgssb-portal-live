@@ -25,11 +25,13 @@ import {
 interface AdminAITestCreatorProps {
   pypPapers: PreviousYearPaper[];
   onTestPublished: (newTest: MockTest, newQuestions: Question[]) => void;
+  onNavigateToCatalog?: () => void;
 }
 
 export const AdminAITestCreator: React.FC<AdminAITestCreatorProps> = ({
   pypPapers,
   onTestPublished,
+  onNavigateToCatalog,
 }) => {
   const [examCategory, setExamCategory] = useState<ExamCategory>('CGSSB');
   const [testTitle, setTestTitle] = useState('CGSSB Vyapam Combined Full Mock 2024-25');
@@ -200,17 +202,28 @@ export const AdminAITestCreator: React.FC<AdminAITestCreatorProps> = ({
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-        <div className="max-w-2xl">
-          <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center space-x-1.5 mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Mock Test Synthesizer</span>
-          </span>
-          <h1 className="text-2xl font-black text-white tracking-tight">
-            Smart AI-Powered Mock Test Creator
-          </h1>
-          <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-            Generate balanced, curriculum-compliant mock test packages by referencing historical Previous Year Papers (PYP), choosing subject taxonomies, and calibrating difficulty ratios.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="max-w-2xl">
+            <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center space-x-1.5 mb-2">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Mock Test Synthesizer</span>
+            </span>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              Smart AI-Powered Mock Test Creator
+            </h1>
+            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+              Generate balanced, curriculum-compliant mock test packages by referencing historical Previous Year Papers (PYP), choosing subject taxonomies, and calibrating difficulty ratios.
+            </p>
+          </div>
+          {onNavigateToCatalog && (
+            <button
+              onClick={onNavigateToCatalog}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition shrink-0 cursor-pointer self-start sm:self-center"
+            >
+              <Layers className="w-4 h-4 text-indigo-400" />
+              <span>← Back to Catalog</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -433,9 +446,21 @@ export const AdminAITestCreator: React.FC<AdminAITestCreatorProps> = ({
                 </div>
 
                 {publishSuccess ? (
-                  <div className="p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-center text-xs font-bold text-emerald-400 flex items-center justify-center space-x-1">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Published to Student Catalog!</span>
+                  <div className="space-y-2">
+                    <div className="p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-center text-xs font-bold text-emerald-400 flex items-center justify-center space-x-1">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Published to Student Catalog!</span>
+                    </div>
+                    {onNavigateToCatalog && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToCatalog}
+                        className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>View in Test Catalog →</span>
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <button

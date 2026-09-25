@@ -15,7 +15,10 @@ import {
   Server,
   Database,
   GitCommit,
-  Info
+  Info,
+  Globe,
+  Palette,
+  Crown
 } from 'lucide-react';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
 
@@ -48,10 +51,15 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
   const navItems = [
     { id: 'admin-overview', label: 'CMS Dashboard', icon: LayoutDashboard },
+    { id: 'admin-cms-pages', label: 'No-Code Pages', icon: Globe },
+    { id: 'admin-cms-posts', label: 'News & Posts', icon: FileText },
+    { id: 'admin-cms-series', label: 'Series Bundles', icon: Crown },
+    { id: 'admin-cms-customizer', label: 'Site Customizer', icon: Palette },
     { id: 'admin-tests', label: 'Live Test Catalog', icon: Layers },
     { id: 'admin-questions', label: 'Question Bank', icon: FolderTree },
     { id: 'admin-pyp', label: 'PYP Manager', icon: FileText },
-    { id: 'admin-ai', label: 'AI Mock Creator', icon: Sparkles },
+    { id: 'admin-ai', label: 'AI Test Creator', icon: Sparkles },
+    { id: 'admin-database', label: 'Database & Schema', icon: Database, badge: 'MySQL' },
     { id: 'admin-android-api', label: 'Android REST API', icon: Smartphone, highlight: true },
   ];
 
@@ -108,6 +116,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                 >
                   <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : item.highlight ? 'text-emerald-400' : 'text-indigo-400'}`} />
                   <span>{item.label}</span>
+                  {item.badge && (
+                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'}`}>
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}

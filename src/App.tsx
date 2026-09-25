@@ -18,7 +18,9 @@ import { AdminTestCatalog } from './components/AdminTestCatalog';
 import { AdminAndroidAPIManager } from './components/AdminAndroidAPIManager';
 import { AdminPortalLogin } from './components/AdminPortalLogin';
 import { AdminCMSDashboard } from './components/AdminCMSDashboard';
+import { AdminDatabaseView } from './components/AdminDatabaseView';
 import { AdminHeader } from './components/AdminHeader';
+import { AdminSubNav } from './components/AdminSubNav';
 import { AuthModal } from './components/AuthModal';
 import { ExamInstructionsScreen } from './components/ExamInstructionsScreen';
 import { CGPSCHeroPage } from './components/CGPSCHeroPage';
@@ -29,6 +31,24 @@ import { BookmarksManager } from './components/BookmarksManager';
 import { ChhattisgarhiRevisionModule } from './components/ChhattisgarhiRevisionModule';
 import { StudentProfileModal } from './components/StudentProfileModal';
 import { AdminToolsAndBackupsModal } from './components/AdminToolsAndBackupsModal';
+import { AdminCMSPageBuilder } from './components/AdminCMSPageBuilder';
+import { DynamicPageRenderer } from './components/DynamicPageRenderer';
+import { AdminCMSPostManager } from './components/AdminCMSPostManager';
+import { DynamicPostRenderer } from './components/DynamicPostRenderer';
+import { AdminCMSTestSeriesManager } from './components/AdminCMSTestSeriesManager';
+import { AdminCMSThemeCustomizer } from './components/AdminCMSThemeCustomizer';
+import {
+  CMSPage,
+  CMSPost,
+  CMSTestSeriesPack,
+  CMSSiteSettings
+} from './types/cms';
+import {
+  INITIAL_CMS_PAGES,
+  INITIAL_CMS_POSTS,
+  INITIAL_CMS_SERIES_PACKS,
+  INITIAL_CMS_SETTINGS
+} from './defaultCmsData';
 import {
   MockTest,
   Question,
@@ -85,6 +105,9 @@ function MainApp() {
     if (path.includes('bookmarks') || hash.includes('bookmarks')) {
       return { route: 'student', tab: 'bookmarks' };
     }
+    if (path.includes('posts') || hash.includes('posts')) {
+      return { route: 'student', tab: 'posts' };
+    }
     if (path.includes('chhattisgarh') || hash.includes('chhattisgarh') || path.includes('flashcards')) {
       return { route: 'student', tab: 'chhattisgarh-deck' };
     }
@@ -105,6 +128,7 @@ function MainApp() {
       case 'mistakes': return '/mistakes';
       case 'bookmarks': return '/bookmarks';
       case 'chhattisgarh-deck': return '/chhattisgarhi-revision';
+      case 'posts': return '/posts';
       default: return '/test-series';
     }
   };
@@ -259,6 +283,120 @@ function MainApp() {
     } catch {}
     return INITIAL_PYP_PAPERS;
   });
+
+  const [cmsPages, setCmsPages] = useState<CMSPage[]>(() => {
+    try {
+      const saved = localStorage.getItem('cgssb_cms_pages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_CMS_PAGES;
+  });
+
+  const [cmsPosts, setCmsPosts] = useState<CMSPost[]>(() => {
+    try {
+      const saved = localStorage.getItem('cgssb_cms_posts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_CMS_POSTS;
+  });
+
+  const [cmsSeriesPacks, setCmsSeriesPacks] = useState<CMSTestSeriesPack[]>(() => {
+    try {
+      const saved = localStorage.getItem('cgssb_cms_series');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_CMS_SERIES_PACKS;
+  });
+
+  const [cmsSettings, setCmsSettings] = useState<CMSSiteSettings>(() => {
+    try {
+      const saved = localStorage.getItem('cgssb_cms_settings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_CMS_SETTINGS;
+  });
+
+  // Selected slug for dynamic page or post viewing
+  const [activePageSlug, setActivePageSlug] = useState<string | null>(null);
+  const [activePostSlug, setActivePostSlug] = useState<string | null>(null);
+
+  // Sync CMS state to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('cgssb_cms_pages', JSON.stringify(cmsPages)); } catch {}
+  }, [cmsPages]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cgssb_cms_posts', JSON.stringify(cmsPosts)); } catch {}
+  }, [cmsPosts]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cgssb_cms_series', JSON.stringify(cmsSeriesPacks)); } catch {}
+  }, [cmsSeriesPacks]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cgssb_cms_settings', JSON.stringify(cmsSettings)); } catch {}
+  }, [cmsSettings]);
+
+  const handleSaveCmsPage = async (page: CMSPage) => {
+    setCmsPages(prev => {
+      const idx = prev.findIndex(p => p.id === page.id);
+      if (idx !== -1) {
+        const updated = [...prev];
+        updated[idx] = page;
+        return updated;
+      }
+      return [page, ...prev];
+    });
+  };
+
+  const handleDeleteCmsPage = async (id: string) => {
+    setCmsPages(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleSaveCmsPost = async (post: CMSPost) => {
+    setCmsPosts(prev => {
+      const idx = prev.findIndex(p => p.id === post.id);
+      if (idx !== -1) {
+        const updated = [...prev];
+        updated[idx] = post;
+        return updated;
+      }
+      return [post, ...prev];
+    });
+  };
+
+  const handleDeleteCmsPost = async (id: string) => {
+    setCmsPosts(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleSaveCmsSeriesPack = async (pack: CMSTestSeriesPack) => {
+    setCmsSeriesPacks(prev => {
+      const idx = prev.findIndex(p => p.id === pack.id);
+      if (idx !== -1) {
+        const updated = [...prev];
+        updated[idx] = pack;
+        return updated;
+      }
+      return [pack, ...prev];
+    });
+  };
+
+  const handleDeleteCmsSeriesPack = async (id: string) => {
+    setCmsSeriesPacks(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleSaveCmsSettings = async (settings: CMSSiteSettings) => {
+    setCmsSettings(settings);
+  };
 
   const [attempts, setAttempts] = useState<TestAttempt[]>(() => {
     try {
@@ -440,7 +578,8 @@ function MainApp() {
       });
 
       if (res.ok) {
-        const attempt = await res.json();
+        const data = await res.json();
+        const attempt = data.attempt || data;
         setAttempts(prev => [attempt, ...prev]);
         setActiveExamTest(null);
         setActiveAttemptReview(attempt);
@@ -839,6 +978,12 @@ function MainApp() {
           onNavigateToStudent={navigateToStudent}
           onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
         />
+        <AdminSubNav
+          activeTab={adminActiveTab}
+          setActiveTab={setAdminActiveTab}
+          onNavigateToStudent={navigateToStudent}
+          onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
+        />
 
         <main className="flex-1">
           {adminActiveTab === 'admin-overview' && (
@@ -849,6 +994,49 @@ function MainApp() {
               attempts={attempts}
               onNavigateTab={tab => setAdminActiveTab(tab)}
               onSyncDefaultCatalog={handleSyncDefaultCatalog}
+            />
+          )}
+
+          {adminActiveTab === 'admin-cms-pages' && (
+            <AdminCMSPageBuilder
+              pages={cmsPages}
+              onSavePage={handleSaveCmsPage}
+              onDeletePage={handleDeleteCmsPage}
+            />
+          )}
+
+          {adminActiveTab === 'admin-cms-posts' && (
+            <AdminCMSPostManager
+              posts={cmsPosts}
+              onSavePost={handleSaveCmsPost}
+              onDeletePost={handleDeleteCmsPost}
+            />
+          )}
+
+          {adminActiveTab === 'admin-cms-series' && (
+            <AdminCMSTestSeriesManager
+              seriesPacks={cmsSeriesPacks}
+              availableTests={tests}
+              onSavePack={handleSaveCmsSeriesPack}
+              onDeletePack={handleDeleteCmsSeriesPack}
+            />
+          )}
+
+          {adminActiveTab === 'admin-cms-customizer' && (
+            <AdminCMSThemeCustomizer
+              settings={cmsSettings}
+              onSaveSettings={handleSaveCmsSettings}
+            />
+          )}
+
+          {adminActiveTab === 'admin-database' && (
+            <AdminDatabaseView
+              tests={tests}
+              questions={questions}
+              pypPapers={pypPapers}
+              attempts={attempts}
+              onRestoreSnapshot={handleRestoreSnapshot}
+              onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
             />
           )}
 
@@ -885,6 +1073,9 @@ function MainApp() {
               onUpdateQuestion={handleUpdateQuestion}
               onDeleteQuestion={handleDeleteQuestion}
               allHierarchyRecords={extractHierarchyFromApp(tests, pypPapers, questions)}
+              onAddPYP={handleAddPYP}
+              onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+              onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
             />
           )}
 
@@ -892,6 +1083,7 @@ function MainApp() {
             <AdminAITestCreator
               pypPapers={pypPapers}
               onTestPublished={handleTestPublished}
+              onNavigateToCatalog={() => setAdminActiveTab('admin-tests')}
             />
           )}
 
@@ -905,6 +1097,9 @@ function MainApp() {
               onDeleteTest={handleDeleteTest}
               onAddTest={handleAddTest}
               onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
+              onAddPYP={handleAddPYP}
+              onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+              onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
               onSaveCompletedTest={(updatedTest, updatedQuestions) => {
                 handleUpdateTest(updatedTest.id, updatedTest);
                 setQuestions(prev => {
@@ -957,6 +1152,7 @@ function MainApp() {
         setActiveTab={setStudentActiveTab}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        onNavigateToAdmin={navigateToAdmin}
         mistakesCount={unresolvedMistakesCount}
       />
 
@@ -1049,6 +1245,15 @@ function MainApp() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <ChhattisgarhiRevisionModule />
           </div>
+        )}
+
+        {studentActiveTab === 'posts' && (
+          <DynamicPostRenderer
+            posts={cmsPosts}
+            selectedPostSlug={activePostSlug}
+            onSelectPost={slug => setActivePostSlug(slug)}
+            onBackToList={() => setActivePostSlug(null)}
+          />
         )}
       </main>
 

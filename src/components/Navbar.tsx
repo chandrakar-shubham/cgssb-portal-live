@@ -16,7 +16,8 @@ import {
   AlertTriangle,
   Bookmark,
   ChevronDown,
-  Layers
+  Layers,
+  ShieldCheck
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -24,6 +25,7 @@ interface NavbarProps {
   setActiveTab: (tab: string) => void;
   onOpenAuthModal: () => void;
   onOpenProfile?: () => void;
+  onNavigateToAdmin?: () => void;
   mistakesCount?: number;
 }
 
@@ -32,6 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   onOpenAuthModal,
   onOpenProfile,
+  onNavigateToAdmin,
   mistakesCount = 0,
 }) => {
   const { user, logout } = useAuth();
@@ -227,6 +230,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right Action Controls for Students */}
         <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
           
+          {/* Quick Admin Portal Button */}
+          {onNavigateToAdmin && (
+            <button
+              onClick={onNavigateToAdmin}
+              title="Official Exam Controller Administration (/admin)"
+              className="inline-flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-700/50 hover:border-indigo-500 text-xs font-bold transition shadow-sm cursor-pointer"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Admin CMS</span>
+            </button>
+          )}
+
           {/* Quick Test Pass Pill */}
           {!user?.hasProPass && (
             <button
@@ -369,6 +384,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               );
             })}
+
+            {onNavigateToAdmin && (
+              <button
+                onClick={() => {
+                  onNavigateToAdmin();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full mt-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 flex items-center justify-between transition cursor-pointer"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span>Admin & CMS Console</span>
+                </div>
+                <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/20 px-2 py-0.5 rounded">/admin</span>
+              </button>
+            )}
           </div>
         </div>
       )}

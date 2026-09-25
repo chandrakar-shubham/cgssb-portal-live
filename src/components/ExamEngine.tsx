@@ -63,28 +63,81 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   const { t } = useLanguage();
 
   // Timer State
+  const sessionKey = `cgssb_exam_session_${test.id}`;
+  
+  // Check if an existing session is present for this test
+  const savedSession = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(sessionKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.testId === test.id) return parsed;
+      }
+    } catch {}
+    return null;
+  }, [sessionKey, test.id]);
+
   const initialDurationSeconds = (test.durationMinutes || 15) * 60;
-  const [secondsRemaining, setSecondsRemaining] = useState(initialDurationSeconds);
+  const [secondsRemaining, setSecondsRemaining] = useState(() => {
+    if (savedSession && typeof savedSession.secondsRemaining === 'number' && savedSession.secondsRemaining > 0) {
+      return savedSession.secondsRemaining;
+    }
+    return initialDurationSeconds;
+  });
   const [isTimerRunning, setIsTimerRunning] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Active Navigation State
-  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(() => {
+    return savedSession?.currentSectionIndex || 0;
+  });
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() => {
+    return savedSession?.currentQuestionIndex || 0;
+  });
 
   // Individual Question Timers
-  const [questionTimes, setQuestionTimes] = useState<Record<string, number>>({});
+  const [questionTimes, setQuestionTimes] = useState<Record<string, number>>(() => {
+    return savedSession?.questionTimes || {};
+  });
   const activeQuestionStartTimeRef = useRef<number>(Date.now());
   const [activeQuestionLiveSeconds, setActiveQuestionLiveSeconds] = useState(0);
 
   // Candidate Response State
-  const [responses, setResponses] = useState<Record<string, 'A' | 'B' | 'C' | 'D' | null>>({});
+  const [responses, setResponses] = useState<Record<string, 'A' | 'B' | 'C' | 'D' | null>>(() => {
+    return savedSession?.responses || {};
+  });
   const [questionStatuses, setQuestionStatuses] = useState<Record<string, QuestionPaletteStatus>>(() => {
+    if (savedSession?.questionStatuses) {
+      return savedSession.questionStatuses;
+    }
     const initial: Record<string, QuestionPaletteStatus> = {};
     questions.forEach((q, index) => {
       initial[q.id] = index === 0 ? 'unanswered' : 'not_visited';
     });
     return initial;
   });
+
+  // Local auto-save checkpointing every 3 seconds for 100% zero-data-loss during live exams
+  useEffect(() => {
+    const saveCheckpoint = () => {
+      try {
+        const payload = {
+          testId: test.id,
+          secondsRemaining,
+          currentSectionIndex,
+          currentQuestionIndex,
+          responses,
+          questionStatuses,
+          questionTimes,
+          updatedAt: Date.now(),
+        };
+        localStorage.setItem(sessionKey, JSON.stringify(payload));
+      } catch (_) {}
+    };
+
+    const timer = setTimeout(saveCheckpoint, 3000);
+    return () => clearTimeout(timer);
+  }, [sessionKey, test.id, secondsRemaining, currentSectionIndex, currentQuestionIndex, responses, questionStatuses, questionTimes]);
 
   // UI state
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -200,7 +253,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
     if (!isTimerRunning) return;
 
     const interval = setInterval(() => {
-      setSecondsRemaining(prev => {
+      setSecondsRemaining((prev: number) => {
         if (prev <= 1) {
           clearInterval(interval);
           setIsTimerRunning(false);
@@ -222,7 +275,12 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   };
 
   const doFinalSubmit = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     recordActiveQuestionTime();
+    try {
+      localStorage.removeItem(sessionKey);
+    } catch (_) {}
     const timeTaken = initialDurationSeconds - secondsRemaining;
     onSubmit({
       testId: test.id,
@@ -1016,19 +1074,22 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
 
             <div className="pt-3 border-t border-slate-800 flex justify-end space-x-2.5">
               <button
+                disabled={isSubmitting}
                 onClick={() => setShowSubmitModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-semibold transition"
               >
                 Back to Test
               </button>
               <button
+                disabled={isSubmitting}
                 onClick={() => {
                   setShowSubmitModal(false);
                   doFinalSubmit();
                 }}
-                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow-lg shadow-emerald-500/20"
+                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black text-xs transition shadow-lg shadow-emerald-500/20 flex items-center space-x-2"
               >
-                Yes, Submit Final Responses
+                {isSubmitting && <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>}
+                <span>{isSubmitting ? 'Submitting...' : 'Yes, Submit Final Responses'}</span>
               </button>
             </div>
           </div>

@@ -11,15 +11,17 @@ import {
   ChevronRight,
   Send,
   HelpCircle,
-  Tag
+  Tag,
+  Award,
+  Layers
 } from 'lucide-react';
 
 interface JsonImportPreviewModalProps {
   isOpen: boolean;
-  rawJsonData: any[];
+  rawJsonData?: any[];
   mappedQuestions: Question[];
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (mode?: 'mock' | 'pyp' | 'both') => Promise<void>;
   isImporting: boolean;
 }
 
@@ -30,6 +32,8 @@ export const JsonImportPreviewModal: React.FC<JsonImportPreviewModalProps> = ({
   onConfirm,
   isImporting,
 }) => {
+  const [selectedMode, setSelectedMode] = useState<'mock' | 'pyp' | 'both'>('mock');
+
   if (!isOpen || mappedQuestions.length === 0) return null;
 
   const previewList = mappedQuestions.slice(0, 3);
@@ -90,6 +94,53 @@ export const JsonImportPreviewModal: React.FC<JsonImportPreviewModalProps> = ({
           </div>
         </div>
 
+        {/* Paper Nature / Import Option Selector */}
+        <div className="space-y-2 bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+          <label className="block text-xs font-bold text-slate-200">
+            Import Classification Option (Paper Nature):
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedMode('mock')}
+              className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
+                selectedMode === 'mock'
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 ring-1 ring-cyan-400 shadow-sm'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span>🎯 Mock Test</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedMode('pyp')}
+              className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
+                selectedMode === 'pyp'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400 shadow-sm'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>📜 Official PYP</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedMode('both')}
+              className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
+                selectedMode === 'both'
+                  ? 'bg-indigo-500/20 border-indigo-400 text-indigo-200 ring-1 ring-indigo-400 shadow-sm'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span>⚡ Both</span>
+            </button>
+          </div>
+        </div>
+
         {/* Sample Question Previews (First 3) */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs font-bold text-slate-300">
@@ -97,7 +148,7 @@ export const JsonImportPreviewModal: React.FC<JsonImportPreviewModalProps> = ({
             <span className="text-emerald-400 font-normal">Auto-detected schema ready</span>
           </div>
 
-          <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1 scrollbar-thin">
+          <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-1 scrollbar-thin">
             {previewList.map((q, idx) => (
               <div
                 key={q.id}
@@ -143,34 +194,38 @@ export const JsonImportPreviewModal: React.FC<JsonImportPreviewModalProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-800">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-800">
           <button
             type="button"
             onClick={onClose}
             disabled={isImporting}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-bold transition cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-bold transition cursor-pointer w-full sm:w-auto"
           >
             Cancel
           </button>
 
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isImporting}
-            className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition flex items-center space-x-2 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
-          >
-            {isImporting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Importing Questions...</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Confirm Import ({mappedQuestions.length} Questions)</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => onConfirm(selectedMode)}
+              disabled={isImporting}
+              className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50 w-full sm:w-auto"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Importing Questions...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    Confirm Import as {selectedMode === 'mock' ? '🎯 Mock Test' : selectedMode === 'pyp' ? '📜 Official PYP' : '⚡ Both'} ({mappedQuestions.length} Qs)
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

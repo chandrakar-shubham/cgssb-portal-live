@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 
 export interface IngestionPaperConfig {
-  paperNature: 'pyp' | 'mock';
+  paperNature: 'pyp' | 'mock' | 'both';
   title: string;
   authority: string;
   examCategory: ExamCategory;
@@ -150,7 +150,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
   }, [sampleExam]);
 
   // Ingestion Configuration State
-  const [paperNature, setPaperNature] = useState<'pyp' | 'mock'>(initialNature);
+  const [paperNature, setPaperNature] = useState<'pyp' | 'mock' | 'both'>(initialNature);
   const [authority, setAuthority] = useState<string>(initialAuthority);
   const [category, setCategory] = useState<ExamCategory>(initialCategory);
   const [subCategory, setSubCategory] = useState<string>(initialSubCategory);
@@ -288,7 +288,8 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
 
   const marks = category === 'CGPSC' ? questionsList.length * 2 : questionsList.length;
 
-  const handlePublish = () => {
+  const handlePublish = (overrideNature?: 'pyp' | 'mock' | 'both') => {
+    const finalNature = overrideNature || paperNature;
     const taggedQuestions = questionsList.map(q => ({
       ...q,
       authority,
@@ -300,7 +301,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
 
     onConfirm(
       {
-        paperNature,
+        paperNature: finalNature,
         title: examTitle.trim() || `${authority} ${subCategory} Exam`,
         authority,
         examCategory: category,
@@ -403,26 +404,26 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                   </p>
                 </div>
 
-                {/* 1. Paper Nature: Mock Test vs PYP */}
+                {/* 1. Paper Nature: Mock Test vs PYP vs Both */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">
                     1. Paper Nature (प्रकृति) <span className="text-rose-400">*</span>
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setPaperNature('mock');
                         setPaperSummary(`High-yield mock simulation test containing ${questionsList.length} questions, authentic answer keys, and detailed bilingual solutions.`);
                       }}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center space-x-2 transition cursor-pointer ${
+                      className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
                         paperNature === 'mock'
                           ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 ring-1 ring-cyan-400 shadow-sm'
                           : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                       }`}
                     >
-                      <Sparkles className="w-4 h-4 text-cyan-400" />
-                      <span>🎯 Mock Test (Test Series)</span>
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span>🎯 Mock Test</span>
                     </button>
 
                     <button
@@ -431,14 +432,30 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                         setPaperNature('pyp');
                         setPaperSummary(`Official past paper simulation containing ${questionsList.length} questions, authentic answer keys, and detailed bilingual solutions.`);
                       }}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center space-x-2 transition cursor-pointer ${
+                      className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
                         paperNature === 'pyp'
                           ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400 shadow-sm'
                           : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                       }`}
                     >
-                      <Award className="w-4 h-4 text-emerald-400" />
-                      <span>📜 Official PYP (Past Exam)</span>
+                      <Award className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>📜 Official PYP</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaperNature('both');
+                        setPaperSummary(`Official past paper archive & live mock simulation containing ${questionsList.length} questions, authentic answer keys, and detailed bilingual solutions.`);
+                      }}
+                      className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
+                        paperNature === 'both'
+                          ? 'bg-indigo-500/20 border-indigo-400 text-indigo-200 ring-1 ring-indigo-400 shadow-sm'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span>⚡ Both (PYP + Mock)</span>
                     </button>
                   </div>
                 </div>
@@ -621,38 +638,50 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                   </div>
 
                   {/* Card Bottom Actions */}
-                  <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                  <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => setActiveTab('questions')}
-                      className="text-xs text-slate-400 hover:text-white transition flex items-center space-x-1 cursor-pointer"
+                      className="text-xs text-slate-400 hover:text-white transition flex items-center space-x-1 cursor-pointer shrink-0"
                     >
                       <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Review & Edit All {questionsList.length} Questions</span>
+                      <span>Edit {questionsList.length} Qs</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={handlePublish}
-                      disabled={isImporting || questionsList.length === 0}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer ${
-                        paperNature === 'mock'
-                          ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
-                          : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
-                      }`}
-                    >
-                      {isImporting ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Publishing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-slate-950" />
-                          <span>Publish {paperNature === 'mock' ? 'Mock Test' : 'Official PYP'}</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handlePublish('mock')}
+                        disabled={isImporting || questionsList.length === 0}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition flex items-center space-x-1 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                        title="Publish strictly as a Mock Test Series"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Mock Test</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handlePublish('pyp')}
+                        disabled={isImporting || questionsList.length === 0}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center space-x-1 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                        title="Publish as an Official Previous Year Paper"
+                      >
+                        <Award className="w-3.5 h-3.5" />
+                        <span>Official PYP</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handlePublish('both')}
+                        disabled={isImporting || questionsList.length === 0}
+                        className="px-3 py-1.5 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center space-x-1 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                        title="Publish as BOTH Official PYP and Linked Mock Test"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Both</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -965,52 +994,56 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
           )}
         </div>
 
-        {/* Modal Bottom Sticky Footer with Publish Action */}
+        {/* Modal Bottom Sticky Footer with Publish Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 bg-slate-950 border-t border-slate-800 shrink-0">
           <div className="flex items-center space-x-3 text-xs text-slate-400">
             <span className="flex items-center space-x-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>
                 Ready to publish <strong className="text-white">{questionsList.length}</strong> questions under{' '}
-                <strong className="text-emerald-400">{category}</strong> › <strong className="text-purple-400">{subCategory}</strong> as{' '}
-                <strong className={paperNature === 'mock' ? 'text-cyan-400' : 'text-emerald-400'}>
-                  {paperNature === 'mock' ? 'Mock Test' : 'Official PYP'}
-                </strong>
+                <strong className="text-emerald-400">{category}</strong> › <strong className="text-purple-400">{subCategory}</strong>
               </span>
             </span>
           </div>
 
-          <div className="flex items-center space-x-3 self-end sm:self-center">
+          <div className="flex flex-wrap items-center gap-2 self-end sm:self-center">
             <button
               type="button"
               onClick={onClose}
               disabled={isImporting}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 transition cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 transition cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
 
             <button
               type="button"
-              onClick={handlePublish}
+              onClick={() => handlePublish('mock')}
               disabled={isImporting || questionsList.length === 0}
-              className={`px-5 py-2.5 rounded-xl text-xs font-black transition shadow-lg flex items-center space-x-2 cursor-pointer disabled:opacity-50 ${
-                paperNature === 'mock'
-                  ? 'bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-400 text-slate-950 hover:from-cyan-400 hover:to-teal-300 shadow-cyan-500/20'
-                  : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
-              }`}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition shadow-lg shadow-cyan-500/20 flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
             >
-              {isImporting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Publishing Exam & Test Series...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-slate-950" />
-                  <span>Publish {paperNature === 'mock' ? 'Mock Test' : 'PYP Exam'} & Create Live Test</span>
-                </>
-              )}
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Publish Mock Test</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePublish('pyp')}
+              disabled={isImporting || questionsList.length === 0}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Publish Official PYP</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePublish('both')}
+              disabled={isImporting || questionsList.length === 0}
+              className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white transition shadow-lg shadow-indigo-600/30 flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Publish Both (PYP + Mock)</span>
             </button>
           </div>
         </div>

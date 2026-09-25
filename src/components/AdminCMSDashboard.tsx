@@ -19,7 +19,9 @@ import {
   Code2,
   Server,
   GitBranch,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  Palette
 } from 'lucide-react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
@@ -96,10 +98,17 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
               </button>
             )}
             <button
-              onClick={() => onNavigateTab('admin-tests')}
+              onClick={() => onNavigateTab('admin-database')}
               className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
             >
-              <Layers className="w-4 h-4" />
+              <Database className="w-4 h-4" />
+              <span>Database & Schema</span>
+            </button>
+            <button
+              onClick={() => onNavigateTab('admin-tests')}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition active:scale-95 cursor-pointer"
+            >
+              <Layers className="w-4 h-4 text-indigo-400" />
               <span>Manage Tests</span>
             </button>
             <button
@@ -198,6 +207,82 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Module: No-Code Pages */}
+              <div 
+                onClick={() => onNavigateTab('admin-cms-pages')}
+                className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-indigo-500/50 transition cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition">
+                      <Globe className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-sm text-white group-hover:text-indigo-300 transition">No-Code Page Builder</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 transition" />
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Visual block editor to construct landing pages, syllabus guides, and coaching partner pages.
+                </p>
+              </div>
+
+              {/* Module: Articles & News */}
+              <div 
+                onClick={() => onNavigateTab('admin-cms-posts')}
+                className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-blue-500/50 transition cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-sm text-white group-hover:text-blue-300 transition">News & Articles Publisher</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400 transition" />
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Publish CGPSC and Vyapam exam notifications, study tips, and syllabus announcements.
+                </p>
+              </div>
+
+              {/* Module: Series Bundles */}
+              <div 
+                onClick={() => onNavigateTab('admin-cms-series')}
+                className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-amber-500/50 transition cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-600 group-hover:text-white transition">
+                      <Crown className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-sm text-white group-hover:text-amber-300 transition">Series Bundles & Passes</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-amber-400 transition" />
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Group mock tests into test series packs, set pricing (₹ INR), and configure Pass Pro access rules.
+                </p>
+              </div>
+
+              {/* Module: Theme Customizer */}
+              <div 
+                onClick={() => onNavigateTab('admin-cms-customizer')}
+                className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-purple-500/50 transition cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition">
+                      <Palette className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-sm text-white group-hover:text-purple-300 transition">Site Theme & Menus</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-purple-400 transition" />
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Customize site title, tagline, accent color palette, header navigation menu, and top announcement banner.
+                </p>
+              </div>
+
               {/* Module 1 */}
               <div 
                 onClick={() => onNavigateTab('admin-tests')}
@@ -255,7 +340,45 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
                 </p>
               </div>
 
-              {/* Module 4 */}
+              {/* Module 4: AI Test Creator */}
+              <div 
+                onClick={() => onNavigateTab('admin-ai')}
+                className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-pink-500/50 transition cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 rounded-lg bg-pink-500/10 text-pink-400 group-hover:bg-pink-600 group-hover:text-white transition">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-sm text-white group-hover:text-pink-300 transition">AI Test Creator</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-pink-400 transition" />
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Synthesize exam-aligned mock papers with Gemini AI, customizable subject blueprints, and difficulty controls.
+                </p>
+              </div>
+
+              {/* Module 5 */}
+              <div 
+                onClick={() => onNavigateTab('admin-database')}
+                className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-indigo-500/50 transition cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:bg-teal-600 group-hover:text-white transition">
+                      <Database className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-sm text-white group-hover:text-teal-300 transition">Database & Schema ERD</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-teal-400 transition" />
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  MySQL 8.0+ / MariaDB relational architecture, UTF-8 Devnagari encoding, connection pool, and live table ERD visualizer.
+                </p>
+              </div>
+
+              {/* Module 5 */}
               <div 
                 onClick={() => onNavigateTab('admin-android-api')}
                 className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-indigo-500/50 transition cursor-pointer group"
@@ -343,11 +466,23 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
                 <span className="text-slate-400">Commit SHA</span>
                 <span className="font-mono text-slate-300">{APP_BUILD_INFO.commitSha}</span>
               </div>
-              <div className="flex items-center justify-between py-1.5">
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                <span className="text-slate-400">Database Engine</span>
+                <span className="font-mono font-bold text-teal-300">MySQL 8.0+ / utf8mb4</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
                 <span className="text-slate-400">Build Date</span>
                 <span className="font-mono text-slate-300">{APP_BUILD_INFO.buildTime}</span>
               </div>
             </div>
+
+            <button
+              onClick={() => onNavigateTab('admin-database')}
+              className="w-full mt-2 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer"
+            >
+              <Database className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Inspect Database Schema & ERD</span>
+            </button>
           </div>
         </div>
       </div>

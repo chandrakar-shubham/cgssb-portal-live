@@ -1,8 +1,10 @@
-import React, { useState, useDeferredValue } from 'react';
+import React, { useState, useDeferredValue, useRef } from 'react';
+import Papa from 'papaparse';
 import {
   MockTest,
   ExamCategory,
-  Question
+  Question,
+  PreviousYearPaper
 } from '../types';
 import {
   Layers,
@@ -22,9 +24,13 @@ import {
   AlertTriangle,
   Crown,
   Lock,
-  Unlock
+  Unlock,
+  FileJson,
+  FileSpreadsheet
 } from 'lucide-react';
 import { AdminCompleteTestEditorModal } from './AdminCompleteTestEditorModal';
+import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
+import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 
 interface AdminTestCatalogProps {
   tests: MockTest[];
@@ -36,6 +42,9 @@ interface AdminTestCatalogProps {
   onAddTest: (test: Partial<MockTest>) => void;
   onNavigateToAICreator: () => void;
   onSaveCompletedTest?: (test: MockTest, questions: Question[]) => void;
+  onAddPYP?: (pyp: Partial<PreviousYearPaper>) => void;
+  onQuestionsAdded?: (questions: Question[]) => void;
+  onTestAdded?: (test: MockTest) => void;
 }
 
 export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
@@ -48,6 +57,9 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
   onAddTest,
   onNavigateToAICreator,
   onSaveCompletedTest,
+  onAddPYP,
+  onQuestionsAdded,
+  onTestAdded,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ExamCategory | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,6 +71,183 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
   const [newDuration, setNewDuration] = useState(120);
   const [newMarks, setNewMarks] = useState(1.0);
   const [newNegativeMarks, setNewNegativeMarks] = useState(0.333);
+
+  // Bulk Ingestion State
+  const jsonInputRef = useRef<HTMLInputElement | null>(null);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewQuestions, setPreviewQuestions] = useState<Question[]>([]);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  // JSON Import Handler
+  const handleJSONImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        const records: any[] = Array.isArray(parsed) ? parsed : (parsed.questions || []);
+
+        if (records.length === 0) {
+          alert('❌ The JSON file is empty or does not contain questions.');
+          return;
+        }
+
+        const mapped = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
+        setPreviewQuestions(mapped);
+        setIsPreviewModalOpen(true);
+      } catch (err: any) {
+        alert(`❌ Invalid JSON file: ${err.message}`);
+      } finally {
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // CSV Import Handler
+  const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        try {
+          const records = results.data as any[];
+          if (!records || records.length === 0) {
+            alert('❌ The CSV file is empty.');
+            return;
+          }
+          const mapped = records.map((r, idx) => mapRawJsonToQuestion(r, idx));
+          setPreviewQuestions(mapped);
+          setIsPreviewModalOpen(true);
+        } catch (err: any) {
+          alert(`❌ CSV Parsing Error: ${err.message}`);
+        } finally {
+          if (e.target) e.target.value = '';
+        }
+      },
+      error: (err) => {
+        alert(`❌ Failed to read CSV file: ${err.message}`);
+        if (e.target) e.target.value = '';
+      }
+    });
+  };
+
+  // Confirm Import Handler from BulkImportPreviewModal
+  const handleConfirmImport = async (
+    paperConfig: IngestionPaperConfig,
+    finalQuestions: Question[]
+  ) => {
+    if (finalQuestions.length === 0) return;
+    setIsImporting(true);
+
+    try {
+      const catPrefix = paperConfig.examCategory === 'CGPSC' ? 'cgpsc' : paperConfig.examCategory === 'CENTRAL_EXAMS' ? 'central' : 'cgssb';
+      const year = paperConfig.year || new Date().getFullYear();
+      const timestamp = Date.now();
+      const marksPerQ = Number((paperConfig.marks / (finalQuestions.length || 1)).toFixed(2)) || 1.0;
+      const negMarks = finalQuestions[0]?.negativeMarks || 0.25;
+
+      const authority = paperConfig.authority || 'CGSSB';
+      const subCategory = paperConfig.subCategory || 'General Recruitment';
+      const postName = paperConfig.postName || 'CG Lecturer 2026';
+      const examNameStr = paperConfig.examName || paperConfig.title;
+
+      const taggedQuestions: Question[] = finalQuestions.map(q => ({
+        ...q,
+        authority,
+        category: paperConfig.examCategory,
+        subCategory,
+        postName,
+        examName: examNameStr,
+        pypSource: examNameStr,
+        year: year,
+      }));
+
+      // Create Mock Test representation
+      if (paperConfig.paperNature === 'mock' || paperConfig.paperNature === 'both') {
+        const testId = `mock-${catPrefix}-${year}-${timestamp}`;
+        const newMockTest: MockTest = {
+          id: testId,
+          title: paperConfig.title,
+          authority,
+          category: paperConfig.examCategory,
+          subCategory,
+          postName,
+          examName: examNameStr,
+          description: paperConfig.paperSummary,
+          durationMinutes: paperConfig.durationMinutes,
+          questionCount: taggedQuestions.length,
+          marksPerQuestion: marksPerQ,
+          negativeMarksPerQuestion: negMarks,
+          isPYP: paperConfig.paperNature === 'both',
+          pypYear: year,
+          pypExamName: examNameStr,
+          sections: [
+            {
+              id: `sec-${testId}`,
+              name: 'Complete Test Paper',
+              questionIds: taggedQuestions.map(q => q.id),
+            },
+          ],
+          attemptsCount: 0,
+          isPublished: true,
+          difficultyDistribution: { easy: 30, medium: 50, hard: 20 },
+          createdAt: new Date().toISOString().split('T')[0],
+        };
+
+        if (onTestAdded) {
+          onTestAdded(newMockTest);
+        } else {
+          onAddTest(newMockTest);
+        }
+      }
+
+      // Create PYP Paper representation
+      if (paperConfig.paperNature === 'pyp' || paperConfig.paperNature === 'both') {
+        const paperId = `pyp-${catPrefix}-${year}-${timestamp}`;
+        const newPypPaper: PreviousYearPaper = {
+          id: paperId,
+          title: paperConfig.title,
+          authority,
+          examCategory: paperConfig.examCategory,
+          subCategory,
+          postName,
+          examName: examNameStr,
+          year: year,
+          totalQuestions: taggedQuestions.length,
+          durationMinutes: paperConfig.durationMinutes,
+          marks: paperConfig.marks,
+          negativeMarkingRatio: paperConfig.negativeMarkingRatio,
+          paperSummary: paperConfig.paperSummary,
+          subjectsWeightage: paperConfig.subjectsWeightage,
+          isOfficialPaper: true,
+          linkedQuestionIds: taggedQuestions.map(q => q.id),
+        };
+
+        if (onAddPYP) {
+          onAddPYP(newPypPaper);
+        }
+      }
+
+      if (taggedQuestions.length > 0 && onQuestionsAdded) {
+        onQuestionsAdded(taggedQuestions);
+      }
+
+      setIsPreviewModalOpen(false);
+      alert(`✅ Imported "${paperConfig.title}" successfully as ${paperConfig.paperNature === 'mock' ? '🎯 Mock Test' : paperConfig.paperNature === 'pyp' ? '📜 Official PYP' : '⚡ Both (PYP + Mock Test)'}!`);
+    } catch (err: any) {
+      alert(`❌ Import Failed: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const filteredTests = tests.filter(test => {
     const matchesCategory = selectedCategory === 'ALL' || test.category === selectedCategory;
@@ -101,6 +290,22 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Hidden File Inputs for Native File Pickers */}
+      <input
+        type="file"
+        ref={jsonInputRef}
+        onChange={handleJSONImport}
+        accept=".json,application/json"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={csvInputRef}
+        onChange={handleCSVImport}
+        accept=".csv,text/csv"
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950/50 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -116,6 +321,22 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            onClick={() => jsonInputRef.current?.click()}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 hover:border-emerald-500/50 font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer"
+            title="Import questions from JSON file as Mock Test or Official PYP"
+          >
+            <FileJson className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Import JSON</span>
+          </button>
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-400 border border-slate-700 hover:border-teal-500/50 font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer"
+            title="Import questions from CSV file as Mock Test or Official PYP"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" />
+            <span>Import CSV</span>
+          </button>
           <button
             onClick={onNavigateToAICreator}
             className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow-md shadow-purple-600/20 transition cursor-pointer"
@@ -396,6 +617,17 @@ export const AdminTestCatalog: React.FC<AdminTestCatalogProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Bulk Import Preview Modal */}
+      {isPreviewModalOpen && (
+        <BulkImportPreviewModal
+          isOpen={isPreviewModalOpen}
+          records={previewQuestions}
+          onClose={() => setIsPreviewModalOpen(false)}
+          onConfirm={handleConfirmImport}
+          isImporting={isImporting}
+        />
       )}
     </div>
   );

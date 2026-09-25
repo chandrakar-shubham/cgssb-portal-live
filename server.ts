@@ -8,10 +8,6 @@ import dotenv from 'dotenv';
 import {
   EXAM_PATTERNS,
   HIERARCHY_TREE,
-  INITIAL_QUESTIONS,
-  INITIAL_MOCK_TESTS,
-  INITIAL_PYP_PAPERS,
-  SAMPLE_USER_ATTEMPTS
 } from './src/mockData';
 import {
   Question,
@@ -22,6 +18,38 @@ import {
   ExamCategory,
   PYQAppearance
 } from './src/types';
+import {
+  getAllQuestions,
+  getQuestionById,
+  saveQuestion,
+  deleteQuestion,
+  getAllMockTests,
+  getMockTestById,
+  saveMockTest,
+  deleteMockTest,
+  getAllPypPapers,
+  savePypPaper,
+  getAllTestAttempts,
+  getTestAttemptById,
+  saveTestAttempt,
+  getDatabaseCounts,
+  saveLocalJsonDb,
+  getAllCmsPages,
+  getCmsPageBySlug,
+  saveCmsPage,
+  deleteCmsPage,
+  getAllCmsPosts,
+  getCmsPostBySlug,
+  saveCmsPost,
+  deleteCmsPost,
+  getAllCmsSeriesPacks,
+  saveCmsSeriesPack,
+  deleteCmsSeriesPack,
+  getCmsSettings,
+  saveCmsSettings,
+} from './server/db/repository';
+import { bootstrapAndMigrate } from './server/db/migrator';
+import { dbConfig, isMysqlActive } from './server/db/connection';
 
 dotenv.config();
 
@@ -66,87 +94,6 @@ function getBuildInfo() {
   return { commitSha, buildTime };
 }
 
-// ==================== PERSISTENT STORAGE ====================
-// Path to a JSON file that survives server restarts
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'cgssb-db.json');
-
-interface DatabaseShape {
-  questions: Question[];
-  mockTests: MockTest[];
-  pypPapers: PreviousYearPaper[];
-  attempts: TestAttempt[];
-}
-
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
-function loadDatabase(): DatabaseShape {
-  ensureDataDir();
-  const mergeById = <T extends { id: string }>(initial: T[], saved?: T[]): T[] => {
-    const map = new Map<string, T>();
-    initial.forEach(item => { if (item && item.id) map.set(item.id, item); });
-    if (Array.isArray(saved)) {
-      saved.forEach(item => { if (item && item.id) map.set(item.id, item); });
-    }
-    return Array.from(map.values());
-  };
-
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      console.log(`✅ Loaded DB from ${DB_FILE}`);
-      return {
-        questions: mergeById(INITIAL_QUESTIONS, parsed.questions),
-        mockTests: mergeById(INITIAL_MOCK_TESTS, parsed.mockTests),
-        pypPapers: mergeById(INITIAL_PYP_PAPERS, parsed.pypPapers),
-        attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [...SAMPLE_USER_ATTEMPTS],
-      };
-    }
-  } catch (err) {
-    console.warn('⚠️ Failed to load DB, using seeds:', err);
-  }
-  console.log('📦 No DB found, seeding with initial data');
-  return {
-    questions: [...INITIAL_QUESTIONS],
-    mockTests: [...INITIAL_MOCK_TESTS],
-    pypPapers: [...INITIAL_PYP_PAPERS],
-    attempts: [...SAMPLE_USER_ATTEMPTS],
-  };
-}
-
-const db: DatabaseShape = loadDatabase();
-let questions: Question[] = db.questions;
-let mockTests: MockTest[] = db.mockTests;
-let pypPapers: PreviousYearPaper[] = db.pypPapers;
-let attempts: TestAttempt[] = db.attempts;
-
-let saveTimer: NodeJS.Timeout | null = null;
-function saveDatabase(immediate = false) {
-  const doSave = () => {
-    try {
-      ensureDataDir();
-      const payload: DatabaseShape = { questions, mockTests, pypPapers, attempts };
-      fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), 'utf-8');
-      console.log(`💾 DB saved (${questions.length} Qs, ${mockTests.length} tests, ${pypPapers.length} PYPs)`);
-    } catch (err) {
-      console.error('❌ Failed to save DB:', err);
-    }
-  };
-  if (immediate) {
-    if (saveTimer) clearTimeout(saveTimer);
-    doSave();
-  } else {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(doSave, 2000);
-  }
-}
-// ==================== END PERSISTENT STORAGE ====================
-
 // Gemini Client initialization (server-side only)
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -161,7 +108,442 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
+// Helper: Classify a question into Subject, Topic (Chapter), and Subtopic based on text content & taxonomy
+function autoClassifyChapter(text: string, defaultSubject: string, defaultTopic: string) {
+  const lower = text.toLowerCase();
+
+  if (
+    lower.includes('हाना') || lower.includes('hana') ||
+    lower.includes('जनउला') || lower.includes('janula') ||
+    lower.includes('छत्तीसगढ़ी') || lower.includes('chhattisgarhi') ||
+    lower.includes('भाखा') || lower.includes('हलबी बोली') || lower.includes('गोंडी बोली')
+  ) {
+    return {
+      subject: 'Chhattisgarhi Language',
+      topic: (lower.includes('हाना') || lower.includes('जनउला')) ? 'Chhattisgarhi Hana & Janula' : 'Chhattisgarhi Vyakaran',
+      chapterName: (lower.includes('हाना') || lower.includes('जनउला')) ? 'Chhattisgarhi Hana & Janula (हाना एवं जनउला)' : 'Chhattisgarhi Vyakaran (छत्तीसगढ़ी व्याकरण)',
+      subtopic: lower.includes('हाना') ? 'Prasiddha Hana (Idioms)' : lower.includes('जनउला') ? 'Janula (Riddles)' : 'Chhattisgarhi Shabdkosh'
+    };
+  }
+
+  if (
+    lower.includes('संधि') || lower.includes('समास') ||
+    lower.includes('पर्यायवाची') || lower.includes('विलोम') ||
+    lower.includes('उपसर्ग') || lower.includes('प्रत्यय') ||
+    lower.includes('तत्सम') || lower.includes('तद्भव') ||
+    lower.includes('मुहावरा') || lower.includes('मुहावरे') || lower.includes('लोकोक्ति') ||
+    lower.includes('वर्तनी') || lower.includes('वाक्य शुद्धि') ||
+    (lower.includes('संज्ञा') && !lower.includes('गोंड')) || lower.includes('सर्वनाम') ||
+    lower.includes('विशेषण') || lower.includes('कारक') || lower.includes('अलंकार')
+  ) {
+    return {
+      subject: 'General Hindi',
+      topic: (lower.includes('संधि') || lower.includes('समास')) ? 'Sandhi & Samas' : 'Hindi Vyakaran & Varnamala',
+      chapterName: 'General Hindi (सामान्य हिन्दी)',
+      subtopic: lower.includes('संधि') ? 'Swar & Vyanjan Sandhi' : lower.includes('समास') ? 'Samas Bhed' : 'Vocabulary & Vyakaran'
+    };
+  }
+
+  if (
+    lower.includes('computer') || lower.includes('कंप्यूटर') ||
+    lower.includes('cpu') || lower.includes('सीपीयू') ||
+    lower.includes('ram') || lower.includes('rom') || lower.includes('रैम') || lower.includes('रोम') ||
+    lower.includes('motherboard') || lower.includes('hardware') || lower.includes('हार्डवेयर') ||
+    lower.includes('software') || lower.includes('सॉफ्टवेयर') ||
+    lower.includes('operating system') || lower.includes('ऑपरेटिंग सिस्टम') ||
+    lower.includes('ms word') || lower.includes('ms excel') || lower.includes('powerpoint') ||
+    lower.includes('spreadsheet') || lower.includes('word processor') ||
+    lower.includes('internet') || lower.includes('इंटरनेट') ||
+    lower.includes('browser') || lower.includes('ब्राउज़र') ||
+    lower.includes('firewall') || lower.includes('फायरवॉल') ||
+    lower.includes('malware') || lower.includes('antivirus') || lower.includes('वायरस') ||
+    lower.includes('ip address') || lower.includes('protocol') || lower.includes('binary') ||
+    lower.includes('printer') || lower.includes('cache memory') || lower.includes('e-mail')
+  ) {
+    return {
+      subject: 'Computer Knowledge',
+      topic: (lower.includes('ms ') || lower.includes('operating') || lower.includes('word') || lower.includes('excel'))
+        ? 'Operating Systems & Software'
+        : (lower.includes('internet') || lower.includes('browser') || lower.includes('firewall') || lower.includes('malware'))
+        ? 'Internet & Cybersecurity'
+        : 'Computer Fundamentals',
+      chapterName: 'Computer Knowledge (कंप्यूटर सामान्य ज्ञान)',
+      subtopic: lower.includes('internet') ? 'Internet & Cybersecurity' : 'MS Office & Architecture'
+    };
+  }
+
+  if (
+    lower.includes('प्रतिशत') || lower.includes('percentage') ||
+    lower.includes('अनुपात') || lower.includes('ratio') ||
+    lower.includes('समानुपात') || lower.includes('proportion') ||
+    lower.includes('लाभ') || lower.includes('हानि') || lower.includes('profit') || lower.includes('loss') ||
+    lower.includes('क्रय मूल्य') || lower.includes('विक्रय मूल्य') ||
+    lower.includes('बट्टा') || lower.includes('छूट') || lower.includes('discount') ||
+    lower.includes('साधारण ब्याज') || lower.includes('simple interest') ||
+    lower.includes('चक्रवृद्धि ब्याज') || lower.includes('compound interest') ||
+    lower.includes('समय और कार्य') || lower.includes('time and work') ||
+    lower.includes('चाल') || lower.includes('दूरी') || lower.includes('speed') || lower.includes('distance') ||
+    lower.includes('औसत') || lower.includes('average') ||
+    lower.includes('ल.स.') || lower.includes('म.स.') || lower.includes('lcm') || lower.includes('hcf') ||
+    lower.includes('संख्या पद्धति') || lower.includes('number system') ||
+    lower.includes('क्षेत्रफल') || lower.includes('आयतन') || lower.includes('mensuration') ||
+    lower.includes('पाई चार्ट') || lower.includes('bar graph')
+  ) {
+    return {
+      subject: 'Quantitative Aptitude',
+      topic: 'Arithmetic & Commercial Mathematics',
+      chapterName: 'Quantitative Aptitude (संख्यात्मक अभिक्षमता)',
+      subtopic: lower.includes('प्रतिशत') || lower.includes('percentage') ? 'Percentages & Profit-Loss' : 'Ratio & Commercial Maths'
+    };
+  }
+
+  if (
+    lower.includes('रीजनिंग') || lower.includes('reasoning') ||
+    lower.includes('कोडिंग') || lower.includes('coding') || lower.includes('decoding') ||
+    lower.includes('रक्त संबंध') || lower.includes('blood relation') ||
+    lower.includes('दिशा ज्ञान') || lower.includes('direction sense') ||
+    lower.includes('न्याय निगमन') || lower.includes('syllogism') ||
+    lower.includes('कथन और निष्कर्ष') || lower.includes('statement and conclusion') ||
+    lower.includes('कथन और पूर्वधारणा') || lower.includes('seating arrangement') || lower.includes('बैठक व्यवस्था') ||
+    lower.includes('वेन आरेख') || lower.includes('venn diagram') ||
+    lower.includes('पासा') || lower.includes('dice') ||
+    lower.includes('कैलेंडर') || lower.includes('calendar') || lower.includes('घड़ी') || lower.includes('clock') ||
+    lower.includes('दर्पण प्रतिबिंब') || lower.includes('mirror image') ||
+    lower.includes('श्रृंखला') || lower.includes('number series') || lower.includes('missing number')
+  ) {
+    return {
+      subject: 'Reasoning',
+      topic: 'Verbal & Analytical Reasoning',
+      chapterName: 'Analytical & Logical Reasoning (तर्कशक्ति)',
+      subtopic: lower.includes('coding') ? 'Coding-Decoding' : lower.includes('blood') ? 'Blood Relations' : 'Logical Deductions'
+    };
+  }
+
+  if (
+    lower.includes('प्रकाश वर्ष') || lower.includes('light year') ||
+    lower.includes('न्यूटन') || lower.includes('गुरुत्वाकर्षण') || lower.includes('gravity') ||
+    lower.includes('विद्युत धारा') || lower.includes('आवर्त सारणी') || lower.includes('periodic table') ||
+    lower.includes('परमाणु') || lower.includes('अणु') ||
+    lower.includes('अम्ल') || lower.includes('acid') || lower.includes('क्षार') || lower.includes('base') ||
+    lower.includes('कोशिका') || lower.includes('cell') ||
+    lower.includes('माइटोकॉन्ड्रिया') || lower.includes('mitochondria') ||
+    lower.includes('डीएनए') || lower.includes('dna') || lower.includes('आरएनए') ||
+    lower.includes('प्रकाश संश्लेषण') || lower.includes('photosynthesis') ||
+    lower.includes('रक्त समूह') || lower.includes('blood group') ||
+    lower.includes('विटामिन') || lower.includes('vitamin') ||
+    lower.includes('जीवाणु') || lower.includes('bacteria') || lower.includes('विषाणु') || lower.includes('virus') ||
+    lower.includes('ओजोन') || lower.includes('ozone') || lower.includes('पारिस्थितिकी') || lower.includes('ecosystem')
+  ) {
+    return {
+      subject: 'General Science',
+      topic: (lower.includes('कोशिका') || lower.includes('डीएनए') || lower.includes('विटामिन') || lower.includes('जीवाणु') || lower.includes('photosynthesis'))
+        ? 'Biology & Environmental Ecology'
+        : (lower.includes('अम्ल') || lower.includes('आवर्त सारणी') || lower.includes('परमाणु'))
+        ? 'Chemistry'
+        : 'Physics',
+      chapterName: 'General Science (सामान्य विज्ञान)',
+      subtopic: 'Core Science Concepts'
+    };
+  }
+
+  if (
+    lower.includes('pedagogy') || lower.includes('बाल विकास') || lower.includes('शिक्षा शास्त्र') ||
+    lower.includes('पियाजे') || lower.includes('piaget') ||
+    lower.includes('वायगोत्स्की') || lower.includes('vygotsky') ||
+    lower.includes('समावेशी शिक्षा') || lower.includes('cce') || lower.includes('nep 2020')
+  ) {
+    return {
+      subject: 'Child Pedagogy & Teaching Methodology',
+      topic: 'Educational Psychology',
+      chapterName: 'Child Pedagogy & Methodology (बाल विकास एवं शिक्षा शास्त्र)',
+      subtopic: 'Child Development & Learning'
+    };
+  }
+
+  const hasCGIdentifier =
+    lower.includes('छत्तीसगढ़') || lower.includes('chhattisgarh') ||
+    lower.includes('कलचुरी') || lower.includes('kalchuri') ||
+    lower.includes('रतनपुर') || lower.includes('ratanpur') ||
+    lower.includes('तुम्माण') || lower.includes('tumman') ||
+    lower.includes('बस्तर') || lower.includes('bastar') ||
+    lower.includes('सरगुजा') || lower.includes('surguja') ||
+    lower.includes('रायपुर') || lower.includes('raipur') ||
+    lower.includes('बिलासपुर') || lower.includes('bilaspur') ||
+    lower.includes('महानदी') || lower.includes('mahanadi') ||
+    lower.includes('इंद्रावती') || lower.includes('indravati') ||
+    lower.includes('शिवनाथ') || lower.includes('shivnath') ||
+    lower.includes('हसदेव') || lower.includes('hasdeo') ||
+    lower.includes('चित्रकोट') || lower.includes('chitrakote') ||
+    lower.includes('तीरथगढ़') || lower.includes('teerathgarh') ||
+    lower.includes('कांगेर') || lower.includes('kanger') ||
+    lower.includes('गोंड') || lower.includes('बैगा') || lower.includes('माड़िया') || lower.includes('मुरिया') ||
+    lower.includes('हल्बा') || lower.includes('कमर') || lower.includes('भुंजिया') ||
+    lower.includes('पंडवानी') || lower.includes('pandwani') ||
+    lower.includes('पंथी') || lower.includes('panthi') ||
+    lower.includes('करमा') || lower.includes('karma') ||
+    lower.includes('राउत नाचा') || lower.includes('raut nacha') ||
+    lower.includes('मड़ई') || lower.includes('madai') ||
+    lower.includes('तीजा') || lower.includes('पोला') || lower.includes('हरेली') || lower.includes('छेरछेरा') ||
+    lower.includes('भूमकाल') || lower.includes('bhumkal') ||
+    lower.includes('तारापुर विद्रोह') || lower.includes('काकतीय') || lower.includes('kakatiya') ||
+    lower.includes('गोधन न्याय') || lower.includes('सुराजी गांव') || lower.includes('महतारी वंदन') ||
+    lower.includes('मैनपाट') || lower.includes('सामरीपाट') || lower.includes('गौरलाटा') ||
+    lower.includes('दंतेवाड़ा') || lower.includes('कांकेर') || lower.includes('सुकमा') || lower.includes('धमतरी') ||
+    lower.includes('कवर्धा') || lower.includes('दुर्ग') || lower.includes('कोरबा') || lower.includes('रायगढ़') ||
+    lower.includes('जशपुर') || lower.includes('राजनांदगांव') || lower.includes('जांजगीर') || lower.includes('कोरिया') ||
+    lower.includes('बलरामपुर') || lower.includes('सूरजपुर') || lower.includes('बेमेतरा') || lower.includes('बालोद') ||
+    lower.includes('गरियाबंद') || lower.includes('महासमुंद') || lower.includes('मुंगेली') || lower.includes('गौरेला') ||
+    lower.includes('मोहला') || lower.includes('सारंगढ़') || lower.includes('खैरागढ़') || lower.includes('मनेंद्रगढ़') ||
+    lower.includes('सक्ती') || lower.includes('दल्ली राजहरा') || lower.includes('बैलाडीला');
+
+  const hasIndiaIdentifier =
+    lower.includes('भारत') || lower.includes('india') || lower.includes('indian') ||
+    lower.includes('भारतीय') || lower.includes('राष्ट्रीय') || lower.includes('national') ||
+    lower.includes('केंद्र') || lower.includes('central') || lower.includes('union') ||
+    lower.includes('संसद') || lower.includes('parliament') || lower.includes('लोकसभा') ||
+    lower.includes('राज्यसभा') || lower.includes('राष्ट्रपति') || lower.includes('supreme court') ||
+    lower.includes('हड़प्पा') || lower.includes('सिंधु घाटी') || lower.includes('मौर्य') ||
+    lower.includes('मुगल') || lower.includes('गांधी') || lower.includes('हिमालय') ||
+    lower.includes('गंगा') || lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') ||
+    lower.includes('आरबीआई') || lower.includes('rbi') || lower.includes('इसरो') || lower.includes('isro');
+
+  if (hasCGIdentifier) {
+    if (
+      lower.includes('कलचुरी') || lower.includes('kalchuri') ||
+      lower.includes('रतनपुर') || lower.includes('तुम्माण') ||
+      lower.includes('मराठा') || lower.includes('भूमकाल') || lower.includes('काकतीय') ||
+      lower.includes('विद्रोह') || lower.includes('revolt') || lower.includes('गठन') ||
+      lower.includes('राज्य स्थापना') || lower.includes('रियासत') || lower.includes('वीर नारायण') ||
+      lower.includes('सोनाखान') || lower.includes('गुंडाधूर') || lower.includes('सत्याग्रह')
+    ) {
+      return {
+        subject: 'Chhattisgarh General Studies',
+        topic: 'History of Chhattisgarh',
+        chapterName: 'History of Chhattisgarh (छत्तीसगढ़ का इतिहास)',
+        subtopic: lower.includes('कलचुरी') ? 'Kalchuri Dynasty' : lower.includes('विद्रोह') ? 'Tribal Revolts & Freedom Struggle' : 'State Formation & History'
+      };
+    }
+    if (
+      lower.includes('जलप्रपात') || lower.includes('waterfall') ||
+      lower.includes('नदी') || lower.includes('river') ||
+      lower.includes('महानदी') || lower.includes('इंद्रावती') || lower.includes('शिवनाथ') || lower.includes('हसदेव') ||
+      lower.includes('चित्रकोट') || lower.includes('तीरथगढ़') || lower.includes('मैनपाट') || lower.includes('सामरीपाट') ||
+      lower.includes('खनिज') || lower.includes('mineral') || lower.includes('कोयला') || lower.includes('लौह अयस्क') ||
+      lower.includes('अभयारण्य') || lower.includes('राष्ट्रीय उद्यान') || lower.includes('कांगेर घाटी')
+    ) {
+      return {
+        subject: 'Chhattisgarh General Studies',
+        topic: 'Geography & Natural Resources',
+        chapterName: 'Geography & Natural Resources (छत्तीसगढ़ भूगोल एवं प्राकृतिक संसाधन)',
+        subtopic: lower.includes('जलप्रपात') || lower.includes('चित्रकोट') ? 'Waterfalls & River Basins' : 'Minerals & Forests'
+      };
+    }
+    if (
+      lower.includes('जनजाति') || lower.includes('tribe') ||
+      lower.includes('गोंड') || lower.includes('बैगा') || lower.includes('माड़िया') || lower.includes('मुरिया') ||
+      lower.includes('दशहरा') || lower.includes('बस्तर') || lower.includes('नृत्य') || lower.includes('dance') ||
+      lower.includes('करमा') || lower.includes('पंथी') || lower.includes('राउत') || lower.includes('पंडवानी') ||
+      lower.includes('दंतेश्वरी') || lower.includes('मड़ई') || lower.includes('हरेली') || lower.includes('पोला') ||
+      lower.includes('छेरछेरा') || lower.includes('घोटुल') || lower.includes('मेला')
+    ) {
+      return {
+        subject: 'Chhattisgarh General Studies',
+        topic: 'Culture, Tribes & Tourism',
+        chapterName: 'Culture, Tribes & Tourism (छत्तीसगढ़ संस्कृति, जनजातियाँ एवं पर्यटन)',
+        subtopic: lower.includes('दशहरा') || lower.includes('मड़ई') ? 'Bastar Dussehra & Fairs' : lower.includes('नृत्य') ? 'Folk Dances' : 'Tribal Traditions'
+      };
+    }
+    return {
+      subject: 'Chhattisgarh General Studies',
+      topic: 'Administration & Economy',
+      chapterName: 'Administration & Economy (छत्तीसगढ़ प्रशासन एवं अर्थव्यवस्था)',
+      subtopic: lower.includes('पंचायत') ? 'Panchayati Raj in CG' : 'State Governance & Schemes'
+    };
+  }
+
+  if (
+    lower.includes('संविधान') || lower.includes('constitution') ||
+    lower.includes('अनुच्छेद') || lower.includes('article ') ||
+    lower.includes('संसद') || lower.includes('parliament') ||
+    lower.includes('लोकसभा') || lower.includes('lok sabha') ||
+    lower.includes('राज्यसभा') || lower.includes('rajya sabha') ||
+    lower.includes('राष्ट्रपति') || lower.includes('president of india') ||
+    lower.includes('उपराष्ट्रपति') || lower.includes('प्रधानमंत्री') || lower.includes('prime minister') ||
+    lower.includes('सर्वोच्च न्यायालय') || lower.includes('supreme court') ||
+    lower.includes('उच्च न्यायालय') || lower.includes('high court') ||
+    lower.includes('मौलिक अधिकार') || lower.includes('fundamental rights') ||
+    lower.includes('मौलिक कर्तव्य') || lower.includes('fundamental duties') ||
+    lower.includes('नीति निदेशक') || lower.includes('dpsp') ||
+    lower.includes('प्रस्तावना') || lower.includes('preamble') ||
+    lower.includes('निर्वाचन आयोग') || lower.includes('election commission') ||
+    lower.includes('नियंत्रक एवं महालेखा') || lower.includes('cag') ||
+    lower.includes('संघ लोक सेवा') || lower.includes('upsc') ||
+    lower.includes('वित्त आयोग') || lower.includes('finance commission') ||
+    lower.includes('संविधान संशोधन') || lower.includes('amendment') ||
+    lower.includes('न्यायपालिका') || lower.includes('judiciary')
+  ) {
+    return {
+      subject: 'India General Studies',
+      topic: 'Indian Polity & Constitution',
+      chapterName: 'Indian Polity & Constitution (भारतीय संविधान एवं राजव्यवस्था)',
+      subtopic: lower.includes('अनुच्छेद') || lower.includes('मौलिक अधिकार') ? 'Fundamental Rights & Articles' : 'Parliament & Governance'
+    };
+  }
+
+  if (
+    lower.includes('हड़प्पा') || lower.includes('harappa') ||
+    lower.includes('सिंधु घाटी') || lower.includes('indus valley') ||
+    lower.includes('मोहनजोदड़ो') || lower.includes('वैदिक काल') || lower.includes('vedic') ||
+    lower.includes('ऋग्वेद') || lower.includes('महाजनपद') ||
+    lower.includes('बौद्ध धर्म') || lower.includes('buddhism') || lower.includes('जैन धर्म') || lower.includes('jainism') ||
+    lower.includes('मौर्य') || lower.includes('maurya') || lower.includes('अशोक') || lower.includes('ashoka') ||
+    lower.includes('गुप्त काल') || lower.includes('gupta') || lower.includes('समुद्रगुप्त') ||
+    lower.includes('दिल्ली सल्तनत') || lower.includes('delhi sultanate') || lower.includes('खिलजी') || lower.includes('तुगलक') ||
+    lower.includes('मुगल') || lower.includes('mughal') || lower.includes('बाबर') || lower.includes('अकबर') ||
+    lower.includes('शाहजहां') || lower.includes('औरंगजेब') || lower.includes('शिवाजी') ||
+    lower.includes('1857') || lower.includes('सिपाही विद्रोह') ||
+    lower.includes('कांग्रेस') || lower.includes('inc') ||
+    lower.includes('गांधी') || lower.includes('gandhi') ||
+    lower.includes('चंपारण') || lower.includes('असहयोग') || lower.includes('सविनय अवज्ञा') || lower.includes('भारत छोड़ो') ||
+    lower.includes('सुभाष चंद्र बोस') || lower.includes('भगत सिंह') || lower.includes('आजाद हिंद') ||
+    lower.includes('ईस्ट इंडिया कंपनी') || lower.includes('प्लासी') || lower.includes('बक्सर') ||
+    lower.includes('वायसराय') || lower.includes('गवर्नर जनरल')
+  ) {
+    return {
+      subject: 'India General Studies',
+      topic: 'Indian History & National Movement',
+      chapterName: 'Indian History & National Movement (भारतीय इतिहास एवं राष्ट्रीय आंदोलन)',
+      subtopic: lower.includes('1857') || lower.includes('गांधी') || lower.includes('कांग्रेस') ? 'Freedom Struggle & National Movement' : 'Ancient & Medieval History'
+    };
+  }
+
+  if (
+    lower.includes('हिमालय') || lower.includes('himalaya') ||
+    lower.includes('गंगा नदी') || lower.includes('ganga') ||
+    lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') || lower.includes('brahmaputra') ||
+    lower.includes('सिंधु नदी') || lower.includes('indus river') ||
+    lower.includes('गोदावरी') || lower.includes('कावेरी') || lower.includes('कृष्णा नदी') ||
+    lower.includes('नर्मदा') || lower.includes('ताप्ती') ||
+    lower.includes('पश्चिमी घाट') || lower.includes('western ghats') ||
+    lower.includes('पूर्वी घाट') || lower.includes('मानसून') || lower.includes('monsoon') ||
+    lower.includes('कर्क रेखा') || lower.includes('tropic of cancer') ||
+    lower.includes('अंडमान') || lower.includes('andaman') || lower.includes('निकोबार') ||
+    lower.includes('लक्षद्वीप') || lower.includes('lakshadweep') || lower.includes('थार मरुस्थल') ||
+    lower.includes('नीलगिरी') || lower.includes('सुंदरवन') || lower.includes('अरावली')
+  ) {
+    return {
+      subject: 'India General Studies',
+      topic: 'Physical & Economic Geography of India',
+      chapterName: 'Geography of India (भारत का भूगोल)',
+      subtopic: lower.includes('हिमालय') || lower.includes('पर्वत') ? 'Himalayas & Physiography' : 'River Systems & Climate'
+    };
+  }
+
+  if (
+    lower.includes('रिजर्व बैंक') || lower.includes('rbi') ||
+    lower.includes('रेपो रेट') || lower.includes('repo rate') ||
+    lower.includes('मौद्रिक नीति') || lower.includes('monetary policy') ||
+    lower.includes('पंचवर्षीय योजना') || lower.includes('five year plan') ||
+    lower.includes('नीति आयोग') || lower.includes('niti aayog') ||
+    lower.includes('सकल घरेलू उत्पाद') || lower.includes('gdp') ||
+    lower.includes('मुद्रास्फीति') || lower.includes('inflation') ||
+    lower.includes('राजकोषीय घाटा') || lower.includes('fiscal deficit') ||
+    lower.includes('सेबी') || lower.includes('sebi') || lower.includes('नाबार्ड') || lower.includes('nabard')
+  ) {
+    return {
+      subject: 'India General Studies',
+      topic: 'Indian Economy & Development',
+      chapterName: 'Indian Economy & Development (भारतीय अर्थव्यवस्था)',
+      subtopic: lower.includes('rbi') || lower.includes('बैंक') ? 'Banking & Monetary Policy' : 'Economic Planning & Indicators'
+    };
+  }
+
+  if (
+    lower.includes('नोबेल') || lower.includes('nobel') ||
+    lower.includes('भारत रत्न') || lower.includes('bharat ratna') ||
+    lower.includes('पद्म') || lower.includes('padma') ||
+    lower.includes('इसरो') || lower.includes('isro') || lower.includes('चंद्रयान') || lower.includes('chandrayaan') ||
+    lower.includes('डीआरडीओ') || lower.includes('drdo') ||
+    lower.includes('संयुक्त राष्ट्र') || lower.includes('united nations') ||
+    lower.includes('g20') || lower.includes('brics') ||
+    lower.includes('विश्व बैंक') || lower.includes('world bank') ||
+    lower.includes('ओलंपिक') || lower.includes('olympic')
+  ) {
+    return {
+      subject: 'India General Studies',
+      topic: 'National Current Affairs & General Knowledge',
+      chapterName: 'Current Affairs & GK (समसामयिक घटनाएं एवं सामान्य ज्ञान)',
+      subtopic: lower.includes('isro') ? 'Space & Science Missions' : 'Awards & International Affairs'
+    };
+  }
+
+  if (hasIndiaIdentifier) {
+    return {
+      subject: 'India General Studies',
+      topic: 'National Current Affairs & General Knowledge',
+      chapterName: 'Current Affairs & GK (समसामयिक घटनाएं एवं सामान्य ज्ञान)',
+      subtopic: 'General India Studies'
+    };
+  }
+
+  let normalizedDefaultSubject = 'Chhattisgarh General Studies';
+  if (defaultSubject) {
+    const clean = defaultSubject.trim();
+    if (clean.includes('Central') || clean.includes('CENTRAL') || clean.includes('India GS') || clean.includes('National')) {
+      normalizedDefaultSubject = 'India General Studies';
+    } else if (clean.includes('CGPSC') || clean.includes('Special Knowledge') || clean.includes('Chhattisgarh')) {
+      normalizedDefaultSubject = 'Chhattisgarh General Studies';
+    } else {
+      normalizedDefaultSubject = clean
+        .replace('General Science & Computer Knowledge', 'General Science')
+        .replace('General Mental Ability & Reasoning', 'Quantitative Aptitude')
+        .replace('General Hindi & Chhattisgarhi Language', 'General Hindi')
+        .replace('General Mental Ability', 'Quantitative Aptitude');
+    }
+  }
+
+  return {
+    subject: normalizedDefaultSubject,
+    topic: defaultTopic,
+    chapterName: defaultTopic,
+    subtopic: 'General Chapter Topic'
+  };
+}
+
+function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Question[], currentId: string) {
+  if (!newText || newText.length < 15) return null;
+  const clean = (s: string) => s.replace(/[^\w\u0900-\u097F]/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim();
+  const target = clean(newText);
+  const targetWords = new Set(target.split(' ').filter(w => w.length > 3));
+
+  if (targetWords.size < 3) return null;
+
+  for (const q of currentQuestions) {
+    if (q.id === currentId) continue;
+    const compText = clean(q.questionHindi || q.questionText || '');
+    if (!compText) continue;
+
+    if (target.includes(compText) || compText.includes(target)) {
+      return q;
+    }
+
+    const compWords = compText.split(' ').filter(w => w.length > 3);
+    let matchCount = 0;
+    for (const cw of compWords) {
+      if (targetWords.has(cw)) matchCount++;
+    }
+    const similarity = matchCount / Math.max(targetWords.size, compWords.length);
+    if (similarity >= 0.70) {
+      return q;
+    }
+  }
+  return null;
+}
+
 async function startServer() {
+  // Bootstrap & Auto-migrate database tables and initial snapshot
+  await bootstrapAndMigrate();
+
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
@@ -184,6 +566,10 @@ async function startServer() {
       status: 'ok',
       platform: 'CGSSB Test (cgssbtest.com)',
       version: '1.0.0',
+      database: {
+        mode: dbConfig.mode,
+        isMysqlActive: isMysqlActive(),
+      },
       timestamp: new Date().toISOString(),
       androidCompatibility: {
         minSdkVersion: 24,
@@ -194,8 +580,9 @@ async function startServer() {
   });
 
   // 1b. Version & Deployment Verification Endpoint
-  app.get('/api/version', (req, res) => {
+  app.get('/api/version', async (req, res) => {
     const { commitSha, buildTime } = getBuildInfo();
+    const counts = await getDatabaseCounts();
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json({
       commitSha,
@@ -203,13 +590,9 @@ async function startServer() {
       serverStartedAt: SERVER_BOOT_TIME,
       nodeVersion: process.version,
       env: process.env.NODE_ENV || 'development',
-      dataFile: DB_FILE,
-      counts: {
-        questions: questions.length,
-        mockTests: mockTests.length,
-        pypPapers: pypPapers.length,
-        attempts: attempts.length,
-      },
+      databaseMode: dbConfig.mode,
+      isMysqlActive: isMysqlActive(),
+      counts,
     });
   });
 
@@ -224,29 +607,24 @@ async function startServer() {
   });
 
   // 4. Questions CRUD
-  app.get('/api/questions', (req, res) => {
-    const { subject, topic, subtopic, difficulty, category, search } = req.query;
-    let filtered = [...questions];
-
-    if (subject) filtered = filtered.filter(q => q.subject === subject);
-    if (topic) filtered = filtered.filter(q => q.topic === topic);
-    if (subtopic) filtered = filtered.filter(q => q.subtopic === subtopic);
-    if (difficulty) filtered = filtered.filter(q => q.difficulty === difficulty);
-    if (category) filtered = filtered.filter(q => q.category === category);
-    if (search && typeof search === 'string') {
-      const s = search.toLowerCase();
-      filtered = filtered.filter(
-        q =>
-          (q.questionText || q.question || '').toLowerCase().includes(s) ||
-          (q.questionHindi && q.questionHindi.toLowerCase().includes(s)) ||
-          (q.topic || '').toLowerCase().includes(s)
-      );
+  app.get('/api/questions', async (req, res) => {
+    try {
+      const { subject, topic, subtopic, difficulty, category, search } = req.query;
+      const questionsList = await getAllQuestions({
+        subject: subject as string,
+        topic: topic as string,
+        subtopic: subtopic as string,
+        difficulty: difficulty as string,
+        category: category as string,
+        search: search as string,
+      });
+      res.json({ success: true, total: questionsList.length, questions: questionsList });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
-
-    res.json({ success: true, total: filtered.length, questions: filtered });
   });
 
-  app.post('/api/questions', (req, res) => {
+  app.post('/api/questions', async (req, res) => {
     try {
       const qData = req.body;
       const newQuestion: Question = {
@@ -274,34 +652,40 @@ async function startServer() {
         createdAt: new Date().toISOString().split('T')[0],
       };
 
-      questions.unshift(newQuestion);
-      saveDatabase();
+      await saveQuestion(newQuestion);
       res.status(201).json({ success: true, question: newQuestion });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
     }
   });
 
-  app.put('/api/questions/:id', (req, res) => {
-    const { id } = req.params;
-    const index = questions.findIndex(q => q.id === id);
-    if (index === -1) {
-      return res.status(404).json({ success: false, error: 'Question not found' });
+  app.put('/api/questions/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await getQuestionById(id);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Question not found' });
+      }
+      const updated: Question = { ...existing, ...req.body, id };
+      await saveQuestion(updated);
+      res.json({ success: true, question: updated });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
-    questions[index] = { ...questions[index], ...req.body, id };
-    saveDatabase();
-    res.json({ success: true, question: questions[index] });
   });
 
-  app.delete('/api/questions/:id', (req, res) => {
-    const { id } = req.params;
-    questions = questions.filter(q => q.id !== id);
-    saveDatabase();
-    res.json({ success: true, message: 'Question deleted successfully' });
+  app.delete('/api/questions/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      await deleteQuestion(id);
+      res.json({ success: true, message: 'Question deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // 4b. Bulk Questions Ingestion Endpoint
-  app.post('/api/questions/bulk', (req, res) => {
+  app.post('/api/questions/bulk', async (req, res) => {
     try {
       const { questions: incomingList } = req.body;
       const list = Array.isArray(incomingList) ? incomingList : (Array.isArray(req.body) ? req.body : []);
@@ -320,7 +704,7 @@ async function startServer() {
       for (const rawQ of list) {
         if (!rawQ) continue;
         const qId = String(rawQ.id || `q-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
-        const existingIdx = questions.findIndex(q => q.id === qId || (rawQ.uniqueQuestionId && q.uniqueQuestionId === rawQ.uniqueQuestionId));
+        const existing = await getQuestionById(qId);
 
         const formattedQ: Question = {
           ...rawQ,
@@ -349,18 +733,12 @@ async function startServer() {
           negativeMarks: Number(rawQ.negativeMarks) || 0.333,
         };
 
-        if (existingIdx !== -1) {
-          questions[existingIdx] = { ...questions[existingIdx], ...formattedQ };
-          updated++;
-          savedQuestions.push(questions[existingIdx]);
-        } else {
-          questions.unshift(formattedQ);
-          inserted++;
-          savedQuestions.push(formattedQ);
-        }
+        await saveQuestion(formattedQ);
+        if (existing) updated++;
+        else inserted++;
+        savedQuestions.push(formattedQ);
       }
 
-      saveDatabase();
       res.status(200).json({
         success: true,
         inserted,
@@ -375,71 +753,80 @@ async function startServer() {
   });
 
   // 5. Mock Tests CRUD
-  app.get('/api/tests', (req, res) => {
-    const { category, publishedOnly } = req.query;
-    const seen = new Set<string>();
-    let list = mockTests.filter(t => {
-      if (!t || !t.id || seen.has(t.id)) return false;
-      seen.add(t.id);
-      if (publishedOnly === 'true' && t.isPublished === false) return false;
-      return true;
-    });
-    if (category && category !== 'ALL') {
-      list = list.filter(t => t.category === category);
-    }
-    res.json({ success: true, tests: list });
-  });
-
-  app.get('/api/tests/:id', (req, res) => {
-    const test = mockTests.find(t => t.id === req.params.id);
-    if (!test) {
-      return res.status(404).json({ success: false, error: 'Test not found' });
-    }
-
-    const allQIds: string[] = [];
-    test.sections.forEach(s => {
-      s.questionIds.forEach(qid => {
-        if (!allQIds.includes(qid)) allQIds.push(qid);
+  app.get('/api/tests', async (req, res) => {
+    try {
+      const { category, publishedOnly } = req.query;
+      const list = await getAllMockTests({
+        category: category as string,
+        publishedOnly: publishedOnly === 'true',
       });
-    });
-
-    const testQuestions = questions.filter(q => allQIds.includes(q.id));
-
-    res.json({
-      success: true,
-      test,
-      questions: testQuestions,
-    });
-  });
-
-  app.put('/api/tests/:id', (req, res) => {
-    const { id } = req.params;
-    const idx = mockTests.findIndex(t => t.id === id);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, error: 'Test not found' });
+      res.json({ success: true, tests: list });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
-    mockTests[idx] = {
-      ...mockTests[idx],
-      ...req.body,
-      id,
-    };
-    saveDatabase();
-    res.json({ success: true, test: mockTests[idx] });
   });
 
-  app.delete('/api/tests/:id', (req, res) => {
-    const { id } = req.params;
-    const beforeCount = mockTests.length;
-    mockTests = mockTests.filter(t => t.id !== id);
-    saveDatabase();
-    res.json({
-      success: true,
-      deleted: beforeCount !== mockTests.length,
-      message: 'Test deleted successfully',
-    });
+  app.get('/api/tests/:id', async (req, res) => {
+    try {
+      const test = await getMockTestById(req.params.id);
+      if (!test) {
+        return res.status(404).json({ success: false, error: 'Test not found' });
+      }
+
+      const allQIds: string[] = [];
+      test.sections.forEach(s => {
+        s.questionIds.forEach(qid => {
+          if (!allQIds.includes(qid)) allQIds.push(qid);
+        });
+      });
+
+      const allQuestionsList = await getAllQuestions();
+      const testQuestions = allQuestionsList.filter(q => allQIds.includes(q.id));
+
+      res.json({
+        success: true,
+        test,
+        questions: testQuestions,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
-  app.post('/api/tests', (req, res) => {
+  app.put('/api/tests/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await getMockTestById(id);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Test not found' });
+      }
+      const updated: MockTest = {
+        ...existing,
+        ...req.body,
+        id,
+      };
+      await saveMockTest(updated);
+      res.json({ success: true, test: updated });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/tests/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await deleteMockTest(id);
+      res.json({
+        success: true,
+        deleted,
+        message: 'Test deleted successfully',
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/tests', async (req, res) => {
     try {
       const data = req.body;
       const pattern = EXAM_PATTERNS[data.category as ExamCategory] || EXAM_PATTERNS.CGSSB;
@@ -467,8 +854,7 @@ async function startServer() {
         createdAt: new Date().toISOString().split('T')[0],
       };
 
-      mockTests.unshift(newTest);
-      saveDatabase();
+      await saveMockTest(newTest);
       res.status(201).json({ success: true, test: newTest });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
@@ -476,7 +862,7 @@ async function startServer() {
   });
 
   // 6. Test Submission & Analytics Evaluation Engine
-  app.post('/api/tests/:id/submit', (req, res) => {
+  app.post('/api/tests/:id/submit', async (req, res) => {
     try {
       const { id } = req.params;
       const {
@@ -487,7 +873,7 @@ async function startServer() {
         questionStatuses = {},
       } = req.body;
 
-      const test = mockTests.find(t => t.id === id);
+      const test = await getMockTestById(id);
       if (!test) {
         return res.status(404).json({ success: false, error: 'Test not found' });
       }
@@ -499,7 +885,8 @@ async function startServer() {
         });
       });
 
-      const testQuestions = questions.filter(q => allQIds.includes(q.id));
+      const allQuestionsList = await getAllQuestions();
+      const testQuestions = allQuestionsList.filter(q => allQIds.includes(q.id));
 
       let correctCount = 0;
       let incorrectCount = 0;
@@ -563,6 +950,7 @@ async function startServer() {
 
       const totalParticipants = (test.attemptsCount || 1200) + 1;
       test.attemptsCount = totalParticipants;
+      await saveMockTest(test);
 
       const percentile = Math.min(99.9, Math.max(15.0, parseFloat((percentage * 0.95 + (accuracy * 0.05)).toFixed(1))));
       const simulatedRank = Math.max(1, Math.round(totalParticipants * (1 - percentile / 100)));
@@ -610,8 +998,7 @@ async function startServer() {
         sectorAnalysis,
       };
 
-      attempts.unshift(attemptResult);
-      saveDatabase();
+      await saveTestAttempt(attemptResult);
 
       res.json({
         success: true,
@@ -624,46 +1011,48 @@ async function startServer() {
   });
 
   // 7. Attempts History
-  app.get('/api/attempts', (req, res) => {
-    const { userId } = req.query;
-    let list = [...attempts];
-    if (userId) {
-      list = list.filter(a => a.userId === userId);
+  app.get('/api/attempts', async (req, res) => {
+    try {
+      const { userId } = req.query;
+      const list = await getAllTestAttempts(userId as string);
+      res.json({ success: true, attempts: list });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
-    res.json({ success: true, attempts: list });
   });
 
-  app.get('/api/attempts/:id', (req, res) => {
-    const attempt = attempts.find(a => a.id === req.params.id);
-    if (!attempt) {
-      return res.status(404).json({ success: false, error: 'Attempt not found' });
+  app.get('/api/attempts/:id', async (req, res) => {
+    try {
+      const attempt = await getTestAttemptById(req.params.id);
+      if (!attempt) {
+        return res.status(404).json({ success: false, error: 'Attempt not found' });
+      }
+      const test = await getMockTestById(attempt.testId);
+      let testQuestions: Question[] = [];
+      if (test) {
+        const qids: string[] = [];
+        test.sections.forEach(s => qids.push(...s.questionIds));
+        const allQuestionsList = await getAllQuestions();
+        testQuestions = allQuestionsList.filter(q => qids.includes(q.id));
+      }
+      res.json({ success: true, attempt, questions: testQuestions });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
-    const test = mockTests.find(t => t.id === attempt.testId);
-    let testQuestions: Question[] = [];
-    if (test) {
-      const qids: string[] = [];
-      test.sections.forEach(s => qids.push(...s.questionIds));
-      testQuestions = questions.filter(q => qids.includes(q.id));
-    }
-    res.json({ success: true, attempt, questions: testQuestions });
   });
 
   // 8. Previous Year Papers (PYP)
-  app.get('/api/pyp', (req, res) => {
-    const { category } = req.query;
-    const seen = new Set<string>();
-    let list = pypPapers.filter(p => {
-      if (!p || !p.id || seen.has(p.id)) return false;
-      seen.add(p.id);
-      return true;
-    });
-    if (category) {
-      list = list.filter(p => p.examCategory === category);
+  app.get('/api/pyp', async (req, res) => {
+    try {
+      const { category } = req.query;
+      const list = await getAllPypPapers(category as string);
+      res.json({ success: true, pypPapers: list });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
-    res.json({ success: true, pypPapers: list });
   });
 
-  app.post('/api/pyp', (req, res) => {
+  app.post('/api/pyp', async (req, res) => {
     try {
       const data = req.body;
       const newPyp: PreviousYearPaper = {
@@ -685,448 +1074,15 @@ async function startServer() {
         fileSize: '3.2 MB',
       };
 
-      pypPapers.unshift(newPyp);
-      saveDatabase();
+      await savePypPaper(newPyp);
       res.status(201).json({ success: true, pyp: newPyp });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
     }
   });
 
-  // Helper: Classify a question into Subject, Topic (Chapter), and Subtopic based on text content & taxonomy
-  function autoClassifyChapter(text: string, defaultSubject: string, defaultTopic: string) {
-    const lower = text.toLowerCase();
-
-    if (
-      lower.includes('हाना') || lower.includes('hana') ||
-      lower.includes('जनउला') || lower.includes('janula') ||
-      lower.includes('छत्तीसगढ़ी') || lower.includes('chhattisgarhi') ||
-      lower.includes('भाखा') || lower.includes('हलबी बोली') || lower.includes('गोंडी बोली')
-    ) {
-      return {
-        subject: 'Chhattisgarhi Language',
-        topic: (lower.includes('हाना') || lower.includes('जनउला')) ? 'Chhattisgarhi Hana & Janula' : 'Chhattisgarhi Vyakaran',
-        chapterName: (lower.includes('हाना') || lower.includes('जनउला')) ? 'Chhattisgarhi Hana & Janula (हाना एवं जनउला)' : 'Chhattisgarhi Vyakaran (छत्तीसगढ़ी व्याकरण)',
-        subtopic: lower.includes('हाना') ? 'Prasiddha Hana (Idioms)' : lower.includes('जनउला') ? 'Janula (Riddles)' : 'Chhattisgarhi Shabdkosh'
-      };
-    }
-
-    if (
-      lower.includes('संधि') || lower.includes('समास') ||
-      lower.includes('पर्यायवाची') || lower.includes('विलोम') ||
-      lower.includes('उपसर्ग') || lower.includes('प्रत्यय') ||
-      lower.includes('तत्सम') || lower.includes('तद्भव') ||
-      lower.includes('मुहावरा') || lower.includes('मुहावरे') || lower.includes('लोकोक्ति') ||
-      lower.includes('वर्तनी') || lower.includes('वाक्य शुद्धि') ||
-      (lower.includes('संज्ञा') && !lower.includes('गोंड')) || lower.includes('सर्वनाम') ||
-      lower.includes('विशेषण') || lower.includes('कारक') || lower.includes('अलंकार')
-    ) {
-      return {
-        subject: 'General Hindi',
-        topic: (lower.includes('संधि') || lower.includes('समास')) ? 'Sandhi & Samas' : 'Hindi Vyakaran & Varnamala',
-        chapterName: 'General Hindi (सामान्य हिन्दी)',
-        subtopic: lower.includes('संधि') ? 'Swar & Vyanjan Sandhi' : lower.includes('समास') ? 'Samas Bhed' : 'Vocabulary & Vyakaran'
-      };
-    }
-
-    if (
-      lower.includes('computer') || lower.includes('कंप्यूटर') ||
-      lower.includes('cpu') || lower.includes('सीपीयू') ||
-      lower.includes('ram') || lower.includes('rom') || lower.includes('रैम') || lower.includes('रोम') ||
-      lower.includes('motherboard') || lower.includes('hardware') || lower.includes('हार्डवेयर') ||
-      lower.includes('software') || lower.includes('सॉफ्टवेयर') ||
-      lower.includes('operating system') || lower.includes('ऑपरेटिंग सिस्टम') ||
-      lower.includes('ms word') || lower.includes('ms excel') || lower.includes('powerpoint') ||
-      lower.includes('spreadsheet') || lower.includes('word processor') ||
-      lower.includes('internet') || lower.includes('इंटरनेट') ||
-      lower.includes('browser') || lower.includes('ब्राउज़र') ||
-      lower.includes('firewall') || lower.includes('फायरवॉल') ||
-      lower.includes('malware') || lower.includes('antivirus') || lower.includes('वायरस') ||
-      lower.includes('ip address') || lower.includes('protocol') || lower.includes('binary') ||
-      lower.includes('printer') || lower.includes('cache memory') || lower.includes('e-mail')
-    ) {
-      return {
-        subject: 'Computer Knowledge',
-        topic: (lower.includes('ms ') || lower.includes('operating') || lower.includes('word') || lower.includes('excel'))
-          ? 'Operating Systems & Software'
-          : (lower.includes('internet') || lower.includes('browser') || lower.includes('firewall') || lower.includes('malware'))
-          ? 'Internet & Cybersecurity'
-          : 'Computer Fundamentals',
-        chapterName: 'Computer Knowledge (कंप्यूटर सामान्य ज्ञान)',
-        subtopic: lower.includes('internet') ? 'Internet & Cybersecurity' : 'MS Office & Architecture'
-      };
-    }
-
-    if (
-      lower.includes('प्रतिशत') || lower.includes('percentage') ||
-      lower.includes('अनुपात') || lower.includes('ratio') ||
-      lower.includes('समानुपात') || lower.includes('proportion') ||
-      lower.includes('लाभ') || lower.includes('हानि') || lower.includes('profit') || lower.includes('loss') ||
-      lower.includes('क्रय मूल्य') || lower.includes('विक्रय मूल्य') ||
-      lower.includes('बट्टा') || lower.includes('छूट') || lower.includes('discount') ||
-      lower.includes('साधारण ब्याज') || lower.includes('simple interest') ||
-      lower.includes('चक्रवृद्धि ब्याज') || lower.includes('compound interest') ||
-      lower.includes('समय और कार्य') || lower.includes('time and work') ||
-      lower.includes('चाल') || lower.includes('दूरी') || lower.includes('speed') || lower.includes('distance') ||
-      lower.includes('औसत') || lower.includes('average') ||
-      lower.includes('ल.स.') || lower.includes('म.स.') || lower.includes('lcm') || lower.includes('hcf') ||
-      lower.includes('संख्या पद्धति') || lower.includes('number system') ||
-      lower.includes('क्षेत्रफल') || lower.includes('आयतन') || lower.includes('mensuration') ||
-      lower.includes('पाई चार्ट') || lower.includes('bar graph')
-    ) {
-      return {
-        subject: 'Quantitative Aptitude',
-        topic: 'Arithmetic & Commercial Mathematics',
-        chapterName: 'Quantitative Aptitude (संख्यात्मक अभिक्षमता)',
-        subtopic: lower.includes('प्रतिशत') || lower.includes('percentage') ? 'Percentages & Profit-Loss' : 'Ratio & Commercial Maths'
-      };
-    }
-
-    if (
-      lower.includes('रीजनिंग') || lower.includes('reasoning') ||
-      lower.includes('कोडिंग') || lower.includes('coding') || lower.includes('decoding') ||
-      lower.includes('रक्त संबंध') || lower.includes('blood relation') ||
-      lower.includes('दिशा ज्ञान') || lower.includes('direction sense') ||
-      lower.includes('न्याय निगमन') || lower.includes('syllogism') ||
-      lower.includes('कथन और निष्कर्ष') || lower.includes('statement and conclusion') ||
-      lower.includes('कथन और पूर्वधारणा') || lower.includes('seating arrangement') || lower.includes('बैठक व्यवस्था') ||
-      lower.includes('वेन आरेख') || lower.includes('venn diagram') ||
-      lower.includes('पासा') || lower.includes('dice') ||
-      lower.includes('कैलेंडर') || lower.includes('calendar') || lower.includes('घड़ी') || lower.includes('clock') ||
-      lower.includes('दर्पण प्रतिबिंब') || lower.includes('mirror image') ||
-      lower.includes('श्रृंखला') || lower.includes('number series') || lower.includes('missing number')
-    ) {
-      return {
-        subject: 'Reasoning',
-        topic: 'Verbal & Analytical Reasoning',
-        chapterName: 'Analytical & Logical Reasoning (तर्कशक्ति)',
-        subtopic: lower.includes('coding') ? 'Coding-Decoding' : lower.includes('blood') ? 'Blood Relations' : 'Logical Deductions'
-      };
-    }
-
-    if (
-      lower.includes('प्रकाश वर्ष') || lower.includes('light year') ||
-      lower.includes('न्यूटन') || lower.includes('गुरुत्वाकर्षण') || lower.includes('gravity') ||
-      lower.includes('विद्युत धारा') || lower.includes('आवर्त सारणी') || lower.includes('periodic table') ||
-      lower.includes('परमाणु') || lower.includes('अणु') ||
-      lower.includes('अम्ल') || lower.includes('acid') || lower.includes('क्षार') || lower.includes('base') ||
-      lower.includes('कोशिका') || lower.includes('cell') ||
-      lower.includes('माइटोकॉन्ड्रिया') || lower.includes('mitochondria') ||
-      lower.includes('डीएनए') || lower.includes('dna') || lower.includes('आरएनए') ||
-      lower.includes('प्रकाश संश्लेषण') || lower.includes('photosynthesis') ||
-      lower.includes('रक्त समूह') || lower.includes('blood group') ||
-      lower.includes('विटामिन') || lower.includes('vitamin') ||
-      lower.includes('जीवाणु') || lower.includes('bacteria') || lower.includes('विषाणु') || lower.includes('virus') ||
-      lower.includes('ओजोन') || lower.includes('ozone') || lower.includes('पारिस्थितिकी') || lower.includes('ecosystem')
-    ) {
-      return {
-        subject: 'General Science',
-        topic: (lower.includes('कोशिका') || lower.includes('डीएनए') || lower.includes('विटामिन') || lower.includes('जीवाणु') || lower.includes('photosynthesis'))
-          ? 'Biology & Environmental Ecology'
-          : (lower.includes('अम्ल') || lower.includes('आवर्त सारणी') || lower.includes('परमाणु'))
-          ? 'Chemistry'
-          : 'Physics',
-        chapterName: 'General Science (सामान्य विज्ञान)',
-        subtopic: 'Core Science Concepts'
-      };
-    }
-
-    if (
-      lower.includes('pedagogy') || lower.includes('बाल विकास') || lower.includes('शिक्षा शास्त्र') ||
-      lower.includes('पियाजे') || lower.includes('piaget') ||
-      lower.includes('वायगोत्स्की') || lower.includes('vygotsky') ||
-      lower.includes('समावेशी शिक्षा') || lower.includes('cce') || lower.includes('nep 2020')
-    ) {
-      return {
-        subject: 'Child Pedagogy & Teaching Methodology',
-        topic: 'Educational Psychology',
-        chapterName: 'Child Pedagogy & Methodology (बाल विकास एवं शिक्षा शास्त्र)',
-        subtopic: 'Child Development & Learning'
-      };
-    }
-
-    const hasCGIdentifier =
-      lower.includes('छत्तीसगढ़') || lower.includes('chhattisgarh') ||
-      lower.includes('कलचुरी') || lower.includes('kalchuri') ||
-      lower.includes('रतनपुर') || lower.includes('ratanpur') ||
-      lower.includes('तुम्माण') || lower.includes('tumman') ||
-      lower.includes('बस्तर') || lower.includes('bastar') ||
-      lower.includes('सरगुजा') || lower.includes('surguja') ||
-      lower.includes('रायपुर') || lower.includes('raipur') ||
-      lower.includes('बिलासपुर') || lower.includes('bilaspur') ||
-      lower.includes('महानदी') || lower.includes('mahanadi') ||
-      lower.includes('इंद्रावती') || lower.includes('indravati') ||
-      lower.includes('शिवनाथ') || lower.includes('shivnath') ||
-      lower.includes('हसदेव') || lower.includes('hasdeo') ||
-      lower.includes('चित्रकोट') || lower.includes('chitrakote') ||
-      lower.includes('तीरथगढ़') || lower.includes('teerathgarh') ||
-      lower.includes('कांगेर') || lower.includes('kanger') ||
-      lower.includes('गोंड') || lower.includes('बैगा') || lower.includes('माड़िया') || lower.includes('मुरिया') ||
-      lower.includes('हल्बा') || lower.includes('कमर') || lower.includes('भुंजिया') ||
-      lower.includes('पंडवानी') || lower.includes('pandwani') ||
-      lower.includes('पंथी') || lower.includes('panthi') ||
-      lower.includes('करमा') || lower.includes('karma') ||
-      lower.includes('राउत नाचा') || lower.includes('raut nacha') ||
-      lower.includes('मड़ई') || lower.includes('madai') ||
-      lower.includes('तीजा') || lower.includes('पोला') || lower.includes('हरेली') || lower.includes('छेरछेरा') ||
-      lower.includes('भूमकाल') || lower.includes('bhumkal') ||
-      lower.includes('तारापुर विद्रोह') || lower.includes('काकतीय') || lower.includes('kakatiya') ||
-      lower.includes('गोधन न्याय') || lower.includes('सुराजी गांव') || lower.includes('महतारी वंदन') ||
-      lower.includes('मैनपाट') || lower.includes('सामरीपाट') || lower.includes('गौरलाटा') ||
-      lower.includes('दंतेवाड़ा') || lower.includes('कांकेर') || lower.includes('सुकमा') || lower.includes('धमतरी') ||
-      lower.includes('कवर्धा') || lower.includes('दुर्ग') || lower.includes('कोरबा') || lower.includes('रायगढ़') ||
-      lower.includes('जशपुर') || lower.includes('राजनांदगांव') || lower.includes('जांजगीर') || lower.includes('कोरिया') ||
-      lower.includes('बलरामपुर') || lower.includes('सूरजपुर') || lower.includes('बेमेतरा') || lower.includes('बालोद') ||
-      lower.includes('गरियाबंद') || lower.includes('महासमुंद') || lower.includes('मुंगेली') || lower.includes('गौरेला') ||
-      lower.includes('मोहला') || lower.includes('सारंगढ़') || lower.includes('खैरागढ़') || lower.includes('मनेंद्रगढ़') ||
-      lower.includes('सक्ती') || lower.includes('दल्ली राजहरा') || lower.includes('बैलाडीला');
-
-    const hasIndiaIdentifier =
-      lower.includes('भारत') || lower.includes('india') || lower.includes('indian') ||
-      lower.includes('भारतीय') || lower.includes('राष्ट्रीय') || lower.includes('national') ||
-      lower.includes('केंद्र') || lower.includes('central') || lower.includes('union') ||
-      lower.includes('संसद') || lower.includes('parliament') || lower.includes('लोकसभा') ||
-      lower.includes('राज्यसभा') || lower.includes('राष्ट्रपति') || lower.includes('supreme court') ||
-      lower.includes('हड़प्पा') || lower.includes('सिंधु घाटी') || lower.includes('मौर्य') ||
-      lower.includes('मुगल') || lower.includes('गांधी') || lower.includes('हिमालय') ||
-      lower.includes('गंगा') || lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') ||
-      lower.includes('आरबीआई') || lower.includes('rbi') || lower.includes('इसरो') || lower.includes('isro');
-
-    if (hasCGIdentifier) {
-      if (
-        lower.includes('कलचुरी') || lower.includes('kalchuri') ||
-        lower.includes('रतनपुर') || lower.includes('तुम्माण') ||
-        lower.includes('मराठा') || lower.includes('भूमकाल') || lower.includes('काकतीय') ||
-        lower.includes('विद्रोह') || lower.includes('revolt') || lower.includes('गठन') ||
-        lower.includes('राज्य स्थापना') || lower.includes('रियासत') || lower.includes('वीर नारायण') ||
-        lower.includes('सोनाखान') || lower.includes('गुंडाधूर') || lower.includes('सत्याग्रह')
-      ) {
-        return {
-          subject: 'Chhattisgarh General Studies',
-          topic: 'History of Chhattisgarh',
-          chapterName: 'History of Chhattisgarh (छत्तीसगढ़ का इतिहास)',
-          subtopic: lower.includes('कलचुरी') ? 'Kalchuri Dynasty' : lower.includes('विद्रोह') ? 'Tribal Revolts & Freedom Struggle' : 'State Formation & History'
-        };
-      }
-      if (
-        lower.includes('जलप्रपात') || lower.includes('waterfall') ||
-        lower.includes('नदी') || lower.includes('river') ||
-        lower.includes('महानदी') || lower.includes('इंद्रावती') || lower.includes('शिवनाथ') || lower.includes('हसदेव') ||
-        lower.includes('चित्रकोट') || lower.includes('तीरथगढ़') || lower.includes('मैनपाट') || lower.includes('सामरीपाट') ||
-        lower.includes('खनिज') || lower.includes('mineral') || lower.includes('कोयला') || lower.includes('लौह अयस्क') ||
-        lower.includes('अभयारण्य') || lower.includes('राष्ट्रीय उद्यान') || lower.includes('कांगेर घाटी')
-      ) {
-        return {
-          subject: 'Chhattisgarh General Studies',
-          topic: 'Geography & Natural Resources',
-          chapterName: 'Geography & Natural Resources (छत्तीसगढ़ भूगोल एवं प्राकृतिक संसाधन)',
-          subtopic: lower.includes('जलप्रपात') || lower.includes('चित्रकोट') ? 'Waterfalls & River Basins' : 'Minerals & Forests'
-        };
-      }
-      if (
-        lower.includes('जनजाति') || lower.includes('tribe') ||
-        lower.includes('गोंड') || lower.includes('बैगा') || lower.includes('माड़िया') || lower.includes('मुरिया') ||
-        lower.includes('दशहरा') || lower.includes('बस्तर') || lower.includes('नृत्य') || lower.includes('dance') ||
-        lower.includes('करमा') || lower.includes('पंथी') || lower.includes('राउत') || lower.includes('पंडवानी') ||
-        lower.includes('दंतेश्वरी') || lower.includes('मड़ई') || lower.includes('हरेली') || lower.includes('पोला') ||
-        lower.includes('छेरछेरा') || lower.includes('घोटुल') || lower.includes('मेला')
-      ) {
-        return {
-          subject: 'Chhattisgarh General Studies',
-          topic: 'Culture, Tribes & Tourism',
-          chapterName: 'Culture, Tribes & Tourism (छत्तीसगढ़ संस्कृति, जनजातियाँ एवं पर्यटन)',
-          subtopic: lower.includes('दशहरा') || lower.includes('मड़ई') ? 'Bastar Dussehra & Fairs' : lower.includes('नृत्य') ? 'Folk Dances' : 'Tribal Traditions'
-        };
-      }
-      return {
-        subject: 'Chhattisgarh General Studies',
-        topic: 'Administration & Economy',
-        chapterName: 'Administration & Economy (छत्तीसगढ़ प्रशासन एवं अर्थव्यवस्था)',
-        subtopic: lower.includes('पंचायत') ? 'Panchayati Raj in CG' : 'State Governance & Schemes'
-      };
-    }
-
-    if (
-      lower.includes('संविधान') || lower.includes('constitution') ||
-      lower.includes('अनुच्छेद') || lower.includes('article ') ||
-      lower.includes('संसद') || lower.includes('parliament') ||
-      lower.includes('लोकसभा') || lower.includes('lok sabha') ||
-      lower.includes('राज्यसभा') || lower.includes('rajya sabha') ||
-      lower.includes('राष्ट्रपति') || lower.includes('president of india') ||
-      lower.includes('उपराष्ट्रपति') || lower.includes('प्रधानमंत्री') || lower.includes('prime minister') ||
-      lower.includes('सर्वोच्च न्यायालय') || lower.includes('supreme court') ||
-      lower.includes('उच्च न्यायालय') || lower.includes('high court') ||
-      lower.includes('मौलिक अधिकार') || lower.includes('fundamental rights') ||
-      lower.includes('मौलिक कर्तव्य') || lower.includes('fundamental duties') ||
-      lower.includes('नीति निदेशक') || lower.includes('dpsp') ||
-      lower.includes('प्रस्तावना') || lower.includes('preamble') ||
-      lower.includes('निर्वाचन आयोग') || lower.includes('election commission') ||
-      lower.includes('नियंत्रक एवं महालेखा') || lower.includes('cag') ||
-      lower.includes('संघ लोक सेवा') || lower.includes('upsc') ||
-      lower.includes('वित्त आयोग') || lower.includes('finance commission') ||
-      lower.includes('संविधान संशोधन') || lower.includes('amendment') ||
-      lower.includes('न्यायपालिका') || lower.includes('judiciary')
-    ) {
-      return {
-        subject: 'India General Studies',
-        topic: 'Indian Polity & Constitution',
-        chapterName: 'Indian Polity & Constitution (भारतीय संविधान एवं राजव्यवस्था)',
-        subtopic: lower.includes('अनुच्छेद') || lower.includes('मौलिक अधिकार') ? 'Fundamental Rights & Articles' : 'Parliament & Governance'
-      };
-    }
-
-    if (
-      lower.includes('हड़प्पा') || lower.includes('harappa') ||
-      lower.includes('सिंधु घाटी') || lower.includes('indus valley') ||
-      lower.includes('मोहनजोदड़ो') || lower.includes('वैदिक काल') || lower.includes('vedic') ||
-      lower.includes('ऋग्वेद') || lower.includes('महाजनपद') ||
-      lower.includes('बौद्ध धर्म') || lower.includes('buddhism') || lower.includes('जैन धर्म') || lower.includes('jainism') ||
-      lower.includes('मौर्य') || lower.includes('maurya') || lower.includes('अशोक') || lower.includes('ashoka') ||
-      lower.includes('गुप्त काल') || lower.includes('gupta') || lower.includes('समुद्रगुप्त') ||
-      lower.includes('दिल्ली सल्तनत') || lower.includes('delhi sultanate') || lower.includes('खिलजी') || lower.includes('तुगलक') ||
-      lower.includes('मुगल') || lower.includes('mughal') || lower.includes('बाबर') || lower.includes('अकबर') ||
-      lower.includes('शाहजहां') || lower.includes('औरंगजेब') || lower.includes('शिवाजी') ||
-      lower.includes('1857') || lower.includes('सिपाही विद्रोह') ||
-      lower.includes('कांग्रेस') || lower.includes('inc') ||
-      lower.includes('गांधी') || lower.includes('gandhi') ||
-      lower.includes('चंपारण') || lower.includes('असहयोग') || lower.includes('सविनय अवज्ञा') || lower.includes('भारत छोड़ो') ||
-      lower.includes('सुभाष चंद्र बोस') || lower.includes('भगत सिंह') || lower.includes('आजाद हिंद') ||
-      lower.includes('ईस्ट इंडिया कंपनी') || lower.includes('प्लासी') || lower.includes('बक्सर') ||
-      lower.includes('वायसराय') || lower.includes('गवर्नर जनरल')
-    ) {
-      return {
-        subject: 'India General Studies',
-        topic: 'Indian History & National Movement',
-        chapterName: 'Indian History & National Movement (भारतीय इतिहास एवं राष्ट्रीय आंदोलन)',
-        subtopic: lower.includes('1857') || lower.includes('गांधी') || lower.includes('कांग्रेस') ? 'Freedom Struggle & National Movement' : 'Ancient & Medieval History'
-      };
-    }
-
-    if (
-      lower.includes('हिमालय') || lower.includes('himalaya') ||
-      lower.includes('गंगा नदी') || lower.includes('ganga') ||
-      lower.includes('यमुना') || lower.includes('ब्रह्मपुत्र') || lower.includes('brahmaputra') ||
-      lower.includes('सिंधु नदी') || lower.includes('indus river') ||
-      lower.includes('गोदावरी') || lower.includes('कावेरी') || lower.includes('कृष्णा नदी') ||
-      lower.includes('नर्मदा') || lower.includes('ताप्ती') ||
-      lower.includes('पश्चिमी घाट') || lower.includes('western ghats') ||
-      lower.includes('पूर्वी घाट') || lower.includes('मानसून') || lower.includes('monsoon') ||
-      lower.includes('कर्क रेखा') || lower.includes('tropic of cancer') ||
-      lower.includes('अंडमान') || lower.includes('andaman') || lower.includes('निकोबार') ||
-      lower.includes('लक्षद्वीप') || lower.includes('lakshadweep') || lower.includes('थार मरुस्थल') ||
-      lower.includes('नीलगिरी') || lower.includes('सुंदरवन') || lower.includes('अरावली')
-    ) {
-      return {
-        subject: 'India General Studies',
-        topic: 'Physical & Economic Geography of India',
-        chapterName: 'Geography of India (भारत का भूगोल)',
-        subtopic: lower.includes('हिमालय') || lower.includes('पर्वत') ? 'Himalayas & Physiography' : 'River Systems & Climate'
-      };
-    }
-
-    if (
-      lower.includes('रिजर्व बैंक') || lower.includes('rbi') ||
-      lower.includes('रेपो रेट') || lower.includes('repo rate') ||
-      lower.includes('मौद्रिक नीति') || lower.includes('monetary policy') ||
-      lower.includes('पंचवर्षीय योजना') || lower.includes('five year plan') ||
-      lower.includes('नीति आयोग') || lower.includes('niti aayog') ||
-      lower.includes('सकल घरेलू उत्पाद') || lower.includes('gdp') ||
-      lower.includes('मुद्रास्फीति') || lower.includes('inflation') ||
-      lower.includes('राजकोषीय घाटा') || lower.includes('fiscal deficit') ||
-      lower.includes('सेबी') || lower.includes('sebi') || lower.includes('नाबार्ड') || lower.includes('nabard')
-    ) {
-      return {
-        subject: 'India General Studies',
-        topic: 'Indian Economy & Development',
-        chapterName: 'Indian Economy & Development (भारतीय अर्थव्यवस्था)',
-        subtopic: lower.includes('rbi') || lower.includes('बैंक') ? 'Banking & Monetary Policy' : 'Economic Planning & Indicators'
-      };
-    }
-
-    if (
-      lower.includes('नोबेल') || lower.includes('nobel') ||
-      lower.includes('भारत रत्न') || lower.includes('bharat ratna') ||
-      lower.includes('पद्म') || lower.includes('padma') ||
-      lower.includes('इसरो') || lower.includes('isro') || lower.includes('चंद्रयान') || lower.includes('chandrayaan') ||
-      lower.includes('डीआरडीओ') || lower.includes('drdo') ||
-      lower.includes('संयुक्त राष्ट्र') || lower.includes('united nations') ||
-      lower.includes('g20') || lower.includes('brics') ||
-      lower.includes('विश्व बैंक') || lower.includes('world bank') ||
-      lower.includes('ओलंपिक') || lower.includes('olympic')
-    ) {
-      return {
-        subject: 'India General Studies',
-        topic: 'National Current Affairs & General Knowledge',
-        chapterName: 'Current Affairs & GK (समसामयिक घटनाएं एवं सामान्य ज्ञान)',
-        subtopic: lower.includes('isro') ? 'Space & Science Missions' : 'Awards & International Affairs'
-      };
-    }
-
-    if (hasIndiaIdentifier) {
-      return {
-        subject: 'India General Studies',
-        topic: 'National Current Affairs & General Knowledge',
-        chapterName: 'Current Affairs & GK (समसामयिक घटनाएं एवं सामान्य ज्ञान)',
-        subtopic: 'General India Studies'
-      };
-    }
-
-    let normalizedDefaultSubject = 'Chhattisgarh General Studies';
-    if (defaultSubject) {
-      const clean = defaultSubject.trim();
-      if (clean.includes('Central') || clean.includes('CENTRAL') || clean.includes('India GS') || clean.includes('National')) {
-        normalizedDefaultSubject = 'India General Studies';
-      } else if (clean.includes('CGPSC') || clean.includes('Special Knowledge') || clean.includes('Chhattisgarh')) {
-        normalizedDefaultSubject = 'Chhattisgarh General Studies';
-      } else {
-        normalizedDefaultSubject = clean
-          .replace('General Science & Computer Knowledge', 'General Science')
-          .replace('General Mental Ability & Reasoning', 'Quantitative Aptitude')
-          .replace('General Hindi & Chhattisgarhi Language', 'General Hindi')
-          .replace('General Mental Ability', 'Quantitative Aptitude');
-      }
-    }
-
-    return {
-      subject: normalizedDefaultSubject,
-      topic: defaultTopic,
-      chapterName: defaultTopic,
-      subtopic: 'General Chapter Topic'
-    };
-  }
-
-  function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Question[], currentId: string) {
-    if (!newText || newText.length < 15) return null;
-    const clean = (s: string) => s.replace(/[^\w\u0900-\u097F]/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim();
-    const target = clean(newText);
-    const targetWords = new Set(target.split(' ').filter(w => w.length > 3));
-
-    if (targetWords.size < 3) return null;
-
-    for (const q of currentQuestions) {
-      if (q.id === currentId) continue;
-      const compText = clean(q.questionHindi || q.questionText || '');
-      if (!compText) continue;
-
-      if (target.includes(compText) || compText.includes(target)) {
-        return q;
-      }
-
-      const compWords = compText.split(' ').filter(w => w.length > 3);
-      let matchCount = 0;
-      for (const cw of compWords) {
-        if (targetWords.has(cw)) matchCount++;
-      }
-      const similarity = matchCount / Math.max(targetWords.size, compWords.length);
-      if (similarity >= 0.70) {
-        return q;
-      }
-    }
-    return null;
-  }
-
   // 8b. PYP Bulk Ingestion (JSON & CSV Bulk Import)
-  app.post('/api/pyp/bulk-import', (req, res) => {
+  app.post('/api/pyp/bulk-import', async (req, res) => {
     try {
       const { questions: incomingList, paperConfig, createMockTest = true } = req.body;
       if (!Array.isArray(incomingList) || incomingList.length === 0) {
@@ -1149,6 +1105,7 @@ async function startServer() {
       );
 
       const catPrefix = targetCategory === 'CGPSC' ? 'CGPSC' : targetCategory === 'CENTRAL_EXAMS' ? 'CENTRAL' : 'CGSSB';
+      const existingAllQuestions = await getAllQuestions();
 
       for (let idx = 0; idx < incomingList.length; idx++) {
         const item = incomingList[idx];
@@ -1200,7 +1157,7 @@ async function startServer() {
 
         const currentAppearance: PYQAppearance = { examName: rawExamname, year, shift: 'Official' };
 
-        const similarQuestion = findSimilarOrRepeatedQuestion(questionHindi || questionEnglish, questions, questionId);
+        const similarQuestion = findSimilarOrRepeatedQuestion(questionHindi || questionEnglish, existingAllQuestions, questionId);
 
         let appearancesList: PYQAppearance[] = [currentAppearance];
         if (similarQuestion?.pypAppearances && Array.isArray(similarQuestion.pypAppearances)) {
@@ -1256,14 +1213,14 @@ async function startServer() {
           createdAt: new Date().toISOString().split('T')[0],
         };
 
-        const existingIdx = questions.findIndex(q =>
+        const existingIdx = existingAllQuestions.findIndex(q =>
           (q.uniqueQuestionId && q.uniqueQuestionId === uniqueKey) ||
           q.id === questionId ||
           (q.category === targetCategory && q.pypAppearances?.some(p => p.examName.toLowerCase() === examname && p.year === year) && q.subtopic === `Question #${sno}`)
         );
 
         if (existingIdx !== -1) {
-          const prior = questions[existingIdx];
+          const prior = existingAllQuestions[existingIdx];
           if (prior.pypAppearances && formattedQuestion.pypAppearances) {
             for (const app of prior.pypAppearances) {
               if (!formattedQuestion.pypAppearances.some(a => a.examName.toLowerCase() === app.examName.toLowerCase() && a.year === app.year)) {
@@ -1272,10 +1229,10 @@ async function startServer() {
             }
             formattedQuestion.repeatedInExams = formattedQuestion.pypAppearances.map(a => `${a.examName} (${a.year})`);
           }
-          questions[existingIdx] = formattedQuestion;
+          await saveQuestion(formattedQuestion);
           updated++;
         } else {
-          questions.unshift(formattedQuestion);
+          await saveQuestion(formattedQuestion);
           inserted++;
         }
         processedQuestions.push(formattedQuestion);
@@ -1288,7 +1245,8 @@ async function startServer() {
       const paperNegRatio = paperConfig?.negativeMarkingRatio || (targetCategory === 'CGPSC' ? '-⅓rd (0.667 Marks per wrong answer)' : '-⅓rd (0.33 Marks)');
       const paperSummary = paperConfig?.paperSummary || `Official question paper archive for ${paperTitle} containing ${processedQuestions.length} bilingual questions, official key, and detailed solutions.`;
 
-      const existingPaper = pypPapers.find(p => p.year === paperYear && p.title.toLowerCase().includes(paperTitle.toLowerCase()));
+      const allPypPapersList = await getAllPypPapers();
+      const existingPaper = allPypPapersList.find(p => p.year === paperYear && p.title.toLowerCase().includes(paperTitle.toLowerCase()));
       const paperId = existingPaper?.id || `pyp-${catPrefix.toLowerCase()}-${paperYear}-${Date.now()}`;
 
       const subjMap: Record<string, number> = {};
@@ -1320,16 +1278,11 @@ async function startServer() {
         linkedQuestionIds: processedQuestions.map(q => q.id),
       };
 
-      if (existingPaper) {
-        Object.assign(existingPaper, updatedOrNewPaper);
-      } else {
-        pypPapers.unshift(updatedOrNewPaper);
-      }
+      await savePypPaper(updatedOrNewPaper);
 
       let createdMockTest: MockTest | null = null;
       if (createMockTest) {
         const mockTestId = `test-from-${updatedOrNewPaper.id}`;
-        const existingTestIdx = mockTests.findIndex(t => t.id === mockTestId);
 
         createdMockTest = {
           id: mockTestId,
@@ -1356,16 +1309,11 @@ async function startServer() {
           createdAt: new Date().toISOString().split('T')[0],
         };
 
-        if (existingTestIdx !== -1) {
-          mockTests[existingTestIdx] = createdMockTest;
-        } else {
-          mockTests.unshift(createdMockTest);
-        }
-
+        await saveMockTest(createdMockTest);
         updatedOrNewPaper.linkedMockTestId = createdMockTest.id;
+        await savePypPaper(updatedOrNewPaper);
       }
 
-      saveDatabase();
       return res.status(200).json({
         success: true,
         inserted,
@@ -1391,16 +1339,18 @@ async function startServer() {
       const testTitle = req.body.testTitle || req.body.title;
 
       const pattern = EXAM_PATTERNS[examCategory as ExamCategory] || EXAM_PATTERNS.CGSSB;
-      const referencedPyp = pypReferenceId ? pypPapers.find(p => p.id === pypReferenceId) : null;
+      const allPypPapersList = await getAllPypPapers();
+      const referencedPyp = pypReferenceId ? allPypPapersList.find(p => p.id === pypReferenceId) : null;
 
-      let candidatePool = questions.filter(q => {
+      const allQuestionsList = await getAllQuestions();
+      let candidatePool = allQuestionsList.filter(q => {
         const catMatch = q.category === examCategory || q.category === 'CGSSB';
         const subjMatch = targetSubjects.length === 0 || targetSubjects.includes(q.subject);
         return catMatch && subjMatch;
       });
 
       if (candidatePool.length < questionCount) {
-        candidatePool = [...questions];
+        candidatePool = [...allQuestionsList];
       }
 
       const ai = getGeminiClient();
@@ -1435,7 +1385,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
 }`;
 
           const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
               responseMimeType: 'application/json',
@@ -1482,7 +1432,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
                 createdAt: new Date().toISOString().split('T')[0],
               };
             });
-            questions.push(...generatedFreshQuestions);
+            for (const gq of generatedFreshQuestions) {
+              await saveQuestion(gq);
+            }
           }
         } catch (geminiError) {
           console.warn('Gemini API call skipped or fell back to tagged question bank synthesis:', geminiError);
@@ -1531,8 +1483,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
         createdAt: new Date().toISOString().split('T')[0],
       };
 
-      mockTests.unshift(newTest);
-      saveDatabase();
+      await saveMockTest(newTest);
 
       res.status(201).json({
         success: true,
@@ -1558,6 +1509,10 @@ Respond strictly with a JSON object having key "questions" containing an array o
       platform: 'CGSSB Test Android Integration Hub',
       version: 'v1.4.0',
       baseUrl,
+      database: {
+        mode: dbConfig.mode,
+        isMysqlActive: isMysqlActive(),
+      },
       apiDocumentation: {
         authentication: {
           endpoint: 'POST /api/auth/login',
@@ -1588,16 +1543,144 @@ Respond strictly with a JSON object having key "questions" containing an array o
   });
 
   // 11. Android Offline Full Sync Endpoint
-  app.get('/api/android/sync', (req, res) => {
-    res.json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      patterns: EXAM_PATTERNS,
-      hierarchy: HIERARCHY_TREE,
-      tests: mockTests,
-      questions: questions,
-      pypPapers: pypPapers,
-    });
+  app.get('/api/android/sync', async (req, res) => {
+    try {
+      const questionsList = await getAllQuestions();
+      const mockTestsList = await getAllMockTests();
+      const pypPapersList = await getAllPypPapers();
+
+      res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        patterns: EXAM_PATTERNS,
+        hierarchy: HIERARCHY_TREE,
+        tests: mockTestsList,
+        questions: questionsList,
+        pypPapers: pypPapersList,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 12. NO-CODE CMS ENDPOINTS (Pages, Posts, Series, Settings)
+  app.get('/api/cms/pages', async (req, res) => {
+    try {
+      const pages = await getAllCmsPages();
+      res.json({ success: true, pages });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/cms/pages/:slug', async (req, res) => {
+    try {
+      const page = await getCmsPageBySlug(req.params.slug);
+      if (!page) return res.status(404).json({ success: false, error: 'Page not found' });
+      res.json({ success: true, page });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/cms/pages', async (req, res) => {
+    try {
+      const saved = await saveCmsPage(req.body);
+      res.json({ success: true, page: saved });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/cms/pages/:id', async (req, res) => {
+    try {
+      const deleted = await deleteCmsPage(req.params.id);
+      res.json({ success: true, deleted });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/cms/posts', async (req, res) => {
+    try {
+      const posts = await getAllCmsPosts();
+      res.json({ success: true, posts });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/cms/posts/:slug', async (req, res) => {
+    try {
+      const post = await getCmsPostBySlug(req.params.slug);
+      if (!post) return res.status(404).json({ success: false, error: 'Post not found' });
+      res.json({ success: true, post });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/cms/posts', async (req, res) => {
+    try {
+      const saved = await saveCmsPost(req.body);
+      res.json({ success: true, post: saved });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/cms/posts/:id', async (req, res) => {
+    try {
+      const deleted = await deleteCmsPost(req.params.id);
+      res.json({ success: true, deleted });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/cms/series', async (req, res) => {
+    try {
+      const series = await getAllCmsSeriesPacks();
+      res.json({ success: true, series });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/cms/series', async (req, res) => {
+    try {
+      const saved = await saveCmsSeriesPack(req.body);
+      res.json({ success: true, pack: saved });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/cms/series/:id', async (req, res) => {
+    try {
+      const deleted = await deleteCmsSeriesPack(req.params.id);
+      res.json({ success: true, deleted });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/cms/settings', async (req, res) => {
+    try {
+      const settings = await getCmsSettings();
+      res.json({ success: true, settings });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/cms/settings', async (req, res) => {
+    try {
+      const saved = await saveCmsSettings(req.body);
+      res.json({ success: true, settings: saved });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
   });
 
   // Mount Vite middleware for dev or static for production
@@ -1660,7 +1743,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
     // Serve all other static files, ensuring HTML files are NEVER cached
     app.use(express.static(staticDir, {
-      index: false, // Don't automatically send index.html with generic headers
+      index: false,
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('.html')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
@@ -1672,7 +1755,6 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
     // SPA fallback — serve index.html for any non-API route with anti-caching headers
     app.get('*', (req, res) => {
-      // Don't intercept API routes
       if (req.path.startsWith('/api/')) {
         return res.status(404).json({ success: false, error: 'API route not found' });
       }
@@ -1688,11 +1770,11 @@ Respond strictly with a JSON object having key "questions" containing an array o
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', async () => {
+    const counts = await getDatabaseCounts();
     console.log(`🚀 CGSSB Test Server running on port ${PORT}`);
-    console.log(`📁 Data directory: ${DATA_DIR}`);
-    console.log(`📁 DB file: ${DB_FILE}`);
-    console.log(`📊 Loaded: ${questions.length} questions, ${mockTests.length} tests, ${pypPapers.length} PYPs`);
+    console.log(`🔌 Database Mode: [${dbConfig.mode.toUpperCase()}] (MySQL Active: ${isMysqlActive()})`);
+    console.log(`📊 Catalog: ${counts.questions} questions, ${counts.mockTests} tests, ${counts.pypPapers} PYPs, ${counts.attempts} attempts`);
   });
 }
 

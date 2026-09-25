@@ -4,6 +4,9 @@ build/
 coverage/
 .DS_Store
 *.log
+*.tar.gz
+*.zip
+backup/
 .env*
 !.env.example
 /data/

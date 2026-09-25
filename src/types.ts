@@ -190,7 +190,7 @@ export interface MockTest {
   passingPercentage?: number;
   isPublished?: boolean;
   difficultyDistribution?: { easy: number; medium: number; hard: number };
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface PreviousYearPaper {
@@ -215,6 +215,7 @@ export interface PreviousYearPaper {
   fileSize?: string;
   downloadUrl?: string;
   linkedQuestionIds?: string[];
+  createdAt?: string;
 }
 
 export interface SectorAnalysis {

@@ -74,7 +74,10 @@ async function runBuild() {
       fs.copyFileSync(path.join('dist/assets', cssFile), path.join('dist/assets', 'index.css'));
     }
 
-    // Copy compiled assets to root assets/ so root directory serves directly on Hostinger
+    // Clean obsolete chunks from root assets/ first so stale bundles don't accumulate
+    if (fs.existsSync('assets')) {
+      fs.rmSync('assets', { recursive: true, force: true });
+    }
     fs.mkdirSync('assets', { recursive: true });
     for (const file of fs.readdirSync('dist/assets')) {
       const srcFile = path.join('dist/assets', file);
