@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
+import { syncUserProfileToFirestore } from '../firebase/firestoreService';
 
 interface AuthContextType {
   // Student Auth
@@ -76,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (user) {
       localStorage.setItem('cgssb_student_user', JSON.stringify(user));
+      syncUserProfileToFirestore(user).catch(() => null);
     } else {
       localStorage.removeItem('cgssb_student_user');
     }

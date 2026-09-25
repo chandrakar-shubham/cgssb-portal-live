@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
+import { isFirebaseConfigured } from '../firebase/config';
+import { migrateAllLocalDataToFirestore, MigrationSummary } from '../firebase/firestoreService';
+import { getStoredBundles } from '../utils/bundleStore';
 import {
   Database,
   Table,
@@ -23,7 +26,10 @@ import {
   Cpu,
   Layers,
   FileCode,
-  ExternalLink
+  ExternalLink,
+  Cloud,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 interface AdminDatabaseViewProps {
@@ -47,6 +53,51 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [schemaSearchQuery, setSchemaSearchQuery] = useState('');
   const [copiedDdl, setCopiedDdl] = useState(false);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
+
+  // Firebase Cloud Migration state
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+  const [migrationProgress, setMigrationProgress] = useState<{ current: number; total: number } | null>(null);
+  const [migrationResult, setMigrationResult] = useState<MigrationSummary | null>(null);
+
+  const handleMigrateToFirebase = async () => {
+    if (!isFirebaseConfigured) {
+      alert('Firebase is not configured yet. Please check your firebase-applet-config.json file.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Sync all ${questions.length} questions, ${tests.length} tests, and test series bundles directly to your Cloud Firestore Database (asia-south1 / Mumbai)?`
+    );
+    if (!confirmed) return;
+
+    setIsMigrating(true);
+    setMigrationResult(null);
+    setMigrationStatus('Starting Firebase Cloud Firestore batch migration...');
+
+    try {
+      const storedBundles = getStoredBundles();
+      const result = await migrateAllLocalDataToFirestore({
+        questions,
+        tests,
+        bundles: storedBundles,
+        attempts,
+        onProgress: (msg, current, total) => {
+          setMigrationStatus(msg);
+          setMigrationProgress({ current, total });
+        },
+      });
+
+      setMigrationResult(result);
+      if (result.success) {
+        setBackupMessage(`Successfully synced ${result.questionsCount} questions, ${result.testsCount} tests, and ${result.bundlesCount} bundles to Cloud Firestore!`);
+      }
+    } catch (err: any) {
+      console.error('Migration error:', err);
+      setMigrationStatus(`Migration error: ${err?.message || 'Failed'}`);
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   const MYSQL_DDL_SCRIPT = `-- =========================================================================
 -- CGSSBTEST Official Database Schema (MySQL 8.0+ / MariaDB)
@@ -444,6 +495,83 @@ CREATE TABLE IF NOT EXISTS test_attempts (
           <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center space-x-2">
             <CheckCircle2 className="w-4 h-4" />
             <span>{backupMessage}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Firebase Cloud Firestore Migration & Hostinger Static Hosting Center */}
+      <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 border border-amber-500/30 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold">
+              <Cloud className="w-3.5 h-3.5 text-amber-400" />
+              <span>Firebase Cloud Firestore Migration (Static Hosting Ready)</span>
+            </div>
+            <h2 className="text-xl font-black text-white">
+              Hostinger Premium Web Hosting + Firebase Database
+            </h2>
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              Your static web hosting (Apache/LiteSpeed on Hostinger) serves the React app bundle directly via <code className="text-amber-300 font-mono">public_html</code>.
+              All live questions, mock tests, bundles, and attempts connect directly to <strong className="text-white">Google Cloud Firestore (Mumbai asia-south1)</strong> with 0 server crashes, 0 maintenance, and 100% Free Tier scaling.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+            <button
+              onClick={handleMigrateToFirebase}
+              disabled={isMigrating}
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center space-x-2 transition shadow-xl shadow-amber-500/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              {isMigrating ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+              ) : (
+                <Zap className="w-4 h-4 text-slate-950" />
+              )}
+              <span>{isMigrating ? 'Migrating to Cloud Firestore...' : '1-Click Migrate All Data to Firebase'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Progress & Result Box */}
+        {(isMigrating || migrationStatus || migrationResult) && (
+          <div className="mt-5 p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-300 flex items-center space-x-2">
+                {isMigrating ? <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                <span>{migrationStatus}</span>
+              </span>
+              {migrationProgress && (
+                <span className="font-mono text-amber-300 font-bold">
+                  {Math.round((migrationProgress.current / (migrationProgress.total || 1)) * 100)}% ({migrationProgress.current}/{migrationProgress.total})
+                </span>
+              )}
+            </div>
+
+            {migrationProgress && (
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-amber-500 to-yellow-400 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((migrationProgress.current / (migrationProgress.total || 1)) * 100)}%` }}
+                />
+              </div>
+            )}
+
+            {migrationResult && migrationResult.success && (
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-xs text-slate-400">Questions Synced</div>
+                  <div className="text-lg font-black text-emerald-400">{migrationResult.questionsCount}</div>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-xs text-slate-400">Mock Tests Synced</div>
+                  <div className="text-lg font-black text-blue-400">{migrationResult.testsCount}</div>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-xs text-slate-400">Series Bundles</div>
+                  <div className="text-lg font-black text-amber-400">{migrationResult.bundlesCount}</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

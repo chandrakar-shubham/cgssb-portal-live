@@ -75,6 +75,12 @@ import {
 } from './utils/taxonomyMigration';
 import { extractHierarchyFromApp } from './utils/examHierarchy';
 import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
+import { testConnection } from './firebase/connectionTest';
+import {
+  saveAttemptToFirestore,
+  fetchTestsFromFirestore,
+  saveTestToFirestore
+} from './firebase/firestoreService';
 
 function MainApp() {
   const { user, deductCredits, isAdminAuthenticated } = useAuth();
@@ -472,15 +478,23 @@ function MainApp() {
     }
   }, [attempts]);
 
-  // Fetch initial data from server if reachable and returns genuine JSON
+  // Fetch initial data from server or Firebase Firestore
   useEffect(() => {
     async function loadData() {
+      // 1. Verify Firestore Connection
+      testConnection().catch(() => null);
+
       try {
-        const [testsRes, pypRes, qRes] = await Promise.all([
+        const [testsRes, pypRes, qRes, firestoreTests] = await Promise.all([
           fetch('/api/tests').catch(() => null),
           fetch('/api/pyp').catch(() => null),
           fetch('/api/questions').catch(() => null),
+          fetchTestsFromFirestore().catch(() => [])
         ]);
+
+        if (firestoreTests && firestoreTests.length > 0) {
+          setTests(prev => dedupeById([...firestoreTests, ...prev]));
+        }
 
         if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
           const t = await testsRes.json();
@@ -681,6 +695,7 @@ function MainApp() {
     };
 
     setAttempts(prev => [newAttempt, ...prev]);
+    saveAttemptToFirestore(newAttempt).catch(() => null);
     setActiveExamTest(null);
     setActiveAttemptReview(newAttempt);
   };

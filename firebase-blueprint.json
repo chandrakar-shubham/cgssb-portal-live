@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered candidate profile with authentication and access pass details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Candidate full name" },
+        "email": { "type": "string", "description": "Candidate email address" },
+        "phone": { "type": "string", "description": "Candidate phone number" },
+        "role": { "type": "string", "enum": ["student", "admin"], "description": "User access role" },
+        "hasProPass": { "type": "boolean", "description": "Whether candidate has active all-access pass" },
+        "proPassPlan": { "type": "string", "description": "Pass duration plan (monthly/yearly)" },
+        "passExpiresAt": { "type": "string", "description": "ISO timestamp of pass expiration" },
+        "targetExam": { "type": "string", "description": "Target exam e.g. CG Teacher, CGPSC" },
+        "targetYear": { "type": "number", "description": "Target exam year" },
+        "district": { "type": "string", "description": "Chhattisgarh residential district" },
+        "registeredAt": { "type": "string", "description": "Registration ISO timestamp" }
+      },
+      "required": ["id", "email", "role", "registeredAt"]
+    },
+    "MockTest": {
+      "title": "MockTest",
+      "description": "Full mock test or sectional test definition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique test identifier" },
+        "title": { "type": "string", "description": "Test title" },
+        "category": { "type": "string", "description": "Exam category e.g. CGSSB, CGPSC" },
+        "durationMinutes": { "type": "number", "description": "Test timer duration in minutes" },
+        "totalMarks": { "type": "number", "description": "Total marks for the test" },
+        "questionCount": { "type": "number", "description": "Number of questions in test" },
+        "isPublished": { "type": "boolean", "description": "Publish status" },
+        "isPro": { "type": "boolean", "description": "Whether test requires Pro Pass" },
+        "isPYP": { "type": "boolean", "description": "Whether paper is Previous Year Paper" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" }
+      },
+      "required": ["id", "title", "category", "durationMinutes"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Bilingual examination question item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Question identifier" },
+        "questionText": { "type": "string", "description": "English question stem" },
+        "questionHindi": { "type": "string", "description": "Hindi question stem" },
+        "subject": { "type": "string", "description": "Subject classification" },
+        "topic": { "type": "string", "description": "Topic or chapter" },
+        "difficulty": { "type": "string", "description": "Difficulty level" },
+        "marks": { "type": "number", "description": "Marks for correct answer" },
+        "negativeMarks": { "type": "number", "description": "Penalty for incorrect answer" },
+        "correctOption": { "type": "string", "description": "Correct option index or letter" }
+      },
+      "required": ["id", "questionText", "subject"]
+    },
+    "TestSeriesBundle": {
+      "title": "TestSeriesBundle",
+      "description": "Test Series Bundle with curriculum, syllabus and dates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Bundle identifier" },
+        "slug": { "type": "string", "description": "URL slug for SEO landing page" },
+        "title": { "type": "string", "description": "Bundle title in English" },
+        "titleHindi": { "type": "string", "description": "Bundle title in Hindi" },
+        "authority": { "type": "string", "description": "Exam authority (CGSSB/CGPSC)" },
+        "price": { "type": "number", "description": "Offer price" },
+        "originalPrice": { "type": "number", "description": "MRP price" },
+        "totalTestsCount": { "type": "number", "description": "Total tests included" },
+        "freeTestsCount": { "type": "number", "description": "Free preview tests count" }
+      },
+      "required": ["id", "slug", "title", "authority"]
+    },
+    "TestAttempt": {
+      "title": "TestAttempt",
+      "description": "Student completed or in-progress test attempt submission",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Attempt submission ID" },
+        "userId": { "type": "string", "description": "Attempting student UID" },
+        "testId": { "type": "string", "description": "Attempted mock test ID" },
+        "testTitle": { "type": "string", "description": "Title of the test" },
+        "score": { "type": "number", "description": "Final calculated score" },
+        "totalMarks": { "type": "number", "description": "Maximum marks possible" },
+        "accuracy": { "type": "number", "description": "Accuracy percentage" },
+        "timeSpentSeconds": { "type": "number", "description": "Time spent in seconds" },
+        "completedAt": { "type": "string", "description": "Submission ISO timestamp" }
+      },
+      "required": ["id", "userId", "testId", "score", "completedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile records and authorization state"
+    },
+    "/mockTests/{testId}": {
+      "schema": { "$ref": "#/entities/MockTest" },
+      "description": "Live mock test catalog items"
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/Question" },
+      "description": "Global question bank repository items"
+    },
+    "/bundles/{bundleId}": {
+      "schema": { "$ref": "#/entities/TestSeriesBundle" },
+      "description": "Test series exam bundles and packages"
+    },
+    "/attempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/TestAttempt" },
+      "description": "Student test attempts and leaderboard scores"
+    }
+  }
+}

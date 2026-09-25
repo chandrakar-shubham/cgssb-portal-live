@@ -1,4 +1,5 @@
 import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
+import { saveBundleToFirestore, deleteBundleFromFirestore } from '../firebase/firestoreService';
 
 const BUNDLE_STORAGE_KEY = 'cgssb_custom_bundles_catalog_v2';
 
@@ -48,6 +49,10 @@ export const saveSingleBundle = (bundle: TestSeriesBundle): TestSeriesBundle[] =
     updated = [bundle, ...list];
   }
   saveStoredBundles(updated);
+  // Async background sync to Firebase Firestore
+  saveBundleToFirestore(bundle).catch(err => {
+    console.warn('Firestore bundle save warning:', err);
+  });
   return updated;
 };
 
@@ -55,6 +60,10 @@ export const deleteStoredBundle = (bundleId: string): TestSeriesBundle[] => {
   const list = getStoredBundles();
   const updated = list.filter(b => b.id !== bundleId && b.slug !== bundleId);
   saveStoredBundles(updated);
+  // Async background sync to Firebase Firestore
+  deleteBundleFromFirestore(bundleId).catch(err => {
+    console.warn('Firestore bundle delete warning:', err);
+  });
   return updated;
 };
 
