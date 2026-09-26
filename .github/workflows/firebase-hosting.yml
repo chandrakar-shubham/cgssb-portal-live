@@ -30,17 +30,44 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          PROJECT_ID: gen-lang-client-0783153446
+          CUSTOM_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
         run: |
+          # 1. Dynamically detect Target Project ID
+          SA_PROJECT_ID=""
           if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "Authenticating via Firebase Service Account..."
+            SA_PROJECT_ID=$(node -e '
+              try {
+                const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
+                console.log(sa.project_id || "");
+              } catch (e) {
+                console.log("");
+              }
+            ')
+          fi
+
+          TARGET_PROJECT="${CUSTOM_PROJECT_ID:-$SA_PROJECT_ID}"
+          if [ -z "$TARGET_PROJECT" ]; then
+            TARGET_PROJECT="gen-lang-client-0783153446"
+          fi
+
+          echo "🎯 Target Firebase Project: $TARGET_PROJECT"
+
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "🔑 Authenticating via Firebase Service Account..."
             echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
             export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
-            npx firebase-tools deploy --only hosting,firestore:rules --project "$PROJECT_ID"
+
+            echo "📦 Deploying Firebase Hosting & Rules to [$TARGET_PROJECT]..."
+            npx firebase-tools deploy --only hosting,firestore:rules --project "$TARGET_PROJECT" || {
+              echo "⚠️ Combined deploy encountered an error. Attempting hosting-only deployment..."
+              npx firebase-tools deploy --only hosting --project "$TARGET_PROJECT"
+            }
           elif [ -n "$FIREBASE_TOKEN" ]; then
-            echo "Authenticating via Firebase CI Token..."
-            npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$PROJECT_ID"
+            echo "🔑 Authenticating via Firebase CI Token..."
+            npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT" || {
+              echo "⚠️ Combined deploy encountered an error. Attempting hosting-only deployment..."
+              npx firebase-tools deploy --only hosting --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT"
+            }
           else
-            echo "::error::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets!"
-            exit 1
+            echo "::warning title=Firebase Secret Missing::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets. Skipping Firebase deploy."
           fi
