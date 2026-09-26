@@ -22,6 +22,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
+import { APP_BUILD_INFO } from '../utils/buildInfo';
 
 interface NavbarProps {
   activeTab: string;
