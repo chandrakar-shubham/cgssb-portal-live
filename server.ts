@@ -49,7 +49,7 @@ import {
   saveCmsSettings,
 } from './server/db/repository.ts';
 import { bootstrapAndMigrate } from './server/db/migrator.ts';
-import { dbConfig, isMysqlActive } from './server/db/connection.ts';
+import { dbConfig, isFirestoreActive } from './server/db/connection.ts';
 
 dotenv.config();
 
@@ -567,8 +567,12 @@ async function startServer() {
       platform: 'CGSSB Test (cgssbtest.com)',
       version: '1.0.0',
       database: {
-        mode: dbConfig.mode,
-        isMysqlActive: isMysqlActive(),
+        engine: 'Cloud Firestore (Enterprise)',
+        mode: 'firestore',
+        databaseId: dbConfig.databaseId,
+        projectId: dbConfig.projectId,
+        region: dbConfig.region,
+        isFirestoreActive: isFirestoreActive(),
       },
       timestamp: new Date().toISOString(),
       androidCompatibility: {
@@ -590,8 +594,12 @@ async function startServer() {
       serverStartedAt: SERVER_BOOT_TIME,
       nodeVersion: process.version,
       env: process.env.NODE_ENV || 'development',
-      databaseMode: dbConfig.mode,
-      isMysqlActive: isMysqlActive(),
+      database: 'Cloud Firestore Enterprise',
+      databaseMode: 'firestore',
+      databaseId: dbConfig.databaseId,
+      projectId: dbConfig.projectId,
+      region: dbConfig.region,
+      isFirestoreActive: isFirestoreActive(),
       counts,
     });
   });
@@ -1510,8 +1518,12 @@ Respond strictly with a JSON object having key "questions" containing an array o
       version: 'v1.4.0',
       baseUrl,
       database: {
-        mode: dbConfig.mode,
-        isMysqlActive: isMysqlActive(),
+        engine: 'Cloud Firestore (Enterprise)',
+        mode: 'firestore',
+        databaseId: dbConfig.databaseId,
+        projectId: dbConfig.projectId,
+        region: dbConfig.region,
+        isFirestoreActive: isFirestoreActive(),
       },
       apiDocumentation: {
         authentication: {
@@ -1778,7 +1790,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
   app.listen(PORT, '0.0.0.0', async () => {
     const counts = await getDatabaseCounts();
     console.log(`🚀 CGSSB Test Server running on port ${PORT}`);
-    console.log(`🔌 Database Mode: [${dbConfig.mode.toUpperCase()}] (MySQL Active: ${isMysqlActive()})`);
+    console.log(`🔌 Database Engine: [CLOUD FIRESTORE ENTERPRISE] (Database: ${dbConfig.databaseId})`);
     console.log(`📊 Catalog: ${counts.questions} questions, ${counts.mockTests} tests, ${counts.pypPapers} PYPs, ${counts.attempts} attempts`);
   });
 }

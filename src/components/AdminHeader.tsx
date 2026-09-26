@@ -59,7 +59,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
     { id: 'admin-questions', label: 'Question Bank', icon: FolderTree },
     { id: 'admin-pyp', label: 'PYP Manager', icon: FileText },
     { id: 'admin-ai', label: 'AI Test Creator', icon: Sparkles },
-    { id: 'admin-database', label: 'Database & Schema', icon: Database, badge: 'MySQL' },
+    { id: 'admin-database', label: 'Database & Schema', icon: Database, badge: 'Firestore' },
     { id: 'admin-android-api', label: 'Android REST API', icon: Smartphone, highlight: true },
   ];
 

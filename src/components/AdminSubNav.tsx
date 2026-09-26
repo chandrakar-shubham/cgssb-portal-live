@@ -58,7 +58,7 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
     {
       groupName: 'System & Database',
       items: [
-        { id: 'admin-database', label: 'Database & ERD', icon: Database, badge: 'MySQL' },
+        { id: 'admin-database', label: 'Database & Schema', icon: Database, badge: 'Firestore' },
         { id: 'admin-android-api', label: 'Android API', icon: Smartphone, highlight: true },
       ],
     },

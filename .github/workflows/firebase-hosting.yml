@@ -27,10 +27,20 @@ jobs:
         run: npm run build
 
       - name: Deploy to Firebase Hosting & Rules
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only hosting,firestore:rules
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           PROJECT_ID: gen-lang-client-0783153446
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "Authenticating via Firebase Service Account..."
+            echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+            npx firebase-tools deploy --only hosting,firestore:rules --project "$PROJECT_ID"
+          elif [ -n "$FIREBASE_TOKEN" ]; then
+            echo "Authenticating via Firebase CI Token..."
+            npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$PROJECT_ID"
+          else
+            echo "::error::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets!"
+            exit 1
+          fi

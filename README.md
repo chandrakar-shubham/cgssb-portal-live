@@ -4,7 +4,7 @@
 
 An enterprise-grade, high-concurrency Mock Test, Question Bank & Official Previous Year Paper (PYP) platform designed for **CGSSB (Chhattisgarh State Staff Selection Board / Vyapam)** and **CGPSC (Chhattisgarh Public Service Commission)** examinations.
 
-The platform is engineered to support **large-scale simultaneous candidate test submissions** (up to 10,000+ candidates) with local checkpoint auto-saving, real-time diagnostic sector analysis, bilingual Hindi/English rendering, and a dual-mode database persistence architecture (**MySQL 8.0+ / MariaDB** or **Local JSON Storage**).
+The platform is engineered to support **large-scale simultaneous candidate test submissions** (up to 10,000+ candidates) with local checkpoint auto-saving, real-time diagnostic sector analysis, bilingual Hindi/English rendering, and **Google Cloud Firestore Enterprise Edition** (`ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089`) with ABAC security rules (`rules_version = '2'`).
 
 ---
 
@@ -26,9 +26,9 @@ The platform is engineered to support **large-scale simultaneous candidate test 
                 ┌─────────────────────┴───┐         ┌───┴─────────────────────┐
                 ▼                         ▼         ▼                         ▼
     ┌───────────────────────┐ ┌───────────────────────┐ ┌───────────────────────┐
-    │   MySQL / MariaDB     │ │  Local JSON Storage   │ │  Android REST API     │
-    │  (Production Mode)    │ │  (Fallback / Dev)     │ │  Sync Engine          │
-    │   utf8mb4_unicode_ci  │ │  (data/cgssb-db.json) │ │  (/api/android/*)     │
+    │ Google Cloud Firestore│ │  Local JSON Storage   │ │  Android REST API     │
+    │  (Enterprise Mode)    │ │  (Fallback / Dev)     │ │  Sync Engine          │
+    │  ai-studio-cgssbtest  │ │  (data/cgssb-db.json) │ │  (/api/android/*)     │
     └───────────────────────┘ └───────────────────────┘ └───────────────────────┘
 ```
 
@@ -43,7 +43,7 @@ The platform is engineered to support **large-scale simultaneous candidate test 
    - Generates a `uniqueQuestionId` (e.g. `CGSSB-2024-HOS-001`) to guarantee zero duplicate imports.
 3. **Draft & Preview Mode (`BulkImportPreviewModal.tsx`)**:
    - Displays a live preview modal before committing items to persistent storage.
-4. **Publish**: Writes validated records into MySQL (`questions` table) or local persistence.
+4. **Publish**: Writes validated records into Cloud Firestore (`questions` collection) and local persistence.
 
 ---
 
@@ -86,9 +86,9 @@ The platform is engineered to support **large-scale simultaneous candidate test 
 
 ---
 
-## 🗄️ 3. Relational Database Schema (MySQL 8.0+ / MariaDB)
+## 🗄️ 3. Cloud Firestore Enterprise Database Schema (`firebase-blueprint.json`)
 
-Character Set: `utf8mb4` with collation `utf8mb4_unicode_ci` (Full Devnagari Hindi and LaTeX formula support).
+Google Cloud Firestore Enterprise Edition (`ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089`) with ABAC Zero-Trust security rules (`firestore.rules`). Full Devnagari Hindi and LaTeX formula support.
 
 ```
  ┌──────────────────────┐         1:N         ┌──────────────────────┐
@@ -259,16 +259,13 @@ The platform includes a **100% No-Code Content Management System (CMS)** allowin
 # Application Port
 PORT=3000
 
-# Database Mode: 'mysql' (Production with MySQL/PostgreSQL) or 'json' (Local Persistence)
-DATABASE_MODE=mysql
+# Google Gemini API Key for AI Test Generation & Solved Paper Explanations
+GEMINI_API_KEY=
 
-# MySQL Connection Details
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=your_mysql_password
-MYSQL_DATABASE=cgssb_db
-MYSQL_CONNECTION_LIMIT=30
+# Database Engine: Google Cloud Firestore (Enterprise Edition)
+DATABASE_MODE=firestore
+FIRESTORE_DATABASE_ID=ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089
+FIREBASE_PROJECT_ID=gen-lang-client-0783153446
 ```
 
 ---

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
+import { getStoredBundles } from '../utils/bundleStore';
 import {
   Database,
   Download,
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   Eye,
   Table,
+  FolderTree,
   GitBranch,
   Key,
   Network,
@@ -51,14 +53,16 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   onRestoreSnapshot,
 }) => {
   const [activeTab, setActiveTab] = useState<'backup' | 'schema' | 'pdf' | 'quality'>('backup');
-  const [selectedSchemaTable, setSelectedSchemaTable] = useState<'all' | 'questions' | 'mock_tests' | 'previous_year_papers' | 'test_attempts'>('all');
+  const [selectedSchemaCollection, setSelectedSchemaCollection] = useState<string>('all');
   const [schemaSearchQuery, setSchemaSearchQuery] = useState('');
-  const [copiedDdl, setCopiedDdl] = useState(false);
+  const [copiedBlueprint, setCopiedBlueprint] = useState(false);
   const [selectedTestId, setSelectedTestId] = useState<string>(tests[0]?.id || '');
   const [includeOmr, setIncludeOmr] = useState(true);
   const [includeSolutionsKey, setIncludeSolutionsKey] = useState(true);
   const [coachingWatermark, setCoachingWatermark] = useState('CGSSB & CGPSC EXAM PREP PORTAL - CHHATTISGARH');
   const [backupSuccessMessage, setBackupSuccessMessage] = useState<string | null>(null);
+
+  const storedBundles = useMemo(() => getStoredBundles(), []);
 
   // -------------------------------------------------------------
   // 1. DATABASE BACKUP / EXPORT & RESTORE
@@ -183,315 +187,261 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   }, [questions]);
 
   // -------------------------------------------------------------
-  // 2. DATABASE SCHEMA METADATA & DATA DICTIONARY
+  // 2. CLOUD FIRESTORE SCHEMA METADATA & DATA DICTIONARY
   // -------------------------------------------------------------
-  const MYSQL_DDL_SCRIPT = `-- =========================================================================
--- CGSSBTEST Official Database Schema (MySQL 8.0+ / MariaDB)
--- Character Set: utf8mb4 for full Devnagari / Hindi and LaTeX formula support
--- =========================================================================
+  const FIRESTORE_BLUEPRINT_JSON = JSON.stringify({
+    entities: {
+      User: {
+        title: "User",
+        description: "Registered candidate profile with authentication and access pass details",
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Firebase Auth UID" },
+          name: { type: "string", description: "Candidate full name" },
+          email: { type: "string", description: "Candidate email address" },
+          phone: { type: "string", description: "Candidate phone number" },
+          role: { type: "string", enum: ["student", "admin"], description: "User access role" },
+          hasProPass: { type: "boolean", description: "Whether candidate has active all-access pass" },
+          proPassPlan: { type: "string", description: "Pass duration plan (monthly/yearly)" },
+          passExpiresAt: { type: "string", description: "ISO timestamp of pass expiration" },
+          targetExam: { type: "string", description: "Target exam e.g. CG Teacher, CGPSC" },
+          targetYear: { type: "number", description: "Target exam year" },
+          district: { type: "string", description: "Chhattisgarh residential district" },
+          registeredAt: { type: "string", description: "Registration ISO timestamp" }
+        },
+        required: ["id", "email", "role", "registeredAt"]
+      },
+      MockTest: {
+        title: "MockTest",
+        description: "Full mock test or sectional test definition",
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Unique test identifier" },
+          title: { type: "string", description: "Test title" },
+          category: { type: "string", description: "Exam category e.g. CGSSB, CGPSC" },
+          durationMinutes: { type: "number", description: "Test timer duration in minutes" },
+          totalMarks: { type: "number", description: "Total marks for the test" },
+          questionCount: { type: "number", description: "Number of questions in test" },
+          isPublished: { type: "boolean", description: "Publish status" },
+          isPro: { type: "boolean", description: "Whether test requires Pro Pass" },
+          isPYP: { type: "boolean", description: "Whether paper is Previous Year Paper" },
+          createdAt: { type: "string", description: "Creation ISO timestamp" }
+        },
+        required: ["id", "title", "category", "durationMinutes"]
+      },
+      Question: {
+        title: "Question",
+        description: "Bilingual examination question item",
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Question identifier" },
+          questionText: { type: "string", description: "English question stem" },
+          questionHindi: { type: "string", description: "Hindi question stem" },
+          subject: { type: "string", description: "Subject classification" },
+          topic: { type: "string", description: "Topic or chapter" },
+          difficulty: { type: "string", description: "Difficulty level" },
+          marks: { type: "number", description: "Marks for correct answer" },
+          negativeMarks: { type: "number", description: "Penalty for incorrect answer" },
+          correctOption: { type: "string", description: "Correct option index or letter" }
+        },
+        required: ["id", "questionText", "subject"]
+      },
+      TestSeriesBundle: {
+        title: "TestSeriesBundle",
+        description: "Test Series Bundle with curriculum, syllabus and dates",
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Bundle identifier" },
+          slug: { type: "string", description: "URL slug for SEO landing page" },
+          title: { type: "string", description: "Bundle title in English" },
+          titleHindi: { type: "string", description: "Bundle title in Hindi" },
+          authority: { type: "string", description: "Exam authority (CGSSB/CGPSC)" },
+          price: { type: "number", description: "Offer price" },
+          originalPrice: { type: "number", description: "MRP price" },
+          totalTestsCount: { type: "number", description: "Total tests included" },
+          freeTestsCount: { type: "number", description: "Free preview tests count" }
+        },
+        required: ["id", "slug", "title", "authority"]
+      },
+      TestAttempt: {
+        title: "TestAttempt",
+        description: "Student completed or in-progress test attempt submission",
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Attempt submission ID" },
+          userId: { type: "string", description: "Attempting student UID" },
+          testId: { type: "string", description: "Attempted mock test ID" },
+          testTitle: { type: "string", description: "Title of the test" },
+          score: { type: "number", description: "Final calculated score" },
+          totalMarks: { type: "number", description: "Maximum marks possible" },
+          accuracy: { type: "number", description: "Accuracy percentage" },
+          timeSpentSeconds: { type: "number", description: "Time spent in seconds" },
+          completedAt: { type: "string", description: "Submission ISO timestamp" }
+        },
+        required: ["id", "userId", "testId", "score", "completedAt"]
+      }
+    },
+    firestore: {
+      "/users/{userId}": {
+        schema: { "$ref": "#/entities/User" },
+        description: "User profile records and authorization state"
+      },
+      "/mockTests/{testId}": {
+        schema: { "$ref": "#/entities/MockTest" },
+        description: "Live mock test catalog items"
+      },
+      "/questions/{questionId}": {
+        schema: { "$ref": "#/entities/Question" },
+        description: "Global question bank repository items"
+      },
+      "/bundles/{bundleId}": {
+        schema: { "$ref": "#/entities/TestSeriesBundle" },
+        description: "Test series exam bundles and packages"
+      },
+      "/attempts/{attemptId}": {
+        schema: { "$ref": "#/entities/TestAttempt" },
+        description: "Student test attempts and leaderboard scores"
+      }
+    }
+  }, null, 2);
 
-CREATE TABLE IF NOT EXISTS questions (
-  id VARCHAR(64) PRIMARY KEY,
-  unique_question_id VARCHAR(100) UNIQUE,
-  authority VARCHAR(100) DEFAULT 'CGSSB',
-  category VARCHAR(50) NOT NULL DEFAULT 'CGSSB',
-  sub_category VARCHAR(150),
-  post_name VARCHAR(150),
-  exam_name VARCHAR(200),
-  exam_year INT,
-  subject VARCHAR(150) NOT NULL,
-  topic VARCHAR(200) NOT NULL,
-  subtopic VARCHAR(200),
-  chapter_name VARCHAR(200),
-  chapter_id VARCHAR(150),
-  difficulty ENUM('Easy', 'Medium', 'Hard') NOT NULL DEFAULT 'Medium',
-  question_type ENUM('mcq', 'matching', 'assertion_reason', 'multi_statement') NOT NULL DEFAULT 'mcq',
-  subject_category ENUM('language', 'non_language', 'gs_reasoning') DEFAULT 'non_language',
-  question_language ENUM('en', 'hi', 'both', 'bilingual') DEFAULT 'both',
-  
-  -- Question Stems
-  question_text TEXT NOT NULL,
-  question_hindi TEXT,
-  
-  -- Structured Components
-  options JSON NOT NULL,
-  statements JSON,
-  column_a JSON,
-  column_b JSON,
-  assertion TEXT,
-  assertion_hindi TEXT,
-  reason TEXT,
-  reason_hindi TEXT,
-  
-  -- Answers & Scoring
-  correct_option ENUM('A', 'B', 'C', 'D') NOT NULL,
-  model_key VARCHAR(10),
-  final_amended_key VARCHAR(10),
-  is_cancelled BOOLEAN DEFAULT FALSE,
-  marks DECIMAL(4,2) NOT NULL DEFAULT 1.00,
-  negative_marks DECIMAL(4,3) NOT NULL DEFAULT 0.333,
-  explanation TEXT,
-  explanation_hindi TEXT,
-  image_url VARCHAR(500),
-  diagram_svg MEDIUMTEXT,
-  ideal_time_seconds INT DEFAULT 45,
-  
-  -- Provenance & PYQ Relations
-  origin_type ENUM('mock', 'pyq') DEFAULT 'mock',
-  pyp_source VARCHAR(255),
-  pyp_appearances JSON,
-  repeated_in_exams JSON,
-  similar_question_ids JSON,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  
-  INDEX idx_category (category),
-  INDEX idx_subject (subject),
-  INDEX idx_topic (topic),
-  INDEX idx_difficulty (difficulty),
-  INDEX idx_origin (origin_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS mock_tests (
-  id VARCHAR(64) PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
-  authority VARCHAR(100) DEFAULT 'CGSSB',
-  category VARCHAR(50) NOT NULL DEFAULT 'CGSSB',
-  sub_category VARCHAR(150),
-  post_name VARCHAR(150),
-  exam_name VARCHAR(200),
-  description TEXT,
-  duration_minutes INT NOT NULL DEFAULT 120,
-  total_marks DECIMAL(6,2),
-  marks_per_question DECIMAL(4,2) NOT NULL DEFAULT 1.00,
-  negative_marks_per_question DECIMAL(4,3) NOT NULL DEFAULT 0.333,
-  is_pyp BOOLEAN DEFAULT FALSE,
-  origin_type ENUM('pyq', 'mock') DEFAULT 'mock',
-  is_pro BOOLEAN DEFAULT FALSE,
-  pyp_year INT,
-  pyp_exam_name VARCHAR(200),
-  question_count INT NOT NULL DEFAULT 0,
-  attempts_count INT NOT NULL DEFAULT 0,
-  passing_percentage DECIMAL(4,1) DEFAULT 45.0,
-  is_published BOOLEAN DEFAULT TRUE,
-  difficulty_distribution JSON,
-  sections JSON NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  
-  INDEX idx_test_category (category),
-  INDEX idx_test_published (is_published),
-  INDEX idx_test_is_pyp (is_pyp)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS previous_year_papers (
-  id VARCHAR(64) PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
-  authority VARCHAR(100) DEFAULT 'CGSSB',
-  exam_category VARCHAR(50) NOT NULL DEFAULT 'CGSSB',
-  sub_category VARCHAR(150),
-  post_name VARCHAR(150),
-  exam_name VARCHAR(200),
-  exam_year INT NOT NULL,
-  total_questions INT NOT NULL DEFAULT 100,
-  duration_minutes INT NOT NULL DEFAULT 120,
-  marks DECIMAL(6,2) NOT NULL DEFAULT 100.00,
-  negative_marking_ratio VARCHAR(100) DEFAULT '-⅓rd (0.33 Marks)',
-  linked_mock_test_id VARCHAR(64),
-  is_official_paper BOOLEAN DEFAULT TRUE,
-  paper_summary TEXT,
-  subjects_weightage JSON,
-  download_file_name VARCHAR(255),
-  file_size VARCHAR(50) DEFAULT '3.5 MB',
-  download_url VARCHAR(500),
-  linked_question_ids JSON,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  
-  INDEX idx_pyp_year (exam_year),
-  INDEX idx_pyp_category (exam_category)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS test_attempts (
-  id VARCHAR(64) PRIMARY KEY,
-  user_id VARCHAR(64) NOT NULL,
-  user_name VARCHAR(150) NOT NULL,
-  test_id VARCHAR(64) NOT NULL,
-  test_title VARCHAR(255) NOT NULL,
-  category VARCHAR(50) NOT NULL,
-  submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  time_taken_seconds INT NOT NULL DEFAULT 0,
-  total_duration_seconds INT NOT NULL DEFAULT 7200,
-  
-  responses JSON NOT NULL,
-  question_statuses JSON NOT NULL,
-  
-  score DECIMAL(6,2) NOT NULL DEFAULT 0.00,
-  max_score DECIMAL(6,2) NOT NULL DEFAULT 100.00,
-  percentage DECIMAL(5,2) NOT NULL DEFAULT 0.00,
-  accuracy DECIMAL(5,2) NOT NULL DEFAULT 0.00,
-  correct_count INT NOT NULL DEFAULT 0,
-  incorrect_count INT NOT NULL DEFAULT 0,
-  unattempted_count INT NOT NULL DEFAULT 0,
-  marked_for_review_count INT NOT NULL DEFAULT 0,
-  negative_marks_deducted DECIMAL(6,2) NOT NULL DEFAULT 0.00,
-  
-  simulated_rank INT DEFAULT 1,
-  total_participants INT DEFAULT 1,
-  percentile DECIMAL(5,2) DEFAULT 50.00,
-  sector_analysis JSON NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  
-  INDEX idx_attempt_user (user_id),
-  INDEX idx_attempt_test (test_id),
-  INDEX idx_attempt_submitted (submitted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`;
-
-  const SCHEMA_TABLES = [
+  const SCHEMA_COLLECTIONS = [
     {
       id: 'questions',
       name: 'questions',
-      badge: 'Questions Bank',
+      badge: 'Cloud Firestore Collection',
       color: 'indigo',
-      rowCount: questions.length,
+      documentCount: questions.length,
       description: 'Master canonical question bank storing bilingual stems, structured options, multi-statement logic, scoring keys, and PYQ linkages.',
-      primaryKey: 'id',
-      indexes: ['category', 'subject', 'topic', 'difficulty', 'origin_type', 'unique_question_id (UK)'],
-      columns: [
-        { name: 'id', type: 'VARCHAR(64)', key: 'PK', nullable: false, defaultVal: 'UUID / q-id', desc: 'Primary key identifying unique question item.' },
-        { name: 'unique_question_id', type: 'VARCHAR(100)', key: 'UK', nullable: true, defaultVal: 'NULL', desc: 'Unique question code (e.g. CGSSB-2024-HOS-001) preventing duplicate imports.' },
-        { name: 'authority', type: 'VARCHAR(100)', key: '', nullable: true, defaultVal: "'CGSSB'", desc: 'Conducting examination board (CGSSB or CGPSC).' },
-        { name: 'category', type: 'VARCHAR(50)', key: 'INDEX', nullable: false, defaultVal: "'CGSSB'", desc: 'Top-level examination category.' },
-        { name: 'sub_category', type: 'VARCHAR(150)', key: '', nullable: true, defaultVal: 'NULL', desc: 'Exam group (e.g. Hostel Warden, RI, Patwari, Sub Inspector).' },
-        { name: 'post_name', type: 'VARCHAR(150)', key: '', nullable: true, defaultVal: 'NULL', desc: 'Designation / Post name.' },
-        { name: 'subject', type: 'VARCHAR(150)', key: 'INDEX', nullable: false, defaultVal: "''", desc: 'Canonical academic subject (e.g. CG GS, Computer, Reasoning).' },
-        { name: 'topic', type: 'VARCHAR(200)', key: 'INDEX', nullable: false, defaultVal: "''", desc: 'Topic classification within subject hierarchy.' },
-        { name: 'subtopic', type: 'VARCHAR(200)', key: '', nullable: true, defaultVal: 'NULL', desc: 'Specific granular subtopic.' },
-        { name: 'difficulty', type: "ENUM('Easy','Medium','Hard')", key: 'INDEX', nullable: false, defaultVal: "'Medium'", desc: 'Calibrated difficulty level for adaptive test assembly.' },
-        { name: 'question_type', type: "ENUM('mcq','matching','assertion_reason','multi_statement')", key: '', nullable: false, defaultVal: "'mcq'", desc: 'Structural schema of the question.' },
-        { name: 'question_text', type: 'TEXT', key: '', nullable: false, defaultVal: "''", desc: 'Standard English question stem (supports HTML/LaTeX).' },
-        { name: 'question_hindi', type: 'TEXT', key: '', nullable: true, defaultVal: 'NULL', desc: 'Devnagari Hindi translated question stem.' },
-        { name: 'options', type: 'JSON', key: '', nullable: false, defaultVal: '[]', desc: 'JSON array containing options A, B, C, D with bilingual labels & text.' },
-        { name: 'correct_option', type: "ENUM('A','B','C','D')", key: '', nullable: false, defaultVal: "'A'", desc: 'Official correct option key.' },
-        { name: 'marks', type: 'DECIMAL(4,2)', key: '', nullable: false, defaultVal: '1.00', desc: 'Positive marks awarded for correct answer.' },
-        { name: 'negative_marks', type: 'DECIMAL(4,3)', key: '', nullable: false, defaultVal: '0.333', desc: 'Penalty marks deducted for wrong response.' },
-        { name: 'explanation', type: 'TEXT', key: '', nullable: true, defaultVal: 'NULL', desc: 'Detailed pedagogical solution explanation (English).' },
-        { name: 'explanation_hindi', type: 'TEXT', key: '', nullable: true, defaultVal: 'NULL', desc: 'Detailed pedagogical solution explanation (Hindi).' },
-        { name: 'origin_type', type: "ENUM('mock','pyq')", key: 'INDEX', nullable: false, defaultVal: "'mock'", desc: 'Origin tag identifying mock prep item vs official PYQ.' },
-        { name: 'pyp_appearances', type: 'JSON', key: '', nullable: true, defaultVal: '[]', desc: 'Array of historical papers where this question appeared.' },
-        { name: 'created_at', type: 'DATETIME', key: '', nullable: false, defaultVal: 'CURRENT_TIMESTAMP', desc: 'Record creation timestamp.' },
+      primaryKey: 'id (Doc ID / UUID)',
+      indexes: ['category ASC', 'subject ASC', 'topic ASC', 'difficulty ASC'],
+      fields: [
+        { name: 'id', type: 'string', key: 'DOC_ID', required: true, defaultVal: 'UUID / auto-id', desc: 'Firestore Document ID identifying unique question item.' },
+        { name: 'uniqueQuestionId', type: 'string', key: 'INDEX', required: false, defaultVal: 'null', desc: 'Unique question code (e.g. CGSSB-2024-HOS-001) preventing duplicate imports.' },
+        { name: 'authority', type: 'string', key: '', required: false, defaultVal: '"CGSSB"', desc: 'Conducting examination board (CGSSB or CGPSC).' },
+        { name: 'category', type: 'string', key: 'INDEX', required: true, defaultVal: '"CGSSB"', desc: 'Top-level examination category (CGSSB, CGPSC, TEACHER, POLICE).' },
+        { name: 'subject', type: 'string', key: 'INDEX', required: true, defaultVal: '""', desc: 'Canonical academic subject (e.g. CG GS, Computer, Reasoning).' },
+        { name: 'topic', type: 'string', key: 'INDEX', required: true, defaultVal: '""', desc: 'Topic classification within subject hierarchy.' },
+        { name: 'subtopic', type: 'string', key: '', required: false, defaultVal: 'null', desc: 'Specific granular subtopic.' },
+        { name: 'difficulty', type: 'string (enum)', key: 'INDEX', required: true, defaultVal: '"Medium"', desc: 'Calibrated difficulty level: "Easy" | "Medium" | "Hard".' },
+        { name: 'questionText', type: 'string', key: '', required: true, defaultVal: '""', desc: 'Standard English question stem (supports HTML/LaTeX).' },
+        { name: 'questionHindi', type: 'string', key: '', required: false, defaultVal: 'null', desc: 'Devnagari Hindi translated question stem.' },
+        { name: 'options', type: 'array<string>', key: '', required: true, defaultVal: '[]', desc: 'Array containing options A, B, C, D with labels & text.' },
+        { name: 'correctOption', type: 'string', key: '', required: true, defaultVal: '"A"', desc: 'Official correct option key ("A" | "B" | "C" | "D").' },
+        { name: 'marks', type: 'number', key: '', required: true, defaultVal: '1.00', desc: 'Positive marks awarded for correct answer.' },
+        { name: 'negativeMarks', type: 'number', key: '', required: true, defaultVal: '0.333', desc: 'Penalty marks deducted for wrong response.' },
+        { name: 'explanation', type: 'string', key: '', required: false, defaultVal: 'null', desc: 'Pedagogical solution explanation (English).' },
+        { name: 'explanationHindi', type: 'string', key: '', required: false, defaultVal: 'null', desc: 'Pedagogical solution explanation (Hindi).' },
+        { name: 'pypAppearances', type: 'array<map>', key: '', required: false, defaultVal: '[]', desc: 'Array of historical papers where this question appeared.' },
+        { name: 'createdAt', type: 'timestamp', key: '', required: true, defaultVal: 'serverTimestamp()', desc: 'Firestore record creation timestamp.' },
       ]
     },
     {
-      id: 'mock_tests',
-      name: 'mock_tests',
-      badge: 'Test Series Catalog',
+      id: 'mockTests',
+      name: 'mockTests',
+      badge: 'Cloud Firestore Collection',
       color: 'blue',
-      rowCount: tests.length,
+      documentCount: tests.length,
       description: 'Test catalog configuring exam duration, section partitioning, marking scheme (+1/-0.33, +2/-0.66), and test question mappings.',
-      primaryKey: 'id',
-      indexes: ['category', 'is_published', 'is_pyp'],
-      columns: [
-        { name: 'id', type: 'VARCHAR(64)', key: 'PK', nullable: false, defaultVal: 'test-id', desc: 'Primary key identifying unique mock test series.' },
-        { name: 'title', type: 'VARCHAR(255)', key: '', nullable: false, defaultVal: "''", desc: 'Full bilingual exam title.' },
-        { name: 'authority', type: 'VARCHAR(100)', key: '', nullable: true, defaultVal: "'CGSSB'", desc: 'Board name (CGSSB or CGPSC).' },
-        { name: 'category', type: 'VARCHAR(50)', key: 'INDEX', nullable: false, defaultVal: "'CGSSB'", desc: 'Category grouping (CGSSB or CGPSC).' },
-        { name: 'duration_minutes', type: 'INT', key: '', nullable: false, defaultVal: '120', desc: 'Total allocated test time limit in minutes.' },
-        { name: 'total_marks', type: 'DECIMAL(6,2)', key: '', nullable: true, defaultVal: '100.00', desc: 'Total maximum marks for the paper.' },
-        { name: 'marks_per_question', type: 'DECIMAL(4,2)', key: '', nullable: false, defaultVal: '1.00', desc: 'Default positive marking weightage.' },
-        { name: 'negative_marks_per_question', type: 'DECIMAL(4,3)', key: '', nullable: false, defaultVal: '0.333', desc: 'Default negative deduction penalty.' },
-        { name: 'is_pyp', type: 'BOOLEAN', key: 'INDEX', nullable: false, defaultVal: 'FALSE', desc: 'Flags whether this test is an official Previous Year Paper.' },
-        { name: 'is_pro', type: 'BOOLEAN', key: '', nullable: false, defaultVal: 'FALSE', desc: 'Monetization flag: requires Pass Pro subscription.' },
-        { name: 'question_count', type: 'INT', key: '', nullable: false, defaultVal: '0', desc: 'Total number of assembled questions in test.' },
-        { name: 'attempts_count', type: 'INT', key: '', nullable: false, defaultVal: '0', desc: 'Counter for total completed student submissions.' },
-        { name: 'is_published', type: 'BOOLEAN', key: 'INDEX', nullable: false, defaultVal: 'TRUE', desc: 'Publication status: student-visible or draft.' },
-        { name: 'sections', type: 'JSON', key: 'FK_REL', nullable: false, defaultVal: '[]', desc: 'Sections JSON array containing section names and questionIds referencing questions.id.' },
-        { name: 'difficulty_distribution', type: 'JSON', key: '', nullable: true, defaultVal: '{}', desc: 'Calculated breakdown of Easy, Medium, Hard questions.' },
-        { name: 'created_at', type: 'DATETIME', key: '', nullable: false, defaultVal: 'CURRENT_TIMESTAMP', desc: 'Timestamp of test creation.' },
+      primaryKey: 'id (Doc ID / Slug)',
+      indexes: ['category ASC', 'isPublished ASC', 'createdAt DESC'],
+      fields: [
+        { name: 'id', type: 'string', key: 'DOC_ID', required: true, defaultVal: 'test-id', desc: 'Firestore Document ID identifying unique mock test series.' },
+        { name: 'title', type: 'string', key: '', required: true, defaultVal: '""', desc: 'Full bilingual exam title.' },
+        { name: 'category', type: 'string', key: 'INDEX', required: true, defaultVal: '"CGSSB"', desc: 'Category grouping (CGSSB, CGPSC, TEACHER, POLICE).' },
+        { name: 'durationMinutes', type: 'number', key: '', required: true, defaultVal: '120', desc: 'Total allocated test time limit in minutes.' },
+        { name: 'totalMarks', type: 'number', key: '', required: false, defaultVal: '100.00', desc: 'Total maximum marks for the paper.' },
+        { name: 'marksPerQuestion', type: 'number', key: '', required: true, defaultVal: '1.00', desc: 'Default positive marking weightage.' },
+        { name: 'negativeMarksPerQuestion', type: 'number', key: '', required: true, defaultVal: '0.333', desc: 'Default negative deduction penalty.' },
+        { name: 'isPublished', type: 'boolean', key: 'INDEX', required: true, defaultVal: 'true', desc: 'Publication status: student-visible or draft.' },
+        { name: 'isPro', type: 'boolean', key: '', required: false, defaultVal: 'false', desc: 'Monetization flag: requires Pass Pro subscription.' },
+        { name: 'sections', type: 'array<map>', key: 'RELATION', required: true, defaultVal: '[]', desc: 'Sections array containing section names and questionIds referencing questions/{id}.' },
+        { name: 'createdAt', type: 'timestamp', key: '', required: true, defaultVal: 'serverTimestamp()', desc: 'Firestore timestamp of test creation.' },
       ]
     },
     {
-      id: 'previous_year_papers',
-      name: 'previous_year_papers',
-      badge: 'Official PYP Archives',
-      color: 'emerald',
-      rowCount: pypPapers.length,
-      description: 'Official Previous Year Exam Paper archive catalog with exam year weightage, direct PDF download URLs, and linked interactive mock tests.',
-      primaryKey: 'id',
-      indexes: ['exam_year', 'exam_category'],
-      columns: [
-        { name: 'id', type: 'VARCHAR(64)', key: 'PK', nullable: false, defaultVal: 'pyp-id', desc: 'Primary key identifying official PYP document.' },
-        { name: 'title', type: 'VARCHAR(255)', key: '', nullable: false, defaultVal: "''", desc: 'Official paper title with year and shift.' },
-        { name: 'exam_category', type: 'VARCHAR(50)', key: 'INDEX', nullable: false, defaultVal: "'CGSSB'", desc: 'Category grouping (CGSSB or CGPSC).' },
-        { name: 'exam_year', type: 'INT', key: 'INDEX', nullable: false, defaultVal: '2024', desc: 'Year of official examination conduct.' },
-        { name: 'total_questions', type: 'INT', key: '', nullable: false, defaultVal: '100', desc: 'Count of official questions in original paper.' },
-        { name: 'duration_minutes', type: 'INT', key: '', nullable: false, defaultVal: '120', desc: 'Official allocated examination time.' },
-        { name: 'marks', type: 'DECIMAL(6,2)', key: '', nullable: false, defaultVal: '100.00', desc: 'Official maximum marks.' },
-        { name: 'linked_mock_test_id', type: 'VARCHAR(64)', key: 'FK', nullable: true, defaultVal: 'NULL', desc: 'Foreign reference to mock_tests.id enabling 1-click test simulation.' },
-        { name: 'linked_question_ids', type: 'JSON', key: 'FK_REL', nullable: true, defaultVal: '[]', desc: 'Array of question UUIDs referencing questions.id in bank.' },
-        { name: 'subjects_weightage', type: 'JSON', key: '', nullable: true, defaultVal: '[]', desc: 'Subject marks distribution analysis.' },
-        { name: 'download_file_name', type: 'VARCHAR(255)', key: '', nullable: true, defaultVal: 'NULL', desc: 'File name for student PDF download.' },
-        { name: 'download_url', type: 'VARCHAR(500)', key: '', nullable: true, defaultVal: 'NULL', desc: 'Direct URL or endpoint for full paper PDF.' },
-        { name: 'created_at', type: 'DATETIME', key: '', nullable: false, defaultVal: 'CURRENT_TIMESTAMP', desc: 'Timestamp of PYP catalog entry.' },
-      ]
-    },
-    {
-      id: 'test_attempts',
-      name: 'test_attempts',
-      badge: 'Student Live Submissions',
+      id: 'bundles',
+      name: 'bundles',
+      badge: 'Cloud Firestore Collection',
       color: 'amber',
-      rowCount: attempts.length,
-      description: 'Candidate test submission logs recording chosen responses, accuracy, score, percentile ranking, and granular sector performance analysis.',
-      primaryKey: 'id',
-      indexes: ['user_id', 'test_id', 'submitted_at'],
-      columns: [
-        { name: 'id', type: 'VARCHAR(64)', key: 'PK', nullable: false, defaultVal: 'att-id', desc: 'Primary key identifying unique submission attempt.' },
-        { name: 'user_id', type: 'VARCHAR(64)', key: 'INDEX', nullable: false, defaultVal: "''", desc: 'Identifier of candidate student submitting attempt.' },
-        { name: 'user_name', type: 'VARCHAR(150)', key: '', nullable: false, defaultVal: "''", desc: 'Full name of candidate at time of submission.' },
-        { name: 'test_id', type: 'VARCHAR(64)', key: 'FK', nullable: false, defaultVal: "''", desc: 'Foreign key referencing mock_tests.id of attempted exam.' },
-        { name: 'test_title', type: 'VARCHAR(255)', key: '', nullable: false, defaultVal: "''", desc: 'Snapshotted title of attempted test.' },
-        { name: 'category', type: 'VARCHAR(50)', key: '', nullable: false, defaultVal: "'CGSSB'", desc: 'Exam category of attempted test.' },
-        { name: 'submitted_at', type: 'DATETIME', key: 'INDEX', nullable: false, defaultVal: 'CURRENT_TIMESTAMP', desc: 'Exact submission timestamp.' },
-        { name: 'time_taken_seconds', type: 'INT', key: '', nullable: false, defaultVal: '0', desc: 'Time spent in test by candidate (seconds).' },
-        { name: 'score', type: 'DECIMAL(6,2)', key: '', nullable: false, defaultVal: '0.00', desc: 'Final calculated net score after negative marks.' },
-        { name: 'max_score', type: 'DECIMAL(6,2)', key: '', nullable: false, defaultVal: '100.00', desc: 'Total maximum paper marks.' },
-        { name: 'percentage', type: 'DECIMAL(5,2)', key: '', nullable: false, defaultVal: '0.00', desc: 'Calculated percentage score.' },
-        { name: 'accuracy', type: 'DECIMAL(5,2)', key: '', nullable: false, defaultVal: '0.00', desc: 'Accuracy percentage (correct / attempted).' },
-        { name: 'correct_count', type: 'INT', key: '', nullable: false, defaultVal: '0', desc: 'Count of correct responses.' },
-        { name: 'incorrect_count', type: 'INT', key: '', nullable: false, defaultVal: '0', desc: 'Count of incorrect responses deducted.' },
-        { name: 'unattempted_count', type: 'INT', key: '', nullable: false, defaultVal: '0', desc: 'Count of skipped questions.' },
-        { name: 'simulated_rank', type: 'INT', key: '', nullable: true, defaultVal: '1', desc: 'State-wide simulated rank.' },
-        { name: 'percentile', type: 'DECIMAL(5,2)', key: '', nullable: true, defaultVal: '50.00', desc: 'Calculated percentile among all test participants.' },
-        { name: 'responses', type: 'JSON', key: '', nullable: false, defaultVal: '{}', desc: 'Key-value map of questionId -> chosenOption (A, B, C, D).' },
-        { name: 'sector_analysis', type: 'JSON', key: '', nullable: false, defaultVal: '{}', desc: 'Granular subject, topic, and difficulty diagnostic analysis.' },
+      documentCount: storedBundles.length,
+      description: 'Curated test series bundles and specialized crash course packs with pricing, validity tenures, and linked mock test IDs.',
+      primaryKey: 'id (Doc ID / Slug)',
+      indexes: ['category ASC', 'isFeatured DESC'],
+      fields: [
+        { name: 'id', type: 'string', key: 'DOC_ID', required: true, defaultVal: 'bundle-id', desc: 'Unique bundle identifier slug.' },
+        { name: 'title', type: 'string', key: '', required: true, defaultVal: '""', desc: 'Commercial display title of the test bundle.' },
+        { name: 'slug', type: 'string', key: 'INDEX', required: true, defaultVal: '""', desc: 'URL routing slug for deep linking.' },
+        { name: 'price', type: 'number', key: '', required: true, defaultVal: '199', desc: 'Selling price in INR.' },
+        { name: 'originalPrice', type: 'number', key: '', required: false, defaultVal: '499', desc: 'Original MRP value before discount.' },
+        { name: 'validityDays', type: 'number', key: '', required: true, defaultVal: '365', desc: 'Subscription validity in days.' },
+        { name: 'testIds', type: 'array<string>', key: 'RELATION', required: true, defaultVal: '[]', desc: 'List of mock test IDs included in this bundle.' },
+      ]
+    },
+    {
+      id: 'attempts',
+      name: 'attempts',
+      badge: 'Cloud Firestore Collection',
+      color: 'emerald',
+      documentCount: attempts.length,
+      description: 'Candidate test submission logs recording chosen responses, accuracy, score, percentile ranking, and granular performance analysis.',
+      primaryKey: 'id (Attempt UUID)',
+      indexes: ['testId ASC', 'score DESC', 'submittedAt DESC'],
+      fields: [
+        { name: 'id', type: 'string', key: 'DOC_ID', required: true, defaultVal: 'att-id', desc: 'Firestore Document ID identifying unique submission attempt.' },
+        { name: 'testId', type: 'string', key: 'INDEX', required: true, defaultVal: '""', desc: 'Reference to parent mockTests/{id}.' },
+        { name: 'userId', type: 'string', key: 'INDEX', required: true, defaultVal: '""', desc: 'Identifier of candidate student submitting attempt (Firebase Auth UID).' },
+        { name: 'userName', type: 'string', key: '', required: true, defaultVal: '""', desc: 'Full name of candidate at time of submission.' },
+        { name: 'score', type: 'number', key: 'INDEX', required: true, defaultVal: '0.00', desc: 'Net score achieved after negative deduction.' },
+        { name: 'accuracy', type: 'number', key: '', required: true, defaultVal: '0.00', desc: 'Accuracy percentage.' },
+        { name: 'responses', type: 'map', key: '', required: true, defaultVal: '{}', desc: 'Key-value map of questionId -> chosenOption (A, B, C, D).' },
+        { name: 'submittedAt', type: 'timestamp', key: '', required: true, defaultVal: 'serverTimestamp()', desc: 'Server submission timestamp.' },
+      ]
+    },
+    {
+      id: 'users',
+      name: 'users',
+      badge: 'Cloud Firestore Collection',
+      color: 'teal',
+      documentCount: 1,
+      description: 'Candidate authentication records, Pro Pass tenure, district preferences, wallet credits, and administrator access roles.',
+      primaryKey: 'id (Firebase Auth UID)',
+      indexes: ['role ASC', 'email ASC'],
+      fields: [
+        { name: 'id', type: 'string', key: 'DOC_ID', required: true, defaultVal: 'uid', desc: 'Firebase Authentication UID.' },
+        { name: 'email', type: 'string', key: 'INDEX', required: true, defaultVal: '""', desc: 'Candidate login email address.' },
+        { name: 'name', type: 'string', key: '', required: true, defaultVal: '""', desc: 'Full candidate name.' },
+        { name: 'role', type: 'string', key: 'INDEX', required: true, defaultVal: '"student"', desc: 'Access role: "student" | "admin".' },
+        { name: 'hasProPass', type: 'boolean', key: '', required: true, defaultVal: 'false', desc: 'Pass subscription active state.' },
+        { name: 'registeredAt', type: 'timestamp', key: '', required: true, defaultVal: 'serverTimestamp()', desc: 'Registration timestamp.' },
       ]
     }
   ];
 
-  const handleCopyDdl = () => {
-    navigator.clipboard.writeText(MYSQL_DDL_SCRIPT);
-    setCopiedDdl(true);
-    setTimeout(() => setCopiedDdl(false), 2500);
+  const handleCopyBlueprint = () => {
+    navigator.clipboard.writeText(FIRESTORE_BLUEPRINT_JSON);
+    setCopiedBlueprint(true);
+    setTimeout(() => setCopiedBlueprint(false), 2500);
   };
 
-  const filteredColumns = useMemo(() => {
+  const filteredCollections = useMemo(() => {
     const query = schemaSearchQuery.trim().toLowerCase();
-    const activeTables = selectedSchemaTable === 'all' 
-      ? SCHEMA_TABLES 
-      : SCHEMA_TABLES.filter(t => t.id === selectedSchemaTable);
+    const activeCollections = selectedSchemaCollection === 'all' 
+      ? SCHEMA_COLLECTIONS 
+      : SCHEMA_COLLECTIONS.filter(t => t.id === selectedSchemaCollection);
 
-    if (!query) return activeTables;
+    if (!query) return activeCollections;
 
-    return activeTables.map(t => ({
+    return activeCollections.map(t => ({
       ...t,
-      columns: t.columns.filter(c => 
+      fields: t.fields.filter(c => 
         c.name.toLowerCase().includes(query) ||
         c.type.toLowerCase().includes(query) ||
         c.desc.toLowerCase().includes(query) ||
         c.key.toLowerCase().includes(query)
       )
-    })).filter(t => t.columns.length > 0);
-  }, [selectedSchemaTable, schemaSearchQuery]);
+    })).filter(t => t.fields.length > 0);
+  }, [selectedSchemaCollection, schemaSearchQuery]);
 
   // -------------------------------------------------------------
   // 3. PRINTABLE PDF QUESTION PAPER GENERATOR
@@ -850,8 +800,8 @@ CREATE TABLE IF NOT EXISTS test_attempts (
                 : 'border-transparent text-slate-400 hover:text-white'
             }`}
           >
-            <Table className="w-3.5 h-3.5" />
-            <span>Database Schema & Architecture</span>
+            <FolderTree className="w-3.5 h-3.5" />
+            <span>Firestore Schema & Architecture</span>
           </button>
 
           <button
@@ -966,22 +916,22 @@ CREATE TABLE IF NOT EXISTS test_attempts (
               <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/60 border border-indigo-900/40 rounded-2xl p-5 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <div className="inline-flex items-center space-x-2 px-2.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-[11px] font-mono font-bold mb-1 border border-indigo-500/30">
-                      <Server className="w-3 h-3 text-indigo-400" />
-                      <span>MySQL 8.0+ / MariaDB Production Schema</span>
+                    <div className="inline-flex items-center space-x-2 px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[11px] font-mono font-bold mb-1 border border-amber-500/30">
+                      <Server className="w-3 h-3 text-amber-400" />
+                      <span>Google Cloud Firestore Enterprise Database</span>
                     </div>
-                    <h3 className="text-base font-black text-white">Relational Database Architecture & ERD</h3>
+                    <h3 className="text-base font-black text-white">Firestore Document Architecture & Collections</h3>
                     <p className="text-xs text-slate-300">
-                      ACID-compliant relational structure configured with <code className="text-indigo-300 font-mono">utf8mb4_unicode_ci</code> for full bilingual Devnagari Hindi text and LaTeX mathematical expressions.
+                      High-availability NoSQL document architecture on <code className="text-amber-300 font-mono">ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089</code> (Mumbai asia-south1). Sub-millisecond queries with native Devnagari Hindi and LaTeX formula storage.
                     </p>
                   </div>
                   <div className="flex items-center space-x-2 shrink-0">
                     <button
-                      onClick={handleCopyDdl}
+                      onClick={handleCopyBlueprint}
                       className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-lg shadow-indigo-600/20 cursor-pointer active:scale-95"
                     >
-                      {copiedDdl ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedDdl ? 'DDL Copied!' : 'Copy Schema SQL'}</span>
+                      {copiedBlueprint ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedBlueprint ? 'Blueprint Copied!' : 'Copy Blueprint JSON'}</span>
                     </button>
                   </div>
                 </div>
@@ -989,20 +939,20 @@ CREATE TABLE IF NOT EXISTS test_attempts (
                 {/* Storage Engine Badges */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-800 text-xs">
                   <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block font-mono">Storage Engine</span>
-                    <strong className="text-indigo-300 text-xs">InnoDB (Row Locks & ACID)</strong>
+                    <span className="text-[10px] text-slate-400 block font-mono">Database Engine</span>
+                    <strong className="text-amber-300 text-xs">Cloud Firestore (Enterprise)</strong>
                   </div>
                   <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block font-mono">Character Set</span>
-                    <strong className="text-emerald-300 text-xs">utf8mb4 (Hindi + LaTeX)</strong>
+                    <span className="text-[10px] text-slate-400 block font-mono">Region</span>
+                    <strong className="text-emerald-300 text-xs">asia-south1 (Mumbai)</strong>
                   </div>
                   <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block font-mono">Connection Pool</span>
-                    <strong className="text-amber-300 text-xs">30 Concurrent Workers</strong>
+                    <span className="text-[10px] text-slate-400 block font-mono">Security Model</span>
+                    <strong className="text-indigo-300 text-xs">ABAC Rules (rules_v2)</strong>
                   </div>
                   <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block font-mono">Total Tables</span>
-                    <strong className="text-teal-300 text-xs">4 Core Tables (88 Columns)</strong>
+                    <span className="text-[10px] text-slate-400 block font-mono">Active Collections</span>
+                    <strong className="text-teal-300 text-xs">5 Core Cloud Collections</strong>
                   </div>
                 </div>
               </div>
@@ -1012,50 +962,50 @@ CREATE TABLE IF NOT EXISTS test_attempts (
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
                     <Network className="w-4 h-4 text-indigo-400" />
-                    <span>Entity-Relationship Architecture (Click table to inspect)</span>
+                    <span>Cloud Firestore Collections (Click collection to inspect)</span>
                   </h4>
                   <span className="text-[11px] text-slate-400">Live Memory Sync Active</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {SCHEMA_TABLES.map(table => {
-                    const isSelected = selectedSchemaTable === table.id;
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {SCHEMA_COLLECTIONS.map(col => {
+                    const isSelected = selectedSchemaCollection === col.id;
                     const borderClass = isSelected
                       ? 'border-indigo-500 bg-indigo-950/20 shadow-indigo-500/10'
                       : 'border-slate-800 hover:border-slate-700 bg-slate-950/60';
 
                     return (
                       <div
-                        key={table.id}
-                        onClick={() => setSelectedSchemaTable(isSelected ? 'all' : (table.id as any))}
+                        key={col.id}
+                        onClick={() => setSelectedSchemaCollection(isSelected ? 'all' : col.id)}
                         className={`p-4 rounded-2xl border transition-all duration-200 cursor-pointer relative shadow-lg ${borderClass}`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
-                              <Table className="w-4 h-4" />
+                              <FolderTree className="w-4 h-4" />
                             </div>
-                            <span className="font-mono font-bold text-sm text-white">{table.name}</span>
+                            <span className="font-mono font-bold text-sm text-white">/{col.name}</span>
                           </div>
                           <div className="flex items-center space-x-1.5">
                             <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] font-mono text-indigo-300 border border-slate-700">
-                              {table.columns.length} Cols
+                              {col.fields.length} Fields
                             </span>
                             <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-[10px] font-mono text-emerald-300 border border-emerald-500/30">
-                              {table.rowCount} Rows
+                              {col.documentCount} Docs
                             </span>
                           </div>
                         </div>
 
                         <p className="text-xs text-slate-400 leading-relaxed mb-3">
-                          {table.description}
+                          {col.description}
                         </p>
 
                         <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-slate-400">
-                          <span className="text-amber-400 font-semibold">PK: {table.primaryKey}</span>
+                          <span className="text-amber-400 font-semibold">ID: {col.primaryKey}</span>
                           <span>•</span>
                           <span className="text-slate-500 truncate max-w-[240px]">
-                            Indexes: {table.indexes.join(', ')}
+                            Indexes: {col.indexes.join(', ')}
                           </span>
                         </div>
                       </div>
@@ -1064,65 +1014,65 @@ CREATE TABLE IF NOT EXISTS test_attempts (
                 </div>
               </div>
 
-              {/* Relational Foreign Key Connections Flow */}
+              {/* Relational Document References Flow */}
               <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3">
                 <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
                   <GitBranch className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Foreign Key & Relational Mappings</span>
+                  <span>Firestore Document References & Relational Mappings</span>
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                   <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-indigo-400 font-bold">mock_tests.sections[].questionIds</span>
-                      <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[9px] font-mono">1 : N (Many)</span>
+                      <span className="font-mono text-indigo-400 font-bold">mockTests/{"{testId}"}.sections[].questionIds</span>
+                      <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[9px] font-mono">1 : N (Embedded Array)</span>
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Sections JSON array embeds question IDs referencing <code className="text-white font-mono">questions.id</code> to assemble exam papers.
+                      Sections JSON array embeds question IDs referencing <code className="text-white font-mono">questions/{"{questionId}"}</code> documents to assemble exam papers.
                     </p>
                   </div>
 
                   <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-emerald-400 font-bold">pyp_papers.linked_mock_test_id</span>
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-mono">1 : 1 (Link)</span>
+                      <span className="font-mono text-emerald-400 font-bold">bundles/{"{bundleId}"}.testIds</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-mono">1 : N (Package Links)</span>
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Links official historical archives directly to interactive playable exams in <code className="text-white font-mono">mock_tests.id</code>.
+                      Curated test series package embeds array of test IDs linking to <code className="text-white font-mono">mockTests/{"{testId}"}</code>.
                     </p>
                   </div>
 
                   <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-amber-400 font-bold">test_attempts.test_id</span>
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-mono">N : 1 (Attempts)</span>
+                      <span className="font-mono text-amber-400 font-bold">attempts/{"{attemptId}"}.testId</span>
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-mono">N : 1 (Attempt Log)</span>
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Foreign reference connecting candidate submission logs to the parent <code className="text-white font-mono">mock_tests.id</code>.
+                      Foreign reference connecting candidate submission logs to the parent <code className="text-white font-mono">mockTests/{"{testId}"}</code>.
                     </p>
                   </div>
 
                   <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-teal-400 font-bold">test_attempts.user_id</span>
-                      <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 text-[9px] font-mono">N : 1 (Candidate)</span>
+                      <span className="font-mono text-teal-400 font-bold">attempts/{"{attemptId}"}.userId</span>
+                      <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 text-[9px] font-mono">N : 1 (Candidate UID)</span>
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Associates live attempt results, diagnostic sector scores, and ranks with the authenticated student candidate.
+                      Associates live attempt results, diagnostic sector scores, and ranks with the authenticated student in <code className="text-white font-mono">users/{"{userId}"}</code>.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Data Dictionary & Column Inspector */}
+              {/* Data Dictionary & Field Inspector */}
               <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-bold text-white flex items-center space-x-2">
                       <HardDrive className="w-4 h-4 text-indigo-400" />
-                      <span>Data Dictionary & Column Definitions</span>
+                      <span>Firestore Collection Schemas & Field Dictionary</span>
                     </h4>
-                    <p className="text-xs text-slate-400">Examine columns, data types, constraints, and business logic mapping.</p>
+                    <p className="text-xs text-slate-400">Examine collection document fields, NoSQL data types, indexing, and rule constraints.</p>
                   </div>
 
                   {/* Filter & Search */}
@@ -1131,7 +1081,7 @@ CREATE TABLE IF NOT EXISTS test_attempts (
                       <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
                       <input
                         type="text"
-                        placeholder="Search column or type..."
+                        placeholder="Search field or type..."
                         value={schemaSearchQuery}
                         onChange={e => setSchemaSearchQuery(e.target.value)}
                         className="bg-slate-900 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-44"
@@ -1140,117 +1090,109 @@ CREATE TABLE IF NOT EXISTS test_attempts (
                   </div>
                 </div>
 
-                {/* Table Filter Pills */}
+                {/* Collection Filter Pills */}
                 <div className="flex flex-wrap gap-1.5">
                   <button
-                    onClick={() => setSelectedSchemaTable('all')}
+                    onClick={() => setSelectedSchemaCollection('all')}
                     className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      selectedSchemaTable === 'all'
+                      selectedSchemaCollection === 'all'
                         ? 'bg-indigo-600 text-white'
                         : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
-                    All Tables (4)
+                    All Collections ({SCHEMA_COLLECTIONS.length})
                   </button>
-                  {SCHEMA_TABLES.map(t => (
+                  {SCHEMA_COLLECTIONS.map(t => (
                     <button
                       key={t.id}
-                      onClick={() => setSelectedSchemaTable(t.id as any)}
+                      onClick={() => setSelectedSchemaCollection(t.id)}
                       className={`px-3 py-1 rounded-lg text-xs font-mono transition cursor-pointer flex items-center space-x-1.5 ${
-                        selectedSchemaTable === t.id
+                        selectedSchemaCollection === t.id
                           ? 'bg-indigo-600 text-white font-bold'
                           : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                       }`}
                     >
-                      <span>{t.name}</span>
-                      <span className="text-[10px] opacity-70">({t.columns.length})</span>
+                      <span>/{t.name}</span>
+                      <span className="text-[10px] opacity-70">({t.fields.length})</span>
                     </button>
                   ))}
                 </div>
 
-                {/* Column Table Listing */}
+                {/* Field Listing */}
                 <div className="space-y-6">
-                  {filteredColumns.map(table => (
-                    <div key={table.id} className="border border-slate-800/80 rounded-2xl overflow-hidden bg-slate-900/70 shadow-md">
+                  {filteredCollections.map(col => (
+                    <div key={col.id} className="border border-slate-800/80 rounded-2xl overflow-hidden bg-slate-900/70 shadow-md">
                       <div className="bg-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <Table className="w-4 h-4 text-indigo-400" />
-                          <span className="font-mono font-bold text-sm text-white">{table.name}</span>
-                          <span className="text-xs text-slate-400">({table.badge})</span>
+                          <FolderTree className="w-4 h-4 text-indigo-400" />
+                          <span className="font-mono font-bold text-sm text-white">/{col.name}</span>
+                          <span className="text-xs text-slate-400">({col.badge})</span>
                         </div>
-                        <span className="text-[11px] font-mono text-slate-400">{table.columns.length} columns defined</span>
+                        <span className="text-[11px] font-mono text-slate-400">{col.fields.length} document fields defined</span>
                       </div>
 
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs">
                           <thead className="bg-slate-950/80 text-slate-400 font-mono text-[11px] uppercase border-b border-slate-800">
                             <tr>
-                              <th className="px-4 py-2.5">Column Name</th>
-                              <th className="px-4 py-2.5">Data Type</th>
+                              <th className="px-4 py-2.5">Field Name</th>
+                              <th className="px-4 py-2.5">Firestore Type</th>
                               <th className="px-4 py-2.5">Key / Index</th>
-                              <th className="px-4 py-2.5">Nullable</th>
-                              <th className="px-4 py-2.5">Default</th>
+                              <th className="px-4 py-2.5">Required</th>
+                              <th className="px-4 py-2.5">Default / Value</th>
                               <th className="px-4 py-2.5">Purpose & Description</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/50">
-                            {table.columns.map((col, idx) => (
+                            {col.fields.map((f, idx) => (
                               <tr key={idx} className="hover:bg-slate-800/30 transition">
                                 <td className="px-4 py-2.5 font-mono font-bold text-white whitespace-nowrap">
-                                  {col.name}
+                                  {f.name}
                                 </td>
                                 <td className="px-4 py-2.5 font-mono text-[11px] whitespace-nowrap">
                                   <span className={`px-2 py-0.5 rounded-md font-semibold ${
-                                    col.type.includes('JSON')
+                                    f.type.includes('map')
                                       ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
-                                      : col.type.includes('VARCHAR') || col.type.includes('TEXT')
+                                      : f.type.includes('string')
                                       ? 'bg-blue-500/10 text-blue-300 border border-blue-500/30'
-                                      : col.type.includes('ENUM')
+                                      : f.type.includes('boolean')
                                       ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
-                                      : col.type.includes('DECIMAL') || col.type.includes('INT')
+                                      : f.type.includes('number')
                                       ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                                      : f.type.includes('timestamp')
+                                      ? 'bg-teal-500/10 text-teal-300 border border-teal-500/30'
                                       : 'bg-slate-800 text-slate-300 border border-slate-700'
                                   }`}>
-                                    {col.type}
+                                    {f.type}
                                   </span>
                                 </td>
                                 <td className="px-4 py-2.5 font-mono text-[11px] whitespace-nowrap">
-                                  {col.key === 'PK' && (
+                                  {f.key === 'DOC_ID' && (
                                     <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 inline-flex items-center space-x-1">
                                       <Key className="w-2.5 h-2.5" />
-                                      <span>PK</span>
+                                      <span>DOC_ID</span>
                                     </span>
                                   )}
-                                  {col.key === 'UK' && (
-                                    <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 font-bold border border-teal-500/40">
-                                      UNIQUE
-                                    </span>
-                                  )}
-                                  {col.key === 'FK' && (
-                                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
-                                      FK
-                                    </span>
-                                  )}
-                                  {col.key === 'FK_REL' && (
+                                  {f.key === 'RELATION' && (
                                     <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/40">
-                                      REL_JSON
+                                      REL_REF
                                     </span>
                                   )}
-                                  {col.key === 'INDEX' && (
+                                  {f.key === 'INDEX' && (
                                     <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
-                                      INDEX
+                                      INDEXED
                                     </span>
                                   )}
-                                  {!col.key && <span className="text-slate-600">—</span>}
+                                  {!f.key && <span className="text-slate-600">—</span>}
                                 </td>
                                 <td className="px-4 py-2.5 font-mono text-[11px] text-slate-400">
-                                  {col.nullable ? 'YES' : 'NO'}
+                                  {f.required ? <span className="text-emerald-400 font-bold">YES</span> : 'OPTIONAL'}
                                 </td>
                                 <td className="px-4 py-2.5 font-mono text-[11px] text-slate-300">
-                                  {col.defaultVal}
+                                  {f.defaultVal}
                                 </td>
                                 <td className="px-4 py-2.5 text-slate-300 leading-relaxed min-w-[220px]">
-                                  {col.desc}
+                                  {f.desc}
                                 </td>
                               </tr>
                             ))}
@@ -1262,23 +1204,23 @@ CREATE TABLE IF NOT EXISTS test_attempts (
                 </div>
               </div>
 
-              {/* Raw SQL Preview Block */}
+              {/* Raw Schema Preview Block */}
               <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
-                    <Code2 className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Raw MySQL Schema SQL (schema.sql)</span>
+                    <Code2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Cloud Firestore Collection Schema (firebase-blueprint.json)</span>
                   </h4>
                   <button
-                    onClick={handleCopyDdl}
+                    onClick={handleCopyBlueprint}
                     className="text-[11px] font-mono text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 cursor-pointer"
                   >
                     <Copy className="w-3 h-3" />
-                    <span>{copiedDdl ? 'Copied' : 'Copy SQL'}</span>
+                    <span>{copiedBlueprint ? 'Copied' : 'Copy Blueprint'}</span>
                   </button>
                 </div>
                 <pre className="p-3 rounded-xl bg-slate-900 text-[11px] font-mono text-slate-300 overflow-x-auto max-h-48 border border-slate-800">
-                  {MYSQL_DDL_SCRIPT}
+                  {FIRESTORE_BLUEPRINT_JSON}
                 </pre>
               </div>
             </div>

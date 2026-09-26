@@ -376,12 +376,12 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
                     <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:bg-teal-600 group-hover:text-white transition">
                       <Database className="w-4 h-4" />
                     </div>
-                    <span className="font-bold text-sm text-white group-hover:text-teal-300 transition">Database & Schema ERD</span>
+                    <span className="font-bold text-sm text-white group-hover:text-teal-300 transition">Firestore Database & Schema</span>
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-teal-400 transition" />
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  MySQL 8.0+ / MariaDB relational architecture, UTF-8 Devnagari encoding, connection pool, and live table ERD visualizer.
+                  Google Cloud Firestore (ai-studio-cgssbtest), multi-role security rules, real-time sync, and live collection inspector.
                 </p>
               </div>
 
@@ -479,7 +479,7 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
                 <span className="text-slate-400">Database Engine</span>
-                <span className="font-mono font-bold text-teal-300">MySQL 8.0+ / utf8mb4</span>
+                <span className="font-mono font-bold text-teal-300">Cloud Firestore (Enterprise)</span>
               </div>
             </div>
 
@@ -488,7 +488,7 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
               className="w-full mt-2 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer"
             >
               <Database className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Inspect Database Schema & ERD</span>
+              <span>Inspect Cloud Firestore Schema</span>
             </button>
           </div>
         </div>
