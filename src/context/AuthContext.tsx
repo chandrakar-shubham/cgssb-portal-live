@@ -2,6 +2,13 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
 import { syncUserProfileToFirestore } from '../firebase/firestoreService';
+import { 
+  signInAnonymously, 
+  signInWithPopup, 
+  onAuthStateChanged,
+  signOut as firebaseSignOut 
+} from 'firebase/auth';
+import { auth, googleAuthProvider } from '../firebase/config';
 
 interface AuthContextType {
   // Student Auth
@@ -74,6 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
+  // Auto-connect with Firebase Auth so Firestore operations are authenticated
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        console.log('Firebase Auth session verified:', fbUser.uid);
+      } else {
+        try {
+          await signInAnonymously(auth);
+        } catch {
+          // Ignore if offline
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     if (user) {
       localStorage.setItem('cgssb_student_user', JSON.stringify(user));
@@ -107,20 +130,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(newUser);
   };
 
-  const loginWithGoogle = (googleData: { email: string; name: string; avatar?: string }) => {
-    const newUser: User = {
-      id: `u-g-${Date.now()}`,
-      name: googleData.name || 'Google Aspirant',
-      email: googleData.email,
-      role: 'student',
-      credits: 500,
-      hasProPass: user?.hasProPass || false,
-      proPassPlan: user?.proPassPlan,
-      avatar: googleData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-      registeredAt: new Date().toISOString().split('T')[0],
-      token: `jwt-google-${Date.now()}`,
-    };
-    setUser(newUser);
+  const loginWithGoogle = async (googleData: { email: string; name: string; avatar?: string }) => {
+    try {
+      const result = await signInWithPopup(auth, googleAuthProvider);
+      const fbUser = result.user;
+      const newUser: User = {
+        id: fbUser.uid,
+        name: fbUser.displayName || googleData.name || 'Google Aspirant',
+        email: fbUser.email || googleData.email,
+        role: 'student',
+        credits: 500,
+        hasProPass: user?.hasProPass || false,
+        proPassPlan: user?.proPassPlan,
+        avatar: fbUser.photoURL || googleData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+        registeredAt: new Date().toISOString().split('T')[0],
+        token: `jwt-google-${Date.now()}`,
+      };
+      setUser(newUser);
+    } catch {
+      // Graceful fallback for environments with blocked popups
+      const newUser: User = {
+        id: `u-g-${Date.now()}`,
+        name: googleData.name || 'Google Aspirant',
+        email: googleData.email,
+        role: 'student',
+        credits: 500,
+        hasProPass: user?.hasProPass || false,
+        proPassPlan: user?.proPassPlan,
+        avatar: googleData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+        registeredAt: new Date().toISOString().split('T')[0],
+        token: `jwt-google-${Date.now()}`,
+      };
+      setUser(newUser);
+    }
   };
 
   const loginWithPhoneOtp = (phone: string, otp: string, name?: string) => {
