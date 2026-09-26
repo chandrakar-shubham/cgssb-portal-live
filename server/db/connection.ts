@@ -58,14 +58,17 @@ export async function testConnection(): Promise<{ ok: boolean; message: string; 
   try {
     const currentPool = getPool();
     if (!currentPool) {
-      return { ok: false, message: 'MySQL pool is not initialized' };
+      dbConfig.mode = 'json';
+      isMysqlConnected = false;
+      return { ok: false, message: 'MySQL pool is not initialized, falling back to local JSON database' };
     }
-    const [rows] = await currentPool.query('SELECT 1 as val');
+    await currentPool.query('SELECT 1 as val');
     isMysqlConnected = true;
     return { ok: true, message: 'MySQL connection established successfully', database: dbConfig.database };
   } catch (err: any) {
     isMysqlConnected = false;
-    return { ok: false, message: `MySQL connection failed: ${err.message}` };
+    dbConfig.mode = 'json';
+    return { ok: false, message: `MySQL not reachable (${err.message || 'connection refused'}). Switched seamlessly to local JSON persistence.` };
   }
 }
 

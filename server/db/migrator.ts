@@ -29,10 +29,10 @@ export async function bootstrapAndMigrate(): Promise<{ success: boolean; message
 
   const connTest = await testConnection();
   if (!connTest.ok) {
-    console.warn(`⚠️ MySQL Connection could not be established (${connTest.message}). Falling back to local JSON database.`);
+    console.log(`ℹ️ [Database] ${connTest.message}`);
     const snapshot = getLocalSnapshot();
     return {
-      success: false,
+      success: true,
       message: connTest.message,
       stats: {
         questions: snapshot.questions.length,
