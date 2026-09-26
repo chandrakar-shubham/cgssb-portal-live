@@ -47,6 +47,15 @@ import {
   CMSTestSeriesPack,
   CMSSiteSettings
 } from './types/cms';
+import { getAdminToken } from './utils/apiClient';
+import {
+  cacheTestBundleForDevice,
+  clearCachedTestBundle,
+  queueOfflineSubmission,
+  initOfflineAutoSync,
+  getPendingSubmissions,
+  syncPendingSubmissions,
+} from './utils/offlineExamManager';
 import {
   INITIAL_CMS_PAGES,
   INITIAL_CMS_POSTS,
@@ -549,6 +558,8 @@ function MainApp() {
     if (user?.role === 'student') {
       deductCredits(10);
     }
+    // Pre-load and cache test bundle onto student device storage for 100% offline execution
+    cacheTestBundleForDevice(preFlightTest, questions);
     setActiveExamTest(preFlightTest);
     setPreFlightTest(null);
   };
@@ -619,6 +630,13 @@ function MainApp() {
         const data = await res.json();
         const attempt = data.attempt || data;
         setAttempts(prev => [attempt, ...prev]);
+        if (Array.isArray(data.solutions) && data.solutions.length > 0) {
+          setQuestions((prev: Question[]): Question[] => {
+            const solMap = new Map<string, Question>();
+            data.solutions.forEach((s: Question) => solMap.set(s.id, s));
+            return prev.map(q => solMap.get(q.id) || q);
+          });
+        }
         setActiveExamTest(null);
         setActiveAttemptReview(attempt);
         return;
@@ -736,16 +754,30 @@ function MainApp() {
       pypAppearances: qData.pypAppearances || [],
       createdAt: new Date().toISOString().split('T')[0],
     };
+    const adminHeaders = () => {
+      const token = getAdminToken();
+      return {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+    };
+
     setQuestions(prev => [newQ, ...prev]);
     saveQuestionsToFirestore([newQ]).catch(() => null);
     fetch('/api/questions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders(),
       body: JSON.stringify(newQ),
     }).catch(() => {});
   };
 
   const handleUpdateQuestion = (id: string, qData: Partial<Question>) => {
+    const token = getAdminToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
     setQuestions(prev => {
       const updated = prev.map(q => (q.id === id ? { ...q, ...qData } : q));
       const target = updated.find(q => q.id === id);
@@ -756,16 +788,20 @@ function MainApp() {
     });
     fetch(`/api/questions/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(qData),
     }).catch(() => {});
   };
 
   const handleDeleteQuestion = (id: string) => {
+    const token = getAdminToken();
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
     setQuestions(prev => prev.filter(q => q.id !== id));
     deleteQuestionFromFirestore(id).catch(() => null);
     fetch(`/api/questions/${id}`, {
       method: 'DELETE',
+      headers,
     }).catch(() => {});
   };
 
@@ -837,9 +873,13 @@ function MainApp() {
       return updated;
     });
     try {
+      const token = getAdminToken();
       await fetch(`/api/tests/${testId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ isPublished: nextStatus }),
       });
     } catch (err) {
@@ -857,9 +897,13 @@ function MainApp() {
       return updated;
     });
     try {
+      const token = getAdminToken();
       await fetch(`/api/tests/${testId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(updates),
       });
     } catch (err) {
@@ -871,8 +915,10 @@ function MainApp() {
     setTests(prev => prev.filter(t => t.id !== testId));
     deleteTestFromFirestore(testId).catch(() => null);
     try {
+      const token = getAdminToken();
       await fetch(`/api/tests/${testId}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
     } catch (err) {
       console.warn('Failed to delete test on server:', err);
@@ -896,9 +942,13 @@ function MainApp() {
     };
     setTests(prev => dedupeById([fullTest, ...prev]));
     saveTestToFirestore(fullTest).catch(() => null);
+    const token = getAdminToken();
     fetch('/api/tests', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(fullTest),
     }).catch(() => {});
   };
@@ -909,9 +959,13 @@ function MainApp() {
     setTests(prev => dedupeById([newTest, ...prev]));
     saveTestToFirestore(newTest).catch(() => null);
     saveQuestionsToFirestore(newQuestions).catch(() => null);
+    const token = getAdminToken();
     fetch('/api/tests', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(newTest),
     }).catch(() => {});
   };

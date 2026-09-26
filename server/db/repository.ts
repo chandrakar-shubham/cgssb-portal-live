@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { dbConfig, isFirestoreActive } from './connection.ts';
+import { doc, getDocs, collection, setDoc, deleteDoc } from 'firebase/firestore';
+import { dbConfig, isFirestoreActive, getFirestoreServer } from './connection.ts';
 import type {
   Question,
   MockTest,
@@ -76,6 +77,84 @@ export function saveLocalJsonDb(immediate = false) {
   }
 }
 
+/**
+ * Sync in-memory catalog with live Cloud Firestore collections
+ */
+export async function syncWithFirestore(): Promise<{
+  syncedQuestions: number;
+  syncedTests: number;
+  syncedAttempts: number;
+}> {
+  const db = getFirestoreServer();
+  if (!db) {
+    return {
+      syncedQuestions: localDb.questions.length,
+      syncedTests: localDb.mockTests.length,
+      syncedAttempts: localDb.attempts.length,
+    };
+  }
+
+  try {
+    // 1. Fetch live questions from Cloud Firestore
+    const qSnap = await getDocs(collection(db, 'questions'));
+    if (!qSnap.empty) {
+      const firestoreQuestions: Question[] = [];
+      qSnap.forEach(d => {
+        firestoreQuestions.push(d.data() as Question);
+      });
+      const qMap = new Map<string, Question>();
+      localDb.questions.forEach(q => qMap.set(q.id, q));
+      firestoreQuestions.forEach(q => qMap.set(q.id, q));
+      localDb.questions = Array.from(qMap.values());
+    } else {
+      // Auto-seed initial questions to Firestore
+      for (const q of localDb.questions.slice(0, 50)) {
+        await setDoc(doc(db, 'questions', q.id), q, { merge: true }).catch(() => null);
+      }
+    }
+
+    // 2. Fetch live mock tests from Cloud Firestore
+    const tSnap = await getDocs(collection(db, 'mockTests'));
+    if (!tSnap.empty) {
+      const firestoreTests: MockTest[] = [];
+      tSnap.forEach(d => {
+        firestoreTests.push(d.data() as MockTest);
+      });
+      const tMap = new Map<string, MockTest>();
+      localDb.mockTests.forEach(t => tMap.set(t.id, t));
+      firestoreTests.forEach(t => tMap.set(t.id, t));
+      localDb.mockTests = Array.from(tMap.values());
+    } else {
+      for (const t of localDb.mockTests) {
+        await setDoc(doc(db, 'mockTests', t.id), t, { merge: true }).catch(() => null);
+      }
+    }
+
+    // 3. Fetch live attempts
+    const aSnap = await getDocs(collection(db, 'attempts'));
+    if (!aSnap.empty) {
+      const firestoreAttempts: TestAttempt[] = [];
+      aSnap.forEach(d => {
+        firestoreAttempts.push(d.data() as TestAttempt);
+      });
+      const aMap = new Map<string, TestAttempt>();
+      localDb.attempts.forEach(a => aMap.set(a.id, a));
+      firestoreAttempts.forEach(a => aMap.set(a.id, a));
+      localDb.attempts = Array.from(aMap.values());
+    }
+
+    saveLocalJsonDb();
+  } catch (err) {
+    console.warn('⚠️ Cloud Firestore sync warning on startup:', err);
+  }
+
+  return {
+    syncedQuestions: localDb.questions.length,
+    syncedTests: localDb.mockTests.length,
+    syncedAttempts: localDb.attempts.length,
+  };
+}
+
 // ----------------- QUESTIONS COLLECTION REPOSITORY (/questions) -----------------
 
 export async function getAllQuestions(filters?: {
@@ -116,6 +195,16 @@ export async function saveQuestion(q: Question): Promise<Question> {
     localDb.questions.unshift(q);
   }
   saveLocalJsonDb();
+
+  // Dual-write directly to Cloud Firestore
+  const db = getFirestoreServer();
+  if (db && q.id) {
+    try {
+      await setDoc(doc(db, 'questions', q.id), q, { merge: true });
+    } catch (err) {
+      console.warn(`Firestore sync note for question [${q.id}]:`, err);
+    }
+  }
   return q;
 }
 
@@ -123,6 +212,16 @@ export async function deleteQuestion(id: string): Promise<boolean> {
   const before = localDb.questions.length;
   localDb.questions = localDb.questions.filter(q => q.id !== id);
   saveLocalJsonDb();
+
+  // Remove directly from Cloud Firestore
+  const db = getFirestoreServer();
+  if (db) {
+    try {
+      await deleteDoc(doc(db, 'questions', id));
+    } catch (err) {
+      console.warn(`Firestore delete note for question [${id}]:`, err);
+    }
+  }
   return before !== localDb.questions.length;
 }
 
@@ -164,6 +263,16 @@ export async function saveMockTest(t: MockTest): Promise<MockTest> {
     localDb.mockTests.unshift(t);
   }
   saveLocalJsonDb();
+
+  // Dual-write directly to Cloud Firestore
+  const db = getFirestoreServer();
+  if (db && t.id) {
+    try {
+      await setDoc(doc(db, 'mockTests', t.id), t, { merge: true });
+    } catch (err) {
+      console.warn(`Firestore sync note for mock test [${t.id}]:`, err);
+    }
+  }
   return t;
 }
 
@@ -171,6 +280,16 @@ export async function deleteMockTest(id: string): Promise<boolean> {
   const before = localDb.mockTests.length;
   localDb.mockTests = localDb.mockTests.filter(t => t.id !== id);
   saveLocalJsonDb();
+
+  // Remove directly from Cloud Firestore
+  const db = getFirestoreServer();
+  if (db) {
+    try {
+      await deleteDoc(doc(db, 'mockTests', id));
+    } catch (err) {
+      console.warn(`Firestore delete note for test [${id}]:`, err);
+    }
+  }
   return before !== localDb.mockTests.length;
 }
 
@@ -192,6 +311,15 @@ export async function savePypPaper(p: PreviousYearPaper): Promise<PreviousYearPa
     localDb.pypPapers.unshift(p);
   }
   saveLocalJsonDb();
+
+  const db = getFirestoreServer();
+  if (db && p.id) {
+    try {
+      await setDoc(doc(db, 'pypPapers', p.id), p, { merge: true });
+    } catch (err) {
+      console.warn(`Firestore sync note for PYP [${p.id}]:`, err);
+    }
+  }
   return p;
 }
 
@@ -212,6 +340,16 @@ export async function getTestAttemptById(id: string): Promise<TestAttempt | null
 export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
   localDb.attempts.unshift(a);
   saveLocalJsonDb();
+
+  // Dual-write directly to Cloud Firestore
+  const db = getFirestoreServer();
+  if (db && a.id) {
+    try {
+      await setDoc(doc(db, 'attempts', a.id), a, { merge: true });
+    } catch (err) {
+      console.warn(`Firestore sync note for attempt [${a.id}]:`, err);
+    }
+  }
   return a;
 }
 

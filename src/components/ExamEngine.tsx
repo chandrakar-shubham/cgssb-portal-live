@@ -35,7 +35,8 @@ import {
   ArrowRight,
   SlidersHorizontal,
   ChevronDown,
-  X
+  X,
+  HardDrive
 } from 'lucide-react';
 import { QuestionRenderer } from './QuestionRenderer';
 import { LanguageToggle } from './LanguageToggle';
@@ -453,6 +454,13 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
 
         {/* Right: Actions */}
         <div className="flex items-center space-x-2">
+          {/* On-Device Execution & Zero Traffic Badge */}
+          <div className="hidden lg:flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-950/60 border border-emerald-500/30 rounded-lg text-[11px] font-semibold text-emerald-300" title="All answers and timers are cached locally on your device with 100% offline protection">
+            <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+            <span>On-Device Storage</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+
           <button
             onClick={toggleFullscreen}
             className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 rounded-lg border border-slate-700 text-xs hidden sm:flex items-center"
