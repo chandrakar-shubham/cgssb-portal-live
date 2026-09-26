@@ -1,9 +1,13 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
+  const version = pkg.version || '2.5.2';
+
   const now = new Date();
   const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const timeCode = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -14,8 +18,8 @@ export default defineConfig(() => {
     : (process.env.COMMIT_SHA || `sha-${Date.now().toString(16).slice(-6)}`);
 
   const buildNumber = process.env.GITHUB_RUN_NUMBER 
-    ? `v2.5.0-run.${process.env.GITHUB_RUN_NUMBER} (${uniqueBuildTag})` 
-    : uniqueBuildTag;
+    ? `v${version}-run.${process.env.GITHUB_RUN_NUMBER} (${uniqueBuildTag})` 
+    : `v${version} (${uniqueBuildTag})`;
 
   const buildTime = process.env.BUILD_TIME || (now.toLocaleString('en-IN', { 
     timeZone: 'Asia/Kolkata', 

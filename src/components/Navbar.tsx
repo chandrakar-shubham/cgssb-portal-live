@@ -508,7 +508,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <div className="text-[10px] text-slate-500 text-center space-y-0.5">
                 <p className="font-semibold text-slate-400">TCS iON CBT Exam Engine Standard</p>
-                <p>CGSSB & CGPSC Test Portal v2.5.0</p>
+                <p>CGSSB & CGPSC Test Portal v{APP_BUILD_INFO.version}</p>
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { isFirebaseConfigured } from '../firebase/config';
+import { APP_BUILD_INFO } from '../utils/buildInfo';
 import { migrateAllLocalDataToFirestore, MigrationSummary } from '../firebase/firestoreService';
 import { getStoredBundles } from '../utils/bundleStore';
 import {
@@ -390,7 +391,7 @@ CREATE TABLE IF NOT EXISTS test_attempts (
 
   const handleDownloadSnapshot = () => {
     const dbSnapshot = {
-      version: '2.5.0',
+      version: APP_BUILD_INFO.version,
       exportedAt: new Date().toISOString(),
       platform: 'CGSSB & CGPSC Portal',
       stats: {

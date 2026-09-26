@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
+import { APP_BUILD_INFO } from '../utils/buildInfo';
 import {
   Database,
   Download,
@@ -64,7 +65,7 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   // -------------------------------------------------------------
   const handleDownloadSnapshot = () => {
     const dbSnapshot = {
-      version: '2.5.0',
+      version: APP_BUILD_INFO.version,
       exportedAt: new Date().toISOString(),
       platform: 'CGSSB & CGPSC Portal',
       stats: {
