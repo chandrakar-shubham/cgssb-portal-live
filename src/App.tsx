@@ -79,7 +79,11 @@ import { testConnection } from './firebase/connectionTest';
 import {
   saveAttemptToFirestore,
   fetchTestsFromFirestore,
-  saveTestToFirestore
+  saveTestToFirestore,
+  fetchQuestionsFromFirestore,
+  saveQuestionsToFirestore,
+  deleteQuestionFromFirestore,
+  deleteTestFromFirestore
 } from './firebase/firestoreService';
 
 function MainApp() {
@@ -485,15 +489,26 @@ function MainApp() {
       testConnection().catch(() => null);
 
       try {
-        const [testsRes, pypRes, qRes, firestoreTests] = await Promise.all([
+        const [testsRes, pypRes, qRes, firestoreTests, firestoreQuestions] = await Promise.all([
           fetch('/api/tests').catch(() => null),
           fetch('/api/pyp').catch(() => null),
           fetch('/api/questions').catch(() => null),
-          fetchTestsFromFirestore().catch(() => [])
+          fetchTestsFromFirestore().catch(() => []),
+          fetchQuestionsFromFirestore().catch(() => [])
         ]);
 
         if (firestoreTests && firestoreTests.length > 0) {
           setTests(prev => dedupeById([...firestoreTests, ...prev]));
+        } else {
+          // Auto-seed Firestore on initial connect so cloud database is never blank
+          INITIAL_MOCK_TESTS.forEach(t => saveTestToFirestore(t).catch(() => null));
+        }
+
+        if (firestoreQuestions && firestoreQuestions.length > 0) {
+          setQuestions(prev => dedupeById([...firestoreQuestions, ...prev]));
+        } else {
+          // Auto-seed initial question catalog to Cloud Firestore
+          saveQuestionsToFirestore(INITIAL_QUESTIONS).catch(() => null);
         }
 
         if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
@@ -722,6 +737,7 @@ function MainApp() {
       createdAt: new Date().toISOString().split('T')[0],
     };
     setQuestions(prev => [newQ, ...prev]);
+    saveQuestionsToFirestore([newQ]).catch(() => null);
     fetch('/api/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -730,7 +746,14 @@ function MainApp() {
   };
 
   const handleUpdateQuestion = (id: string, qData: Partial<Question>) => {
-    setQuestions(prev => prev.map(q => (q.id === id ? { ...q, ...qData } : q)));
+    setQuestions(prev => {
+      const updated = prev.map(q => (q.id === id ? { ...q, ...qData } : q));
+      const target = updated.find(q => q.id === id);
+      if (target) {
+        saveQuestionsToFirestore([target]).catch(() => null);
+      }
+      return updated;
+    });
     fetch(`/api/questions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -740,6 +763,7 @@ function MainApp() {
 
   const handleDeleteQuestion = (id: string) => {
     setQuestions(prev => prev.filter(q => q.id !== id));
+    deleteQuestionFromFirestore(id).catch(() => null);
     fetch(`/api/questions/${id}`, {
       method: 'DELETE',
     }).catch(() => {});
@@ -804,7 +828,14 @@ function MainApp() {
   const handleTogglePublishTest = async (testId: string) => {
     const target = tests.find(t => t.id === testId);
     const nextStatus = target ? target.isPublished === false : false;
-    setTests(prev => prev.map(t => (t.id === testId ? { ...t, isPublished: nextStatus } : t)));
+    setTests(prev => {
+      const updated = prev.map(t => (t.id === testId ? { ...t, isPublished: nextStatus } : t));
+      const updatedTarget = updated.find(t => t.id === testId);
+      if (updatedTarget) {
+        saveTestToFirestore(updatedTarget).catch(() => null);
+      }
+      return updated;
+    });
     try {
       await fetch(`/api/tests/${testId}`, {
         method: 'PUT',
@@ -817,7 +848,14 @@ function MainApp() {
   };
 
   const handleUpdateTest = async (testId: string, updates: Partial<MockTest>) => {
-    setTests(prev => prev.map(t => (t.id === testId ? { ...t, ...updates } : t)));
+    setTests(prev => {
+      const updated = prev.map(t => (t.id === testId ? { ...t, ...updates } : t));
+      const target = updated.find(t => t.id === testId);
+      if (target) {
+        saveTestToFirestore(target).catch(() => null);
+      }
+      return updated;
+    });
     try {
       await fetch(`/api/tests/${testId}`, {
         method: 'PUT',
@@ -831,6 +869,7 @@ function MainApp() {
 
   const handleDeleteTest = async (testId: string) => {
     setTests(prev => prev.filter(t => t.id !== testId));
+    deleteTestFromFirestore(testId).catch(() => null);
     try {
       await fetch(`/api/tests/${testId}`, {
         method: 'DELETE',
@@ -856,6 +895,7 @@ function MainApp() {
       createdAt: new Date().toISOString(),
     };
     setTests(prev => dedupeById([fullTest, ...prev]));
+    saveTestToFirestore(fullTest).catch(() => null);
     fetch('/api/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -867,6 +907,8 @@ function MainApp() {
   const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
     setQuestions(prev => dedupeById([...newQuestions, ...prev]));
     setTests(prev => dedupeById([newTest, ...prev]));
+    saveTestToFirestore(newTest).catch(() => null);
+    saveQuestionsToFirestore(newQuestions).catch(() => null);
     fetch('/api/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
