@@ -13,7 +13,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, auth } from './config';
-import { MockTest, Question, TestAttempt, User } from '../types';
+import { MockTest, Question, TestAttempt, User, PreviousYearPaper } from '../types';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 
 export enum OperationType {
@@ -69,6 +69,7 @@ const TESTS_COLLECTION = 'mockTests';
 const QUESTIONS_COLLECTION = 'questions';
 const BUNDLES_COLLECTION = 'bundles';
 const ATTEMPTS_COLLECTION = 'attempts';
+const PYP_PAPERS_COLLECTION = 'pypPapers';
 
 // ==========================================
 // USER SERVICES
@@ -207,12 +208,48 @@ export async function deleteQuestionFromFirestore(questionId: string): Promise<v
 }
 
 // ==========================================
+// PREVIOUS YEAR PAPERS (PYP) SERVICES
+// ==========================================
+export async function fetchPypPapersFromFirestore(): Promise<PreviousYearPaper[]> {
+  try {
+    const snap = await getDocs(collection(db, PYP_PAPERS_COLLECTION));
+    const items: PreviousYearPaper[] = [];
+    snap.forEach(d => {
+      items.push(d.data() as PreviousYearPaper);
+    });
+    return items;
+  } catch (err) {
+    console.warn('Error fetching PYP papers from Firestore:', err);
+    return [];
+  }
+}
+
+export async function savePypPaperToFirestore(paper: PreviousYearPaper): Promise<void> {
+  try {
+    const paperDocRef = doc(db, PYP_PAPERS_COLLECTION, paper.id);
+    await setDoc(paperDocRef, paper, { merge: true });
+  } catch (err) {
+    console.warn('Error saving PYP paper to Firestore:', err);
+  }
+}
+
+export async function deletePypPaperFromFirestore(paperId: string): Promise<void> {
+  try {
+    const paperDocRef = doc(db, PYP_PAPERS_COLLECTION, paperId);
+    await deleteDoc(paperDocRef);
+  } catch (err) {
+    console.warn('Error deleting PYP paper from Firestore:', err);
+  }
+}
+
+// ==========================================
 // BULK DATA MIGRATION & FULL SYNC
 // ==========================================
 export interface MigrationSummary {
   questionsCount: number;
   testsCount: number;
   bundlesCount: number;
+  pypCount: number;
   attemptsCount: number;
   success: boolean;
   error?: string;
@@ -222,17 +259,19 @@ export async function migrateAllLocalDataToFirestore(params: {
   questions: Question[];
   tests: MockTest[];
   bundles: TestSeriesBundle[];
+  pypPapers?: PreviousYearPaper[];
   attempts?: TestAttempt[];
   onProgress?: (msg: string, current: number, total: number) => void;
 }): Promise<MigrationSummary> {
-  const { questions, tests, bundles, attempts = [], onProgress } = params;
+  const { questions, tests, bundles, pypPapers = [], attempts = [], onProgress } = params;
   let qCount = 0;
   let tCount = 0;
   let bCount = 0;
+  let pCount = 0;
   let aCount = 0;
 
   try {
-    const totalItems = questions.length + tests.length + bundles.length + attempts.length;
+    const totalItems = questions.length + tests.length + bundles.length + pypPapers.length + attempts.length;
     let processed = 0;
 
     // 1. Sync Questions in small chunks
@@ -274,7 +313,20 @@ export async function migrateAllLocalDataToFirestore(params: {
       }
     }
 
-    // 4. Sync Attempts
+    // 4. Sync PYP Papers
+    for (const p of pypPapers) {
+      if (p && p.id) {
+        const pRef = doc(db, PYP_PAPERS_COLLECTION, p.id);
+        await setDoc(pRef, p, { merge: true });
+        pCount++;
+      }
+      processed++;
+      if (onProgress) {
+        onProgress(`Migrating PYP Papers (${processed}/${totalItems})...`, processed, totalItems);
+      }
+    }
+
+    // 5. Sync Attempts
     for (const a of attempts) {
       if (a && a.id) {
         const aRef = doc(db, ATTEMPTS_COLLECTION, a.id);
@@ -292,6 +344,7 @@ export async function migrateAllLocalDataToFirestore(params: {
       questionsCount: qCount,
       testsCount: tCount,
       bundlesCount: bCount,
+      pypCount: pCount,
       attemptsCount: aCount,
       success: true,
     };
@@ -301,6 +354,7 @@ export async function migrateAllLocalDataToFirestore(params: {
       questionsCount: qCount,
       testsCount: tCount,
       bundlesCount: bCount,
+      pypCount: pCount,
       attemptsCount: aCount,
       success: false,
       error: err?.message || 'Unknown migration error',

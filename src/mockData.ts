@@ -7,6 +7,7 @@ import type {
   HierarchicalSubjectNode,
   TestAttempt
 } from './types.ts';
+import { LECTURER_ENGLISH_MOCK_01, LECTURER_ENGLISH_QUESTIONS } from './data/lecturerEnglishQuestions.ts';
 
 export const EXAM_PATTERNS: Record<ExamCategory, ExamPatternConfig> = {
   CGSSB: {
@@ -275,6 +276,7 @@ export const HIERARCHY_TREE: HierarchicalSubjectNode[] = [
 ];
 
 export const INITIAL_QUESTIONS: Question[] = [
+  ...LECTURER_ENGLISH_QUESTIONS,
   // 1
   {
     id: 'q-cg-01',
@@ -940,6 +942,7 @@ export const INITIAL_QUESTIONS: Question[] = [
 ];
 
 export const INITIAL_MOCK_TESTS: MockTest[] = [
+  LECTURER_ENGLISH_MOCK_01,
   // 1. CGSSB > Teacher Recruitment 2026 > CG Lecturer 2026 > CG English Lecturer 2026 > CG English Lecturer 2026 Mock Test 8
   {
     id: 'test-cg-lecturer-english-08',

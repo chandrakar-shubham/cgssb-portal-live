@@ -37,7 +37,33 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+      // Merge official bundles with stored bundles to ensure all test items and new official mocks are retained
+      const bundleMap = new Map<string, TestSeriesBundle>();
+      OFFICIAL_BUNDLES_CATALOG.forEach(b => {
+        if (b && b.id) bundleMap.set(b.id, { ...b });
+      });
+      parsed.forEach(stored => {
+        if (stored && stored.id) {
+          const official = bundleMap.get(stored.id);
+          if (official) {
+            // Combine testItems avoiding duplicates
+            const officialTestItems = official.testItems || [];
+            const storedTestItems = stored.testItems || [];
+            const itemMap = new Map<string, any>();
+            officialTestItems.forEach((item: any) => itemMap.set(item.id, item));
+            storedTestItems.forEach((item: any) => itemMap.set(item.id, item));
+
+            bundleMap.set(stored.id, {
+              ...official,
+              ...stored,
+              testItems: Array.from(itemMap.values()),
+            });
+          } else {
+            bundleMap.set(stored.id, stored);
+          }
+        }
+      });
+      return Array.from(bundleMap.values());
     }
     return OFFICIAL_BUNDLES_CATALOG;
   } catch (err) {

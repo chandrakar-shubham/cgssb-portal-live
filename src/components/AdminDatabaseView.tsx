@@ -161,7 +161,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
       return;
     }
     const confirmed = window.confirm(
-      `Sync all ${questions.length} questions, ${tests.length} tests, and ${storedBundles.length} bundles directly to Cloud Firestore (database: ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089)?`
+      `Sync all ${questions.length} questions, ${tests.length} tests, ${pypPapers.length} PYP papers, and ${storedBundles.length} bundles directly to Cloud Firestore (database: ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089)?`
     );
     if (!confirmed) return;
 
@@ -174,6 +174,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
         questions,
         tests,
         bundles: storedBundles,
+        pypPapers,
         attempts,
         onProgress: (msg, current, total) => {
           setMigrationStatus(msg);
@@ -183,7 +184,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
 
       setMigrationResult(result);
       if (result.success) {
-        setBackupMessage(`Successfully synced ${result.questionsCount} questions, ${result.testsCount} tests, and ${result.bundlesCount} bundles to Cloud Firestore!`);
+        setBackupMessage(`Successfully synced ${result.questionsCount} questions, ${result.testsCount} tests, ${result.pypCount || 0} PYPs, and ${result.bundlesCount} bundles to Cloud Firestore!`);
         setTimeout(() => setBackupMessage(null), 5000);
       }
     } catch (err: any) {

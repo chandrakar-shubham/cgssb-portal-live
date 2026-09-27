@@ -875,9 +875,21 @@ export const OFFICIAL_BUNDLES_CATALOG: TestSeriesBundle[] = [
     ],
     testItems: [
       {
+        id: 'test-1790519847815',
+        title: 'CG Lecturer English 2026 - Comprehensive Full Mock 01',
+        titleHindi: 'व्याख्याता अंग्रेजी 2026 संपूर्ण मॉक टेस्ट 01',
+        type: 'full_mock',
+        questionCount: 100,
+        durationMinutes: 120,
+        marks: 100,
+        isFreePreview: true,
+        statusText: 'Free Preview Available',
+        attemptsCount: 1202,
+      },
+      {
         id: 'test-lecturer-eng-01',
         title: 'Lecturer English 2026 Full-Length Mock 01',
-        titleHindi: 'व्याख्याता अंग्रेजी 2026 संपूर्ण मॉक टेस्ट 01',
+        titleHindi: 'व्याख्याता अंग्रेजी 2026 संपूर्ण मॉक टेस्ट 01 (Advanced)',
         type: 'full_mock',
         questionCount: 150,
         durationMinutes: 150,

@@ -41,6 +41,7 @@ import { getStoredBundles, saveSingleBundle } from '../utils/bundleStore';
 import { apiFetch, getAdminHeaders } from '../utils/apiClient';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { QuestionRenderer } from './QuestionRenderer';
+import { saveQuestionsToFirestore, saveTestToFirestore, savePypPaperToFirestore } from '../firebase/firestoreService';
 
 export type IngestionContentType = 'MOCK_TEST' | 'PYP' | 'CHAPTER_TEST' | 'QUESTION_BANK';
 export type IngestionInputTab = 'SMART_PASTE' | 'JSON_EDITOR' | 'AI_GEMINI';
@@ -205,70 +206,15 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
     return getStoredBundles();
   }, [availableBundles]);
 
-  const [previewSubjectFilter, setPreviewSubjectFilter] = useState<string>('ALL');
-
-  // Compute Sectional & Subject Breakdown Summary from Parsed Questions
-  const sectionalSummary = useMemo(() => {
-    const subjectMap = new Map<string, { count: number; marks: number; topics: Set<string>; types: Record<string, number> }>();
-    const diffMap = { Easy: 0, Medium: 0, Hard: 0 };
-    const typeMap = { mcq: 0, assertion_reason: 0, matching: 0, multi_statement: 0 };
-
-    parsedQuestions.forEach(q => {
-      const subj = (q.subject && q.subject.trim()) || (contentType === 'CHAPTER_TEST' ? subject || 'Chhattisgarh General Knowledge' : 'General Paper');
-      const top = (q.topic && q.topic.trim()) || 'General';
-      const qType = (q.questionType || q.type || 'mcq') as 'mcq' | 'assertion_reason' | 'matching' | 'multi_statement';
-      const diff = (q.difficulty || 'Medium') as 'Easy' | 'Medium' | 'Hard';
-
-      if (!subjectMap.has(subj)) {
-        subjectMap.set(subj, { count: 0, marks: 0, topics: new Set(), types: { mcq: 0, assertion_reason: 0, matching: 0, multi_statement: 0 } });
-      }
-      const entry = subjectMap.get(subj)!;
-      entry.count += 1;
-      entry.marks += (q.marks || marksPerQuestion || 1.0);
-      if (top) entry.topics.add(top);
-      if (entry.types[qType] !== undefined) {
-        entry.types[qType] += 1;
-      } else {
-        entry.types.mcq += 1;
-      }
-
-      if (diffMap[diff] !== undefined) diffMap[diff] += 1;
-      else diffMap.Medium += 1;
-
-      if (typeMap[qType] !== undefined) typeMap[qType] += 1;
-      else typeMap.mcq += 1;
-    });
-
-    const totalQ = parsedQuestions.length;
-    const subjects = Array.from(subjectMap.entries()).map(([subj, data]) => ({
-      subject: subj,
-      count: data.count,
-      marks: data.marks,
-      percentage: totalQ > 0 ? Math.round((data.count / totalQ) * 100) : 0,
-      topics: Array.from(data.topics),
-      types: data.types
-    }));
-
-    return {
-      subjects,
-      diffMap,
-      typeMap,
-      totalQuestions: totalQ,
-      totalMarks: subjects.reduce((sum, s) => sum + s.marks, 0),
-    };
-  }, [parsedQuestions, contentType, subject, marksPerQuestion]);
-
   // Filtered Questions for Preview
   const filteredPreviewQuestions = useMemo(() => {
     return parsedQuestions.filter(q => {
-      const qSubj = q.subject?.trim() || (contentType === 'CHAPTER_TEST' ? subject : 'General Paper');
-      const matchesSubject = previewSubjectFilter === 'ALL' || qSubj === previewSubjectFilter;
       const matchesDifficulty = filterDifficulty === 'ALL' || q.difficulty === filterDifficulty;
       const qText = `${q.questionHindi || ''} ${q.questionText || ''} ${q.subject || ''} ${q.topic || ''}`.toLowerCase();
       const matchesSearch = !previewSearch.trim() || qText.includes(previewSearch.toLowerCase());
-      return matchesSubject && matchesDifficulty && matchesSearch;
+      return matchesDifficulty && matchesSearch;
     });
-  }, [parsedQuestions, previewSubjectFilter, filterDifficulty, previewSearch, contentType, subject]);
+  }, [parsedQuestions, filterDifficulty, previewSearch]);
 
   if (!isOpen) return null;
 
@@ -524,7 +470,11 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
       const timestamp = Date.now();
       const createdQuestionIds = parsedQuestions.map(q => q.id);
 
-      // 1. Dual-Write all questions to server & Cloud Firestore
+      // 1. Dual-Write all questions directly to Cloud Firestore & backend
+      saveQuestionsToFirestore(parsedQuestions).catch(err => {
+        console.warn('Firestore bulk question save note:', err);
+      });
+
       const qRes = await fetch('/api/questions/bulk', {
         method: 'POST',
         headers: {
@@ -544,52 +494,21 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
 
       let createdMockTestId: string | null = null;
       let createdPypId: string | null = null;
-      let createdMockTestObject: MockTest | null = null;
-      let createdPypObject: PreviousYearPaper | null = null;
 
       // 2. If Mock Test or Chapter Test, create MockTest record
       if (contentType === 'MOCK_TEST' || contentType === 'CHAPTER_TEST') {
-        const isChapter = contentType === 'CHAPTER_TEST';
-        const testId = isChapter
-          ? `chapter-${authority.toLowerCase()}-${timestamp.toString().slice(-6)}`
-          : `mock-${authority.toLowerCase()}-${timestamp.toString().slice(-6)}`;
+        const testId = `mock-${authority.toLowerCase()}-${timestamp.toString().slice(-6)}`;
         createdMockTestId = testId;
-
-        // Group sections by question subject
-        const subjectSectionMap = new Map<string, string[]>();
-        parsedQuestions.forEach(q => {
-          const sName = q.subject?.trim() || (isChapter ? topic || subject : `${cadre} Core Paper`);
-          if (!subjectSectionMap.has(sName)) {
-            subjectSectionMap.set(sName, []);
-          }
-          subjectSectionMap.get(sName)!.push(q.id);
-        });
-
-        const generatedSections = Array.from(subjectSectionMap.entries()).map(([sName, qIds], sIdx) => ({
-          id: `sec-${sIdx + 1}`,
-          name: sName,
-          questionIds: qIds,
-        }));
-
-        const easyCount = parsedQuestions.filter(q => q.difficulty === 'Easy').length;
-        const hardCount = parsedQuestions.filter(q => q.difficulty === 'Hard').length;
-        const medCount = parsedQuestions.length - easyCount - hardCount;
 
         const newMockTest: MockTest = {
           id: testId,
-          title: testTitle || (isChapter ? `${examName} - Chapter Quiz (${topic || subject})` : `${examName} - Mock Test`),
+          title: testTitle || `${examName} - Mock Test`,
           examName: examName,
           category: authority as ExamCategory,
           authority: authority,
           subCategory: examName,
           postName: cadre,
-          testType: isChapter ? 'chapter_test' : 'full_mock',
-          subject: isChapter ? (subject || parsedQuestions[0]?.subject || 'General') : undefined,
-          topic: isChapter ? (topic || parsedQuestions[0]?.topic || 'General') : undefined,
-          subtopic: isChapter ? (subtopic || parsedQuestions[0]?.subtopic) : undefined,
-          description: isChapter
-            ? `Topic quiz on ${topic || subject} for ${examName}`
-            : `${cadre} full length simulation exam`,
+          description: contentType === 'CHAPTER_TEST' ? `Topic quiz on ${topic}` : `${cadre} full length simulation exam`,
           durationMinutes: durationMinutes,
           totalMarks: parsedQuestions.length * marksPerQuestion,
           marksPerQuestion: marksPerQuestion,
@@ -597,22 +516,20 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
           questionCount: parsedQuestions.length,
           attemptsCount: 0,
           isPublished: true,
-          difficultyDistribution: {
-            easy: parsedQuestions.length > 0 ? Math.round((easyCount / parsedQuestions.length) * 100) : 33,
-            medium: parsedQuestions.length > 0 ? Math.round((medCount / parsedQuestions.length) * 100) : 34,
-            hard: parsedQuestions.length > 0 ? Math.round((hardCount / parsedQuestions.length) * 100) : 33,
-          },
           createdAt: new Date().toISOString(),
-          sections: generatedSections.length > 0 ? generatedSections : [
+          sections: [
             {
               id: 'sec-1',
-              name: isChapter ? topic : `${cadre} Core Paper`,
+              name: contentType === 'CHAPTER_TEST' ? topic : `${cadre} Core Paper`,
               questionIds: createdQuestionIds,
             },
           ],
         };
 
-        createdMockTestObject = newMockTest;
+        // Direct write to Cloud Firestore
+        saveTestToFirestore(newMockTest).catch(err => {
+          console.warn('Firestore test save note:', err);
+        });
 
         // Save Mock Test to backend
         await fetch('/api/tests', {
@@ -648,18 +565,16 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
           marks: parsedQuestions.length * marksPerQuestion,
           negativeMarkingRatio: negativeMarking === 0.25 ? '-1/4' : negativeMarking === 0.333 ? '-1/3' : '0',
           paperSummary: `${examName} Official Solved Paper (${pypYear} ${pypShift})`,
-          subjectsWeightage: sectionalSummary.subjects.map(s => ({
-            subject: s.subject,
-            questionCount: s.count,
-            percentage: s.percentage,
-          })),
+          subjectsWeightage: [{ subject: subject || 'General Paper', questionCount: parsedQuestions.length, percentage: 100 }],
           downloadFileName: `${(testTitle || examName).replace(/\s+/g, '_')}_Official.pdf`,
           isOfficialPaper: true,
           linkedQuestionIds: createdQuestionIds,
           createdAt: new Date().toISOString(),
         };
 
-        createdPypObject = newPyp;
+        savePypPaperToFirestore(newPyp).catch(err => {
+          console.warn('Firestore PYP save note:', err);
+        });
 
         await fetch('/api/pyp', {
           method: 'POST',
@@ -675,90 +590,34 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
         }
       }
 
-      // 4. If Target Test Series Bundle is selected, link and update Bundle accurately
+      // 4. If Target Test Series Bundle is selected, link and update Bundle
       if (targetBundleId) {
         const bundle = allBundles.find(b => b.id === targetBundleId);
         if (bundle) {
-          const isChapter = contentType === 'CHAPTER_TEST';
-          const isPyp = contentType === 'PYP';
-
-          const newBundleItem = {
-            id: createdMockTestId || createdPypId || `test-${timestamp}`,
-            title: testTitle,
-            titleHindi: testTitle,
-            type: (isPyp ? 'pyp' : isChapter ? 'sectional' : 'full_mock') as 'full_mock' | 'sectional' | 'pyp',
-            questionCount: parsedQuestions.length,
-            durationMinutes: durationMinutes,
-            marks: parsedQuestions.length * marksPerQuestion,
-            isFreePreview: accessTier === 'free',
-            isPublished: true,
-            subject: isChapter ? (subject || parsedQuestions[0]?.subject || topic) : undefined,
-            attemptsCount: 0,
+          const updatedBundle: TestSeriesBundle = {
+            ...bundle,
+            totalTestsCount: (bundle.totalTestsCount || 0) + 1,
+            testItems: [
+              ...(bundle.testItems || []),
+              {
+                id: createdMockTestId || createdPypId || `test-${timestamp}`,
+                title: testTitle,
+                titleHindi: testTitle,
+                type: contentType === 'PYP' ? 'pyp' : contentType === 'CHAPTER_TEST' ? 'sectional' : 'full_mock',
+                questionCount: parsedQuestions.length,
+                durationMinutes: durationMinutes,
+                marks: parsedQuestions.length * marksPerQuestion,
+                isFreePreview: accessTier === 'free',
+                attemptsCount: 0,
+              },
+            ],
           };
-
-          let updatedBundle: TestSeriesBundle;
-          if (isChapter) {
-            updatedBundle = {
-              ...bundle,
-              totalTestsCount: (bundle.totalTestsCount || 0) + 1,
-              chapterTests: [...(bundle.chapterTests || []), newBundleItem],
-            };
-          } else if (isPyp) {
-            updatedBundle = {
-              ...bundle,
-              totalTestsCount: (bundle.totalTestsCount || 0) + 1,
-              pypTests: [...(bundle.pypTests || []), newBundleItem],
-            };
-          } else {
-            updatedBundle = {
-              ...bundle,
-              totalTestsCount: (bundle.totalTestsCount || 0) + 1,
-              testItems: [...(bundle.testItems || []), newBundleItem],
-            };
-          }
 
           saveSingleBundle(updatedBundle);
           if (onBundleUpdated) {
             onBundleUpdated(updatedBundle);
           }
         }
-      }
-
-      // 5. Synchronous Local Storage update & instant UI reactive broadcast
-      try {
-        if (createdMockTestObject) {
-          const rawLocalTests = localStorage.getItem('cgssb_tests');
-          const localTests: MockTest[] = rawLocalTests ? JSON.parse(rawLocalTests) : [];
-          const mergedTests = [createdMockTestObject, ...localTests.filter(t => t.id !== createdMockTestObject!.id)];
-          localStorage.setItem('cgssb_tests', JSON.stringify(mergedTests));
-        }
-
-        const rawLocalQs = localStorage.getItem('cgssb_questions');
-        const localQs: Question[] = rawLocalQs ? JSON.parse(rawLocalQs) : [];
-        const mergedQs = [...parsedQuestions, ...localQs.filter(q => !createdQuestionIds.includes(q.id))];
-        localStorage.setItem('cgssb_questions', JSON.stringify(mergedQs));
-
-        if (createdPypObject) {
-          const rawLocalPyp = localStorage.getItem('cgssb_pyp');
-          const localPyp: PreviousYearPaper[] = rawLocalPyp ? JSON.parse(rawLocalPyp) : [];
-          const mergedPyp = [createdPypObject, ...localPyp.filter(p => p.id !== createdPypObject!.id)];
-          localStorage.setItem('cgssb_pyp', JSON.stringify(mergedPyp));
-        }
-
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('cgssb_data_updated', {
-              detail: {
-                newTest: createdMockTestObject,
-                newPyp: createdPypObject,
-                questions: parsedQuestions,
-                contentType,
-              },
-            })
-          );
-        }
-      } catch (err) {
-        console.warn('LocalStorage reactive sync note:', err);
       }
 
       setStatusMessage({
@@ -988,21 +847,7 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
                         key={t.id}
                         type="button"
                         disabled={lockType && !isSelected}
-                        onClick={() => {
-                          if (lockType && !isSelected) return;
-                          const newType = t.id as IngestionContentType;
-                          setContentType(newType);
-                          if (newType === 'CHAPTER_TEST') {
-                            setTestTitle(`${examName} - Chapter Quiz (${topic || 'Syllabus Topic'})`);
-                            setDurationMinutes(30);
-                          } else if (newType === 'PYP') {
-                            setTestTitle(`${examName} Official Solved Paper (${pypYear})`);
-                            setDurationMinutes(120);
-                          } else if (newType === 'MOCK_TEST') {
-                            setTestTitle(`${cadre || examName} 2026 - Comprehensive Mock 01`);
-                            setDurationMinutes(150);
-                          }
-                        }}
+                        onClick={() => setContentType(t.id as IngestionContentType)}
                         className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between ${
                           isSelected
                             ? 'bg-indigo-950/80 border-indigo-500 text-white shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500'
@@ -1547,83 +1392,6 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
                     <Layout className="w-3.5 h-3.5" />
                     <span>🎴 Test Card Preview</span>
                   </button>
-                </div>
-              </div>
-
-              {/* Sectional Summary & Subject Blueprint Bar */}
-              <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
-                      <Layers className="w-4 h-4" />
-                    </span>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                      Sectional Summary & Syllabus Weightage ({sectionalSummary.subjects.length} Subjects)
-                    </h4>
-                  </div>
-                  <div className="flex items-center space-x-3 text-[11px] text-slate-400">
-                    <span>Total Marks: <strong className="text-emerald-400 font-mono">{sectionalSummary.totalMarks}</strong></span>
-                    <span>•</span>
-                    <span>Negative: <strong className="text-rose-400 font-mono">-{negativeMarking}</strong></span>
-                    <span>•</span>
-                    <span>Duration: <strong className="text-indigo-300 font-mono">{durationMinutes} min</strong></span>
-                  </div>
-                </div>
-
-                {/* Subject Cards & Filter Pills */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setPreviewSubjectFilter('ALL')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
-                      previewSubjectFilter === 'ALL'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400'
-                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                    }`}
-                  >
-                    <span>All Sections</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950/60 font-mono">
-                      {sectionalSummary.totalQuestions}
-                    </span>
-                  </button>
-
-                  {sectionalSummary.subjects.map((sec, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setPreviewSubjectFilter(previewSubjectFilter === sec.subject ? 'ALL' : sec.subject)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
-                        previewSubjectFilter === sec.subject
-                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
-                          : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-850 border border-slate-800'
-                      }`}
-                    >
-                      <span>{sec.subject}</span>
-                      <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-slate-950/70 text-emerald-300 font-mono font-bold">
-                        {sec.count} Qs ({sec.percentage}%)
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Sub-Metrics: Question Types & Difficulty distribution */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                    <span className="text-slate-400">Standard MCQs:</span>
-                    <span className="font-mono font-bold text-white">{sectionalSummary.typeMap.mcq}</span>
-                  </div>
-                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                    <span className="text-slate-400">Assertion & Reason:</span>
-                    <span className="font-mono font-bold text-amber-300">{sectionalSummary.typeMap.assertion_reason}</span>
-                  </div>
-                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                    <span className="text-slate-400">Column Match:</span>
-                    <span className="font-mono font-bold text-indigo-300">{sectionalSummary.typeMap.matching}</span>
-                  </div>
-                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                    <span className="text-slate-400">Multi-Statements:</span>
-                    <span className="font-mono font-bold text-purple-300">{sectionalSummary.typeMap.multi_statement}</span>
-                  </div>
                 </div>
               </div>
 

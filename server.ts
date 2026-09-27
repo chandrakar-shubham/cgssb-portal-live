@@ -1189,14 +1189,28 @@ async function startServer() {
       }
 
       const allQIds: string[] = [];
-      test.sections.forEach(s => {
-        s.questionIds.forEach(qid => {
-          if (!allQIds.includes(qid)) allQIds.push(qid);
+      if (test.sections && Array.isArray(test.sections)) {
+        test.sections.forEach(s => {
+          if (s.questionIds && Array.isArray(s.questionIds)) {
+            s.questionIds.forEach(qid => {
+              if (!allQIds.includes(qid)) allQIds.push(qid);
+            });
+          }
         });
-      });
+      }
 
       const allQuestionsList = await getAllQuestions();
-      const testQuestions = allQuestionsList.filter(q => allQIds.includes(q.id));
+      let testQuestions = allQuestionsList.filter(q => allQIds.includes(q.id));
+      if (testQuestions.length === 0) {
+        testQuestions = allQuestionsList.filter(q => 
+          q.category === test.category || 
+          (test.title && q.examName && q.examName.toLowerCase().includes('english') && test.title.toLowerCase().includes('english')) ||
+          (test.title && q.subject && q.subject.toLowerCase().includes('english') && test.title.toLowerCase().includes('english'))
+        );
+      }
+      if (testQuestions.length === 0) {
+        testQuestions = allQuestionsList.slice(0, test.questionCount || 100);
+      }
 
       let correctCount = 0;
       let incorrectCount = 0;

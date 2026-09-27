@@ -103,7 +103,10 @@ import {
   fetchQuestionsFromFirestore,
   saveQuestionsToFirestore,
   deleteQuestionFromFirestore,
-  deleteTestFromFirestore
+  deleteTestFromFirestore,
+  fetchPypPapersFromFirestore,
+  savePypPaperToFirestore,
+  deletePypPaperFromFirestore
 } from './firebase/firestoreService';
 
 function MainApp() {
@@ -552,12 +555,13 @@ function MainApp() {
       testConnection().catch(() => null);
 
       try {
-        const [testsRes, pypRes, qRes, firestoreTests, firestoreQuestions] = await Promise.all([
+        const [testsRes, pypRes, qRes, firestoreTests, firestoreQuestions, firestorePyp] = await Promise.all([
           fetch('/api/tests').catch(() => null),
           fetch('/api/pyp').catch(() => null),
           fetch('/api/questions').catch(() => null),
           fetchTestsFromFirestore().catch(() => []),
-          fetchQuestionsFromFirestore().catch(() => [])
+          fetchQuestionsFromFirestore().catch(() => []),
+          fetchPypPapersFromFirestore().catch(() => [])
         ]);
 
         if (firestoreTests && firestoreTests.length > 0) {
@@ -572,6 +576,10 @@ function MainApp() {
         } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
           // Auto-seed initial question catalog to Cloud Firestore only if logged in as administrator
           saveQuestionsToFirestore(INITIAL_QUESTIONS).catch(() => null);
+        }
+
+        if (firestorePyp && firestorePyp.length > 0) {
+          setPypPapers(prev => dedupeById([...firestorePyp, ...prev]));
         }
 
         if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
@@ -680,11 +688,22 @@ function MainApp() {
     if (!activeExamTest) return;
 
     const currentTest = activeExamTest;
-    const testQs = questions.filter(q => {
-      return currentTest.sections.some(s => s.questionIds.includes(q.id));
+    let testQs = questions.filter(q => {
+      return currentTest.sections && currentTest.sections.some(s => s.questionIds && s.questionIds.includes(q.id));
     });
 
-    const activeQuestionList = testQs.length > 0 ? testQs : questions;
+    if (testQs.length === 0) {
+      testQs = questions.filter(q => 
+        q.category === currentTest.category || 
+        (currentTest.title && q.examName && q.examName.toLowerCase().includes('english') && currentTest.title.toLowerCase().includes('english')) ||
+        (currentTest.title && q.subject && q.subject.toLowerCase().includes('english') && currentTest.title.toLowerCase().includes('english'))
+      );
+    }
+    if (testQs.length === 0) {
+      testQs = questions.slice(0, currentTest.questionCount || 100);
+    }
+
+    const activeQuestionList = testQs;
 
     try {
       const res = await fetch(`/api/tests/${currentTest.id}/submit`, {
@@ -906,10 +925,26 @@ function MainApp() {
       linkedQuestionIds: pypData.linkedQuestionIds,
     };
     setPypPapers(prev => dedupeById([newPaper, ...prev]));
+    savePypPaperToFirestore(newPaper).catch(() => null);
+    const token = getAdminToken();
+    fetch('/api/pyp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(newPaper),
+    }).catch(() => {});
   };
 
   const handleDeletePYP = (id: string) => {
     setPypPapers(prev => prev.filter(p => p.id !== id));
+    deletePypPaperFromFirestore(id).catch(() => null);
+    const token = getAdminToken();
+    fetch(`/api/pyp/${id}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).catch(() => {});
   };
 
   const handleConvertPYPToMockTest = (pyp: PreviousYearPaper) => {
@@ -936,9 +971,21 @@ function MainApp() {
     };
 
     setTests(prev => dedupeById([newTest, ...prev]));
+    saveTestToFirestore(newTest).catch(() => null);
+    const updatedPaper = { ...pyp, linkedMockTestId: newTest.id };
     setPypPapers(prev =>
-      prev.map(p => (p.id === pyp.id ? { ...p, linkedMockTestId: newTest.id } : p))
+      prev.map(p => (p.id === pyp.id ? updatedPaper : p))
     );
+    savePypPaperToFirestore(updatedPaper).catch(() => null);
+    const token = getAdminToken();
+    fetch('/api/tests', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(newTest),
+    }).catch(() => {});
   };
 
   // ADMIN TEST MANAGEMENT ACTIONS
@@ -1049,6 +1096,72 @@ function MainApp() {
       },
       body: JSON.stringify(newTest),
     }).catch(() => {});
+    fetch('/api/questions/bulk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ questions: newQuestions }),
+    }).catch(() => {});
+  };
+
+  // UNIFIED BULK QUESTIONS ADDED (Syncs directly to Cloud Firestore & backend)
+  const handleBulkQuestionsAdded = (newQs: Question[]) => {
+    if (!newQs || newQs.length === 0) return;
+    setQuestions(prev => dedupeById([...newQs, ...prev]));
+    saveQuestionsToFirestore(newQs).catch(() => null);
+    const token = getAdminToken();
+    fetch('/api/questions/bulk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ questions: newQs }),
+    }).catch(() => {});
+  };
+
+  // UNIFIED BULK TESTS ADDED (Syncs directly to Cloud Firestore & backend)
+  const handleBulkTestsAdded = (newTests: MockTest[]) => {
+    if (!newTests || newTests.length === 0) return;
+    setTests(prev => dedupeById([...newTests, ...prev]));
+    newTests.forEach(t => saveTestToFirestore(t).catch(() => null));
+    const token = getAdminToken();
+    newTests.forEach(t => {
+      fetch('/api/tests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(t),
+      }).catch(() => {});
+    });
+  };
+
+  // UNIFIED COMPLETE TEST & QUESTIONS SAVE (Syncs directly to Cloud Firestore & backend)
+  const handleSaveCompletedTestAndQuestions = (updatedTest: MockTest, updatedQuestions: Question[]) => {
+    handleUpdateTest(updatedTest.id, updatedTest);
+    if (updatedQuestions && updatedQuestions.length > 0) {
+      setQuestions(prev => {
+        const updatedMap = new Map(updatedQuestions.map(q => [q.id, q]));
+        const existingIds = new Set(prev.map(q => q.id));
+        const newQuestions = updatedQuestions.filter(q => !existingIds.has(q.id));
+        const merged = prev.map(q => updatedMap.has(q.id) ? updatedMap.get(q.id)! : q);
+        return dedupeById([...newQuestions, ...merged]);
+      });
+      saveQuestionsToFirestore(updatedQuestions).catch(() => null);
+      const token = getAdminToken();
+      fetch('/api/questions/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ questions: updatedQuestions }),
+      }).catch(() => {});
+    }
   };
 
   // MISTAKE RETEST ENGINE HANDLER
@@ -1244,8 +1357,8 @@ function MainApp() {
                   window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
                 }
               }}
-              onTestsAdded={(newTests) => setTests(prev => dedupeById([...newTests, ...prev]))}
-              onQuestionsAdded={(newQs) => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+              onTestsAdded={handleBulkTestsAdded}
+              onQuestionsAdded={handleBulkQuestionsAdded}
               onOpenUniversalIngest={openUniversalIngestion}
             />
           )}
@@ -1260,20 +1373,11 @@ function MainApp() {
               onConvertPYPToMockTest={handleConvertPYPToMockTest}
               onTogglePublishTest={handleTogglePublishTest}
               onStartTest={handleStartTest}
-              onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
-              onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
+              onQuestionsAdded={handleBulkQuestionsAdded}
+              onTestAdded={handleAddTest}
               onUpdateTest={handleUpdateTest}
               onOpenUniversalIngest={openUniversalIngestion}
-              onSaveCompletedTest={(updatedTest, updatedQuestions) => {
-                handleUpdateTest(updatedTest.id, updatedTest);
-                setQuestions(prev => {
-                  const updatedMap = new Map(updatedQuestions.map(q => [q.id, q]));
-                  const existingIds = new Set(prev.map(q => q.id));
-                  const newQuestions = updatedQuestions.filter(q => !existingIds.has(q.id));
-                  const merged = prev.map(q => updatedMap.has(q.id) ? updatedMap.get(q.id)! : q);
-                  return dedupeById([...newQuestions, ...merged]);
-                });
-              }}
+              onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
             />
           )}
 
@@ -1307,8 +1411,8 @@ function MainApp() {
               onDeleteQuestion={handleDeleteQuestion}
               allHierarchyRecords={extractHierarchyFromApp(tests, pypPapers, questions)}
               onAddPYP={handleAddPYP}
-              onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
-              onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
+              onQuestionsAdded={handleBulkQuestionsAdded}
+              onTestAdded={handleAddTest}
             />
           )}
 
@@ -1335,18 +1439,9 @@ function MainApp() {
               onAddTest={handleAddTest}
               onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
               onAddPYP={handleAddPYP}
-              onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
-              onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
-              onSaveCompletedTest={(updatedTest, updatedQuestions) => {
-                handleUpdateTest(updatedTest.id, updatedTest);
-                setQuestions(prev => {
-                  const updatedMap = new Map(updatedQuestions.map(q => [q.id, q]));
-                  const existingIds = new Set(prev.map(q => q.id));
-                  const newQuestions = updatedQuestions.filter(q => !existingIds.has(q.id));
-                  const merged = prev.map(q => updatedMap.has(q.id) ? updatedMap.get(q.id)! : q);
-                  return dedupeById([...newQuestions, ...merged]);
-                });
-              }}
+              onQuestionsAdded={handleBulkQuestionsAdded}
+              onTestAdded={handleAddTest}
+              onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
             />
           )}
 
