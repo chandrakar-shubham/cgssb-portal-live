@@ -340,18 +340,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </button>
           </form>
         )}
-
-        {/* Quick Demo Student Account */}
-        <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-          <span className="text-slate-400 text-[11px]">Quick Access:</span>
-          <button
-            type="button"
-            onClick={() => handleQuickDemo('student')}
-            className="text-emerald-400 hover:text-emerald-300 font-bold text-[11px] transition"
-          >
-            1-Click Candidate Demo
-          </button>
-        </div>
       </div>
     </div>
   );

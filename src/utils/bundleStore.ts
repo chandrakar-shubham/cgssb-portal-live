@@ -1,4 +1,5 @@
 import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
+import { MockTest } from '../types';
 import {
   fetchBundlesFromFirestore,
   saveBundleToFirestore,
@@ -264,4 +265,65 @@ export const resetBundlesToDefault = (): TestSeriesBundle[] => {
     localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
   }
   return OFFICIAL_BUNDLES_CATALOG;
+};
+
+export const autoLinkTestToBundles = (test: MockTest): void => {
+  if (!test || !test.id) return;
+  const bundles = getStoredBundles();
+  let modified = false;
+
+  const updatedBundles = bundles.map(bundle => {
+    const matchesCategory = test.category && bundle.authority && test.category.toLowerCase() === bundle.authority.toLowerCase();
+    const matchesSubCat = test.subCategory && bundle.targetPost && (
+      test.subCategory.toLowerCase().includes(bundle.targetPost.toLowerCase()) ||
+      bundle.targetPost.toLowerCase().includes(test.subCategory.toLowerCase()) ||
+      (bundle.slug && test.subCategory.toLowerCase().includes(bundle.slug.toLowerCase()))
+    );
+    const matchesPost = test.postName && bundle.targetPost && (
+      test.postName.toLowerCase().includes(bundle.targetPost.toLowerCase()) ||
+      bundle.targetPost.toLowerCase().includes(test.postName.toLowerCase())
+    );
+
+    if (matchesCategory || matchesSubCat || matchesPost || bundle.id === 'bundle-cgssb-lecturer-english-2026') {
+      const testItems = bundle.testItems || [];
+      const exists = testItems.some(item => item.id === test.id || item.mockTestRef?.id === test.id);
+      if (!exists) {
+        modified = true;
+        const totalQ = test.sections?.reduce((acc, s) => acc + (s.questionIds?.length || 0), 0) || 100;
+        const newItem = {
+          id: test.id,
+          title: test.title,
+          titleHindi: test.titleHindi || test.title,
+          type: 'full_mock' as const,
+          questionCount: totalQ,
+          durationMinutes: test.durationMinutes || 120,
+          marks: test.totalMarks || (totalQ * 1),
+          isFreePreview: testItems.length === 0,
+          attemptsCount: 0,
+          mockTestRef: test
+        };
+        return {
+          ...bundle,
+          testItems: [...testItems, newItem],
+          totalTestsCount: (bundle.totalTestsCount || testItems.length) + 1
+        };
+      }
+    }
+    return bundle;
+  });
+
+  if (modified) {
+    saveStoredBundles(updatedBundles);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updatedBundles }));
+    }
+    updatedBundles.forEach(b => {
+      saveBundleToFirestore(b).catch(() => null);
+      fetch('/api/bundles', {
+        method: 'POST',
+        headers: getAdminHeaders(),
+        body: JSON.stringify(b)
+      }).catch(() => null);
+    });
+  }
 };

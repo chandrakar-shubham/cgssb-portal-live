@@ -182,11 +182,15 @@ export interface MockTestSection {
 export interface MockTest {
   id: string;
   title: string;
+  titleHindi?: string;
   authority?: string;
   category: ExamCategory;
   subCategory?: string;
   postName?: string;
   examName?: string;
+  testType?: string;
+  subject?: string;
+  topic?: string;
   description: string;
   durationMinutes: number;
   totalMarks?: number;

@@ -138,18 +138,6 @@ export const AdminPortalLogin: React.FC<AdminPortalLoginProps> = ({
             </div>
           </div>
 
-          {/* Quick Demo Credentials Notice */}
-          <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-[11px] text-slate-400">
-            <div className="font-semibold text-slate-300 mb-0.5 flex items-center space-x-1.5">
-              <Lock className="w-3 h-3 text-indigo-400" />
-              <span>Default Admin Credentials:</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-slate-300 mt-1">
-              <span>User: <strong className="text-indigo-300">admin@cgssbtest.com</strong></span>
-              <span>Pass: <strong className="text-indigo-300">admin123</strong></span>
-            </div>
-          </div>
-
           <button
             type="submit"
             disabled={isLoading}
