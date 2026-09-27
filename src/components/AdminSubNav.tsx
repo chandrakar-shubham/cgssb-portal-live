@@ -33,36 +33,58 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const menuContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Grouped Navigation Structure
   const navGroups = [
     {
-      groupName: 'CMS & Customization',
+      groupId: 'content',
+      groupName: 'Exams & Content',
+      icon: Layers,
       items: [
-        { id: 'admin-overview', label: 'CMS Dashboard', icon: LayoutDashboard },
-        { id: 'admin-cms-pages', label: 'No-Code Pages', icon: Globe },
-        { id: 'admin-cms-posts', label: 'News & Articles', icon: FileText },
-        { id: 'admin-cms-series', label: 'Series Bundles', icon: Crown },
-        { id: 'admin-cms-customizer', label: 'Site Customizer', icon: Palette },
+        { id: 'admin-tests', label: 'Mock Test Catalog', icon: Layers, desc: 'Manage full-length timed exams' },
+        { id: 'admin-pyp', label: 'PYP Manager', icon: FileText, desc: 'Previous year question papers' },
+        { id: 'admin-chapters', label: 'Chapter Tests', icon: FolderTree, desc: 'Subject & topic-wise quizzes' },
+        { id: 'admin-practice', label: 'Practice Drills', icon: Sparkles, desc: 'Instant-explanation daily MCQs' },
+        { id: 'admin-questions', label: 'Question Bank', icon: FolderTree, desc: 'Central question repository' },
+        { id: 'admin-ca-studio', label: 'Current Affairs Studio', icon: Sparkles, badge: 'New', desc: 'Sources, topics & CA Q-Bank' },
+        { id: 'admin-ai', label: 'AI Test Creator', icon: Sparkles, desc: 'Generate tests with Gemini AI' },
       ],
     },
     {
-      groupName: 'Exams & Catalog',
+      groupId: 'cms',
+      groupName: 'CMS & Customizer',
+      icon: Globe,
       items: [
-        { id: 'admin-tests', label: 'Test Catalog', icon: Layers },
-        { id: 'admin-questions', label: 'Question Bank', icon: FolderTree },
-        { id: 'admin-pyp', label: 'PYP Manager', icon: FileText },
-        { id: 'admin-ai', label: 'AI Test Creator', icon: Sparkles },
+        { id: 'admin-overview', label: 'CMS Dashboard', icon: LayoutDashboard, desc: 'Overview, analytics & sync' },
+        { id: 'admin-cms-pages', label: 'No-Code Pages', icon: Globe, desc: 'Static & landing pages' },
+        { id: 'admin-cms-posts', label: 'News & Articles', icon: FileText, desc: 'Blog posts & exam updates' },
+        { id: 'admin-cms-series', label: 'Series Bundles', icon: Crown, desc: 'Test series package studio' },
+        { id: 'admin-cms-customizer', label: 'Site Customizer', icon: Palette, desc: 'Colors, branding & typography' },
       ],
     },
     {
-      groupName: 'System & Database',
+      groupId: 'system',
+      groupName: 'System & APIs',
+      icon: Database,
       items: [
-        { id: 'admin-database', label: 'Database & Schema', icon: Database, badge: 'Firestore' },
-        { id: 'admin-android-api', label: 'Android API', icon: Smartphone, highlight: true },
+        { id: 'admin-database', label: 'Database & Schema', icon: Database, badge: 'Firestore', desc: 'Firestore collections & backups' },
+        { id: 'admin-android-api', label: 'Android API', icon: Smartphone, highlight: true, desc: 'Mobile app sync & endpoints' },
       ],
     },
   ];
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
 
   // All flat items for search & breadcrumb lookup
   const allNavItems = navGroups.flatMap(g => g.items);
@@ -75,12 +97,12 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
   );
 
   return (
-    <div className="bg-slate-900/90 border-b border-indigo-950/60 sticky top-16 z-40 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div className="bg-slate-900/95 border-b border-indigo-950/60 sticky top-16 z-40 backdrop-blur-md">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           
           {/* Left: Dynamic Breadcrumbs */}
-          <div className="flex items-center space-x-2 text-xs font-semibold text-slate-400 overflow-x-auto py-1 shrink-0">
+          <div className="flex items-center space-x-2 text-xs font-semibold text-slate-400 overflow-x-auto py-0.5 shrink-0">
             <button
               onClick={() => setActiveTab('admin-overview')}
               className="hover:text-indigo-400 flex items-center space-x-1 transition cursor-pointer shrink-0"
@@ -97,65 +119,83 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
             </span>
           </div>
 
-          {/* Right: Categorized Navigation Quick Switcher Pills */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar touch-scroll py-1 max-w-full">
-            {navGroups.map(group => (
-              <div key={group.groupName} className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800/80 shrink-0">
-                {group.items.map(item => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
-                        isActive
-                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-indigo-400'}`} />
-                      <span>{item.label}</span>
-                      {'badge' in item && item.badge && (
-                        <span className="text-[9px] font-mono px-1 rounded bg-indigo-500/20 text-indigo-300">
-                          {item.badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
+          {/* Right: 3 Category Dropdowns + Quick Search */}
+          <div className="flex items-center space-x-2 shrink-0" ref={menuContainerRef}>
+            {navGroups.map(group => {
+              const Icon = group.icon;
+              const isGroupActive = group.items.some(i => i.id === activeTab);
+              const isOpen = activeMenu === group.groupId;
+
+              return (
+                <div key={group.groupId} className="relative">
+                  <button
+                    onClick={() => setActiveMenu(isOpen ? null : group.groupId)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+                      isGroupActive
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{group.groupName}</span>
+                    <span className="px-1 py-0.2 rounded text-[9px] bg-indigo-950/80 border border-indigo-700/40 text-indigo-300">
+                      {group.items.length}
+                    </span>
+                    <ChevronRight className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {isOpen && (
+                    <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-800/80 mb-1">
+                        {group.groupName} Modules
+                      </div>
+                      {group.items.map(item => {
+                        const ItemIcon = item.icon;
+                        const isCurrent = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setActiveMenu(null);
+                            }}
+                            className={`w-full px-3 py-2 rounded-xl text-left transition flex items-start space-x-2.5 cursor-pointer ${
+                              isCurrent
+                                ? 'bg-indigo-600 text-white font-bold'
+                                : 'text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            <ItemIcon className={`w-4 h-4 mt-0.5 shrink-0 ${isCurrent ? 'text-white' : 'text-indigo-400'}`} />
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold">{item.label}</span>
+                                {'badge' in item && item.badge && (
+                                  <span className="text-[9px] font-mono px-1 rounded bg-indigo-500/20 text-indigo-300">
+                                    {item.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[11px] leading-tight mt-0.5 ${isCurrent ? 'text-indigo-100' : 'text-slate-400'}`}>
+                                {item.desc}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Admin Quick Search Command Button */}
             <button
               onClick={() => setIsSearchOpen(true)}
               className="p-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition cursor-pointer shrink-0"
-              title="Search Admin Modules (Ctrl/Cmd+K)"
+              title="Quick Search Modules (Ctrl/Cmd+K)"
             >
               <Search className="w-4 h-4 text-indigo-400" />
-            </button>
-
-            {/* DB Tools & PDF */}
-            {onOpenToolsModal && (
-              <button
-                onClick={onOpenToolsModal}
-                className="hidden xl:inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-bold rounded-xl bg-slate-950/80 hover:bg-indigo-950 text-indigo-300 border border-slate-800 hover:border-indigo-700/60 transition cursor-pointer shrink-0"
-                title="Database Tools, Snapshots & PDF Generator"
-              >
-                <Database className="w-3.5 h-3.5 text-indigo-400" />
-                <span>DB Tools</span>
-              </button>
-            )}
-
-            {/* Student Portal Switcher */}
-            <button
-              onClick={onNavigateToStudent}
-              className="hidden lg:inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-bold rounded-xl bg-slate-950/80 hover:bg-emerald-950/60 text-emerald-400 hover:text-emerald-300 border border-slate-800 hover:border-emerald-700/60 transition cursor-pointer shrink-0"
-              title="Switch to Student Candidate View"
-            >
-              <span>Student View</span>
-              <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

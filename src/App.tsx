@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { StudentDashboard } from './components/StudentDashboard';
 import { PYPSection } from './components/PYPSection';
@@ -18,6 +19,7 @@ import { AdminAITestCreator } from './components/AdminAITestCreator';
 import { AdminTestCatalog } from './components/AdminTestCatalog';
 import { AdminAndroidAPIManager } from './components/AdminAndroidAPIManager';
 import { AdminPortalLogin } from './components/AdminPortalLogin';
+import { AdminCurrentAffairsStudio } from './components/AdminCurrentAffairsStudio';
 import { AdminCMSDashboard } from './components/AdminCMSDashboard';
 import { AdminDatabaseView } from './components/AdminDatabaseView';
 import { AdminHeader } from './components/AdminHeader';
@@ -39,7 +41,15 @@ import { DynamicPostRenderer } from './components/DynamicPostRenderer';
 import { AdminCMSTestSeriesManager } from './components/AdminCMSTestSeriesManager';
 import { AdminCMSThemeCustomizer } from './components/AdminCMSThemeCustomizer';
 import { AdminBundleStudio } from './components/AdminBundleStudio';
+import { UniversalIngestionStudio, IngestionContentType } from './components/UniversalIngestionStudio';
+import { ChapterTestSection } from './components/ChapterTestSection';
+import { PracticeSetSection } from './components/PracticeSetSection';
+import { SEOQuestionView } from './components/SEOQuestionView';
+import { AdminChapterTestManager } from './components/AdminChapterTestManager';
+import { AdminPracticeSetManager } from './components/AdminPracticeSetManager';
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
+import { LegalModal, LegalTab } from './components/LegalModal';
+import { syncBundlesFromFirestore } from './utils/bundleStore';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import {
   CMSPage,
@@ -84,6 +94,7 @@ import {
 } from './utils/taxonomyMigration';
 import { extractHierarchyFromApp } from './utils/examHierarchy';
 import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
+import { auth } from './firebase/config';
 import { testConnection } from './firebase/connectionTest';
 import {
   saveAttemptToFirestore,
@@ -106,6 +117,12 @@ function MainApp() {
 
     if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
       return { route: 'admin', tab: 'admin-pyp' };
+    }
+    if (path.includes('chapter') || hash.includes('chapter')) {
+      return { route: 'student', tab: 'chapters' };
+    }
+    if (path.includes('practice') || hash.includes('practice')) {
+      return { route: 'student', tab: 'practice' };
     }
     if (path.includes('leaderboard') || hash.includes('leaderboard')) {
       return { route: 'student', tab: 'leaderboard' };
@@ -143,25 +160,31 @@ function MainApp() {
   const initialRoute = parseRouteFromLocation();
   const [currentRoute, setCurrentRoute] = useState<'student' | 'admin'>(initialRoute.route);
   const [studentActiveTab, setStudentActiveTabState] = useState<string>(initialRoute.tab);
+  const [selectedSEOQuestion, setSelectedSEOQuestion] = useState<Question | null>(null);
 
   const getTabPath = (tab: string) => {
     switch (tab) {
+      case 'tests': return '/';
+      case 'chapters': return '/cgvyapam-cgssb/chapter-tests';
+      case 'practice': return '/cgvyapam-cgssb/practice-drills';
       case 'leaderboard': return '/leaderboard';
-      case 'cgpsc': return '/exams/cgpsc';
-      case 'cgssb': return '/exams/cgssb';
+      case 'cgpsc': return '/cgpsc/mock-tests';
+      case 'cgssb': return '/cgvyapam/mock-tests';
       case 'pass': return '/pass';
-      case 'pyp': return '/pyp';
+      case 'pyp': return '/cgvyapam/pyp-papers';
       case 'analytics': return '/analytics';
       case 'mistakes': return '/mistakes';
       case 'bookmarks': return '/bookmarks';
       case 'chhattisgarh-deck': return '/chhattisgarhi-revision';
       case 'posts': return '/posts';
-      default: return '/test-series';
+      default: return '/';
     }
   };
 
   const getPageTitle = (tab: string) => {
     switch (tab) {
+      case 'chapters': return 'CG Vyapam & CGPSC Chapter Tests (Topic-wise Quizzes) | CGSSB Test';
+      case 'practice': return 'CG Vyapam Daily Practice Drills & Solved MCQs | CGSSB Test';
       case 'leaderboard': return 'State-Wide Live Merit Leaderboard & Percentile Ranks | CGSSB Test';
       case 'cgpsc': return 'CGPSC Prelims & Forest Service Mock Tests 2026 | CGSSB Test';
       case 'cgssb': return 'CG Vyapam Hostel Warden, Patwari & RI Tests 2026 | CGSSB Test';
@@ -171,7 +194,7 @@ function MainApp() {
       case 'mistakes': return 'Mistake Notebook & Error Log (कमज़ोर विषय री-टेस्ट) | CGSSB Test';
       case 'bookmarks': return 'Starred Questions & Personal Notes (बुकमार्क) | CGSSB Test';
       case 'chhattisgarh-deck': return 'Chhattisgarhi Language & GK Flashcards Revision | CGSSB Test';
-      default: return 'CGSSB & CGPSC Test Portal | Mock Tests & PYP Archive';
+      default: return 'CGSSB & CGPSC Test Portal | Mock Tests, Chapter Tests & PYP Archive';
     }
   };
 
@@ -233,7 +256,38 @@ function MainApp() {
   // Student Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState<LegalTab>('privacy');
+  const openLegalModal = (tab: LegalTab) => {
+    setLegalTab(tab);
+    setIsLegalModalOpen(true);
+  };
+
+  // Admin Modals
   const [isAdminToolsModalOpen, setIsAdminToolsModalOpen] = useState(false);
+  const [isUniversalIngestOpen, setIsUniversalIngestOpen] = useState(false);
+  const [universalIngestConfig, setUniversalIngestConfig] = useState<{
+    type?: IngestionContentType;
+    lockType?: boolean;
+    initialInputTab?: 'SMART_PASTE' | 'JSON_EDITOR' | 'AI_GEMINI';
+    authority?: string;
+    examName?: string;
+    cadre?: string;
+    bundleId?: string;
+  }>({});
+
+  const openUniversalIngestion = (config?: {
+    type?: IngestionContentType;
+    lockType?: boolean;
+    initialInputTab?: 'SMART_PASTE' | 'JSON_EDITOR' | 'AI_GEMINI';
+    authority?: string;
+    examName?: string;
+    cadre?: string;
+    bundleId?: string;
+  }) => {
+    setUniversalIngestConfig(config || {});
+    setIsUniversalIngestOpen(true);
+  };
 
   // Pre-Flight Exam Instructions State (TCS iON Screen)
   const [preFlightTest, setPreFlightTest] = useState<MockTest | null>(null);
@@ -508,15 +562,15 @@ function MainApp() {
 
         if (firestoreTests && firestoreTests.length > 0) {
           setTests(prev => dedupeById([...firestoreTests, ...prev]));
-        } else {
-          // Auto-seed Firestore on initial connect so cloud database is never blank
+        } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
+          // Auto-seed Firestore on initial connect only if logged in as administrator
           INITIAL_MOCK_TESTS.forEach(t => saveTestToFirestore(t).catch(() => null));
         }
 
         if (firestoreQuestions && firestoreQuestions.length > 0) {
           setQuestions(prev => dedupeById([...firestoreQuestions, ...prev]));
-        } else {
-          // Auto-seed initial question catalog to Cloud Firestore
+        } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
+          // Auto-seed initial question catalog to Cloud Firestore only if logged in as administrator
           saveQuestionsToFirestore(INITIAL_QUESTIONS).catch(() => null);
         }
 
@@ -535,11 +589,27 @@ function MainApp() {
           const list = Array.isArray(q) ? q : (q?.questions || []);
           if (list.length > 0) setQuestions(prev => dedupeById([...list, ...prev]));
         }
+
+        // Sync and refresh Test Series bundles from Cloud Firestore & server
+        await syncBundlesFromFirestore().catch(() => null);
       } catch (err) {
         console.warn('Backend API unavailable or non-JSON response received. Falling back to local state:', err);
       }
     }
     loadData();
+
+    // Initialize Auto-Sync for queued on-device exam attempts when internet reconnects
+    const unsubscribe = initOfflineAutoSync((syncedAttempt, solutions) => {
+      setAttempts(prev => dedupeById([syncedAttempt, ...prev]));
+      if (Array.isArray(solutions) && solutions.length > 0) {
+        setQuestions((prev: Question[]): Question[] => {
+          const solMap = new Map<string, Question>();
+          solutions.forEach((s: Question) => solMap.set(s.id, s));
+          return prev.map(q => solMap.get(q.id) || q);
+        });
+      }
+    });
+    return unsubscribe;
   }, []);
 
   // START TEST HANDLER (Routes through TCS iON Pre-Flight Screen)
@@ -630,6 +700,7 @@ function MainApp() {
         const data = await res.json();
         const attempt = data.attempt || data;
         setAttempts(prev => [attempt, ...prev]);
+        clearCachedTestBundle(currentTest.id);
         if (Array.isArray(data.solutions) && data.solutions.length > 0) {
           setQuestions((prev: Question[]): Question[] => {
             const solMap = new Map<string, Question>();
@@ -642,7 +713,17 @@ function MainApp() {
         return;
       }
     } catch (e) {
-      console.warn('Server submission failed, performing local evaluation:', e);
+      console.warn('Server submission failed or offline, performing local evaluation and queuing for sync:', e);
+      // Queue offline attempt for automatic sync upon reconnection
+      queueOfflineSubmission({
+        testId: currentTest.id,
+        testTitle: currentTest.title,
+        userId: user?.id || 'guest',
+        userName: user?.name || 'Aspirant Student',
+        timeTakenSeconds: submission.timeTakenSeconds,
+        responses: submission.responses,
+        questionStatuses: submission.questionStatuses,
+      });
     }
 
     // Local evaluation engine
@@ -1097,6 +1178,7 @@ function MainApp() {
           setActiveTab={setAdminActiveTab}
           onNavigateToStudent={navigateToStudent}
           onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
+          onOpenUniversalIngest={() => openUniversalIngestion()}
         />
         <AdminSubNav
           activeTab={adminActiveTab}
@@ -1133,15 +1215,6 @@ function MainApp() {
             />
           )}
 
-          {adminActiveTab === 'admin-cms-series' && (
-            <AdminCMSTestSeriesManager
-              seriesPacks={cmsSeriesPacks}
-              availableTests={tests}
-              onSavePack={handleSaveCmsSeriesPack}
-              onDeletePack={handleDeleteCmsSeriesPack}
-            />
-          )}
-
           {adminActiveTab === 'admin-cms-customizer' && (
             <AdminCMSThemeCustomizer
               settings={cmsSettings}
@@ -1173,6 +1246,7 @@ function MainApp() {
               }}
               onTestsAdded={(newTests) => setTests(prev => dedupeById([...newTests, ...prev]))}
               onQuestionsAdded={(newQs) => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+              onOpenUniversalIngest={openUniversalIngestion}
             />
           )}
 
@@ -1189,6 +1263,7 @@ function MainApp() {
               onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
               onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
               onUpdateTest={handleUpdateTest}
+              onOpenUniversalIngest={openUniversalIngestion}
               onSaveCompletedTest={(updatedTest, updatedQuestions) => {
                 handleUpdateTest(updatedTest.id, updatedTest);
                 setQuestions(prev => {
@@ -1199,6 +1274,28 @@ function MainApp() {
                   return dedupeById([...newQuestions, ...merged]);
                 });
               }}
+            />
+          )}
+
+          {adminActiveTab === 'admin-chapters' && (
+            <AdminChapterTestManager
+              tests={tests}
+              questions={questions}
+              onAddTest={handleAddTest}
+              onUpdateTest={handleUpdateTest}
+              onDeleteTest={handleDeleteTest}
+              onStartTest={handleStartTest}
+              onOpenUniversalIngest={openUniversalIngestion}
+            />
+          )}
+
+          {adminActiveTab === 'admin-practice' && (
+            <AdminPracticeSetManager
+              questions={questions}
+              onAddQuestion={handleAddQuestion}
+              onUpdateQuestion={handleUpdateQuestion}
+              onDeleteQuestion={handleDeleteQuestion}
+              onOpenUniversalIngest={openUniversalIngestion}
             />
           )}
 
@@ -1213,6 +1310,10 @@ function MainApp() {
               onQuestionsAdded={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
               onTestAdded={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
             />
+          )}
+
+          {adminActiveTab === 'admin-ca-studio' && (
+            <AdminCurrentAffairsStudio />
           )}
 
           {adminActiveTab === 'admin-ai' && (
@@ -1274,6 +1375,32 @@ function MainApp() {
             </div>
           </div>
         </footer>
+
+        {/* Global Admin Modals */}
+        <AdminToolsAndBackupsModal
+          isOpen={isAdminToolsModalOpen}
+          onClose={() => setIsAdminToolsModalOpen(false)}
+          tests={tests}
+          questions={questions}
+          pypPapers={pypPapers}
+          attempts={attempts}
+          onRestoreSnapshot={handleRestoreSnapshot}
+        />
+
+        <UniversalIngestionStudio
+          isOpen={isUniversalIngestOpen}
+          onClose={() => setIsUniversalIngestOpen(false)}
+          initialType={universalIngestConfig.type || 'MOCK_TEST'}
+          lockType={universalIngestConfig.lockType || false}
+          initialInputTab={universalIngestConfig.initialInputTab || 'SMART_PASTE'}
+          defaultAuthority={universalIngestConfig.authority || 'CGSSB'}
+          defaultExamName={universalIngestConfig.examName || 'CG Teacher Recruitment 2026'}
+          defaultCadre={universalIngestConfig.cadre || 'Assistant Teacher (Sahayak Shikshak)'}
+          defaultBundleId={universalIngestConfig.bundleId || ''}
+          onQuestionsIngested={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+          onMockTestCreated={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
+          onPypCreated={newPyp => setPypPapers(prev => dedupeById([newPyp, ...prev]))}
+        />
       </div>
     );
   }
@@ -1293,7 +1420,7 @@ function MainApp() {
       />
 
       <main className="flex-1 pb-20 md:pb-8">
-        {studentActiveTab === 'tests' && (
+        {!selectedSEOQuestion && studentActiveTab === 'tests' && (
           <StudentDashboard
             tests={tests}
             onStartTest={handleStartTest}
@@ -1308,7 +1435,7 @@ function MainApp() {
           />
         )}
 
-        {studentActiveTab === 'leaderboard' && (
+        {!selectedSEOQuestion && studentActiveTab === 'leaderboard' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
             <div className="flex items-center justify-between gap-4">
               <button
@@ -1333,7 +1460,39 @@ function MainApp() {
           </div>
         )}
 
-        {studentActiveTab === 'cgpsc' && (
+        {/* Standalone SEO Question Detail Page */}
+        {selectedSEOQuestion && (
+          <SEOQuestionView
+            question={selectedSEOQuestion}
+            allTests={tests}
+            allPypPapers={pypPapers}
+            onBackToDashboard={() => setSelectedSEOQuestion(null)}
+            onStartRelatedTest={handleStartTest}
+          />
+        )}
+
+        {!selectedSEOQuestion && studentActiveTab === 'chapters' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <ChapterTestSection
+              tests={tests}
+              questions={questions}
+              onStartTest={handleStartTest}
+              selectedCategory={selectedCategory}
+            />
+          </div>
+        )}
+
+        {!selectedSEOQuestion && studentActiveTab === 'practice' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <PracticeSetSection
+              questions={questions}
+              onViewQuestionSEO={q => setSelectedSEOQuestion(q)}
+              selectedCategory={selectedCategory}
+            />
+          </div>
+        )}
+
+        {!selectedSEOQuestion && studentActiveTab === 'cgpsc' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <CGPSCHeroPage
               tests={tests}
@@ -1345,7 +1504,7 @@ function MainApp() {
           </div>
         )}
 
-        {studentActiveTab === 'cgssb' && (
+        {!selectedSEOQuestion && studentActiveTab === 'cgssb' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <CGSSBHeroPage
               tests={tests}
@@ -1357,7 +1516,7 @@ function MainApp() {
           </div>
         )}
 
-        {studentActiveTab === 'pass' && (
+        {!selectedSEOQuestion && studentActiveTab === 'pass' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <TestPassSection
               onExploreTests={() => setStudentActiveTab('tests')}
@@ -1365,7 +1524,7 @@ function MainApp() {
           </div>
         )}
 
-        {studentActiveTab === 'pyp' && (
+        {!selectedSEOQuestion && studentActiveTab === 'pyp' && (
           <PYPSection
             pypPapers={pypPapers}
             onPracticePaper={handlePracticePaper}
@@ -1375,7 +1534,7 @@ function MainApp() {
           />
         )}
 
-        {studentActiveTab === 'analytics' && (
+        {!selectedSEOQuestion && studentActiveTab === 'analytics' && (
           <AnalyticsHub
             attempts={attempts}
             onReviewAttempt={attempt => setActiveAttemptReview(attempt)}
@@ -1383,7 +1542,7 @@ function MainApp() {
           />
         )}
 
-        {studentActiveTab === 'mistakes' && (
+        {!selectedSEOQuestion && studentActiveTab === 'mistakes' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <MistakeNotebook
               attempts={attempts}
@@ -1394,7 +1553,7 @@ function MainApp() {
           </div>
         )}
 
-        {studentActiveTab === 'bookmarks' && (
+        {!selectedSEOQuestion && studentActiveTab === 'bookmarks' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <BookmarksManager
               questions={questions}
@@ -1404,13 +1563,13 @@ function MainApp() {
           </div>
         )}
 
-        {studentActiveTab === 'chhattisgarh-deck' && (
+        {!selectedSEOQuestion && studentActiveTab === 'chhattisgarh-deck' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <ChhattisgarhiRevisionModule />
           </div>
         )}
 
-        {studentActiveTab === 'posts' && (
+        {!selectedSEOQuestion && studentActiveTab === 'posts' && (
           <DynamicPostRenderer
             posts={cmsPosts}
             selectedPostSlug={activePostSlug}
@@ -1502,7 +1661,13 @@ function MainApp() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Non-Government Disclaimer Banner */}
+          <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
+            <span className="font-semibold text-amber-400 block mb-0.5">Official Non-Government Platform Notice:</span>
+            CGSSB Test (cgssbtest.com) is an independent examination preparation and diagnostic mock testing platform for students in Chhattisgarh. It is not affiliated with, sponsored by, or endorsed by the Chhattisgarh Professional Examination Board (CG Vyapam), CGPSC, or any State/Central government agency. All exam names and syllabi are used strictly for descriptive educational preparation purposes.
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-extrabold text-white">
                 CGSSB <span className="text-emerald-400">Test</span>
@@ -1511,6 +1676,44 @@ function MainApp() {
               <span>cgssbtest.com</span>
               <span className="text-slate-600">•</span>
               <span className="text-emerald-400 font-semibold">Chhattisgarh State Exam Preparation Platform</span>
+            </div>
+
+            {/* Legal Safeguard Links */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
+              <button
+                onClick={() => openLegalModal('privacy')}
+                className="hover:text-emerald-400 underline underline-offset-2 transition"
+              >
+                Privacy Policy
+              </button>
+              <span className="text-slate-700">•</span>
+              <button
+                onClick={() => openLegalModal('terms')}
+                className="hover:text-emerald-400 underline underline-offset-2 transition"
+              >
+                Terms of Service
+              </button>
+              <span className="text-slate-700">•</span>
+              <button
+                onClick={() => openLegalModal('disclaimer')}
+                className="hover:text-amber-400 underline underline-offset-2 transition"
+              >
+                Disclaimer
+              </button>
+              <span className="text-slate-700">•</span>
+              <button
+                onClick={() => openLegalModal('refund')}
+                className="hover:text-emerald-400 underline underline-offset-2 transition"
+              >
+                Refund Policy
+              </button>
+              <span className="text-slate-700">•</span>
+              <button
+                onClick={() => openLegalModal('contact')}
+                className="hover:text-emerald-400 underline underline-offset-2 transition"
+              >
+                Candidate Support
+              </button>
             </div>
 
             <div className="flex items-center space-x-3">
@@ -1526,6 +1729,13 @@ function MainApp() {
           </div>
         </div>
       </footer>
+
+      {/* Trust, Safety & Legal Policies Modal */}
+      <LegalModal
+        isOpen={isLegalModalOpen}
+        onClose={() => setIsLegalModalOpen(false)}
+        initialTab={legalTab}
+      />
 
       {/* Student Auth Modal */}
       <AuthModal
@@ -1549,11 +1759,24 @@ function MainApp() {
         attempts={attempts}
         onRestoreSnapshot={handleRestoreSnapshot}
       />
+
+      {/* Universal Ingestion Studio (Universal Master Engine) */}
+      <UniversalIngestionStudio
+        isOpen={isUniversalIngestOpen}
+        onClose={() => setIsUniversalIngestOpen(false)}
+        initialType={universalIngestConfig.type || 'MOCK_TEST'}
+        lockType={universalIngestConfig.lockType || false}
+        defaultAuthority={universalIngestConfig.authority || 'CGSSB'}
+        defaultExamName={universalIngestConfig.examName || 'CG Teacher Recruitment 2026'}
+        defaultCadre={universalIngestConfig.cadre || 'Assistant Teacher (Sahayak Shikshak)'}
+        defaultBundleId={universalIngestConfig.bundleId || ''}
+        onQuestionsIngested={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+        onMockTestCreated={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
+        onPypCreated={newPyp => setPypPapers(prev => dedupeById([newPyp, ...prev]))}
+      />
     </div>
   );
 }
-
-import { LanguageProvider } from './context/LanguageContext';
 
 export default function App() {
   return (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TestSeriesBundle, BundleTestItem } from '../data/bundleCatalog';
 import { MockTest } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { toggleBundlePublish } from '../utils/bundleStore';
 import {
   AlertCircle,
   ArrowLeft,
@@ -39,7 +40,8 @@ import {
   Copy,
   Info,
   Building,
-  CheckCheck
+  CheckCheck,
+  EyeOff
 } from 'lucide-react';
 import {
   calculateDaysRemaining,
@@ -66,8 +68,20 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
   onEnrollSuccess,
 }) => {
   const { user, activateProPass } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const isPassActive = isUserPassActive(user);
   const daysRemaining = calculateDaysRemaining(user?.passExpiresAt);
+  const [isPublishedState, setIsPublishedState] = useState(bundle.isPublished !== false && !bundle.isDraft);
+
+  const handleTogglePublish = () => {
+    const { newStatus } = toggleBundlePublish(bundle.id);
+    setIsPublishedState(newStatus);
+    showToast(
+      newStatus
+        ? 'Test Series Published — Now live for all aspirants!'
+        : 'Test Series Unpublished — Now in Draft mode (hidden from students).'
+    );
+  };
 
   const [activeTab, setActiveTab] = useState<'tests' | 'dates' | 'eligibility' | 'syllabus' | 'pattern' | 'faqs'>('tests');
   const [testTypeFilter, setTestTypeFilter] = useState<'ALL' | 'MOCK' | 'CHAPTER' | 'PYP'>('ALL');
@@ -285,6 +299,31 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
         </button>
 
         <div className="flex items-center space-x-2">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleTogglePublish}
+              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition border cursor-pointer ${
+                isPublishedState
+                  ? 'bg-slate-900 hover:bg-amber-500/15 text-slate-300 hover:text-amber-300 border-slate-700'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-600/30'
+              }`}
+              title={isPublishedState ? 'Unpublish bundle (hide from students)' : 'Publish bundle (make live for students)'}
+            >
+              {isPublishedState ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Unpublish</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                  <span>Publish</span>
+                </>
+              )}
+            </button>
+          )}
+
           <span className="hidden md:inline-flex text-[11px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
             /series/{bundle.slug}
           </span>
@@ -298,6 +337,35 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Draft Mode Notification Banner */}
+      {!isPublishedState && (
+        <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+              <EyeOff className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-sm text-white">Draft Mode (Unpublished Series)</div>
+              <div className="text-xs text-amber-200/80 mt-0.5">
+                {isAdmin
+                  ? 'This test series is hidden from regular students on the portal. You can review all sections and publish whenever ready.'
+                  : 'This test series is currently being finalized and is not yet open to students. Please check back later.'}
+              </div>
+            </div>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleTogglePublish}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 transition shadow-lg shadow-emerald-600/30 cursor-pointer shrink-0"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Publish Series Now</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Hero Banner Section */}
       <section className={`relative overflow-hidden rounded-3xl border p-6 sm:p-8 shadow-2xl ${
@@ -748,16 +816,30 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
       {/* ===================================================================== */}
       {activeTab === 'syllabus' && (
         <div className="space-y-6">
-          <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
-            <div className="flex items-center space-x-2">
-              <FileText className="w-5 h-5 text-emerald-400" />
-              <h3 className="text-lg font-black text-white">
-                Official Syllabus & Subject-Wise Marks Distribution
-              </h3>
+          <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-lg font-black text-white">
+                  Official Syllabus & Subject-Wise Marks Distribution
+                </h3>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Every mock test in this bundle follows the exact official mark weightage distribution outlined below.
+              </p>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Every mock test in this bundle follows the exact official mark weightage distribution outlined below.
-            </p>
+
+            {bundle.officialLinks?.syllabusPdfUrl && (
+              <a
+                href={bundle.officialLinks.syllabusPdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2.5 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold flex items-center space-x-2 shrink-0 transition"
+              >
+                <Download className="w-4 h-4 text-indigo-400" />
+                <span>Official Syllabus PDF</span>
+              </a>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
@@ -776,6 +858,11 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
                   <div className="min-w-0 pr-2">
                     <span className="text-xs font-bold block truncate text-white">{sec.subject}</span>
                     <span className="text-[11px] text-slate-400 block truncate">{sec.subjectHindi}</span>
+                    {sec.isMandatoryQualifying && (
+                      <span className="inline-block mt-1 text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Qualifying
+                      </span>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <span className="text-xs font-black text-emerald-400 block">{sec.marks} Marks</span>
@@ -791,9 +878,16 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
                     <div>
-                      <h4 className="text-base sm:text-lg font-black text-white">
-                        {bundle.syllabusBreakdown[selectedSyllabusIndex].subject}
-                      </h4>
+                      <div className="flex items-center space-x-2">
+                        <h4 className="text-base sm:text-lg font-black text-white">
+                          {bundle.syllabusBreakdown[selectedSyllabusIndex].subject}
+                        </h4>
+                        {bundle.syllabusBreakdown[selectedSyllabusIndex].isMandatoryQualifying && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            Qualifying Paper
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-emerald-400 font-medium">
                         {bundle.syllabusBreakdown[selectedSyllabusIndex].subjectHindi}
                       </p>
@@ -802,26 +896,32 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
                     <div className="flex items-center space-x-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-xs">
                       <span className="text-slate-400">Weightage:</span>
                       <strong className="text-white font-black">
-                        {bundle.syllabusBreakdown[selectedSyllabusIndex].marks} Marks ({bundle.syllabusBreakdown[selectedSyllabusIndex].questionCount} Qs)
+                        {bundle.syllabusBreakdown[selectedSyllabusIndex].marks} Marks ({bundle.syllabusBreakdown[selectedSyllabusIndex].questionCount || bundle.syllabusBreakdown[selectedSyllabusIndex].marks} Qs)
                       </strong>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     <span className="text-xs font-bold text-slate-300 block uppercase tracking-wider">
-                      Prescribed Syllabus Topics:
+                      Prescribed Syllabus Topics ({bundle.syllabusBreakdown[selectedSyllabusIndex].topics?.length || 0}):
                     </span>
-                    <ul className="grid grid-cols-1 gap-2.5">
-                      {bundle.syllabusBreakdown[selectedSyllabusIndex].topics.map((topic, tIdx) => (
-                        <li
-                          key={tIdx}
-                          className="flex items-start space-x-2 text-xs text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
-                          <span className="leading-relaxed">{topic}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {(bundle.syllabusBreakdown[selectedSyllabusIndex].topics || []).length > 0 ? (
+                      <ul className="grid grid-cols-1 gap-2.5">
+                        {bundle.syllabusBreakdown[selectedSyllabusIndex].topics.map((topic, tIdx) => (
+                          <li
+                            key={tIdx}
+                            className="flex items-start space-x-2 text-xs text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                            <span className="leading-relaxed">{topic}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400">
+                        Prescribed topics for this subject section follow the latest official state recruitment guidelines.
+                      </div>
+                    )}
                   </div>
                 </>
               ) : null}

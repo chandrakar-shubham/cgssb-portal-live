@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MockTest, PreviousYearPaper } from '../types';
-import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
+import { TestSeriesBundle } from '../data/bundleCatalog';
+import { getStoredBundles } from '../utils/bundleStore';
+import { useAuth } from '../context/AuthContext';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import {
@@ -42,9 +44,14 @@ export const CGPSCHeroPage: React.FC<CGPSCHeroPageProps> = ({
   const [activeTab, setActiveTab] = useState<'bundles' | 'tests' | 'pyp'>('bundles');
   const [searchQuery, setSearchQuery] = useState('');
   const [enrolledBundleIds, setEnrolledBundleIds] = useState<string[]>([]);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // Filter CGPSC specific bundles
-  const cgpscBundles = OFFICIAL_BUNDLES_CATALOG.filter(b => b.authority === 'CGPSC');
+  const allBundles = useMemo(() => getStoredBundles(), []);
+  const cgpscBundles = allBundles.filter(
+    b => b.authority === 'CGPSC' && (isAdmin || (b.isPublished !== false && !b.isDraft))
+  );
 
   // Filter CGPSC specific tests
   const cgpscTests = tests.filter(

@@ -18,7 +18,8 @@ import {
   Info,
   Globe,
   Palette,
-  Crown
+  Crown,
+  Zap
 } from 'lucide-react';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
 
@@ -32,6 +33,7 @@ interface AdminHeaderProps {
   setActiveTab: (tab: string) => void;
   onNavigateToStudent: () => void;
   onOpenToolsModal?: () => void;
+  onOpenUniversalIngest?: () => void;
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
@@ -39,6 +41,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   setActiveTab,
   onNavigateToStudent,
   onOpenToolsModal,
+  onOpenUniversalIngest,
 }) => {
   const { adminUser, adminLogout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -99,6 +102,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
           {/* Right Action Controls */}
           <div className="flex items-center space-x-2 shrink-0">
+            {/* Universal Ingestion Studio Button */}
+            {onOpenUniversalIngest && (
+              <button
+                onClick={onOpenUniversalIngest}
+                title="Universal Ingestion Studio: Ingest from Text/PDF, JSON or AI"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-gradient-to-r from-amber-500/20 to-indigo-500/20 hover:from-amber-500/30 hover:to-indigo-500/30 text-amber-300 border border-amber-500/40 hover:border-amber-400 transition shadow-sm cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400/30" />
+                <span className="font-bold">⚡ Universal Ingest</span>
+              </button>
+            )}
+
             {/* DB Backup & Tools Button */}
             {onOpenToolsModal && (
               <button

@@ -18,6 +18,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
+import { findBundleBySlugOrId } from '../utils/bundleStore';
 import { MockTest } from '../types';
 
 interface HotSliderAndOffersProps {
@@ -39,9 +40,9 @@ export const HotSliderAndOffers: React.FC<HotSliderAndOffersProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
 
-  const teacherBundle = OFFICIAL_BUNDLES_CATALOG.find(b => b.id === 'assistant-teacher-2026') || OFFICIAL_BUNDLES_CATALOG[0];
-  const cgpscBundle = OFFICIAL_BUNDLES_CATALOG.find(b => b.id === 'cgpsc-pre-2026') || OFFICIAL_BUNDLES_CATALOG[1];
-  const siBundle = OFFICIAL_BUNDLES_CATALOG.find(b => b.id === 'cgssb-si-2026') || OFFICIAL_BUNDLES_CATALOG[4];
+  const teacherBundle = findBundleBySlugOrId('assistant-teacher-2026') || OFFICIAL_BUNDLES_CATALOG[0];
+  const cgpscBundle = findBundleBySlugOrId('cgpsc-pre-2026') || OFFICIAL_BUNDLES_CATALOG[1];
+  const siBundle = findBundleBySlugOrId('cgssb-si-2026') || OFFICIAL_BUNDLES_CATALOG[4];
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard?.writeText(code);

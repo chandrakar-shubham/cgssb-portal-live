@@ -68,71 +68,72 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* CMS Hero Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-900/40 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-900/40 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden space-y-6">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-bold">
-              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div className="space-y-2 max-w-3xl">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-bold whitespace-nowrap">
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
               <span>Modular Central Content Management System (CMS)</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
               Exam Platform Control & Catalog CMS
             </h1>
-            <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               Canonical repository for tests, question banks, previous year exam papers, and Testbook-style Pass Pro monetization subscriptions.
             </p>
           </div>
 
-          {/* Quick Action Buttons */}
-          <div className="flex flex-wrap gap-2.5 shrink-0 items-center">
-            {onSyncDefaultCatalog && (
-              <button
-                onClick={handleSyncClick}
-                title="Sync all built-in latest tests & questions from codebase into local view"
-                className="px-4 py-2.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-emerald-600/20 active:scale-95 cursor-pointer"
-              >
-                <RefreshCw className={`w-4 h-4 ${syncedToast ? 'animate-spin' : ''}`} />
-                <span>{syncedToast ? 'Catalog Synced!' : 'Sync Latest Catalog'}</span>
-              </button>
-            )}
+          {onSyncDefaultCatalog && (
             <button
-              onClick={() => onNavigateTab('admin-cms-series')}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs flex items-center space-x-2 transition shadow-lg shadow-amber-600/20 active:scale-95 cursor-pointer"
+              onClick={handleSyncClick}
+              title="Sync all built-in latest tests & questions from codebase into local view"
+              className="px-4 py-2.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-emerald-600/20 active:scale-95 cursor-pointer shrink-0 self-start"
             >
-              <Crown className="w-4 h-4 fill-slate-950" />
-              <span>Series & Bundle Studio</span>
+              <RefreshCw className={`w-4 h-4 ${syncedToast ? 'animate-spin' : ''}`} />
+              <span>{syncedToast ? 'Catalog Synced!' : 'Sync Latest Catalog'}</span>
             </button>
-            <button
-              onClick={() => onNavigateTab('admin-database')}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
-            >
-              <Database className="w-4 h-4" />
-              <span>Database & Schema</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('admin-tests')}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition active:scale-95 cursor-pointer"
-            >
-              <Layers className="w-4 h-4 text-indigo-400" />
-              <span>Manage Tests</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('admin-questions')}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition active:scale-95 cursor-pointer"
-            >
-              <FolderTree className="w-4 h-4 text-emerald-400" />
-              <span>Question Bank</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('admin-pyp')}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition active:scale-95 cursor-pointer"
-            >
-              <FileText className="w-4 h-4 text-blue-400" />
-              <span>PYP Ingestion</span>
-            </button>
-          </div>
+          )}
+        </div>
+
+        {/* Quick Action Navigation Bar */}
+        <div className="relative z-10 pt-4 border-t border-indigo-900/40 flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => onNavigateTab('admin-cms-series')}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs flex items-center space-x-2 transition shadow-lg shadow-amber-600/20 active:scale-95 cursor-pointer"
+          >
+            <Crown className="w-4 h-4 fill-slate-950" />
+            <span>Series & Bundle Studio</span>
+          </button>
+          <button
+            onClick={() => onNavigateTab('admin-database')}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
+          >
+            <Database className="w-4 h-4" />
+            <span>Database & Schema</span>
+          </button>
+          <button
+            onClick={() => onNavigateTab('admin-tests')}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition active:scale-95 cursor-pointer"
+          >
+            <Layers className="w-4 h-4 text-indigo-400" />
+            <span>Manage Tests</span>
+          </button>
+          <button
+            onClick={() => onNavigateTab('admin-questions')}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition active:scale-95 cursor-pointer"
+          >
+            <FolderTree className="w-4 h-4 text-emerald-400" />
+            <span>Question Bank</span>
+          </button>
+          <button
+            onClick={() => onNavigateTab('admin-pyp')}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition active:scale-95 cursor-pointer"
+          >
+            <FileText className="w-4 h-4 text-blue-400" />
+            <span>PYP Ingestion</span>
+          </button>
         </div>
       </div>
 

@@ -43,44 +43,52 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [openDropdown, setOpenDropdown] = useState<'tests' | 'exams' | 'hub' | null>(null);
+  const navContainerRef = useRef<HTMLDivElement>(null);
 
-  const primaryNav = [
-    { id: 'tests', label: 'All Mocks', icon: BookOpen },
-    { id: 'cgpsc', label: 'CGPSC Hub', icon: Award, highlightColor: 'text-rose-400' },
-    { id: 'cgssb', label: 'CGSSB Hub', icon: Sparkles, highlightColor: 'text-teal-400' },
-    { id: 'pyp', label: 'PYP Bank', icon: FileText },
-    { id: 'mistakes', label: 'Mistakes', icon: AlertTriangle, badge: mistakesCount > 0 ? mistakesCount : undefined, highlightColor: 'text-rose-400' },
-    { id: 'pass', label: 'Pass Pro', icon: Crown, isProBadge: true, highlightColor: 'text-amber-400' },
+  // Group 1: Tests & Practice Engine
+  const testItems = [
+    { id: 'tests', label: 'Full Mock Tests', icon: BookOpen, desc: 'Timed simulated exams with state ranks' },
+    { id: 'pyp', label: 'PYP Archives', icon: FileText, desc: 'Official solved papers (2014-2024)' },
+    { id: 'chapters', label: 'Chapter Tests', icon: Layers, desc: 'Subject & Topic-wise revision quizzes' },
+    { id: 'practice', label: 'Practice Drills', icon: Zap, desc: 'Untimed daily MCQs with instant solutions' },
   ];
 
-  const secondaryNav = [
-    { id: 'leaderboard', label: 'Leaderboard', icon: Trophy, highlightColor: 'text-amber-400', desc: 'State-wide live merit ranks' },
-    { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark, highlightColor: 'text-amber-400', desc: 'Starred questions & notes' },
-    { id: 'chhattisgarh-deck', label: 'CG Flashcards', icon: Sparkles, highlightColor: 'text-teal-300', desc: 'Bhasha & CG GK cards' },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, highlightColor: 'text-indigo-400', desc: 'Rank & strength insights' },
+  // Group 2: Dedicated Exam Portals
+  const examItems = [
+    { id: 'cgpsc', label: 'CGPSC Hub', icon: Award, desc: 'State Service SSE & Forest Mock Series', color: 'text-rose-400' },
+    { id: 'cgssb', label: 'CG Vyapam Hub', icon: Sparkles, desc: 'Hostel Warden, Patwari & RI Exams', color: 'text-teal-400' },
   ];
 
-  const isSecondaryActive = secondaryNav.some(item => item.id === activeTab);
-  const activeSecondaryItem = secondaryNav.find(item => item.id === activeTab);
+  // Group 3: Study Lounge & Analytics
+  const studyItems = [
+    { id: 'leaderboard', label: 'State Leaderboard', icon: Trophy, desc: 'Live statewide merit & percentile rankings', color: 'text-amber-400' },
+    { id: 'mistakes', label: 'Mistake Notebook', icon: AlertTriangle, desc: 'Review & re-test incorrect questions', badge: mistakesCount > 0 ? mistakesCount : undefined, color: 'text-rose-400' },
+    { id: 'bookmarks', label: 'Starred Bookmarks', icon: Bookmark, desc: 'Saved questions and custom notes', color: 'text-amber-400' },
+    { id: 'chhattisgarh-deck', label: 'CG Flashcards', icon: Sparkles, desc: 'Chhattisgarhi language & GK quick cards', color: 'text-teal-300' },
+    { id: 'analytics', label: 'Analytics Hub', icon: BarChart3, desc: 'Score trends & subject weak areas', color: 'text-indigo-400' },
+  ];
 
-  // Close "More" dropdown when clicking outside
+  const isTestActive = testItems.some(i => i.id === activeTab);
+  const isExamActive = examItems.some(i => i.id === activeTab);
+  const isStudyActive = studyItems.some(i => i.id === activeTab);
+
+  // Close dropdown on outside click
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
-        setIsMoreMenuOpen(false);
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (navContainerRef.current && !navContainerRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
   return (
     <>
     <header className="sticky top-0 z-40 w-full bg-slate-900/95 backdrop-blur-md border-b border-slate-800 shadow-md font-sans">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
-        <div className="flex items-center justify-between h-15 sm:h-16 gap-2">
+        <div className="flex items-center justify-between h-15 sm:h-16 gap-3">
           
           {/* Brand Identity - Candidate / Student Portal */}
           <div
@@ -88,6 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => {
               setActiveTab('tests');
               setIsMobileMenuOpen(false);
+              setOpenDropdown(null);
             }}
           >
             <div className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-slate-950 font-black text-sm sm:text-base tracking-wider group-hover:scale-105 transition-transform">
@@ -111,130 +120,194 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Student Desktop Navigation Links - Responsive & Overflow-Safe */}
-          <div className="hidden lg:flex items-center min-w-0 justify-center px-1">
-            <nav className="flex items-center space-x-0.5 xl:space-x-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/90 shadow-inner">
-              {primaryNav.map(item => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMoreMenuOpen(false);
-                    }}
-                    className={`px-2 xl:px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 whitespace-nowrap shrink-0 cursor-pointer ${
-                      isActive
-                        ? item.id === 'pass'
-                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md shadow-amber-500/20'
-                          : item.id === 'cgpsc'
-                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
-                          : 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                        : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                    }`}
-                  >
-                    <Icon
-                      className={`w-3.5 h-3.5 ${
-                        isActive
-                          ? 'text-current'
-                          : item.isProBadge
-                          ? 'text-amber-400'
-                          : item.highlightColor || 'text-emerald-400'
-                      }`}
-                    />
-                    <span>{item.label}</span>
-                    {item.badge != null && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white ml-0.5">
-                        {item.badge}
-                      </span>
-                    )}
-                    {item.isProBadge && !isActive && (
-                      <span className="px-1 py-0.2 rounded text-[8px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        PRO
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+          {/* Streamlined Desktop Navigation Links (4 Sleek Groups) */}
+          <div className="hidden lg:flex items-center min-w-0 justify-center px-2" ref={navContainerRef}>
+            <nav className="flex items-center space-x-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800/90 shadow-inner">
+              
+              {/* DROPDOWN 1: Tests & Practice */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenDropdown(openDropdown === 'tests' ? null : 'tests')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                    isTestActive
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Tests & Practice</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === 'tests' ? 'rotate-180' : ''}`} />
+                </button>
 
-              {/* 2XL Direct Links vs LG/XL 'More' Dropdown */}
-              <div className="hidden 2xl:flex items-center space-x-1 pl-0.5 border-l border-slate-800/80">
-                {secondaryNav.map(item => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 whitespace-nowrap shrink-0 cursor-pointer ${
-                      isActive
-                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                        : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                    }`}
-                  >
-                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-current' : item.highlightColor}`} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+                {openDropdown === 'tests' && (
+                  <div className="absolute left-0 mt-2 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-800/80 mb-1">
+                      Exam Simulation Engines
+                    </div>
+                    {testItems.map(item => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setOpenDropdown(null);
+                          }}
+                          className={`w-full px-3 py-2 rounded-xl text-left transition flex items-start space-x-3 cursor-pointer ${
+                            isActive
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
+                              : 'text-slate-200 hover:bg-slate-800'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-bold text-white">{item.label}</span>
+                            <span className="text-[11px] text-slate-400 leading-tight mt-0.5">{item.desc}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
-            {/* More Dropdown for LG & XL Screens */}
-            <div className="relative 2xl:hidden" ref={moreMenuRef}>
+              {/* DROPDOWN 2: Exam Hubs */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenDropdown(openDropdown === 'exams' ? null : 'exams')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                    isExamActive
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Exam Hubs</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === 'exams' ? 'rotate-180' : ''}`} />
+                </button>
+
+                {openDropdown === 'exams' && (
+                  <div className="absolute left-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-800/80 mb-1">
+                      Board Portals
+                    </div>
+                    {examItems.map(item => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setOpenDropdown(null);
+                          }}
+                          className={`w-full px-3 py-2 rounded-xl text-left transition flex items-start space-x-3 cursor-pointer ${
+                            isActive
+                              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold'
+                              : 'text-slate-200 hover:bg-slate-800'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${item.color}`} />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-bold text-white">{item.label}</span>
+                            <span className="text-[11px] text-slate-400 leading-tight mt-0.5">{item.desc}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* DIRECT BUTTON 3: Pass Pro (Glowing Gold) */}
               <button
-                type="button"
-                onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-                className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 whitespace-nowrap shrink-0 cursor-pointer ${
-                  isSecondaryActive
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                onClick={() => {
+                  setActiveTab('pass');
+                  setOpenDropdown(null);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  activeTab === 'pass'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md shadow-amber-500/30'
+                    : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{isSecondaryActive && activeSecondaryItem ? activeSecondaryItem.label : 'More'}</span>
-                <ChevronDown className={`w-3 h-3 transition-transform ${isMoreMenuOpen ? 'rotate-180' : ''}`} />
+                <Crown className="w-3.5 h-3.5 fill-current" />
+                <span>Pass Pro</span>
+                <span className="px-1 py-0.2 rounded text-[8px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  ALL-ACCESS
+                </span>
               </button>
 
-              {isMoreMenuOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-800/80 mb-1">
-                    Tools & Study Aids
-                  </div>
-                  {secondaryNav.map(item => {
-                    const Icon = item.icon;
-                    const isActive = activeTab === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          setActiveTab(item.id);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className={`w-full px-2.5 py-2 rounded-lg text-left transition flex items-center space-x-2.5 cursor-pointer ${
-                          isActive
-                            ? 'bg-emerald-500 text-slate-950 font-bold'
-                            : 'text-slate-200 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : item.highlightColor}`} />
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-bold truncate">{item.label}</span>
-                          <span className={`text-[10px] truncate ${isActive ? 'text-slate-900/80' : 'text-slate-400'}`}>
-                            {item.desc}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </nav>
-        </div>
+              {/* DROPDOWN 4: Study Lounge & Analytics */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenDropdown(openDropdown === 'hub' ? null : 'hub')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                    isStudyActive
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                  }`}
+                >
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Study Hub</span>
+                  {mistakesCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white">
+                      {mistakesCount}
+                    </span>
+                  )}
+                  <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === 'hub' ? 'rotate-180' : ''}`} />
+                </button>
 
-        {/* Right Action Controls for Students */}
-        <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
+                {openDropdown === 'hub' && (
+                  <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-800/80 mb-1">
+                      Personalized Study Aids
+                    </div>
+                    {studyItems.map(item => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setOpenDropdown(null);
+                          }}
+                          className={`w-full px-3 py-2 rounded-xl text-left transition flex items-start space-x-3 cursor-pointer ${
+                            isActive
+                              ? 'bg-emerald-500 text-slate-950 font-bold'
+                              : 'text-slate-200 hover:bg-slate-800'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${isActive ? 'text-slate-950' : item.color}`} />
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold">{item.label}</span>
+                              {item.badge != null && (
+                                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-500 text-white">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`text-[11px] leading-tight mt-0.5 ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                              {item.desc}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </nav>
+          </div>
+
+          {/* Right Action Controls for Students */}
+          <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
 
           {/* Unified Pass Status Pill (Replaces Credits System) */}
           {user && (
@@ -424,12 +497,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* NAVIGABLE SECTIONS IN SIDEBAR */}
               <div className="space-y-4">
-                {/* Section 1: Main Portals */}
+                {/* Section 1: Tests & Practice */}
                 <div className="space-y-1">
                   <span className="px-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
-                    Official Portals & Mocks
+                    Tests & Practice Engines
                   </span>
-                  {primaryNav.map(item => {
+                  {testItems.map(item => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
                     return (
@@ -446,25 +519,52 @@ export const Navbar: React.FC<NavbarProps> = ({
                         }`}
                       >
                         <div className="flex items-center space-x-2.5">
-                          <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : item.highlightColor || 'text-emerald-400'}`} />
+                          <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-emerald-400'}`} />
                           <span>{item.label}</span>
                         </div>
-                        {item.badge != null && (
-                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white">
-                            {item.badge}
-                          </span>
-                        )}
+                        <span className="text-[10px] text-slate-500 font-normal truncate max-w-[120px]">{item.desc}</span>
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Section 2: Study Aids & Revision */}
+                {/* Section 2: Exam Hubs */}
                 <div className="space-y-1 pt-2 border-t border-slate-800">
                   <span className="px-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
-                    Revision & Performance Tools
+                    Exam Board Hubs
                   </span>
-                  {secondaryNav.map(item => {
+                  {examItems.map(item => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          isActive
+                            ? 'bg-indigo-600 text-white font-black shadow-md'
+                            : 'text-slate-300 hover:bg-slate-800/80'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2.5">
+                          <Icon className={`w-4 h-4 ${isActive ? 'text-white' : item.color}`} />
+                          <span>{item.label}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-normal truncate max-w-[120px]">{item.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Section 3: Study Aids & Revision */}
+                <div className="space-y-1 pt-2 border-t border-slate-800">
+                  <span className="px-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                    Study Aids & Tools
+                  </span>
+                  {studyItems.map(item => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
                     return (
@@ -481,10 +581,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                         }`}
                       >
                         <div className="flex items-center space-x-2.5">
-                          <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : item.highlightColor}`} />
+                          <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : item.color}`} />
                           <span>{item.label}</span>
                         </div>
-                        <span className="text-[10px] text-slate-500 font-normal">{item.desc}</span>
+                        {item.badge != null ? (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white">
+                            {item.badge}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 font-normal truncate max-w-[120px]">{item.desc}</span>
+                        )}
                       </button>
                     );
                   })}

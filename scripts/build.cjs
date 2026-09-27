@@ -110,11 +110,9 @@ async function runBuild() {
     }
   }
 
-  // 8. Copy compiled dist/index.html to root index.html
-  // This guarantees that if Hostinger Git pulls the repository, index.html is the production bundle!
-  if (fs.existsSync('dist/index.html')) {
-    fs.copyFileSync('dist/index.html', 'index.html');
-    console.log('✅ Synced production index.html to repository root successfully.');
+  // 8. Ensure root index.html remains the clean Vite source template
+  if (fs.existsSync('index.source.html')) {
+    fs.copyFileSync('index.source.html', 'index.html');
   }
 
   // 9. Runtime package.json in dist for Hostinger Node.js Application Manager

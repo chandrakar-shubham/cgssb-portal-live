@@ -11,7 +11,9 @@ import {
   saveStoredBundles,
   saveSingleBundle,
   deleteStoredBundle,
-  resetBundlesToDefault
+  resetBundlesToDefault,
+  toggleBundlePublish,
+  syncBundlesFromFirestore
 } from '../utils/bundleStore';
 import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
@@ -36,6 +38,7 @@ import {
   Copy,
   Download,
   Eye,
+  EyeOff,
   ArrowLeft,
   Save,
   Check,
@@ -43,9 +46,16 @@ import {
   GraduationCap,
   FileCheck,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  MoveUp,
+  MoveDown,
   ShieldCheck,
   Sparkles,
   UploadCloud,
+  CloudDownload,
+  ListPlus,
+  FileSpreadsheet,
   HelpCircle,
   Flame,
   Award,
@@ -64,9 +74,69 @@ interface AdminBundleStudioProps {
   onNavigateToPreview: (bundle: TestSeriesBundle) => void;
   onTestsAdded?: (newTests: MockTest[]) => void;
   onQuestionsAdded?: (newQuestions: Question[]) => void;
+  onOpenUniversalIngest?: (config?: {
+    type?: 'MOCK_TEST' | 'PYP' | 'CHAPTER_TEST' | 'QUESTION_BANK';
+    lockType?: boolean;
+    authority?: string;
+    examName?: string;
+    cadre?: string;
+    bundleId?: string;
+  }) => void;
 }
 
 export type IngestionTargetSection = 'mock' | 'chapter' | 'pyp';
+
+const SYLLABUS_TOPIC_PRESETS: Record<string, string[]> = {
+  'Child Development & Pedagogy': [
+    'विकास की अवधारणा एवं अधिगम से उसका संबंध',
+    'बाल विकास के सिद्धांत (Piaget, Kohlberg, Vygotsky)',
+    'समावेशी शिक्षा की अवधारणा एवं विशेष आवश्यकता वाले बच्चे',
+    'अधिगम एवं शिक्षणशास्त्र (Learning & Pedagogy)',
+    'सतत एवं समग्र मूल्यांकन (CCE)',
+  ],
+  'General Hindi': [
+    'वर्ण विचार: स्वर, व्यंजन, वर्तनी व संधि',
+    'शब्द रचना: उपसर्ग, प्रत्यय, समास',
+    'शब्द प्रकार: तत्सम, तद्भव, देशज, विदेशी',
+    'संज्ञा, सर्वनाम, क्रिया, विशेषण, कारक, लिंग, वचन',
+    'पर्यायवाची, विलोम शब्द, मुहावरे एवं लोकोक्तियां (छत्तीसगढ़ी हाना सहित)',
+  ],
+  'General English': [
+    'Reading Comprehension & Unseen Passages',
+    'Grammar: Tenses, Prepositions, Articles, Active/Passive Voice',
+    'Direct and Indirect Speech, Modal Auxiliaries',
+    'Vocabulary: Synonyms, Antonyms, One Word Substitution',
+    'Pedagogy of English Language Teaching (Class 1-5 / 6-8)',
+  ],
+  'Mathematics': [
+    'संख्या प्रणाली (Number System) एवं भिन्न',
+    'वर्गमूल, घनमूल, ल.स.प. एवं म.स.प. (LCM & HCF)',
+    'प्रतिशत, लाभ-हानि, साधारण एवं चक्रवृद्धि ब्याज',
+    'अनुपात-समानुपात, समय एवं कार्य, चाल-दूरी-समय',
+    'ज्यामिति: कोण, त्रिभुज, चतुर्भुज एवं वृत्त (Mensuration 2D/3D)',
+  ],
+  'Environmental Studies (EVS)': [
+    'स्वयं के पर्यावरण को समझना व परिवेशीय अध्ययन',
+    'पारिस्थितिकी तंत्र (Ecosystem), जैव विविधता एवं संरक्षण',
+    'पर्यावरण प्रदूषण एवं निवारण के उपाय',
+    'छत्तीसगढ़ की नदियां, जलप्रपात, वन एवं राष्ट्रीय उद्यान',
+    'पर्यावरण अध्ययन शिक्षण विधियां (EVS Pedagogy)',
+  ],
+  'Computer Knowledge': [
+    'Computer Hardware & Architecture (CPU, RAM, ROM)',
+    'Input and Output Devices (Printer, Scanner, OCR)',
+    'Operating Systems (Windows, Linux, Android)',
+    'Internet, Email, MS Office (Word, Excel, PowerPoint)',
+    'Cyber Security, Virus and Antivirus Fundamentals',
+  ],
+  'Chhattisgarh GK': [
+    'छत्तीसगढ़ का इतिहास एवं प्रमुख राजवंश (कलचुरी, मराठा, ब्रिटिश काल)',
+    'छत्तीसगढ़ का भूगोल: नदियां, मिट्टी, जलवायु, खनिज एवं उद्योग',
+    'छत्तीसगढ़ की जनजातियां, लोक कला, संस्कृति, तीज-त्यौहार एवं नृत्य',
+    'छत्तीसगढ़ की प्रशासनिक संरचना एवं पंचायती राज',
+    'छत्तीसगढ़ समसामयिकी एवं प्रमुख शासकीय योजनाएं',
+  ],
+};
 
 export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   availableTests,
@@ -74,10 +144,12 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   onNavigateToPreview,
   onTestsAdded,
   onQuestionsAdded,
+  onOpenUniversalIngest,
 }) => {
   const [bundles, setBundles] = useState<TestSeriesBundle[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [authorityFilter, setAuthorityFilter] = useState<'ALL' | 'CGSSB' | 'CGPSC'>('ALL');
+  const [publishFilter, setPublishFilter] = useState<'ALL' | 'PUBLISHED' | 'DRAFT'>('ALL');
   const [editingBundle, setEditingBundle] = useState<TestSeriesBundle | null>(null);
   const [activeTab, setActiveTab] = useState<'basic' | 'dates' | 'eligibility' | 'links' | 'pricing' | 'syllabus' | 'tests' | 'faqs' | 'seo'>('basic');
   
@@ -102,13 +174,58 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Cloud & Remote URL Sync State
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [remoteSyncUrl, setRemoteSyncUrl] = useState('https://ais-dev-ct3wt467aiuf3l7jxdfime-879588382474.asia-southeast1.run.app');
+
+  // Syllabus Breakdown Topics State
+  const [bulkTopicsSectionIdx, setBulkTopicsSectionIdx] = useState<number | null>(null);
+  const [bulkTopicsText, setBulkTopicsText] = useState('');
+  const [newTopicInputs, setNewTopicInputs] = useState<Record<number, string>>({});
+
   useEffect(() => {
     setBundles(getStoredBundles());
+    syncBundlesFromFirestore().then(({ list }) => {
+      if (list && list.length > 0) setBundles(list);
+    }).catch(() => null);
+
+    const handleUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setBundles(e.detail);
+      }
+    };
+    window.addEventListener('cgssb-bundles-updated', handleUpdate);
+    return () => window.removeEventListener('cgssb-bundles-updated', handleUpdate);
   }, []);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const handleSyncFromCloud = async (customUrl?: string) => {
+    setIsSyncingCloud(true);
+    try {
+      const { list, count, source } = await syncBundlesFromFirestore(customUrl);
+      setBundles(list);
+      showToast(`Synced ${count} test series bundles successfully from ${source}!`);
+      setIsSyncModalOpen(false);
+    } catch (err: any) {
+      showToast(`Cloud sync error: ${err.message || 'Failed to sync'}`);
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  const handleTogglePublish = (bundleId: string, title: string) => {
+    const { updatedList, newStatus } = toggleBundlePublish(bundleId);
+    setBundles(updatedList);
+    showToast(
+      newStatus
+        ? `Published "${title}" — Live on Student Portal!`
+        : `Unpublished "${title}" — Moved to Drafts (Hidden from students).`
+    );
   };
 
   const allHierarchyRecords = useMemo(() => {
@@ -241,10 +358,13 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     const freeMockCount = editingBundle.testItems?.filter(t => t.isFreePreview).length || 0;
     const totalFreeCount = freeChapterCount + freePypCount + freeMockCount;
 
+    const isPub = editingBundle.isPublished !== false && !editingBundle.isDraft;
     const bundleToSave: TestSeriesBundle = {
       ...editingBundle,
       totalTestsCount: totalCount > 0 ? totalCount : 1,
       freeTestsCount: totalFreeCount,
+      isPublished: isPub,
+      isDraft: !isPub,
     };
 
     const updatedList = saveSingleBundle(bundleToSave);
@@ -552,14 +672,22 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
 
   const filteredBundles = bundles.filter(b => {
     const matchesAuth = authorityFilter === 'ALL' || b.authority === authorityFilter;
+    const isPub = b.isPublished !== false && !b.isDraft;
+    const matchesPublish =
+      publishFilter === 'ALL' ||
+      (publishFilter === 'PUBLISHED' && isPub) ||
+      (publishFilter === 'DRAFT' && !isPub);
+
     const matchesSearch = b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.titleHindi.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.targetPost.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.slug.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesAuth && matchesSearch;
+    return matchesAuth && matchesPublish && matchesSearch;
   });
 
   const totalSeriesCount = bundles.length;
+  const publishedCount = bundles.filter(b => b.isPublished !== false && !b.isDraft).length;
+  const draftCount = bundles.filter(b => b.isPublished === false || b.isDraft === true).length;
   const totalAttachedTests = bundles.reduce((acc, b) => 
     acc + (b.testItems?.length || 0) + (b.chapterTests?.length || 0) + (b.pypTests?.length || 0), 0
   );
@@ -835,6 +963,43 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Direct Publish / Unpublish Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const currentPub = editingBundle.isPublished !== false && !editingBundle.isDraft;
+                const nextPub = !currentPub;
+                setEditingBundle({
+                  ...editingBundle,
+                  isPublished: nextPub,
+                  isDraft: !nextPub,
+                });
+                showToast(nextPub ? `Marked as Published (Live on Portal)` : `Marked as Draft (Unpublished / Hidden)`);
+              }}
+              className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer border ${
+                editingBundle.isPublished !== false && !editingBundle.isDraft
+                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
+              }`}
+              title={
+                editingBundle.isPublished !== false && !editingBundle.isDraft
+                  ? 'Click to unpublish (hide from students)'
+                  : 'Click to publish (make live for students)'
+              }
+            >
+              {editingBundle.isPublished !== false && !editingBundle.isDraft ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Live: Click to Unpublish</span>
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-4 h-4 text-amber-400" />
+                  <span>Draft: Click to Publish</span>
+                </>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => onNavigateToPreview(editingBundle)}
@@ -902,6 +1067,67 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
               <Crown className="w-5 h-5 text-indigo-400" />
               <span>Basic Series Information & Branding</span>
             </h3>
+
+            {/* Publication Status Selector */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-300 block">
+                Portal Publication Status & Student Visibility
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingBundle({ ...editingBundle, isPublished: true, isDraft: false })}
+                  className={`p-3.5 rounded-xl border text-left flex items-start space-x-3 transition cursor-pointer ${
+                    editingBundle.isPublished !== false && !editingBundle.isDraft
+                      ? 'bg-emerald-500/15 border-emerald-500/50 text-white shadow-lg shadow-emerald-500/10'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                    editingBundle.isPublished !== false && !editingBundle.isDraft
+                      ? 'bg-emerald-500 text-slate-950'
+                      : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-emerald-300 flex items-center space-x-1.5">
+                      <span>Published & Live</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Visible in student portal, public catalog, search engines & direct URLs.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingBundle({ ...editingBundle, isPublished: false, isDraft: true })}
+                  className={`p-3.5 rounded-xl border text-left flex items-start space-x-3 transition cursor-pointer ${
+                    editingBundle.isPublished === false || editingBundle.isDraft === true
+                      ? 'bg-amber-500/15 border-amber-500/50 text-white shadow-lg shadow-amber-500/10'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                    editingBundle.isPublished === false || editingBundle.isDraft === true
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    <EyeOff className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-amber-300">
+                      Unpublished / Draft (Hidden)
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Hidden from student portal. Only administrators can preview and edit.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
@@ -1389,127 +1615,373 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
 
         {/* TAB 6: SYLLABUS & PATTERN */}
         {activeTab === 'syllabus' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
-            <h3 className="text-base font-black text-white flex items-center space-x-2">
-              <BookOpen className="w-5 h-5 text-indigo-400" />
-              <span>Official Exam Pattern & Subject Syllabus Breakdown</span>
-            </h3>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-8">
+            {/* Header with Title and Sync Action */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center space-x-2">
+                  <BookOpen className="w-5 h-5 text-indigo-400" />
+                  <span>Official Exam Pattern & Subject Syllabus Breakdown</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Define exact marks, question distribution, qualifying criteria, and detailed prescribed topics per subject.
+                </p>
+              </div>
 
-            {/* Pattern Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl bg-slate-950 border border-slate-800">
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 mb-1 block">Total Questions</label>
-                <input
-                  type="number"
-                  value={editingBundle.examPattern?.totalQuestions || 100}
-                  onChange={e => setEditingBundle({
+              {/* Quick Auto-Calculate & Sync with Pattern */}
+              <button
+                type="button"
+                onClick={() => {
+                  const sections = editingBundle.syllabusBreakdown || [];
+                  const calcTotalQuestions = sections.reduce((sum, s) => sum + (s.questionCount || s.marks || 0), 0);
+                  const calcTotalMarks = sections.reduce((sum, s) => sum + (s.marks || 0), 0);
+                  setEditingBundle({
                     ...editingBundle,
-                    examPattern: { ...editingBundle.examPattern, totalQuestions: Number(e.target.value) }
-                  })}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-white"
-                />
+                    examPattern: {
+                      ...editingBundle.examPattern,
+                      totalQuestions: calcTotalQuestions > 0 ? calcTotalQuestions : (editingBundle.examPattern?.totalQuestions || 100),
+                      totalMarks: calcTotalMarks > 0 ? calcTotalMarks : (editingBundle.examPattern?.totalMarks || 100),
+                    }
+                  });
+                  showToast(`Synced pattern: ${calcTotalMarks} Total Marks & ${calcTotalQuestions} Total Questions from ${sections.length} subjects!`);
+                }}
+                className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center space-x-2 transition self-start sm:self-auto cursor-pointer"
+                title="Calculate sum of all subject marks & questions and apply to Exam Pattern"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Calculate & Sync Totals</span>
+              </button>
+            </div>
+
+            {/* Pattern Grid & Exam Rules */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                1. Examination Blueprint & Marking Rules
+              </span>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Total Questions</label>
+                  <input
+                    type="number"
+                    value={editingBundle.examPattern?.totalQuestions || 100}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, totalQuestions: Number(e.target.value) }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-white focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Total Marks</label>
+                  <input
+                    type="number"
+                    value={editingBundle.examPattern?.totalMarks || 100}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, totalMarks: Number(e.target.value) }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-white focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Duration (Minutes)</label>
+                  <input
+                    type="number"
+                    value={editingBundle.examPattern?.durationMinutes || 120}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, durationMinutes: Number(e.target.value) }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-white focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Negative Marking</label>
+                  <input
+                    type="text"
+                    value={editingBundle.examPattern?.negativeMarkPenalty || '-0.25'}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, negativeMarkPenalty: e.target.value }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-rose-400 focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Marking Scheme</label>
+                  <input
+                    type="text"
+                    value={editingBundle.examPattern?.markingScheme || '+1.0 Mark for correct answer'}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, markingScheme: e.target.value }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                    placeholder="+1.0 Mark"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Language / Medium</label>
+                  <input
+                    type="text"
+                    value={editingBundle.examPattern?.language || 'Bilingual (Hindi / English)'}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, language: e.target.value }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                    placeholder="Hindi / English"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Cadre / Post Type</label>
+                  <input
+                    type="text"
+                    value={editingBundle.examPattern?.cadre || 'Direct Recruitment Cadre'}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, cadre: e.target.value }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                    placeholder="E & T Cadre"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 mb-1 block">Passing Criteria</label>
+                  <input
+                    type="text"
+                    value={editingBundle.examPattern?.passingCriteria || 'Minimum 33% (30% for SC/ST/OBC)'}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      examPattern: { ...editingBundle.examPattern, passingCriteria: e.target.value }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                    placeholder="Minimum 33%"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 mb-1 block">Total Marks</label>
-                <input
-                  type="number"
-                  value={editingBundle.examPattern?.totalMarks || 100}
-                  onChange={e => setEditingBundle({
-                    ...editingBundle,
-                    examPattern: { ...editingBundle.examPattern, totalMarks: Number(e.target.value) }
-                  })}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-white"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 mb-1 block">Duration (Minutes)</label>
-                <input
-                  type="number"
-                  value={editingBundle.examPattern?.durationMinutes || 120}
-                  onChange={e => setEditingBundle({
-                    ...editingBundle,
-                    examPattern: { ...editingBundle.examPattern, durationMinutes: Number(e.target.value) }
-                  })}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-white"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 mb-1 block">Negative Marking</label>
-                <input
-                  type="text"
-                  value={editingBundle.examPattern?.negativeMarkPenalty || '-0.25'}
-                  onChange={e => setEditingBundle({
-                    ...editingBundle,
-                    examPattern: { ...editingBundle.examPattern, negativeMarkPenalty: e.target.value }
-                  })}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-rose-400"
-                />
+
+              {/* Official Syllabus PDF Link */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex-1">
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">
+                    Official Syllabus PDF Download URL (Displayed to students on detail page)
+                  </label>
+                  <input
+                    type="url"
+                    value={editingBundle.officialLinks?.syllabusPdfUrl || ''}
+                    onChange={e => setEditingBundle({
+                      ...editingBundle,
+                      officialLinks: { ...editingBundle.officialLinks, syllabusPdfUrl: e.target.value }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 font-mono focus:border-indigo-500 focus:outline-none"
+                    placeholder="https://vyapam.cgstate.gov.in/syllabus/2026_notification.pdf"
+                  />
+                </div>
+                {editingBundle.officialLinks?.syllabusPdfUrl && (
+                  <a
+                    href={editingBundle.officialLinks.syllabusPdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold flex items-center space-x-1.5 self-start sm:self-end transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Open PDF</span>
+                  </a>
+                )}
               </div>
             </div>
 
-            {/* Subject Sections */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300">Subject Breakdown ({editingBundle.syllabusBreakdown?.length || 0} Sections)</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const current = editingBundle.syllabusBreakdown || [];
-                    setEditingBundle({
-                      ...editingBundle,
-                      syllabusBreakdown: [
-                        ...current,
-                        {
-                          subject: 'New Subject',
-                          subjectHindi: 'नया विषय',
-                          marks: 25,
-                          questionCount: 25,
-                          weightagePercentage: 25,
-                          topics: ['Topic 1', 'Topic 2']
-                        }
-                      ]
-                    });
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center space-x-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Subject Section</span>
-                </button>
+            {/* Subject Sections Manager */}
+            <div className="space-y-4 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm font-black text-white flex items-center space-x-2">
+                    <span>2. Subject Sections & Detailed Syllabus Topics</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {editingBundle.syllabusBreakdown?.length || 0} Subjects
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Click any subject to edit its prescribed syllabus bullet points or bulk paste from official notification.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const current = editingBundle.syllabusBreakdown || [];
+                      setEditingBundle({
+                        ...editingBundle,
+                        syllabusBreakdown: [
+                          ...current,
+                          {
+                            subject: 'New Subject',
+                            subjectHindi: 'नया विषय',
+                            marks: 25,
+                            questionCount: 25,
+                            weightagePercentage: 15,
+                            topics: [
+                              'Topic 1: Fundamental Concepts & Theories',
+                              'Topic 2: Solved Applications & Practice'
+                            ]
+                          }
+                        ]
+                      });
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer shadow-md shadow-indigo-600/20"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Subject Section</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-3">
-                {editingBundle.syllabusBreakdown?.map((sec, idx) => (
-                  <div key={idx} className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Subject Name (EN)</label>
-                        <input
-                          type="text"
-                          value={sec.subject}
-                          onChange={e => {
-                            const updated = [...editingBundle.syllabusBreakdown];
-                            updated[idx].subject = e.target.value;
-                            setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
-                          }}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white"
-                        />
+              {/* Sections List */}
+              <div className="space-y-4">
+                {(!editingBundle.syllabusBreakdown || editingBundle.syllabusBreakdown.length === 0) && (
+                  <div className="p-8 text-center bg-slate-950 rounded-2xl border border-dashed border-slate-800 text-slate-400">
+                    <BookOpen className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                    <p className="text-sm font-bold text-slate-300">No subject sections defined yet.</p>
+                    <p className="text-xs text-slate-500 mt-1">Add a subject section above or choose a standard template.</p>
+                  </div>
+                )}
+
+                {editingBundle.syllabusBreakdown?.map((sec, idx) => {
+                  const topicsList = sec.topics || [];
+                  const isBulkEditing = bulkTopicsSectionIdx === idx;
+                  const currentNewTopic = newTopicInputs[idx] || '';
+
+                  return (
+                    <div
+                      key={idx}
+                      className="p-5 rounded-3xl bg-slate-950 border border-slate-800/90 shadow-md space-y-4 hover:border-slate-700 transition"
+                    >
+                      {/* Section Card Top Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                        <div className="flex items-center space-x-2.5">
+                          <span className="w-6 h-6 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-black flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span className="text-sm font-black text-white">
+                            {sec.subject || 'Untitled Subject'}
+                          </span>
+                          {sec.subjectHindi && (
+                            <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+                              ({sec.subjectHindi})
+                            </span>
+                          )}
+                          {sec.isMandatoryQualifying && (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              Qualifying Paper
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-1.5">
+                          {/* Reorder Buttons */}
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => {
+                              if (idx === 0) return;
+                              const updated = [...editingBundle.syllabusBreakdown];
+                              const temp = updated[idx - 1];
+                              updated[idx - 1] = updated[idx];
+                              updated[idx] = temp;
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+                            title="Move section up"
+                          >
+                            <MoveUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === (editingBundle.syllabusBreakdown.length - 1)}
+                            onClick={() => {
+                              if (idx >= editingBundle.syllabusBreakdown.length - 1) return;
+                              const updated = [...editingBundle.syllabusBreakdown];
+                              const temp = updated[idx + 1];
+                              updated[idx + 1] = updated[idx];
+                              updated[idx] = temp;
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+                            title="Move section down"
+                          >
+                            <MoveDown className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Duplicate Section */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...editingBundle.syllabusBreakdown];
+                              updated.splice(idx + 1, 0, {
+                                ...sec,
+                                subject: `${sec.subject} (Copy)`,
+                                subjectHindi: `${sec.subjectHindi} (प्रति)`,
+                                topics: [...(sec.topics || [])]
+                              });
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition"
+                            title="Duplicate section"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Remove Section */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = editingBundle.syllabusBreakdown.filter((_, i) => i !== idx);
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition"
+                            title="Remove subject section"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Subject Name (HI)</label>
-                        <input
-                          type="text"
-                          value={sec.subjectHindi}
-                          onChange={e => {
-                            const updated = [...editingBundle.syllabusBreakdown];
-                            updated[idx].subjectHindi = e.target.value;
-                            setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
-                          }}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white"
-                        />
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="flex-1">
-                          <label className="text-[10px] text-slate-400 block mb-1">Marks</label>
+
+                      {/* Subject Metadata Fields */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] font-bold text-slate-400 block mb-1">Subject Name (English)</label>
+                          <input
+                            type="text"
+                            value={sec.subject}
+                            onChange={e => {
+                              const updated = [...editingBundle.syllabusBreakdown];
+                              updated[idx].subject = e.target.value;
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                            placeholder="e.g. Mathematics"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] font-bold text-slate-400 block mb-1">Subject Name (Hindi)</label>
+                          <input
+                            type="text"
+                            value={sec.subjectHindi}
+                            onChange={e => {
+                              const updated = [...editingBundle.syllabusBreakdown];
+                              updated[idx].subjectHindi = e.target.value;
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                            placeholder="e.g. गणित"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 block mb-1">Marks</label>
                           <input
                             type="number"
                             value={sec.marks}
@@ -1518,24 +1990,245 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                               updated[idx].marks = Number(e.target.value);
                               setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
                             }}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-emerald-400 font-bold"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs font-black text-emerald-400 focus:border-indigo-500 focus:outline-none"
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = editingBundle.syllabusBreakdown.filter((_, i) => i !== idx);
-                            setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
-                          }}
-                          className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 mt-4 transition"
-                          title="Remove subject"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 block mb-1">Questions Count</label>
+                          <input
+                            type="number"
+                            value={sec.questionCount || sec.marks}
+                            onChange={e => {
+                              const updated = [...editingBundle.syllabusBreakdown];
+                              updated[idx].questionCount = Number(e.target.value);
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-indigo-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 block mb-1">Weightage %</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={sec.weightagePercentage || 0}
+                            onChange={e => {
+                              const updated = [...editingBundle.syllabusBreakdown];
+                              updated[idx].weightagePercentage = Number(e.target.value);
+                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                            }}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-indigo-300 focus:border-indigo-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-3 flex items-center pt-5">
+                          <label className="flex items-center space-x-2 text-xs font-semibold text-slate-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(sec.isMandatoryQualifying)}
+                              onChange={e => {
+                                const updated = [...editingBundle.syllabusBreakdown];
+                                updated[idx].isMandatoryQualifying = e.target.checked;
+                                setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                              }}
+                              className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                            />
+                            <span>Mandatory Qualifying Paper (उत्तीर्ण होना अनिवार्य - e.g. Chhattisgarhi/Language)</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Prescribed Syllabus Topics Sub-Block */}
+                      <div className="pt-2 border-t border-slate-800/80 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center space-x-2">
+                            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs font-bold text-white">
+                              Prescribed Detailed Syllabus Topics ({topicsList.length} Topics)
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {/* Preset Topics Loader Dropdown */}
+                            {Object.keys(SYLLABUS_TOPIC_PRESETS).map(presetKey => (
+                              <button
+                                key={presetKey}
+                                type="button"
+                                onClick={() => {
+                                  const presetTopics = SYLLABUS_TOPIC_PRESETS[presetKey];
+                                  const updated = [...editingBundle.syllabusBreakdown];
+                                  const existingTopics = updated[idx].topics || [];
+                                  // Dedupe and append
+                                  const combined = Array.from(new Set([...existingTopics, ...presetTopics]));
+                                  updated[idx].topics = combined;
+                                  setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                                  showToast(`Added ${presetTopics.length} preset topics from "${presetKey}"!`);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-bold text-slate-300 hover:text-indigo-300 transition"
+                                title={`Append ${presetKey} syllabus topics`}
+                              >
+                                + {presetKey.split(' ')[0]}
+                              </button>
+                            ))}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isBulkEditing) {
+                                  setBulkTopicsSectionIdx(null);
+                                } else {
+                                  setBulkTopicsSectionIdx(idx);
+                                  setBulkTopicsText(topicsList.join('\n'));
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center space-x-1 transition cursor-pointer"
+                            >
+                              <ListPlus className="w-3.5 h-3.5" />
+                              <span>{isBulkEditing ? 'Close Bulk Editor' : 'Bulk Paste / Edit'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Bulk Multi-line Topics Editor */}
+                        {isBulkEditing ? (
+                          <div className="p-4 rounded-2xl bg-slate-900 border border-indigo-500/40 space-y-3">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-indigo-300">
+                                Bulk Topics Editor — One Topic Per Line
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                Paste multiple lines from syllabus PDF/notification
+                              </span>
+                            </div>
+                            <textarea
+                              rows={6}
+                              value={bulkTopicsText}
+                              onChange={e => setBulkTopicsText(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none"
+                              placeholder={`वर्ण विचार: स्वर, व्यंजन, वर्तनी व संधि\nशब्द रचना: उपसर्ग, प्रत्यय, समास\nशब्द प्रकार: तत्सम, तद्भव, देशज, विदेशी`}
+                            />
+                            <div className="flex items-center justify-end space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => setBulkTopicsSectionIdx(null)}
+                                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const lines = bulkTopicsText
+                                    .split('\n')
+                                    .map(l => l.trim().replace(/^[•\-*\d.]+\s*/, ''))
+                                    .filter(l => l.length > 0);
+                                  const updated = [...editingBundle.syllabusBreakdown];
+                                  updated[idx].topics = lines;
+                                  setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                                  setBulkTopicsSectionIdx(null);
+                                  showToast(`Updated ${lines.length} syllabus topics for ${sec.subject}!`);
+                                }}
+                                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-md"
+                              >
+                                Save & Apply Topics
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Interactive Topic Items List */
+                          <div className="space-y-2">
+                            {topicsList.length === 0 ? (
+                              <div className="p-3 rounded-xl bg-slate-900/60 border border-dashed border-slate-800 text-xs text-slate-500 text-center">
+                                No topics added yet. Add individual topics below or click &quot;Bulk Paste / Edit&quot;.
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-1.5 max-h-72 overflow-y-auto pr-1">
+                                {topicsList.map((topic, tIdx) => (
+                                  <div
+                                    key={tIdx}
+                                    className="flex items-center space-x-2 bg-slate-900/80 border border-slate-800/80 px-3 py-1.5 rounded-xl hover:border-slate-700 transition group"
+                                  >
+                                    <span className="w-5 h-5 rounded-md bg-slate-800 text-slate-400 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                      {tIdx + 1}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={topic}
+                                      onChange={e => {
+                                        const updated = [...editingBundle.syllabusBreakdown];
+                                        const nextTopics = [...(updated[idx].topics || [])];
+                                        nextTopics[tIdx] = e.target.value;
+                                        updated[idx].topics = nextTopics;
+                                        setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                                      }}
+                                      className="flex-1 bg-transparent border-0 text-xs text-slate-200 focus:outline-none focus:ring-0 focus:text-white"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = [...editingBundle.syllabusBreakdown];
+                                        const nextTopics = (updated[idx].topics || []).filter((_, i) => i !== tIdx);
+                                        updated[idx].topics = nextTopics;
+                                        setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                                      }}
+                                      className="text-slate-500 hover:text-rose-400 p-1 rounded transition opacity-50 group-hover:opacity-100"
+                                      title="Remove topic"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Add Topic Input Bar */}
+                            <div className="flex items-center space-x-2 pt-1">
+                              <input
+                                type="text"
+                                value={currentNewTopic}
+                                onChange={e => {
+                                  setNewTopicInputs(prev => ({ ...prev, [idx]: e.target.value }));
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const val = currentNewTopic.trim();
+                                    if (!val) return;
+                                    const updated = [...editingBundle.syllabusBreakdown];
+                                    const nextTopics = [...(updated[idx].topics || []), val];
+                                    updated[idx].topics = nextTopics;
+                                    setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                                    setNewTopicInputs(prev => ({ ...prev, [idx]: '' }));
+                                  }
+                                }}
+                                placeholder="Add syllabus topic and press Enter (e.g. संख्या प्रणाली एवं भिन्न)..."
+                                className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = currentNewTopic.trim();
+                                  if (!val) return;
+                                  const updated = [...editingBundle.syllabusBreakdown];
+                                  const nextTopics = [...(updated[idx].topics || []), val];
+                                  updated[idx].topics = nextTopics;
+                                  setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                                  setNewTopicInputs(prev => ({ ...prev, [idx]: '' }));
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center space-x-1 shrink-0 transition"
+                              >
+                                <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Add Topic</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1544,6 +2237,44 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
         {/* TAB 7: ATTACHED TESTS & INGESTION STUDIO ENGINE */}
         {activeTab === 'tests' && (
           <div className="space-y-6">
+            {/* Universal Ingestion Studio Master Banner for Bundle */}
+            {onOpenUniversalIngest && (
+              <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-950/60 via-indigo-950/60 to-slate-900 border border-amber-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+                <div className="flex items-center space-x-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white flex items-center space-x-2">
+                      <span>Universal Ingestion Studio for {editingBundle.title}</span>
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30">
+                        Bundle Optimized
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Ingest Full Mocks, Chapter Tests, or PYPs from Text/PDF, JSON, or Gemini AI directly into this Pack.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenUniversalIngest({
+                      type: 'MOCK_TEST',
+                      lockType: false,
+                      authority: editingBundle.authority || 'CGSSB',
+                      examName: editingBundle.title,
+                      cadre: editingBundle.targetPost || editingBundle.title,
+                      bundleId: editingBundle.id,
+                    })
+                  }
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 cursor-pointer shrink-0"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>⚡ Ingest Test Directly into Pack</span>
+                </button>
+              </div>
+            )}
             
             {/* Top Ingestion CTA Cards (Using the Proven Ingestion Studio Engine) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2121,6 +2852,14 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
 
           <div className="flex flex-wrap items-center gap-3">
             <button
+              onClick={() => setIsSyncModalOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center space-x-2 transition cursor-pointer shadow-lg shadow-indigo-950/40"
+              title="Sync bundles with Cloud Firestore or Pull updates from deployed Cloud Run URL"
+            >
+              <CloudDownload className={`w-4 h-4 text-indigo-400 ${isSyncingCloud ? 'animate-bounce' : ''}`} />
+              <span>{isSyncingCloud ? 'Syncing...' : 'Sync Cloud / Pull Updates'}</span>
+            </button>
+            <button
               onClick={handleResetDefaults}
               className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition cursor-pointer"
               title="Reset default catalog"
@@ -2141,8 +2880,18 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
         {/* Quick KPI Stats Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-800/80">
           <div>
-            <span className="text-[11px] text-slate-400 font-semibold block">Total Live Series</span>
-            <span className="text-xl font-black text-white">{totalSeriesCount} Bundles</span>
+            <span className="text-[11px] text-slate-400 font-semibold block">Series Status</span>
+            <div className="flex items-center space-x-2 mt-1">
+              <span className="text-sm font-black text-emerald-400 flex items-center space-x-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{publishedCount} Live</span>
+              </span>
+              <span className="text-slate-600">•</span>
+              <span className="text-sm font-black text-amber-400 flex items-center space-x-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span>{draftCount} Drafts</span>
+              </span>
+            </div>
           </div>
           <div>
             <span className="text-[11px] text-slate-400 font-semibold block">Attached Tests</span>
@@ -2162,8 +2911,8 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80">
-        <div className="relative w-full sm:w-80">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80">
+        <div className="relative w-full lg:w-80">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
@@ -2174,20 +2923,46 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
           />
         </div>
 
-        <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto">
-          {(['ALL', 'CGSSB', 'CGPSC'] as const).map(auth => (
-            <button
-              key={auth}
-              onClick={() => setAuthorityFilter(auth)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                authorityFilter === auth
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {auth === 'ALL' ? 'All Boards' : auth}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Publish / Draft Status Filter */}
+          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            {(['ALL', 'PUBLISHED', 'DRAFT'] as const).map(pFilter => (
+              <button
+                key={pFilter}
+                type="button"
+                onClick={() => setPublishFilter(pFilter)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  publishFilter === pFilter
+                    ? pFilter === 'PUBLISHED'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : pFilter === 'DRAFT'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {pFilter === 'ALL' ? `All (${bundles.length})` : pFilter === 'PUBLISHED' ? `Live (${publishedCount})` : `Drafts (${draftCount})`}
+              </button>
+            ))}
+          </div>
+
+          {/* Board Filter */}
+          <div className="flex items-center space-x-1">
+            {(['ALL', 'CGSSB', 'CGPSC'] as const).map(auth => (
+              <button
+                key={auth}
+                type="button"
+                onClick={() => setAuthorityFilter(auth)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  authorityFilter === auth
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {auth === 'ALL' ? 'All Boards' : auth}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -2196,11 +2971,14 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
         {filteredBundles.map(bundle => {
           const totalTests = (bundle.testItems?.length || 0) + (bundle.chapterTests?.length || 0) + (bundle.pypTests?.length || 0);
           const isCgpsc = bundle.authority === 'CGPSC';
+          const isPublished = bundle.isPublished !== false && !bundle.isDraft;
 
           return (
             <div
               key={bundle.id}
-              className="bg-slate-900 border border-slate-800 rounded-3xl p-5 hover:border-indigo-500/40 transition flex flex-col justify-between shadow-xl relative group"
+              className={`bg-slate-900 border rounded-3xl p-5 transition flex flex-col justify-between shadow-xl relative group ${
+                isPublished ? 'border-slate-800 hover:border-indigo-500/40' : 'border-amber-500/30 bg-slate-900/90'
+              }`}
             >
               {/* Card Header */}
               <div>
@@ -2213,9 +2991,21 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                     {bundle.authority} • {bundle.targetYear}
                   </span>
                   
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
-                    {bundle.badge || 'Active'}
-                  </span>
+                  <div className="flex items-center space-x-1.5">
+                    {/* Status Badge */}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 border ${
+                      isPublished
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isPublished ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                      <span>{isPublished ? 'Live' : 'Draft'}</span>
+                    </span>
+
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
+                      {bundle.badge || 'Active'}
+                    </span>
+                  </div>
                 </div>
 
                 <h3 className="text-base font-black text-white group-hover:text-indigo-400 transition leading-snug">
@@ -2263,11 +3053,11 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => setSharePreviewBundle(bundle)}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition shrink-0"
                   title="Share preview & SEO card"
                 >
                   <Share2 className="w-4 h-4" />
@@ -2275,26 +3065,52 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => onNavigateToPreview(bundle)}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 transition"
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 transition shrink-0"
                   title="View Dedicated Student Page"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
+
+                {/* Publish / Unpublish Button */}
+                <button
+                  type="button"
+                  onClick={() => handleTogglePublish(bundle.id, bundle.title)}
+                  className={`px-2.5 py-2 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer border shrink-0 ${
+                    isPublished
+                      ? 'bg-slate-800/90 hover:bg-amber-500/15 text-slate-300 hover:text-amber-300 border-slate-700/80 hover:border-amber-500/30'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-600/30'
+                  }`}
+                  title={isPublished ? 'Unpublish bundle (hide from students)' : 'Publish bundle (make live for students)'}
+                >
+                  {isPublished ? (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-[11px] font-semibold">Unpublish</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                      <span className="text-[11px] font-bold">Publish</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
                     setEditingBundle(bundle);
                     setActiveTab('basic');
                   }}
-                  className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+                  className="flex-1 py-2 px-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-indigo-600/20 cursor-pointer min-w-0"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Series</span>
+                  <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Edit Series</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => handleDelete(bundle.id, bundle.title)}
-                  className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition"
+                  className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition shrink-0"
                   title="Delete Series"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -2304,6 +3120,103 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
           );
         })}
       </div>
+
+      {/* Cloud & Remote Sync Modal */}
+      {isSyncModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 relative">
+            <button
+              onClick={() => setIsSyncModalOpen(false)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                <CloudDownload className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Sync Content with Cloud</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Synchronize test bundles, syllabi, questions, and test catalogs with Cloud Firestore & deployed instances.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              {/* Option 1: Fast Firestore Direct Sync */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>Firebase Cloud Firestore Direct</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
+                    Online
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Fetches all bundles from the shared enterprise Firestore collection and merges with local storage.
+                </p>
+                <button
+                  type="button"
+                  disabled={isSyncingCloud}
+                  onClick={() => handleSyncFromCloud()}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center space-x-2 transition shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingCloud ? 'Syncing with Firestore...' : 'Sync Now with Cloud Firestore'}</span>
+                </button>
+              </div>
+
+              {/* Option 2: Pull from Remote Cloud Run URL */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center space-x-1.5">
+                    <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Pull from Deployed Cloud Run URL</span>
+                  </span>
+                  <p className="text-xs text-slate-400 mt-1">
+                    If you created or modified content in a separate deployed Cloud Run instance, enter the URL below to pull all series, tests, questions, and PYPs.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Deployed URL / Origin</label>
+                  <input
+                    type="url"
+                    value={remoteSyncUrl}
+                    onChange={e => setRemoteSyncUrl(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none"
+                    placeholder="https://ais-dev-...run.app"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isSyncingCloud || !remoteSyncUrl.trim()}
+                  onClick={() => handleSyncFromCloud(remoteSyncUrl.trim())}
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
+                >
+                  <CloudDownload className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-bounce' : ''}`} />
+                  <span>{isSyncingCloud ? 'Pulling Remote Content...' : 'Pull Content from URL'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSyncModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

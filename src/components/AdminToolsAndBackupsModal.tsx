@@ -61,6 +61,44 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   const [includeSolutionsKey, setIncludeSolutionsKey] = useState(true);
   const [coachingWatermark, setCoachingWatermark] = useState('CGSSB & CGPSC EXAM PREP PORTAL - CHHATTISGARH');
   const [backupSuccessMessage, setBackupSuccessMessage] = useState<string | null>(null);
+  const [remoteSyncUrl, setRemoteSyncUrl] = useState('https://ais-dev-ct3wt467aiuf3l7jxdfime-879588382474.asia-southeast1.run.app');
+  const [isRemoteSyncing, setIsRemoteSyncing] = useState(false);
+
+  const handlePullRemoteContent = async () => {
+    setIsRemoteSyncing(true);
+    try {
+      const res = await fetch('/api/remote-sync/pull', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'cgssb_admin_2026',
+        },
+        body: JSON.stringify({ remoteUrl: remoteSyncUrl.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBackupSuccessMessage(data.message || 'Remote sync completed successfully!');
+        const tRes = await fetch('/api/tests').catch(() => null);
+        if (tRes && tRes.ok) {
+          const tData = await tRes.json().catch(() => null);
+          if (tData?.tests && onRestoreSnapshot) {
+            onRestoreSnapshot({
+              tests: tData.tests,
+              questions,
+              pypPapers,
+            });
+          }
+        }
+        setTimeout(() => setBackupSuccessMessage(null), 4000);
+      } else {
+        alert('Sync note: ' + (data.error || 'Failed to pull from remote URL'));
+      }
+    } catch (err: any) {
+      alert('Network or server error during sync: ' + err.message);
+    } finally {
+      setIsRemoteSyncing(false);
+    }
+  };
 
   const storedBundles = useMemo(() => getStoredBundles(), []);
 
@@ -879,8 +917,8 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
               {/* Restore & Purge Section */}
               <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 space-y-3">
                 <div>
-                  <h3 className="text-sm font-bold text-white">Restore & Sync Options</h3>
-                  <p className="text-xs text-slate-400">Restore database from a previously downloaded JSON snapshot file or purge local browser storage to load the fresh server catalog.</p>
+                  <h3 className="text-sm font-bold text-white">Restore & Local Storage Options</h3>
+                  <p className="text-xs text-slate-400">Restore database from a previously downloaded JSON snapshot file or purge local browser storage to reload defaults.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 pt-2">
                   <label className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 cursor-pointer transition space-x-2">
@@ -904,6 +942,45 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                     <RefreshCw className="w-4 h-4" />
                     <span>Purge Local Storage & Reload Master Catalog</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Cloud Run / Deployed URL Live Synchronization Card */}
+              <div className="bg-slate-950/60 border border-indigo-500/30 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                    <Network className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Remote Cloud Instance Live Sync</h3>
+                    <p className="text-xs text-slate-400">
+                      Pull bundles, tests, questions, and PYP papers directly from your deployed Cloud Run URL into this preview environment.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
+                  <div className="sm:col-span-3">
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Deployed URL / Origin</label>
+                    <input
+                      type="url"
+                      value={remoteSyncUrl}
+                      onChange={e => setRemoteSyncUrl(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none"
+                      placeholder="https://ais-dev-...run.app"
+                    />
+                  </div>
+                  <div className="sm:col-span-1 flex items-end">
+                    <button
+                      type="button"
+                      disabled={isRemoteSyncing || !remoteSyncUrl.trim()}
+                      onClick={handlePullRemoteContent}
+                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRemoteSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isRemoteSyncing ? 'Pulling...' : 'Pull Content Now'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

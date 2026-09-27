@@ -40,6 +40,11 @@ export function getAdminToken(): string | null {
   return null;
 }
 
+export function getAdminHeaders(): Record<string, string> {
+  const token = getAdminToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export interface ApiFetchOptions extends RequestInit {
   requireAuth?: boolean;
 }

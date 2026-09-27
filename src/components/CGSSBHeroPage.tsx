@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MockTest, PreviousYearPaper } from '../types';
-import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
+import { TestSeriesBundle } from '../data/bundleCatalog';
+import { getStoredBundles } from '../utils/bundleStore';
+import { useAuth } from '../context/AuthContext';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import {
@@ -43,9 +45,14 @@ export const CGSSBHeroPage: React.FC<CGSSBHeroPageProps> = ({
   const [activeTab, setActiveTab] = useState<'bundles' | 'tests' | 'pyp'>('bundles');
   const [searchQuery, setSearchQuery] = useState('');
   const [enrolledBundleIds, setEnrolledBundleIds] = useState<string[]>([]);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // Filter CGSSB specific bundles
-  const cgssbBundles = OFFICIAL_BUNDLES_CATALOG.filter(b => b.authority === 'CGSSB');
+  const allBundles = useMemo(() => getStoredBundles(), []);
+  const cgssbBundles = allBundles.filter(
+    b => b.authority === 'CGSSB' && (isAdmin || (b.isPublished !== false && !b.isDraft))
+  );
 
   // Filter CGSSB / Vyapam specific tests
   const vyapamTests = tests.filter(

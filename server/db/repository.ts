@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { doc, getDocs, collection, setDoc, deleteDoc } from 'firebase/firestore';
-import { dbConfig, isFirestoreActive, getFirestoreServer } from './connection.ts';
+import { dbConfig, isFirestoreActive, getFirestoreServer, canServerWriteFirestore } from './connection.ts';
 import type {
   Question,
   MockTest,
@@ -16,6 +16,10 @@ import {
   INITIAL_PYP_PAPERS,
   SAMPLE_USER_ATTEMPTS
 } from '../../src/mockData.ts';
+import {
+  TestSeriesBundle,
+  OFFICIAL_BUNDLES_CATALOG
+} from '../../src/data/bundleCatalog.ts';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'cgssb-db.json');
@@ -106,8 +110,8 @@ export async function syncWithFirestore(): Promise<{
       localDb.questions.forEach(q => qMap.set(q.id, q));
       firestoreQuestions.forEach(q => qMap.set(q.id, q));
       localDb.questions = Array.from(qMap.values());
-    } else {
-      // Auto-seed initial questions to Firestore
+    } else if (canServerWriteFirestore()) {
+      // Auto-seed initial questions to Firestore only if server has authenticated write credentials
       for (const q of localDb.questions.slice(0, 50)) {
         await setDoc(doc(db, 'questions', q.id), q, { merge: true }).catch(() => null);
       }
@@ -124,7 +128,7 @@ export async function syncWithFirestore(): Promise<{
       localDb.mockTests.forEach(t => tMap.set(t.id, t));
       firestoreTests.forEach(t => tMap.set(t.id, t));
       localDb.mockTests = Array.from(tMap.values());
-    } else {
+    } else if (canServerWriteFirestore()) {
       for (const t of localDb.mockTests) {
         await setDoc(doc(db, 'mockTests', t.id), t, { merge: true }).catch(() => null);
       }
@@ -196,13 +200,15 @@ export async function saveQuestion(q: Question): Promise<Question> {
   }
   saveLocalJsonDb();
 
-  // Dual-write directly to Cloud Firestore
-  const db = getFirestoreServer();
-  if (db && q.id) {
-    try {
-      await setDoc(doc(db, 'questions', q.id), q, { merge: true });
-    } catch (err) {
-      console.warn(`Firestore sync note for question [${q.id}]:`, err);
+  // Dual-write to Cloud Firestore only if server possesses authenticated write credentials
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db && q.id) {
+      try {
+        await setDoc(doc(db, 'questions', q.id), q, { merge: true });
+      } catch (err) {
+        console.warn(`Firestore sync note for question [${q.id}]:`, err);
+      }
     }
   }
   return q;
@@ -213,13 +219,14 @@ export async function deleteQuestion(id: string): Promise<boolean> {
   localDb.questions = localDb.questions.filter(q => q.id !== id);
   saveLocalJsonDb();
 
-  // Remove directly from Cloud Firestore
-  const db = getFirestoreServer();
-  if (db) {
-    try {
-      await deleteDoc(doc(db, 'questions', id));
-    } catch (err) {
-      console.warn(`Firestore delete note for question [${id}]:`, err);
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'questions', id));
+      } catch (err) {
+        console.warn(`Firestore delete note for question [${id}]:`, err);
+      }
     }
   }
   return before !== localDb.questions.length;
@@ -264,13 +271,14 @@ export async function saveMockTest(t: MockTest): Promise<MockTest> {
   }
   saveLocalJsonDb();
 
-  // Dual-write directly to Cloud Firestore
-  const db = getFirestoreServer();
-  if (db && t.id) {
-    try {
-      await setDoc(doc(db, 'mockTests', t.id), t, { merge: true });
-    } catch (err) {
-      console.warn(`Firestore sync note for mock test [${t.id}]:`, err);
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db && t.id) {
+      try {
+        await setDoc(doc(db, 'mockTests', t.id), t, { merge: true });
+      } catch (err) {
+        console.warn(`Firestore sync note for mock test [${t.id}]:`, err);
+      }
     }
   }
   return t;
@@ -281,13 +289,14 @@ export async function deleteMockTest(id: string): Promise<boolean> {
   localDb.mockTests = localDb.mockTests.filter(t => t.id !== id);
   saveLocalJsonDb();
 
-  // Remove directly from Cloud Firestore
-  const db = getFirestoreServer();
-  if (db) {
-    try {
-      await deleteDoc(doc(db, 'mockTests', id));
-    } catch (err) {
-      console.warn(`Firestore delete note for test [${id}]:`, err);
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'mockTests', id));
+      } catch (err) {
+        console.warn(`Firestore delete note for test [${id}]:`, err);
+      }
     }
   }
   return before !== localDb.mockTests.length;
@@ -312,12 +321,14 @@ export async function savePypPaper(p: PreviousYearPaper): Promise<PreviousYearPa
   }
   saveLocalJsonDb();
 
-  const db = getFirestoreServer();
-  if (db && p.id) {
-    try {
-      await setDoc(doc(db, 'pypPapers', p.id), p, { merge: true });
-    } catch (err) {
-      console.warn(`Firestore sync note for PYP [${p.id}]:`, err);
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db && p.id) {
+      try {
+        await setDoc(doc(db, 'pypPapers', p.id), p, { merge: true });
+      } catch (err) {
+        console.warn(`Firestore sync note for PYP [${p.id}]:`, err);
+      }
     }
   }
   return p;
@@ -341,13 +352,14 @@ export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
   localDb.attempts.unshift(a);
   saveLocalJsonDb();
 
-  // Dual-write directly to Cloud Firestore
-  const db = getFirestoreServer();
-  if (db && a.id) {
-    try {
-      await setDoc(doc(db, 'attempts', a.id), a, { merge: true });
-    } catch (err) {
-      console.warn(`Firestore sync note for attempt [${a.id}]:`, err);
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db && a.id) {
+      try {
+        await setDoc(doc(db, 'attempts', a.id), a, { merge: true });
+      } catch (err) {
+        console.warn(`Firestore sync note for attempt [${a.id}]:`, err);
+      }
     }
   }
   return a;
@@ -449,4 +461,74 @@ export async function getCmsSettings(): Promise<CMSSiteSettings> {
 export async function saveCmsSettings(settings: CMSSiteSettings): Promise<CMSSiteSettings> {
   cmsSettingsDb = settings;
   return cmsSettingsDb;
+}
+
+// ==========================================
+// TEST SERIES BUNDLES REPOSITORY
+// ==========================================
+let localBundles: TestSeriesBundle[] = [...OFFICIAL_BUNDLES_CATALOG];
+
+export async function getAllBundles(options?: { publishedOnly?: boolean }): Promise<TestSeriesBundle[]> {
+  const db = getFirestoreServer();
+  if (db) {
+    try {
+      const snap = await getDocs(collection(db, 'bundles'));
+      if (!snap.empty) {
+        const firestoreBundles: TestSeriesBundle[] = [];
+        snap.forEach(d => firestoreBundles.push(d.data() as TestSeriesBundle));
+        localBundles = firestoreBundles;
+      }
+    } catch (err) {
+      console.warn('⚠️ Server failed to fetch bundles from Firestore:', err);
+    }
+  }
+
+  if (options?.publishedOnly) {
+    return localBundles.filter(b => b.isPublished !== false && !b.isDraft);
+  }
+  return localBundles;
+}
+
+export async function getBundleById(id: string): Promise<TestSeriesBundle | undefined> {
+  const list = await getAllBundles();
+  const clean = id.trim().toLowerCase();
+  return list.find(b => b.id.toLowerCase() === clean || b.slug.toLowerCase() === clean);
+}
+
+export async function saveBundle(bundle: TestSeriesBundle): Promise<TestSeriesBundle> {
+  const idx = localBundles.findIndex(b => b.id === bundle.id || b.slug === bundle.slug);
+  if (idx !== -1) {
+    localBundles[idx] = bundle;
+  } else {
+    localBundles.unshift(bundle);
+  }
+
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db) {
+      try {
+        await setDoc(doc(db, 'bundles', bundle.id), bundle, { merge: true });
+      } catch (err) {
+        console.warn('⚠️ Server failed to save bundle to Firestore:', err);
+      }
+    }
+  }
+  return bundle;
+}
+
+export async function deleteBundle(id: string): Promise<boolean> {
+  const before = localBundles.length;
+  localBundles = localBundles.filter(b => b.id !== id && b.slug !== id);
+
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'bundles', id));
+      } catch (err) {
+        console.warn('⚠️ Server failed to delete bundle from Firestore:', err);
+      }
+    }
+  }
+  return before !== localBundles.length;
 }

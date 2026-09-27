@@ -36,7 +36,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
-import { getStoredBundles, findBundleBySlugOrId } from '../utils/bundleStore';
+import { getStoredBundles, findBundleBySlugOrId, syncBundlesFromFirestore } from '../utils/bundleStore';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
@@ -107,7 +107,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   useEffect(() => {
     setBundles(getStoredBundles());
+    syncBundlesFromFirestore().then(({ list }) => {
+      if (list && list.length > 0) setBundles(list);
+    }).catch(() => null);
+
+    const handleUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setBundles(e.detail);
+      }
+    };
+    window.addEventListener('cgssb-bundles-updated', handleUpdate);
+    return () => window.removeEventListener('cgssb-bundles-updated', handleUpdate);
   }, []);
+
+  const visibleBundlesForViewer = useMemo(() => {
+    return bundles.filter(b => isAdmin || (b.isPublished !== false && !b.isDraft));
+  }, [bundles, isAdmin]);
 
   const handleOpenBundleDetail = (bundle: TestSeriesBundle) => {
     setSelectedBundle(bundle);
@@ -912,7 +927,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Test Series ({bundles.length})</span>
+              <span>Test Series ({visibleBundlesForViewer.length})</span>
             </button>
 
             <button
@@ -968,7 +983,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800/80'
                     }`}
                   >
-                    All Bundles ({bundles.length})
+                    All Bundles ({visibleBundlesForViewer.length})
                   </button>
                   <button
                     onClick={() => setBundleAuthorityFilter('CGSSB')}
@@ -978,7 +993,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         : 'text-slate-400 hover:text-emerald-400 bg-slate-900 border border-slate-800/80'
                     }`}
                   >
-                    <span>CGSSB / Vyapam ({bundles.filter(b => b.authority === 'CGSSB').length})</span>
+                    <span>CGSSB / Vyapam ({visibleBundlesForViewer.filter(b => b.authority === 'CGSSB').length})</span>
                   </button>
                   <button
                     onClick={() => setBundleAuthorityFilter('CGPSC')}
@@ -988,7 +1003,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         : 'text-slate-400 hover:text-rose-400 bg-slate-900 border border-slate-800/80'
                     }`}
                   >
-                    <span>CGPSC SSE ({bundles.filter(b => b.authority === 'CGPSC').length})</span>
+                    <span>CGPSC SSE ({visibleBundlesForViewer.filter(b => b.authority === 'CGPSC').length})</span>
                   </button>
                 </div>
 
@@ -999,7 +1014,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
               {/* Compact Bundles Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {bundles.filter(b => bundleAuthorityFilter === 'ALL' || b.authority === bundleAuthorityFilter).map(bundle => (
+                {visibleBundlesForViewer.filter(b => bundleAuthorityFilter === 'ALL' || b.authority === bundleAuthorityFilter).map(bundle => (
                   <BundleCompactCard
                     key={bundle.id}
                     bundle={bundle}

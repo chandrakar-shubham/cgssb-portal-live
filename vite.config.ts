@@ -5,7 +5,7 @@ import fs from 'fs';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
-  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf-8'));
   const version = pkg.version || '2.5.2';
 
   const now = new Date();

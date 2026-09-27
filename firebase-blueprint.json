@@ -2,14 +2,14 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "Registered candidate profile with authentication and access pass details",
+      "description": "Registered candidate profile with authentication, role, and exam access pass details",
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Firebase Auth UID" },
         "name": { "type": "string", "description": "Candidate full name" },
         "email": { "type": "string", "description": "Candidate email address" },
-        "phone": { "type": "string", "description": "Candidate phone number" },
-        "role": { "type": "string", "enum": ["student", "admin"], "description": "User access role" },
+        "phone": { "type": "string", "description": "Candidate mobile number" },
+        "role": { "type": "string", "enum": ["student", "admin"], "description": "Access control role" },
         "hasProPass": { "type": "boolean", "description": "Whether candidate has active all-access pass" },
         "proPassPlan": { "type": "string", "description": "Pass duration plan (monthly/yearly)" },
         "passExpiresAt": { "type": "string", "description": "ISO timestamp of pass expiration" },
@@ -27,7 +27,7 @@
       "properties": {
         "id": { "type": "string", "description": "Unique test identifier" },
         "title": { "type": "string", "description": "Test title" },
-        "category": { "type": "string", "description": "Exam category e.g. CGSSB, CGPSC" },
+        "category": { "type": "string", "description": "Exam category e.g. CGSSB, CGPSC, CENTRAL_EXAMS" },
         "durationMinutes": { "type": "number", "description": "Test timer duration in minutes" },
         "totalMarks": { "type": "number", "description": "Total marks for the test" },
         "questionCount": { "type": "number", "description": "Number of questions in test" },
@@ -61,14 +61,15 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Bundle identifier" },
-        "slug": { "type": "string", "description": "URL slug for SEO landing page" },
+        "slug": { "type": "string", "description": "URL slug for landing page" },
         "title": { "type": "string", "description": "Bundle title in English" },
         "titleHindi": { "type": "string", "description": "Bundle title in Hindi" },
         "authority": { "type": "string", "description": "Exam authority (CGSSB/CGPSC)" },
         "price": { "type": "number", "description": "Offer price" },
         "originalPrice": { "type": "number", "description": "MRP price" },
         "totalTestsCount": { "type": "number", "description": "Total tests included" },
-        "freeTestsCount": { "type": "number", "description": "Free preview tests count" }
+        "freeTestsCount": { "type": "number", "description": "Free preview tests count" },
+        "isPublished": { "type": "boolean", "description": "Whether bundle is published publicly" }
       },
       "required": ["id", "slug", "title", "authority"]
     },
@@ -88,6 +89,19 @@
         "completedAt": { "type": "string", "description": "Submission ISO timestamp" }
       },
       "required": ["id", "userId", "testId", "score", "completedAt"]
+    },
+    "CurrentAffairsTopic": {
+      "title": "CurrentAffairsTopic",
+      "description": "Verified daily or monthly current affairs topic for Chhattisgarh and national examinations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Topic ID" },
+        "titleEn": { "type": "string", "description": "Topic title in English" },
+        "titleHindi": { "type": "string", "description": "Topic title in Hindi" },
+        "region": { "type": "string", "description": "Region scope (chhattisgarh, india, international)" },
+        "date": { "type": "string", "description": "Date of current affair" }
+      },
+      "required": ["id", "titleEn", "titleHindi", "region", "date"]
     }
   },
   "firestore": {
@@ -110,6 +124,14 @@
     "/attempts/{attemptId}": {
       "schema": { "$ref": "#/entities/TestAttempt" },
       "description": "Student test attempts and leaderboard scores"
+    },
+    "/pypPapers/{paperId}": {
+      "schema": { "$ref": "#/entities/MockTest" },
+      "description": "Official Previous Year Question Papers (PYP) archive"
+    },
+    "/currentAffairsTopics/{topicId}": {
+      "schema": { "$ref": "#/entities/CurrentAffairsTopic" },
+      "description": "Current affairs exam topics repository"
     }
   }
 }

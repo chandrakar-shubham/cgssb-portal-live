@@ -98,6 +98,7 @@ export interface TestSeriesBundle {
   pypTests?: BundleTestItem[];
   mockTests?: BundleTestItem[];
   isDraft?: boolean;
+  isPublished?: boolean;
   seoMeta?: {
     title?: string;
     description?: string;

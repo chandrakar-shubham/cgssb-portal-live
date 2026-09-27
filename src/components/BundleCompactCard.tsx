@@ -36,8 +36,10 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
   hasEnrolled = false,
 }) => {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const isPassActive = isUserPassActive(user);
   const isCgpsc = bundle.authority === 'CGPSC';
+  const isPublished = bundle.isPublished !== false && !bundle.isDraft;
 
   const badgeTheme = {
     emerald: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
@@ -72,10 +74,17 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             </span>
           </div>
 
-          <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border flex items-center space-x-1 ${badgeTheme}`}>
-            <Sparkles className="w-3 h-3 inline-block" />
-            <span>{bundle.badge}</span>
-          </span>
+          <div className="flex items-center space-x-1.5">
+            {!isPublished && (
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30">
+                Draft (Hidden)
+              </span>
+            )}
+            <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border flex items-center space-x-1 ${badgeTheme}`}>
+              <Sparkles className="w-3 h-3 inline-block" />
+              <span>{bundle.badge}</span>
+            </span>
+          </div>
         </div>
 
         {/* Title & Hindi Title */}

@@ -114,6 +114,14 @@ export interface Question {
   isCancelled?: boolean;                 // Marked cancelled by board - bonus marks
   imageUrl?: string;                     // Diagram or geography map URL
   diagramSvg?: string;                   // Inline SVG diagram
+  currentAffairTopicId?: string;
+  exams?: string[];
+  subjects?: string[];
+  region?: string;
+  sourceIds?: string[];
+  date?: string;
+  monthYear?: string;
+  status?: string;
   explanation: string;              // English
   explanationHindi?: string;         // Hindi
 
@@ -133,6 +141,7 @@ export interface Question {
   chapter?: string;
   keyFactHindi?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface QuestionBookmark {

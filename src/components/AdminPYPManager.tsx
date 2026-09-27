@@ -68,6 +68,14 @@ interface AdminPYPManagerProps {
   onTestAdded?: (test: MockTest) => void;
   onUpdateTest?: (testId: string, updates: Partial<MockTest>) => void;
   onSaveCompletedTest?: (test: MockTest, questions: Question[]) => void;
+  onOpenUniversalIngest?: (config?: {
+    type?: 'MOCK_TEST' | 'PYP' | 'CHAPTER_TEST' | 'QUESTION_BANK';
+    lockType?: boolean;
+    authority?: string;
+    examName?: string;
+    cadre?: string;
+    bundleId?: string;
+  }) => void;
 }
 
 export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
@@ -83,6 +91,7 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   onTestAdded,
   onUpdateTest,
   onSaveCompletedTest,
+  onOpenUniversalIngest,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGridBuilderOpen, setIsGridBuilderOpen] = useState(false);
@@ -584,6 +593,23 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
         <div className="flex flex-col items-start lg:items-end gap-2">
           {/* Main Action Buttons */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {onOpenUniversalIngest && (
+              <button
+                onClick={() =>
+                  onOpenUniversalIngest({
+                    type: 'PYP',
+                    lockType: true,
+                    authority: 'CGSSB',
+                    examName: 'CG Teacher Recruitment 2026',
+                  })
+                }
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:from-amber-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-emerald-500/20 cursor-pointer ring-1 ring-amber-400/50"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>⚡ Universal Ingest PYP</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsGridBuilderOpen(true)}
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-blue-500/20 border border-blue-400/30 cursor-pointer"

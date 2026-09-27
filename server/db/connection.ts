@@ -55,3 +55,11 @@ export async function testConnection(): Promise<{ ok: boolean; message: string; 
 export function isFirestoreActive(): boolean {
   return true;
 }
+
+export function canServerWriteFirestore(): boolean {
+  return Boolean(
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    process.env.ENABLE_SERVER_FIRESTORE_WRITE === 'true'
+  );
+}
