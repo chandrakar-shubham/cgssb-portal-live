@@ -474,9 +474,27 @@ export async function getAllBundles(options?: { publishedOnly?: boolean }): Prom
     try {
       const snap = await getDocs(collection(db, 'bundles'));
       if (!snap.empty) {
-        const firestoreBundles: TestSeriesBundle[] = [];
-        snap.forEach(d => firestoreBundles.push(d.data() as TestSeriesBundle));
-        localBundles = firestoreBundles;
+        const firestoreMap = new Map<string, TestSeriesBundle>();
+        OFFICIAL_BUNDLES_CATALOG.forEach(b => { if (b && b.id) firestoreMap.set(b.id, { ...b }); });
+        
+        snap.forEach(d => {
+          const incoming = d.data() as TestSeriesBundle;
+          if (incoming && incoming.id) {
+            const base = firestoreMap.get(incoming.id) || incoming;
+            const testItemMap = new Map<string, any>();
+            (base.testItems || []).forEach(t => testItemMap.set(t.id, t));
+            (incoming.testItems || []).forEach(t => testItemMap.set(t.id, t));
+
+            firestoreMap.set(incoming.id, {
+              ...base,
+              ...incoming,
+              testItems: Array.from(testItemMap.values()),
+              chapterTests: incoming.chapterTests?.length ? incoming.chapterTests : base.chapterTests,
+              pypTests: incoming.pypTests?.length ? incoming.pypTests : base.pypTests,
+            });
+          }
+        });
+        localBundles = Array.from(firestoreMap.values());
       }
     } catch (err) {
       console.warn('⚠️ Server failed to fetch bundles from Firestore:', err);

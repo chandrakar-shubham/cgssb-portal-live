@@ -36,7 +36,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
-import { getStoredBundles, findBundleBySlugOrId, syncBundlesFromFirestore } from '../utils/bundleStore';
+import { getStoredBundles, findBundleBySlugOrId, syncBundlesFromFirestore, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
@@ -106,9 +106,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [leaderboardSelectedTestId, setLeaderboardSelectedTestId] = useState<string>('');
 
   useEffect(() => {
-    setBundles(getStoredBundles());
+    let initialList = getStoredBundles();
+    if (tests && tests.length > 0) {
+      initialList = reconcileAllTestsWithBundles(tests);
+    }
+    setBundles(initialList);
+
     syncBundlesFromFirestore().then(({ list }) => {
-      if (list && list.length > 0) setBundles(list);
+      if (list && list.length > 0) {
+        if (tests && tests.length > 0) {
+          const reconciled = reconcileAllTestsWithBundles(tests);
+          setBundles(reconciled);
+        } else {
+          setBundles(list);
+        }
+      }
     }).catch(() => null);
 
     const handleUpdate = (e: any) => {
@@ -118,7 +130,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     };
     window.addEventListener('cgssb-bundles-updated', handleUpdate);
     return () => window.removeEventListener('cgssb-bundles-updated', handleUpdate);
-  }, []);
+  }, [tests]);
+
+  // Keep selectedBundle synchronized with latest bundle data
+  useEffect(() => {
+    if (selectedBundle) {
+      const fresh = findBundleBySlugOrId(selectedBundle.slug || selectedBundle.id, bundles);
+      if (fresh) {
+        setSelectedBundle(fresh);
+      }
+    }
+  }, [bundles]);
 
   const visibleBundlesForViewer = useMemo(() => {
     return bundles.filter(b => isAdmin || (b.isPublished !== false && !b.isDraft));

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, PreviousYearPaper } from '../types';
 import { TestSeriesBundle } from '../data/bundleCatalog';
-import { getStoredBundles } from '../utils/bundleStore';
+import { getStoredBundles, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { useAuth } from '../context/AuthContext';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
@@ -48,7 +48,7 @@ export const CGPSCHeroPage: React.FC<CGPSCHeroPageProps> = ({
   const isAdmin = user?.role === 'admin';
 
   // Filter CGPSC specific bundles
-  const allBundles = useMemo(() => getStoredBundles(), []);
+  const allBundles = useMemo(() => reconcileAllTestsWithBundles(tests), [tests]);
   const cgpscBundles = allBundles.filter(
     b => b.authority === 'CGPSC' && (isAdmin || (b.isPublished !== false && !b.isDraft))
   );

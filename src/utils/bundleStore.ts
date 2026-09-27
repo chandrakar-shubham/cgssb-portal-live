@@ -1,4 +1,4 @@
-import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
+import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG, BundleTestItem } from '../data/bundleCatalog';
 import { MockTest } from '../types';
 import {
   fetchBundlesFromFirestore,
@@ -27,38 +27,84 @@ export const getAdminHeaders = (): Record<string, string> => {
   return headers;
 };
 
+/**
+ * Intelligent bundle entity merger that never wipes official curriculum items with empty arrays
+ */
+export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<TestSeriesBundle>): TestSeriesBundle => {
+  const testItemMap = new Map<string, BundleTestItem>();
+  (base.testItems || []).forEach(item => { if (item && item.id) testItemMap.set(item.id, item); });
+  (incoming.testItems || []).forEach(item => { if (item && item.id) testItemMap.set(item.id, item); });
+
+  const chapterMap = new Map<string, BundleTestItem>();
+  (base.chapterTests || []).forEach(item => { if (item && item.id) chapterMap.set(item.id, item); });
+  (incoming.chapterTests || []).forEach(item => { if (item && item.id) chapterMap.set(item.id, item); });
+
+  const pypMap = new Map<string, BundleTestItem>();
+  (base.pypTests || []).forEach(item => { if (item && item.id) pypMap.set(item.id, item); });
+  (incoming.pypTests || []).forEach(item => { if (item && item.id) pypMap.set(item.id, item); });
+
+  const mergedTestItems = Array.from(testItemMap.values());
+  const mergedChapterTests = Array.from(chapterMap.values());
+  const mergedPypTests = Array.from(pypMap.values());
+
+  const totalCount = mergedTestItems.length + mergedChapterTests.length + mergedPypTests.length;
+  const allTests = [...mergedTestItems, ...mergedChapterTests, ...mergedPypTests];
+  const freeCount = allTests.filter(t => t.isFreePreview).length;
+
+  return {
+    ...base,
+    ...incoming,
+    id: incoming.id || base.id,
+    slug: incoming.slug || base.slug,
+    title: incoming.title || base.title,
+    titleHindi: incoming.titleHindi || base.titleHindi,
+    authority: (incoming.authority || base.authority) as any,
+    targetPost: incoming.targetPost || base.targetPost,
+    targetYear: incoming.targetYear || base.targetYear,
+    badge: incoming.badge || base.badge,
+    badgeColor: (incoming.badgeColor || base.badgeColor) as any,
+    shortDescription: incoming.shortDescription || base.shortDescription,
+    fullDescription: incoming.fullDescription || base.fullDescription,
+    price: typeof incoming.price === 'number' ? incoming.price : base.price,
+    originalPrice: typeof incoming.originalPrice === 'number' ? incoming.originalPrice : base.originalPrice,
+    isProOnly: incoming.isProOnly !== undefined ? incoming.isProOnly : base.isProOnly,
+    testItems: mergedTestItems,
+    chapterTests: mergedChapterTests,
+    pypTests: mergedPypTests,
+    totalTestsCount: totalCount > 0 ? totalCount : (incoming.totalTestsCount || base.totalTestsCount || 1),
+    freeTestsCount: freeCount > 0 ? freeCount : (incoming.freeTestsCount || base.freeTestsCount || 1),
+    syllabusBreakdown: incoming.syllabusBreakdown?.length ? incoming.syllabusBreakdown : base.syllabusBreakdown,
+    examPattern: incoming.examPattern?.keyRules?.length ? incoming.examPattern : base.examPattern,
+    features: incoming.features?.length ? incoming.features : base.features,
+    faqs: incoming.faqs?.length ? incoming.faqs : base.faqs,
+    importantDates: incoming.importantDates || base.importantDates,
+    eligibility: incoming.eligibility || base.eligibility,
+    officialLinks: incoming.officialLinks || base.officialLinks,
+    isPublished: incoming.isPublished !== undefined ? incoming.isPublished : (base.isPublished !== false && !base.isDraft),
+    isDraft: incoming.isDraft !== undefined ? incoming.isDraft : (base.isDraft || base.isPublished === false),
+  };
+};
+
 export const getStoredBundles = (): TestSeriesBundle[] => {
   if (typeof window === 'undefined') return OFFICIAL_BUNDLES_CATALOG;
   try {
     const raw = localStorage.getItem(BUNDLE_STORAGE_KEY);
     if (!raw) {
-      // Initialize with official bundles
       localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
       return OFFICIAL_BUNDLES_CATALOG;
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Merge official bundles with stored bundles to ensure all test items and new official mocks are retained
       const bundleMap = new Map<string, TestSeriesBundle>();
       OFFICIAL_BUNDLES_CATALOG.forEach(b => {
         if (b && b.id) bundleMap.set(b.id, { ...b });
       });
+
       parsed.forEach(stored => {
         if (stored && stored.id) {
           const official = bundleMap.get(stored.id);
           if (official) {
-            // Combine testItems avoiding duplicates
-            const officialTestItems = official.testItems || [];
-            const storedTestItems = stored.testItems || [];
-            const itemMap = new Map<string, any>();
-            officialTestItems.forEach((item: any) => itemMap.set(item.id, item));
-            storedTestItems.forEach((item: any) => itemMap.set(item.id, item));
-
-            bundleMap.set(stored.id, {
-              ...official,
-              ...stored,
-              testItems: Array.from(itemMap.values()),
-            });
+            bundleMap.set(stored.id, mergeBundleEntities(official, stored));
           } else {
             bundleMap.set(stored.id, stored);
           }
@@ -93,9 +139,14 @@ export const syncBundlesFromFirestore = async (
   const map = new Map<string, TestSeriesBundle>();
 
   // Base with official bundles
-  OFFICIAL_BUNDLES_CATALOG.forEach(b => { if (b && b.id) map.set(b.id, b); });
+  OFFICIAL_BUNDLES_CATALOG.forEach(b => { if (b && b.id) map.set(b.id, { ...b }); });
   // Overlay current local storage
-  current.forEach(b => { if (b && b.id) map.set(b.id, b); });
+  current.forEach(b => {
+    if (b && b.id) {
+      const base = map.get(b.id) || b;
+      map.set(b.id, mergeBundleEntities(base, b));
+    }
+  });
 
   let sourceUsed = 'local';
 
@@ -111,7 +162,10 @@ export const syncBundlesFromFirestore = async (
         const pullData = await pullRes.json().catch(() => null);
         if (pullData?.bundles && Array.isArray(pullData.bundles)) {
           pullData.bundles.forEach((b: TestSeriesBundle) => {
-            if (b && b.id) map.set(b.id, b);
+            if (b && b.id) {
+              const base = map.get(b.id) || b;
+              map.set(b.id, mergeBundleEntities(base, b));
+            }
           });
           sourceUsed = 'remote-url';
         }
@@ -126,7 +180,10 @@ export const syncBundlesFromFirestore = async (
     const firestoreBundles = await fetchBundlesFromFirestore();
     if (firestoreBundles && Array.isArray(firestoreBundles) && firestoreBundles.length > 0) {
       firestoreBundles.forEach(b => {
-        if (b && b.id) map.set(b.id, b);
+        if (b && b.id) {
+          const base = map.get(b.id) || b;
+          map.set(b.id, mergeBundleEntities(base, b));
+        }
       });
       sourceUsed = sourceUsed === 'remote-url' ? 'remote-url+firestore' : 'firestore';
     }
@@ -142,7 +199,10 @@ export const syncBundlesFromFirestore = async (
       const list = Array.isArray(data) ? data : (data?.bundles || []);
       if (Array.isArray(list) && list.length > 0) {
         list.forEach(b => {
-          if (b && b.id) map.set(b.id, b);
+          if (b && b.id) {
+            const base = map.get(b.id) || b;
+            map.set(b.id, mergeBundleEntities(base, b));
+          }
         });
         if (sourceUsed === 'local') sourceUsed = 'server-api';
       }
@@ -263,49 +323,162 @@ export const resetBundlesToDefault = (): TestSeriesBundle[] => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(BUNDLE_STORAGE_KEY);
     localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
+    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: OFFICIAL_BUNDLES_CATALOG }));
   }
   return OFFICIAL_BUNDLES_CATALOG;
 };
 
+/**
+ * Determines whether a given MockTest matches a TestSeriesBundle by category, post, slug, or title
+ */
+export const doesTestMatchBundle = (test: MockTest, bundle: TestSeriesBundle): boolean => {
+  if (!test || !bundle) return false;
+
+  const tTitle = (test.title || '').toLowerCase();
+  const tTitleHindi = (test.titleHindi || '').toLowerCase();
+  const tSub = (test.subCategory || '').toLowerCase();
+  const tPost = (test.postName || '').toLowerCase();
+  const tCat = (test.category || '').toLowerCase();
+  const tId = (test.id || '').toLowerCase();
+
+  const bId = (bundle.id || '').toLowerCase();
+  const bSlug = (bundle.slug || '').toLowerCase();
+  const bPost = (bundle.targetPost || '').toLowerCase();
+  const bTitle = (bundle.title || '').toLowerCase();
+  const bAuth = (bundle.authority || '').toLowerCase();
+
+  // 1. Exact ID or direct slug association
+  if (bId === 'bundle-cgssb-lecturer-english-2026' || bSlug === 'lecturer-english-2026') {
+    if (
+      tId.includes('lecturer-english') ||
+      tId.includes('lecturer_eng') ||
+      tId.includes('lecturer-eng') ||
+      (tTitle.includes('lecturer') && tTitle.includes('english')) ||
+      (tTitleHindi.includes('व्याख्याता') && tTitleHindi.includes('अंग्रेजी')) ||
+      (tPost.includes('lecturer') && tPost.includes('english')) ||
+      (tSub.includes('lecturer') && tSub.includes('english'))
+    ) {
+      return true;
+    }
+  }
+
+  if (bId === 'bundle-cgssb-asst-teacher-2026' || bSlug === 'assistant-teacher-2026') {
+    if (
+      tId.includes('shikshak-paper1') ||
+      tId.includes('asst-teacher') ||
+      tTitle.includes('assistant teacher') ||
+      tTitleHindi.includes('सहायक शिक्षक') ||
+      tPost.includes('assistant teacher') ||
+      tSub.includes('assistant teacher') ||
+      tTitle.includes('वर्ग-3')
+    ) {
+      return true;
+    }
+  }
+
+  if (bId === 'bundle-cgssb-teacher-english-2026' || bSlug === 'teacher-english-2026') {
+    if (
+      (tId.includes('shikshak-paper2') && (tId.includes('eng') || tTitle.includes('english'))) ||
+      (tTitle.includes('teacher') && tTitle.includes('english') && !tTitle.includes('assistant') && !tTitle.includes('lecturer')) ||
+      (tTitleHindi.includes('शिक्षक') && tTitleHindi.includes('अंग्रेजी') && !tTitleHindi.includes('सहायक') && !tTitleHindi.includes('व्याख्याता'))
+    ) {
+      return true;
+    }
+  }
+
+  if (bId === 'bundle-cgssb-teacher-maths-2026' || bSlug === 'teacher-maths-2026') {
+    if (
+      (tId.includes('shikshak-paper2') && (tId.includes('math') || tTitle.includes('math'))) ||
+      (tTitle.includes('teacher') && (tTitle.includes('math') || tTitle.includes('science')) && !tTitle.includes('assistant') && !tTitle.includes('lecturer')) ||
+      (tTitleHindi.includes('शिक्षक') && (tTitleHindi.includes('गणित') || tTitleHindi.includes('विज्ञान')) && !tTitleHindi.includes('सहायक') && !tTitleHindi.includes('व्याख्याता'))
+    ) {
+      return true;
+    }
+  }
+
+  if (bId === 'bundle-cgssb-si-2026' || bSlug === 'cgssb-si-2026') {
+    if (
+      tId.includes('si-') ||
+      tId.includes('sub-inspector') ||
+      tTitle.includes('sub inspector') ||
+      tTitle.includes('sub-inspector') ||
+      tTitle.includes('si 2026') ||
+      tTitleHindi.includes('सब इंस्पेक्टर') ||
+      tTitleHindi.includes('सूबेदार')
+    ) {
+      return true;
+    }
+  }
+
+  if (bId === 'bundle-cgpsc-pre-2026' || bSlug === 'cgpsc-pre-2026') {
+    if (
+      tId.includes('cgpsc') ||
+      tCat === 'cgpsc' ||
+      tTitle.includes('cgpsc') ||
+      tTitle.includes('state service') ||
+      tTitleHindi.includes('राज्य सेवा')
+    ) {
+      return true;
+    }
+  }
+
+  // 2. Generic keyword match on authority, postName, or subCategory
+  if (tCat && bAuth && tCat === bAuth) {
+    if (bPost && (tPost.includes(bPost) || bPost.includes(tPost) || tSub.includes(bPost) || bPost.includes(tSub))) {
+      return true;
+    }
+    if (bTitle && (tTitle.includes(bTitle) || bTitle.includes(tTitle))) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * Converts a MockTest into a standard BundleTestItem
+ */
+export const convertMockTestToBundleItem = (test: MockTest, isFirstFree = false): BundleTestItem => {
+  const totalQ = test.questionCount || test.sections?.reduce((acc, s) => acc + (s.questionIds?.length || 0), 0) || 100;
+  return {
+    id: test.id,
+    title: test.title,
+    titleHindi: test.titleHindi || test.title,
+    type: test.isPYP ? 'pyp' : (test.durationMinutes && test.durationMinutes <= 45 ? 'sectional' : 'full_mock'),
+    questionCount: totalQ,
+    durationMinutes: test.durationMinutes || 120,
+    marks: test.totalMarks || (totalQ * (test.marksPerQuestion || 1.0)),
+    isFreePreview: test.isPro ? false : (isFirstFree || !test.isPro),
+    attemptsCount: test.attemptsCount || 0,
+    statusText: test.isPro ? 'Pro Access' : 'Free Preview Available',
+    mockTestRef: test
+  };
+};
+
+/**
+ * Auto-links a newly created or edited test to all matching bundles
+ */
 export const autoLinkTestToBundles = (test: MockTest): void => {
   if (!test || !test.id) return;
   const bundles = getStoredBundles();
   let modified = false;
 
   const updatedBundles = bundles.map(bundle => {
-    const matchesCategory = test.category && bundle.authority && test.category.toLowerCase() === bundle.authority.toLowerCase();
-    const matchesSubCat = test.subCategory && bundle.targetPost && (
-      test.subCategory.toLowerCase().includes(bundle.targetPost.toLowerCase()) ||
-      bundle.targetPost.toLowerCase().includes(test.subCategory.toLowerCase()) ||
-      (bundle.slug && test.subCategory.toLowerCase().includes(bundle.slug.toLowerCase()))
-    );
-    const matchesPost = test.postName && bundle.targetPost && (
-      test.postName.toLowerCase().includes(bundle.targetPost.toLowerCase()) ||
-      bundle.targetPost.toLowerCase().includes(test.postName.toLowerCase())
-    );
-
-    if (matchesCategory || matchesSubCat || matchesPost || bundle.id === 'bundle-cgssb-lecturer-english-2026') {
+    if (doesTestMatchBundle(test, bundle)) {
       const testItems = bundle.testItems || [];
       const exists = testItems.some(item => item.id === test.id || item.mockTestRef?.id === test.id);
       if (!exists) {
         modified = true;
-        const totalQ = test.sections?.reduce((acc, s) => acc + (s.questionIds?.length || 0), 0) || 100;
-        const newItem = {
-          id: test.id,
-          title: test.title,
-          titleHindi: test.titleHindi || test.title,
-          type: 'full_mock' as const,
-          questionCount: totalQ,
-          durationMinutes: test.durationMinutes || 120,
-          marks: test.totalMarks || (totalQ * 1),
-          isFreePreview: testItems.length === 0,
-          attemptsCount: 0,
-          mockTestRef: test
-        };
+        const newItem = convertMockTestToBundleItem(test, testItems.length === 0);
+        const newTestItems = [...testItems, newItem];
+        const totalCount = newTestItems.length + (bundle.chapterTests?.length || 0) + (bundle.pypTests?.length || 0);
+        const freeCount = [...newTestItems, ...(bundle.chapterTests || []), ...(bundle.pypTests || [])].filter(t => t.isFreePreview).length;
+
         return {
           ...bundle,
-          testItems: [...testItems, newItem],
-          totalTestsCount: (bundle.totalTestsCount || testItems.length) + 1
+          testItems: newTestItems,
+          totalTestsCount: totalCount,
+          freeTestsCount: freeCount || 1,
         };
       }
     }
@@ -326,4 +499,55 @@ export const autoLinkTestToBundles = (test: MockTest): void => {
       }).catch(() => null);
     });
   }
+};
+
+/**
+ * Reconciles all mock tests in the catalog with stored bundles, auto-attaching missing matching tests
+ */
+export const reconcileAllTestsWithBundles = (allTests: MockTest[]): TestSeriesBundle[] => {
+  if (!allTests || allTests.length === 0) return getStoredBundles();
+  const bundles = getStoredBundles();
+  let modified = false;
+
+  const updatedBundles = bundles.map(bundle => {
+    const matchingTests = allTests.filter(t => doesTestMatchBundle(t, bundle));
+    if (matchingTests.length === 0) return bundle;
+
+    const currentItems = [...(bundle.testItems || [])];
+    let bundleModified = false;
+
+    matchingTests.forEach(test => {
+      const exists = currentItems.some(item => item.id === test.id || item.mockTestRef?.id === test.id);
+      if (!exists) {
+        bundleModified = true;
+        const newItem = convertMockTestToBundleItem(test, currentItems.length === 0);
+        currentItems.push(newItem);
+      }
+    });
+
+    if (bundleModified) {
+      modified = true;
+      const totalCount = currentItems.length + (bundle.chapterTests?.length || 0) + (bundle.pypTests?.length || 0);
+      const allAttached = [...currentItems, ...(bundle.chapterTests || []), ...(bundle.pypTests || [])];
+      const freeCount = allAttached.filter(t => t.isFreePreview).length;
+
+      return {
+        ...bundle,
+        testItems: currentItems,
+        totalTestsCount: totalCount,
+        freeTestsCount: freeCount || 1,
+      };
+    }
+
+    return bundle;
+  });
+
+  if (modified) {
+    saveStoredBundles(updatedBundles);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updatedBundles }));
+    }
+  }
+
+  return updatedBundles;
 };

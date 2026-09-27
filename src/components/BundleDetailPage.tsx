@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TestSeriesBundle, BundleTestItem } from '../data/bundleCatalog';
 import { MockTest } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { toggleBundlePublish } from '../utils/bundleStore';
+import { toggleBundlePublish, doesTestMatchBundle, convertMockTestToBundleItem } from '../utils/bundleStore';
 import {
   AlertCircle,
   ArrowLeft,
@@ -150,12 +150,28 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  // Compile combined test items (Full Mocks + Chapters + PYPs)
-  const allAttachedItems = [
-    ...(bundle.testItems || []).map(t => ({ ...t, kind: 'MOCK' as const })),
-    ...(bundle.chapterTests || []).map(t => ({ ...t, kind: 'CHAPTER' as const })),
-    ...(bundle.pypTests || []).map(t => ({ ...t, kind: 'PYP' as const }))
-  ];
+  // Compile combined test items (Full Mocks + Chapters + PYPs) with dynamic catalog discovery
+  const allAttachedItems = useMemo(() => {
+    const directMocks = [...(bundle.testItems || [])];
+    const directChapters = [...(bundle.chapterTests || [])];
+    const directPyps = [...(bundle.pypTests || [])];
+
+    // Auto-discover any matching mock tests in availableTests that are not yet in directMocks
+    if (availableTests && availableTests.length > 0) {
+      const matchingFromCatalog = availableTests.filter(t => doesTestMatchBundle(t, bundle));
+      matchingFromCatalog.forEach(t => {
+        if (!directMocks.some(item => item.id === t.id)) {
+          directMocks.push(convertMockTestToBundleItem(t, directMocks.length === 0));
+        }
+      });
+    }
+
+    return [
+      ...directMocks.map(t => ({ ...t, kind: 'MOCK' as const })),
+      ...directChapters.map(t => ({ ...t, kind: 'CHAPTER' as const })),
+      ...directPyps.map(t => ({ ...t, kind: 'PYP' as const }))
+    ];
+  }, [bundle, availableTests]);
 
   const filteredAttachedItems = allAttachedItems.filter(item => {
     if (testTypeFilter === 'ALL') return true;
@@ -424,8 +440,10 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
               <span className="text-[11px] text-slate-400 block font-medium">Total Curriculum</span>
               <span className="text-sm sm:text-base font-black text-white flex items-center space-x-1">
                 <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{allAttachedItems.length || bundle.totalTestsCount} Tests</span>
-                <span className="text-[10px] text-emerald-400 font-normal">({bundle.freeTestsCount || 1} Free)</span>
+                <span>{allAttachedItems.length || bundle.totalTestsCount || 1} Tests</span>
+                <span className="text-[10px] text-emerald-400 font-normal">
+                  ({allAttachedItems.filter(t => t.isFreePreview).length || bundle.freeTestsCount || 1} Free)
+                </span>
               </span>
             </div>
 
@@ -546,9 +564,9 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
                   }`}
                 >
                   {type === 'ALL' && `All Curriculum (${allAttachedItems.length})`}
-                  {type === 'MOCK' && `Full Mocks (${bundle.testItems?.length || 0})`}
-                  {type === 'CHAPTER' && `Chapter Tests (${bundle.chapterTests?.length || 0})`}
-                  {type === 'PYP' && `Past Papers (${bundle.pypTests?.length || 0})`}
+                  {type === 'MOCK' && `Full Mocks (${allAttachedItems.filter(t => t.kind === 'MOCK').length})`}
+                  {type === 'CHAPTER' && `Chapter Tests (${allAttachedItems.filter(t => t.kind === 'CHAPTER').length})`}
+                  {type === 'PYP' && `Past Papers (${allAttachedItems.filter(t => t.kind === 'PYP').length})`}
                 </button>
               ))}
             </div>

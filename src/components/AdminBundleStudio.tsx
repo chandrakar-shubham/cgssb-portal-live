@@ -13,7 +13,10 @@ import {
   deleteStoredBundle,
   resetBundlesToDefault,
   toggleBundlePublish,
-  syncBundlesFromFirestore
+  syncBundlesFromFirestore,
+  doesTestMatchBundle,
+  reconcileAllTestsWithBundles,
+  convertMockTestToBundleItem,
 } from '../utils/bundleStore';
 import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
@@ -185,9 +188,21 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   const [newTopicInputs, setNewTopicInputs] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    setBundles(getStoredBundles());
+    let initialList = getStoredBundles();
+    if (availableTests && availableTests.length > 0) {
+      initialList = reconcileAllTestsWithBundles(availableTests);
+    }
+    setBundles(initialList);
+
     syncBundlesFromFirestore().then(({ list }) => {
-      if (list && list.length > 0) setBundles(list);
+      if (list && list.length > 0) {
+        if (availableTests && availableTests.length > 0) {
+          const reconciled = reconcileAllTestsWithBundles(availableTests);
+          setBundles(reconciled);
+        } else {
+          setBundles(list);
+        }
+      }
     }).catch(() => null);
 
     const handleUpdate = (e: any) => {
@@ -197,7 +212,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     };
     window.addEventListener('cgssb-bundles-updated', handleUpdate);
     return () => window.removeEventListener('cgssb-bundles-updated', handleUpdate);
-  }, []);
+  }, [availableTests]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -622,18 +637,14 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   const handleAttachExistingTest = (test: MockTest) => {
     if (!editingBundle) return;
 
-    const newBundleItem: BundleTestItem = {
-      id: test.id,
-      title: test.title,
-      titleHindi: test.title,
-      type: attachTargetSection === 'pyp' ? 'pyp' : (attachTargetSection === 'chapter' ? 'sectional' : 'full_mock'),
-      questionCount: test.questionCount || 100,
-      durationMinutes: test.durationMinutes || 120,
-      marks: test.totalMarks || test.questionCount || 100,
-      isFreePreview: true,
-      attemptsCount: test.attemptsCount || 0,
-      statusText: 'Free Preview'
-    };
+    const newBundleItem = convertMockTestToBundleItem(test, false);
+    if (attachTargetSection === 'chapter') {
+      newBundleItem.type = 'sectional';
+    } else if (attachTargetSection === 'pyp') {
+      newBundleItem.type = 'pyp';
+    } else {
+      newBundleItem.type = 'full_mock';
+    }
 
     if (attachTargetSection === 'chapter') {
       const currentList = editingBundle.chapterTests || [];
@@ -641,33 +652,80 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
         showToast('This test is already in Chapter Tests.');
         return;
       }
-      setEditingBundle({
+      const updatedList = [newBundleItem, ...currentList];
+      const updated = {
         ...editingBundle,
-        chapterTests: [newBundleItem, ...currentList]
-      });
+        chapterTests: updatedList,
+        totalTestsCount: (editingBundle.testItems?.length || 0) + updatedList.length + (editingBundle.pypTests?.length || 0),
+      };
+      setEditingBundle(updated);
+      saveSingleBundle(updated);
     } else if (attachTargetSection === 'pyp') {
       const currentList = editingBundle.pypTests || [];
       if (currentList.some(t => t.id === test.id)) {
         showToast('This test is already in PYQ Papers.');
         return;
       }
-      setEditingBundle({
+      const updatedList = [newBundleItem, ...currentList];
+      const updated = {
         ...editingBundle,
-        pypTests: [newBundleItem, ...currentList]
-      });
+        pypTests: updatedList,
+        totalTestsCount: (editingBundle.testItems?.length || 0) + (editingBundle.chapterTests?.length || 0) + updatedList.length,
+      };
+      setEditingBundle(updated);
+      saveSingleBundle(updated);
     } else {
       const currentList = editingBundle.testItems || [];
       if (currentList.some(t => t.id === test.id)) {
         showToast('This test is already in Full Mock Tests.');
         return;
       }
-      setEditingBundle({
+      const updatedList = [newBundleItem, ...currentList];
+      const updated = {
         ...editingBundle,
-        testItems: [newBundleItem, ...currentList]
-      });
+        testItems: updatedList,
+        totalTestsCount: updatedList.length + (editingBundle.chapterTests?.length || 0) + (editingBundle.pypTests?.length || 0),
+      };
+      setEditingBundle(updated);
+      saveSingleBundle(updated);
     }
 
     showToast(`✓ Attached "${test.title}" to ${editingBundle.title}!`);
+  };
+
+  const handleAutoLinkMatchingTests = () => {
+    if (!editingBundle) return;
+    const matching = availableTests.filter(t => doesTestMatchBundle(t, editingBundle));
+    if (matching.length === 0) {
+      showToast(`No unattached matching tests found in catalog for ${editingBundle.title}.`);
+      return;
+    }
+    const current = [...(editingBundle.testItems || [])];
+    let addedCount = 0;
+    matching.forEach(t => {
+      if (!current.some(item => item.id === t.id)) {
+        current.push(convertMockTestToBundleItem(t, current.length === 0));
+        addedCount++;
+      }
+    });
+
+    if (addedCount === 0) {
+      showToast(`All ${matching.length} matching catalog tests are already attached.`);
+      return;
+    }
+
+    const allAttached = [...current, ...(editingBundle.chapterTests || []), ...(editingBundle.pypTests || [])];
+    const freeCount = allAttached.filter(t => t.isFreePreview).length;
+
+    const updated: TestSeriesBundle = {
+      ...editingBundle,
+      testItems: current,
+      totalTestsCount: allAttached.length,
+      freeTestsCount: freeCount || 1,
+    };
+    setEditingBundle(updated);
+    saveSingleBundle(updated);
+    showToast(`⚡ Attached ${addedCount} matching tests from catalog to ${editingBundle.title}!`);
   };
 
   const filteredBundles = bundles.filter(b => {
@@ -2275,6 +2333,34 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                 </button>
               </div>
             )}
+
+            {/* Smart Auto-Link Catalog Tests Banner */}
+            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-950/90 via-slate-900 to-slate-950 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-white flex items-center space-x-2">
+                    <span>⚡ Auto-Link Matching Tests from Catalog</span>
+                    <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-bold border border-indigo-500/30">
+                      Smart Match
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Instantly sync all created tests matching <strong>{editingBundle.targetPost || editingBundle.title}</strong> into this bundle's curriculum.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoLinkMatchingTests}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/30 shrink-0 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Auto-Link Tests ({availableTests.filter(t => doesTestMatchBundle(t, editingBundle)).length} Matching)</span>
+              </button>
+            </div>
             
             {/* Top Ingestion CTA Cards (Using the Proven Ingestion Studio Engine) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3098,7 +3184,25 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setEditingBundle(bundle);
+                    const matchingTests = availableTests.filter(t => doesTestMatchBundle(t, bundle));
+                    let reconciled = { ...bundle };
+                    if (matchingTests.length > 0) {
+                      const currentItems = [...(bundle.testItems || [])];
+                      let modified = false;
+                      matchingTests.forEach(t => {
+                        if (!currentItems.some(item => item.id === t.id)) {
+                          currentItems.push(convertMockTestToBundleItem(t, currentItems.length === 0));
+                          modified = true;
+                        }
+                      });
+                      if (modified) {
+                        reconciled.testItems = currentItems;
+                        reconciled.totalTestsCount = currentItems.length + (reconciled.chapterTests?.length || 0) + (reconciled.pypTests?.length || 0);
+                        reconciled.freeTestsCount = [...currentItems, ...(reconciled.chapterTests || []), ...(reconciled.pypTests || [])].filter(t => t.isFreePreview).length || 1;
+                        saveSingleBundle(reconciled);
+                      }
+                    }
+                    setEditingBundle(reconciled);
                     setActiveTab('basic');
                   }}
                   className="flex-1 py-2 px-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-indigo-600/20 cursor-pointer min-w-0"

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, PreviousYearPaper } from '../types';
 import { TestSeriesBundle } from '../data/bundleCatalog';
-import { getStoredBundles } from '../utils/bundleStore';
+import { getStoredBundles, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { useAuth } from '../context/AuthContext';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
@@ -49,7 +49,7 @@ export const CGSSBHeroPage: React.FC<CGSSBHeroPageProps> = ({
   const isAdmin = user?.role === 'admin';
 
   // Filter CGSSB specific bundles
-  const allBundles = useMemo(() => getStoredBundles(), []);
+  const allBundles = useMemo(() => reconcileAllTestsWithBundles(tests), [tests]);
   const cgssbBundles = allBundles.filter(
     b => b.authority === 'CGSSB' && (isAdmin || (b.isPublished !== false && !b.isDraft))
   );
