@@ -312,16 +312,37 @@ function MainApp() {
     return result;
   }
 
-  // Helper to deduplicate and merge initial items with saved local state
-  function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[]): T[] {
+  // Helper to get deleted IDs set from localStorage
+  function getDeletedIds(key: string): Set<string> {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return new Set(parsed);
+      }
+    } catch {}
+    return new Set<string>();
+  }
+
+  function addDeletedId(key: string, id: string) {
+    try {
+      const set = getDeletedIds(key);
+      set.add(id);
+      localStorage.setItem(key, JSON.stringify(Array.from(set)));
+    } catch {}
+  }
+
+  // Helper to deduplicate and merge initial items with saved local state (respecting deletions)
+  function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
+    const deletedSet = getDeletedIds(deletedKey);
     const map = new Map<string, T>();
-    // 1. First populate all built-in latest catalog items
+    // 1. First populate all built-in latest catalog items (skipping deleted)
     initial.forEach(item => {
-      if (item && item.id) map.set(item.id, item);
+      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
     });
-    // 2. Add/overlay saved items
+    // 2. Add/overlay saved items (skipping deleted)
     saved.forEach(item => {
-      if (item && item.id) {
+      if (item && item.id && !deletedSet.has(item.id)) {
         map.set(item.id, item);
       }
     });
@@ -335,11 +356,11 @@ function MainApp() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_MOCK_TESTS, parsed);
+          return mergeWithInitial(INITIAL_MOCK_TESTS, parsed, 'cgssb_deleted_tests');
         }
       }
     } catch {}
-    return INITIAL_MOCK_TESTS;
+    return mergeWithInitial(INITIAL_MOCK_TESTS, [], 'cgssb_deleted_tests');
   });
 
   const [questions, setQuestions] = useState<Question[]>(() => {
@@ -349,11 +370,11 @@ function MainApp() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           const migrated = parsed.map(migrateLegacyQuestion);
-          return mergeWithInitial(INITIAL_QUESTIONS, migrated);
+          return mergeWithInitial(INITIAL_QUESTIONS, migrated, 'cgssb_deleted_questions');
         }
       }
     } catch {}
-    return INITIAL_QUESTIONS;
+    return mergeWithInitial(INITIAL_QUESTIONS, [], 'cgssb_deleted_questions');
   });
 
   const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
@@ -362,11 +383,11 @@ function MainApp() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_PYP_PAPERS, parsed);
+          return mergeWithInitial(INITIAL_PYP_PAPERS, parsed, 'cgssb_deleted_pyp');
         }
       }
     } catch {}
-    return INITIAL_PYP_PAPERS;
+    return mergeWithInitial(INITIAL_PYP_PAPERS, [], 'cgssb_deleted_pyp');
   });
 
   const [cmsPages, setCmsPages] = useState<CMSPage[]>(() => {
@@ -499,19 +520,19 @@ function MainApp() {
   // Run taxonomy migration & ensure all latest mock tests are synced on initial mount
   useEffect(() => {
     runTaxonomyMigration(INITIAL_QUESTIONS, INITIAL_ATTEMPTS);
-    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev));
-    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev));
-    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev));
+    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests'));
+    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions'));
+    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp'));
   }, []);
 
   const handleSyncDefaultCatalog = () => {
-    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev));
-    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev));
-    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev));
+    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests'));
+    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions'));
+    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp'));
     try {
-      localStorage.setItem('cgssb_tests', JSON.stringify(mergeWithInitial(INITIAL_MOCK_TESTS, tests)));
-      localStorage.setItem('cgssb_questions', JSON.stringify(mergeWithInitial(INITIAL_QUESTIONS, questions)));
-      localStorage.setItem('cgssb_pyp', JSON.stringify(mergeWithInitial(INITIAL_PYP_PAPERS, pypPapers)));
+      localStorage.setItem('cgssb_tests', JSON.stringify(mergeWithInitial(INITIAL_MOCK_TESTS, tests, 'cgssb_deleted_tests')));
+      localStorage.setItem('cgssb_questions', JSON.stringify(mergeWithInitial(INITIAL_QUESTIONS, questions, 'cgssb_deleted_questions')));
+      localStorage.setItem('cgssb_pyp', JSON.stringify(mergeWithInitial(INITIAL_PYP_PAPERS, pypPapers, 'cgssb_deleted_pyp')));
     } catch {}
   };
 
@@ -565,37 +586,49 @@ function MainApp() {
         ]);
 
         if (firestoreTests && firestoreTests.length > 0) {
-          setTests(prev => dedupeById([...prev, ...firestoreTests]));
+          const deletedTests = getDeletedIds('cgssb_deleted_tests');
+          setTests(prev => dedupeById([...prev, ...firestoreTests]).filter(t => !deletedTests.has(t.id)));
         } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
           // Auto-seed Firestore on initial connect only if logged in as administrator
           INITIAL_MOCK_TESTS.forEach(t => saveTestToFirestore(t).catch(() => null));
         }
 
         if (firestoreQuestions && firestoreQuestions.length > 0) {
-          setQuestions(prev => dedupeById([...prev, ...firestoreQuestions]));
+          const deletedQs = getDeletedIds('cgssb_deleted_questions');
+          setQuestions(prev => dedupeById([...prev, ...firestoreQuestions]).filter(q => !deletedQs.has(q.id)));
         } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
           // Auto-seed initial question catalog to Cloud Firestore only if logged in as administrator
           saveQuestionsToFirestore(INITIAL_QUESTIONS).catch(() => null);
         }
 
         if (firestorePyp && firestorePyp.length > 0) {
-          setPypPapers(prev => dedupeById([...prev, ...firestorePyp]));
+          const deletedPyps = getDeletedIds('cgssb_deleted_pyp');
+          setPypPapers(prev => dedupeById([...prev, ...firestorePyp]).filter(p => !deletedPyps.has(p.id)));
         }
 
         if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
           const t = await testsRes.json();
           const list = Array.isArray(t) ? t : (t?.tests || []);
-          if (list.length > 0) setTests(prev => dedupeById([...prev, ...list]));
+          if (list.length > 0) {
+            const deletedTests = getDeletedIds('cgssb_deleted_tests');
+            setTests(prev => dedupeById([...prev, ...list]).filter(test => !deletedTests.has(test.id)));
+          }
         }
         if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
           const p = await pypRes.json();
           const list = Array.isArray(p) ? p : (p?.papers || []);
-          if (list.length > 0) setPypPapers(prev => dedupeById([...prev, ...list]));
+          if (list.length > 0) {
+            const deletedPyps = getDeletedIds('cgssb_deleted_pyp');
+            setPypPapers(prev => dedupeById([...prev, ...list]).filter(paper => !deletedPyps.has(paper.id)));
+          }
         }
         if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
           const q = await qRes.json();
           const list = Array.isArray(q) ? q : (q?.questions || []);
-          if (list.length > 0) setQuestions(prev => dedupeById([...prev, ...list]));
+          if (list.length > 0) {
+            const deletedQs = getDeletedIds('cgssb_deleted_questions');
+            setQuestions(prev => dedupeById([...prev, ...list]).filter(question => !deletedQs.has(question.id)));
+          }
         }
 
         // Sync and refresh Test Series bundles from Cloud Firestore & server
@@ -894,10 +927,14 @@ function MainApp() {
   };
 
   const handleDeleteQuestion = (id: string) => {
+    addDeletedId('cgssb_deleted_questions', id);
     const token = getAdminToken();
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
-    setQuestions(prev => prev.filter(q => q.id !== id));
+    const updated = questions.filter(q => q.id !== id);
+    setQuestions(updated);
+    try {
+      localStorage.setItem('cgssb_questions', JSON.stringify(updated));
+    } catch {}
     deleteQuestionFromFirestore(id).catch(() => null);
     fetch(`/api/questions/${id}`, {
       method: 'DELETE',
@@ -938,7 +975,12 @@ function MainApp() {
   };
 
   const handleDeletePYP = (id: string) => {
-    setPypPapers(prev => prev.filter(p => p.id !== id));
+    addDeletedId('cgssb_deleted_pyp', id);
+    const updated = pypPapers.filter(p => p.id !== id);
+    setPypPapers(updated);
+    try {
+      localStorage.setItem('cgssb_pyp', JSON.stringify(updated));
+    } catch {}
     deletePypPaperFromFirestore(id).catch(() => null);
     const token = getAdminToken();
     fetch(`/api/pyp/${id}`, {
@@ -1042,7 +1084,12 @@ function MainApp() {
   };
 
   const handleDeleteTest = async (testId: string) => {
-    setTests(prev => prev.filter(t => t.id !== testId));
+    addDeletedId('cgssb_deleted_tests', testId);
+    const updated = tests.filter(t => t.id !== testId);
+    setTests(updated);
+    try {
+      localStorage.setItem('cgssb_tests', JSON.stringify(updated));
+    } catch {}
     deleteTestFromFirestore(testId).catch(() => null);
     try {
       const token = getAdminToken();
