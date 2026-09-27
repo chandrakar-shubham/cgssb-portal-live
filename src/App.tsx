@@ -565,37 +565,37 @@ function MainApp() {
         ]);
 
         if (firestoreTests && firestoreTests.length > 0) {
-          setTests(prev => dedupeById([...firestoreTests, ...prev]));
+          setTests(prev => dedupeById([...prev, ...firestoreTests]));
         } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
           // Auto-seed Firestore on initial connect only if logged in as administrator
           INITIAL_MOCK_TESTS.forEach(t => saveTestToFirestore(t).catch(() => null));
         }
 
         if (firestoreQuestions && firestoreQuestions.length > 0) {
-          setQuestions(prev => dedupeById([...firestoreQuestions, ...prev]));
+          setQuestions(prev => dedupeById([...prev, ...firestoreQuestions]));
         } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
           // Auto-seed initial question catalog to Cloud Firestore only if logged in as administrator
           saveQuestionsToFirestore(INITIAL_QUESTIONS).catch(() => null);
         }
 
         if (firestorePyp && firestorePyp.length > 0) {
-          setPypPapers(prev => dedupeById([...firestorePyp, ...prev]));
+          setPypPapers(prev => dedupeById([...prev, ...firestorePyp]));
         }
 
         if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
           const t = await testsRes.json();
           const list = Array.isArray(t) ? t : (t?.tests || []);
-          if (list.length > 0) setTests(prev => dedupeById([...list, ...prev]));
+          if (list.length > 0) setTests(prev => dedupeById([...prev, ...list]));
         }
         if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
           const p = await pypRes.json();
           const list = Array.isArray(p) ? p : (p?.papers || []);
-          if (list.length > 0) setPypPapers(prev => dedupeById([...list, ...prev]));
+          if (list.length > 0) setPypPapers(prev => dedupeById([...prev, ...list]));
         }
         if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
           const q = await qRes.json();
           const list = Array.isArray(q) ? q : (q?.questions || []);
-          if (list.length > 0) setQuestions(prev => dedupeById([...list, ...prev]));
+          if (list.length > 0) setQuestions(prev => dedupeById([...prev, ...list]));
         }
 
         // Sync and refresh Test Series bundles from Cloud Firestore & server
