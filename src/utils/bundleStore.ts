@@ -9,10 +9,10 @@ import {
 const BUNDLE_STORAGE_KEY = 'cgssb_custom_bundles_catalog_v2';
 const DELETED_BUNDLES_STORAGE_KEY = 'cgssb_deleted_bundles';
 
-export const getDeletedBundleIds = (): Set<string> => {
+export const getDeletedBundleIds = (storageKey = DELETED_BUNDLES_STORAGE_KEY): Set<string> => {
   if (typeof window === 'undefined') return new Set();
   try {
-    const raw = localStorage.getItem(DELETED_BUNDLES_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return new Set(parsed);
@@ -168,7 +168,34 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
         });
       }
     }
-    return Array.from(bundleMap.values());
+    const rawBundles = Array.from(bundleMap.values());
+    const deletedTests = getDeletedBundleIds('cgssb_deleted_tests');
+    const deletedPyps = getDeletedBundleIds('cgssb_deleted_pyp');
+
+    const sanitizedBundles = rawBundles.map(bundle => {
+      const filterItems = (items?: BundleTestItem[]) => (items || []).filter(item => {
+        const id = item.id;
+        const refId = item.mockTestRef?.id;
+        return !id || (!deletedTests.has(id) && !deletedPyps.has(id) && (!refId || (!deletedTests.has(refId) && !deletedPyps.has(refId))));
+      });
+
+      const newTestItems = filterItems(bundle.testItems);
+      const newChapterTests = filterItems(bundle.chapterTests);
+      const newPypTests = filterItems(bundle.pypTests);
+      const totalCount = newTestItems.length + newChapterTests.length + newPypTests.length;
+      const freeCount = [...newTestItems, ...newChapterTests, ...newPypTests].filter(t => t.isFreePreview).length;
+
+      return {
+        ...bundle,
+        testItems: newTestItems,
+        chapterTests: newChapterTests,
+        pypTests: newPypTests,
+        totalTestsCount: totalCount > 0 ? totalCount : 1,
+        freeTestsCount: freeCount > 0 ? freeCount : 1,
+      };
+    });
+
+    return sanitizedBundles;
   } catch (err) {
     console.error('Error loading bundles from storage:', err);
     return OFFICIAL_BUNDLES_CATALOG;

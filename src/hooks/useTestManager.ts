@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MockTest } from '../types';
 import { INITIAL_MOCK_TESTS } from '../mockData';
+import { cleanTestFromAllBundles } from '../utils/bundleStore';
 
 function getDeletedIds(key: string): Set<string> {
   try {
@@ -85,6 +86,7 @@ export function useTestManager() {
       if (!arr.includes(testId)) arr.push(testId);
       localStorage.setItem('cgssb_deleted_tests', JSON.stringify(arr));
     } catch {}
+    cleanTestFromAllBundles(testId);
     setTests(prev => prev.filter(t => t.id !== testId));
   };
 
