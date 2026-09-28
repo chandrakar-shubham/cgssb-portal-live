@@ -39,35 +39,39 @@ function ensureDataDir() {
 
 function loadLocalJsonDb(): DatabaseShape {
   ensureDataDir();
-  const mergeById = <T extends { id: string }>(initial: T[], saved?: T[]): T[] => {
-    const map = new Map<string, T>();
-    initial.forEach(item => { if (item && item.id) map.set(item.id, item); });
-    if (Array.isArray(saved)) {
-      saved.forEach(item => { if (item && item.id) map.set(item.id, item); });
-    }
-    return Array.from(map.values());
-  };
-
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
-      return {
-        questions: mergeById(INITIAL_QUESTIONS, parsed.questions),
-        mockTests: mergeById(INITIAL_MOCK_TESTS, parsed.mockTests),
-        pypPapers: mergeById(INITIAL_PYP_PAPERS, parsed.pypPapers),
-        attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [...SAMPLE_USER_ATTEMPTS],
-      };
+      if (parsed && typeof parsed === 'object') {
+        return {
+          questions: Array.isArray(parsed.questions) ? parsed.questions : [...INITIAL_QUESTIONS],
+          mockTests: Array.isArray(parsed.mockTests) ? parsed.mockTests : [...INITIAL_MOCK_TESTS],
+          pypPapers: Array.isArray(parsed.pypPapers) ? parsed.pypPapers : [...INITIAL_PYP_PAPERS],
+          attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [...SAMPLE_USER_ATTEMPTS],
+        };
+      }
     }
   } catch (err) {
-    console.warn('⚠️ Failed to load local JSON DB, using initial seeds:', err);
+    console.warn('⚠️ Failed to load local JSON DB, creating initial snapshot:', err);
   }
-  return {
+
+  // Initial bootstrap when DB_FILE does not exist
+  const initialDb: DatabaseShape = {
     questions: [...INITIAL_QUESTIONS],
     mockTests: [...INITIAL_MOCK_TESTS],
     pypPapers: [...INITIAL_PYP_PAPERS],
     attempts: [...SAMPLE_USER_ATTEMPTS],
   };
+
+  try {
+    ensureDataDir();
+    fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to write initial DB_FILE:', err);
+  }
+
+  return initialDb;
 }
 
 let localDb: DatabaseShape = loadLocalJsonDb();

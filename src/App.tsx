@@ -50,7 +50,7 @@ import { AdminChapterTestManager } from './components/AdminChapterTestManager';
 import { AdminPracticeSetManager } from './components/AdminPracticeSetManager';
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
-import { syncBundlesFromFirestore, autoLinkTestToBundles } from './utils/bundleStore';
+import { syncBundlesFromFirestore, autoLinkTestToBundles, cleanTestFromAllBundles } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
 import { AdminRemoteConfigStudio } from './components/AdminRemoteConfigStudio';
 import { ArrowLeft, Trophy, Bell, AlertTriangle, Radio, X } from 'lucide-react';
@@ -350,6 +350,16 @@ function MainApp() {
     } catch {}
   }
 
+  function removeDeletedId(key: string, id: string) {
+    try {
+      const set = getDeletedIds(key);
+      if (set.has(id)) {
+        set.delete(id);
+        localStorage.setItem(key, JSON.stringify(Array.from(set)));
+      }
+    } catch {}
+  }
+
   // Helper to deduplicate and merge initial items with saved local state (respecting deletions)
   function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
     const deletedSet = getDeletedIds(deletedKey);
@@ -535,12 +545,9 @@ function MainApp() {
     return INITIAL_ATTEMPTS;
   });
 
-  // Run taxonomy migration & ensure all latest mock tests are synced on initial mount
+  // Run taxonomy migration on initial mount
   useEffect(() => {
     runTaxonomyMigration(INITIAL_QUESTIONS, INITIAL_ATTEMPTS);
-    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests'));
-    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions'));
-    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp'));
 
     // Listen for governance events (Test restore, Cascade publish)
     const handleRestored = (e: any) => {
@@ -625,50 +632,38 @@ function MainApp() {
           fetchPypPapersFromFirestore().catch(() => [])
         ]);
 
-        if (firestoreTests && firestoreTests.length > 0) {
-          const deletedTests = getDeletedIds('cgssb_deleted_tests');
-          setTests(prev => dedupeById([...prev, ...firestoreTests]).filter(t => !deletedTests.has(t.id)));
-        } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
-          // Auto-seed Firestore on initial connect only if logged in as administrator
-          INITIAL_MOCK_TESTS.forEach(t => saveTestToFirestore(t).catch(() => null));
-        }
-
-        if (firestoreQuestions && firestoreQuestions.length > 0) {
-          const deletedQs = getDeletedIds('cgssb_deleted_questions');
-          setQuestions(prev => dedupeById([...prev, ...firestoreQuestions]).filter(q => !deletedQs.has(q.id)));
-        } else if (isAdminAuthenticated || auth.currentUser?.email === 'coolboy171717@gmail.com') {
-          // Auto-seed initial question catalog to Cloud Firestore only if logged in as administrator
-          saveQuestionsToFirestore(INITIAL_QUESTIONS).catch(() => null);
-        }
-
-        if (firestorePyp && firestorePyp.length > 0) {
-          const deletedPyps = getDeletedIds('cgssb_deleted_pyp');
-          setPypPapers(prev => dedupeById([...prev, ...firestorePyp]).filter(p => !deletedPyps.has(p.id)));
-        }
+        const deletedTests = getDeletedIds('cgssb_deleted_tests');
+        const deletedQs = getDeletedIds('cgssb_deleted_questions');
+        const deletedPyps = getDeletedIds('cgssb_deleted_pyp');
 
         if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
           const t = await testsRes.json();
           const list = Array.isArray(t) ? t : (t?.tests || []);
           if (list.length > 0) {
-            const deletedTests = getDeletedIds('cgssb_deleted_tests');
-            setTests(prev => dedupeById([...prev, ...list]).filter(test => !deletedTests.has(test.id)));
+            setTests(list.filter((test: MockTest) => !deletedTests.has(test.id)));
           }
+        } else if (firestoreTests && firestoreTests.length > 0) {
+          setTests(firestoreTests.filter(t => !deletedTests.has(t.id)));
         }
-        if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
-          const p = await pypRes.json();
-          const list = Array.isArray(p) ? p : (p?.papers || []);
-          if (list.length > 0) {
-            const deletedPyps = getDeletedIds('cgssb_deleted_pyp');
-            setPypPapers(prev => dedupeById([...prev, ...list]).filter(paper => !deletedPyps.has(paper.id)));
-          }
-        }
+
         if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
           const q = await qRes.json();
           const list = Array.isArray(q) ? q : (q?.questions || []);
           if (list.length > 0) {
-            const deletedQs = getDeletedIds('cgssb_deleted_questions');
-            setQuestions(prev => dedupeById([...prev, ...list]).filter(question => !deletedQs.has(question.id)));
+            setQuestions(list.filter((question: Question) => !deletedQs.has(question.id)));
           }
+        } else if (firestoreQuestions && firestoreQuestions.length > 0) {
+          setQuestions(firestoreQuestions.filter(q => !deletedQs.has(q.id)));
+        }
+
+        if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
+          const p = await pypRes.json();
+          const list = Array.isArray(p) ? p : (p?.papers || []);
+          if (list.length > 0) {
+            setPypPapers(list.filter((paper: PreviousYearPaper) => !deletedPyps.has(paper.id)));
+          }
+        } else if (firestorePyp && firestorePyp.length > 0) {
+          setPypPapers(firestorePyp.filter(p => !deletedPyps.has(p.id)));
         }
 
         // Sync and refresh Test Series bundles from Cloud Firestore & server
@@ -935,6 +930,7 @@ function MainApp() {
       };
     };
 
+    removeDeletedId('cgssb_deleted_questions', newQ.id);
     setQuestions(prev => [newQ, ...prev]);
     saveQuestionsToFirestore([newQ]).catch(() => null);
     fetch('/api/questions', {
@@ -1001,6 +997,7 @@ function MainApp() {
       linkedMockTestId: pypData.linkedMockTestId,
       linkedQuestionIds: pypData.linkedQuestionIds,
     };
+    removeDeletedId('cgssb_deleted_pyp', newPaper.id);
     setPypPapers(prev => dedupeById([newPaper, ...prev]));
     savePypPaperToFirestore(newPaper).catch(() => null);
     const token = getAdminToken();
@@ -1052,6 +1049,7 @@ function MainApp() {
       createdAt: new Date().toISOString(),
     };
 
+    removeDeletedId('cgssb_deleted_tests', newTest.id);
     setTests(prev => dedupeById([newTest, ...prev]));
     saveTestToFirestore(newTest).catch(() => null);
     const updatedPaper = { ...pyp, linkedMockTestId: newTest.id };
@@ -1099,6 +1097,7 @@ function MainApp() {
 
   const handleUpdateTest = async (testId: string, updates: Partial<MockTest>) => {
     let targetTest: MockTest | null = null;
+    removeDeletedId('cgssb_deleted_tests', testId);
     setTests(prev => {
       const updated = prev.map(t => (t.id === testId ? { ...t, ...updates } : t));
       targetTest = updated.find(t => t.id === testId) || null;
@@ -1130,6 +1129,7 @@ function MainApp() {
     try {
       localStorage.setItem('cgssb_tests', JSON.stringify(updated));
     } catch {}
+    cleanTestFromAllBundles(testId);
     deleteTestFromFirestore(testId).catch(() => null);
     try {
       const token = getAdminToken();
@@ -1157,6 +1157,7 @@ function MainApp() {
       isPublished: newTest.isPublished !== false,
       createdAt: new Date().toISOString(),
     };
+    removeDeletedId('cgssb_deleted_tests', fullTest.id);
     setTests(prev => dedupeById([fullTest, ...prev]));
     saveTestToFirestore(fullTest).catch(() => null);
     autoLinkTestToBundles(fullTest);
@@ -1173,6 +1174,8 @@ function MainApp() {
 
   // ADMIN AI TEST CREATOR PUBLISH ACTION
   const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
+    removeDeletedId('cgssb_deleted_tests', newTest.id);
+    newQuestions.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
     setQuestions(prev => dedupeById([...newQuestions, ...prev]));
     setTests(prev => dedupeById([newTest, ...prev]));
     saveTestToFirestore(newTest).catch(() => null);
@@ -1200,6 +1203,7 @@ function MainApp() {
   // UNIFIED BULK QUESTIONS ADDED (Syncs directly to Cloud Firestore & backend)
   const handleBulkQuestionsAdded = (newQs: Question[]) => {
     if (!newQs || newQs.length === 0) return;
+    newQs.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
     setQuestions(prev => dedupeById([...newQs, ...prev]));
     saveQuestionsToFirestore(newQs).catch(() => null);
     const token = getAdminToken();
@@ -1216,6 +1220,7 @@ function MainApp() {
   // UNIFIED BULK TESTS ADDED (Syncs directly to Cloud Firestore & backend)
   const handleBulkTestsAdded = (newTests: MockTest[]) => {
     if (!newTests || newTests.length === 0) return;
+    newTests.forEach(t => removeDeletedId('cgssb_deleted_tests', t.id));
     setTests(prev => dedupeById([...newTests, ...prev]));
     newTests.forEach(t => {
       saveTestToFirestore(t).catch(() => null);

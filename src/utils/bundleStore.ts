@@ -7,6 +7,37 @@ import {
 } from '../firebase/firestoreService';
 
 const BUNDLE_STORAGE_KEY = 'cgssb_custom_bundles_catalog_v2';
+const DELETED_BUNDLES_STORAGE_KEY = 'cgssb_deleted_bundles';
+
+export const getDeletedBundleIds = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_BUNDLES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch {}
+  return new Set();
+};
+
+export const addDeletedBundleId = (idOrSlug: string) => {
+  if (typeof window === 'undefined' || !idOrSlug) return;
+  try {
+    const set = getDeletedBundleIds();
+    set.add(idOrSlug);
+    localStorage.setItem(DELETED_BUNDLES_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  } catch {}
+};
+
+export const removeDeletedBundleId = (idOrSlug: string) => {
+  if (typeof window === 'undefined' || !idOrSlug) return;
+  try {
+    const set = getDeletedBundleIds();
+    set.delete(idOrSlug);
+    localStorage.setItem(DELETED_BUNDLES_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  } catch {}
+};
 
 export const getAdminHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = {
@@ -88,31 +119,34 @@ export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<Te
 export const getStoredBundles = (): TestSeriesBundle[] => {
   if (typeof window === 'undefined') return OFFICIAL_BUNDLES_CATALOG;
   try {
+    const deletedSet = getDeletedBundleIds();
     const raw = localStorage.getItem(BUNDLE_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
-      return OFFICIAL_BUNDLES_CATALOG;
-    }
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      const bundleMap = new Map<string, TestSeriesBundle>();
-      OFFICIAL_BUNDLES_CATALOG.forEach(b => {
-        if (b && b.id) bundleMap.set(b.id, { ...b });
-      });
+    const bundleMap = new Map<string, TestSeriesBundle>();
 
-      parsed.forEach(stored => {
-        if (stored && stored.id) {
-          const official = bundleMap.get(stored.id);
-          if (official) {
-            bundleMap.set(stored.id, mergeBundleEntities(official, stored));
-          } else {
-            bundleMap.set(stored.id, stored);
+    // 1. Populate official catalog excluding any deleted bundles
+    OFFICIAL_BUNDLES_CATALOG.forEach(b => {
+      if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
+        bundleMap.set(b.id, { ...b });
+      }
+    });
+
+    // 2. Overlay user stored bundles excluding any deleted
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        parsed.forEach(stored => {
+          if (stored && stored.id && !deletedSet.has(stored.id) && !deletedSet.has(stored.slug)) {
+            const official = bundleMap.get(stored.id);
+            if (official) {
+              bundleMap.set(stored.id, mergeBundleEntities(official, stored));
+            } else {
+              bundleMap.set(stored.id, stored);
+            }
           }
-        }
-      });
-      return Array.from(bundleMap.values());
+        });
+      }
     }
-    return OFFICIAL_BUNDLES_CATALOG;
+    return Array.from(bundleMap.values());
   } catch (err) {
     console.error('Error loading bundles from storage:', err);
     return OFFICIAL_BUNDLES_CATALOG;
@@ -122,7 +156,9 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
 export const saveStoredBundles = (bundles: TestSeriesBundle[]): void => {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(bundles));
+    const deletedSet = getDeletedBundleIds();
+    const cleanList = bundles.filter(b => b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug));
+    localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(cleanList));
   } catch (err) {
     console.error('Error saving bundles to storage:', err);
   }
@@ -136,13 +172,19 @@ export const syncBundlesFromFirestore = async (
   remoteUrl?: string
 ): Promise<{ list: TestSeriesBundle[]; count: number; source: string }> => {
   const current = getStoredBundles();
+  const deletedSet = getDeletedBundleIds();
   const map = new Map<string, TestSeriesBundle>();
 
-  // Base with official bundles
-  OFFICIAL_BUNDLES_CATALOG.forEach(b => { if (b && b.id) map.set(b.id, { ...b }); });
-  // Overlay current local storage
+  // Base with official bundles (skipping deleted)
+  OFFICIAL_BUNDLES_CATALOG.forEach(b => {
+    if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
+      map.set(b.id, { ...b });
+    }
+  });
+
+  // Overlay current local storage (skipping deleted)
   current.forEach(b => {
-    if (b && b.id) {
+    if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
       const base = map.get(b.id) || b;
       map.set(b.id, mergeBundleEntities(base, b));
     }
@@ -162,7 +204,7 @@ export const syncBundlesFromFirestore = async (
         const pullData = await pullRes.json().catch(() => null);
         if (pullData?.bundles && Array.isArray(pullData.bundles)) {
           pullData.bundles.forEach((b: TestSeriesBundle) => {
-            if (b && b.id) {
+            if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
               const base = map.get(b.id) || b;
               map.set(b.id, mergeBundleEntities(base, b));
             }
@@ -180,7 +222,7 @@ export const syncBundlesFromFirestore = async (
     const firestoreBundles = await fetchBundlesFromFirestore();
     if (firestoreBundles && Array.isArray(firestoreBundles) && firestoreBundles.length > 0) {
       firestoreBundles.forEach(b => {
-        if (b && b.id) {
+        if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
           const base = map.get(b.id) || b;
           map.set(b.id, mergeBundleEntities(base, b));
         }
@@ -199,7 +241,7 @@ export const syncBundlesFromFirestore = async (
       const list = Array.isArray(data) ? data : (data?.bundles || []);
       if (Array.isArray(list) && list.length > 0) {
         list.forEach(b => {
-          if (b && b.id) {
+          if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
             const base = map.get(b.id) || b;
             map.set(b.id, mergeBundleEntities(base, b));
           }
@@ -260,7 +302,15 @@ export const saveSingleBundle = (bundle: TestSeriesBundle): TestSeriesBundle[] =
 
 export const deleteStoredBundle = (bundleId: string): TestSeriesBundle[] => {
   const list = getStoredBundles();
-  const updated = list.filter(b => b.id !== bundleId && b.slug !== bundleId);
+  const target = list.find(b => b.id === bundleId || b.slug === bundleId);
+
+  addDeletedBundleId(bundleId);
+  if (target) {
+    if (target.id) addDeletedBundleId(target.id);
+    if (target.slug) addDeletedBundleId(target.slug);
+  }
+
+  const updated = list.filter(b => b.id !== bundleId && b.slug !== bundleId && (!target || (b.id !== target.id && b.slug !== target.slug)));
   saveStoredBundles(updated);
 
   if (typeof window !== 'undefined') {
@@ -271,6 +321,9 @@ export const deleteStoredBundle = (bundleId: string): TestSeriesBundle[] => {
   deleteBundleFromFirestore(bundleId).catch(err => {
     console.warn('Firestore bundle delete warning:', err);
   });
+  if (target && target.id !== bundleId) {
+    deleteBundleFromFirestore(target.id).catch(() => null);
+  }
 
   fetch(`/api/bundles/${bundleId}`, {
     method: 'DELETE',
@@ -321,6 +374,7 @@ export const toggleBundlePublish = (bundleId: string): { updatedList: TestSeries
 
 export const resetBundlesToDefault = (): TestSeriesBundle[] => {
   if (typeof window !== 'undefined') {
+    localStorage.removeItem(DELETED_BUNDLES_STORAGE_KEY);
     localStorage.removeItem(BUNDLE_STORAGE_KEY);
     localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
     window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: OFFICIAL_BUNDLES_CATALOG }));
@@ -366,6 +420,9 @@ export const saveTrashItems = (items: TrashedItem[]): void => {
  * Move a bundle to Trash Bin (Soft Delete)
  */
 export const moveToTrashBundle = (bundle: TestSeriesBundle, userEmail?: string): void => {
+  addDeletedBundleId(bundle.id);
+  if (bundle.slug) addDeletedBundleId(bundle.slug);
+
   const trashed: TrashedItem = {
     id: bundle.id,
     type: 'BUNDLE',
@@ -388,6 +445,10 @@ export const restoreBundleFromTrash = (bundleId: string): TestSeriesBundle | nul
   const currentTrash = getTrashItems();
   const target = currentTrash.find(i => i.id === bundleId && i.type === 'BUNDLE');
   if (!target || !target.data) return null;
+
+  removeDeletedBundleId(bundleId);
+  if (target.data.id) removeDeletedBundleId(target.data.id);
+  if (target.data.slug) removeDeletedBundleId(target.data.slug);
 
   saveTrashItems(currentTrash.filter(i => i.id !== bundleId));
   const restoredBundle: TestSeriesBundle = {
