@@ -1330,6 +1330,7 @@ function MainApp() {
                 onOpenUniversalIngest={openUniversalIngestion}
                 onDeleteTest={handleDeleteTest}
                 onTogglePublishTest={handleTogglePublishTest}
+                onStartTest={handleStartTest}
               />
             )}
 

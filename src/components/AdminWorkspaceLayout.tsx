@@ -274,6 +274,18 @@ export const AdminWorkspaceLayout: React.FC<AdminWorkspaceLayoutProps> = ({
             )}
           </div>
 
+          {/* Universal Control & Ingest Button */}
+          {onOpenUniversalIngest && (
+            <button
+              onClick={onOpenUniversalIngest}
+              title="Universal Control & Ingestion Studio"
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-md shadow-emerald-500/20 transition cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+              <span className="hidden sm:inline">Universal Control</span>
+            </button>
+          )}
+
           {/* Universal Ingest / Tools Modal */}
           {onOpenToolsModal && (
             <button

@@ -31,15 +31,17 @@ function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], de
 export function useTestManager() {
   const [tests, setTests] = useState<MockTest[]>(() => {
     try {
+      const deletedSet = getDeletedIds('cgssb_deleted_tests');
       const saved = localStorage.getItem('cgssb_tests');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_MOCK_TESTS, parsed, 'cgssb_deleted_tests');
+          return mergeWithInitial(INITIAL_MOCK_TESTS, parsed, 'cgssb_deleted_tests').filter(t => !deletedSet.has(t.id));
         }
       }
     } catch {}
-    return mergeWithInitial(INITIAL_MOCK_TESTS, [], 'cgssb_deleted_tests');
+    const deletedSet = getDeletedIds('cgssb_deleted_tests');
+    return mergeWithInitial(INITIAL_MOCK_TESTS, [], 'cgssb_deleted_tests').filter(t => !deletedSet.has(t.id));
   });
 
   useEffect(() => {

@@ -30,15 +30,17 @@ function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], de
 export function usePypManager() {
   const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
     try {
+      const deletedSet = getDeletedIds('cgssb_deleted_pyp');
       const saved = localStorage.getItem('cgssb_pyp');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_PYP_PAPERS, parsed, 'cgssb_deleted_pyp');
+          return mergeWithInitial(INITIAL_PYP_PAPERS, parsed, 'cgssb_deleted_pyp').filter(p => !deletedSet.has(p.id));
         }
       }
     } catch {}
-    return mergeWithInitial(INITIAL_PYP_PAPERS, [], 'cgssb_deleted_pyp');
+    const deletedSet = getDeletedIds('cgssb_deleted_pyp');
+    return mergeWithInitial(INITIAL_PYP_PAPERS, [], 'cgssb_deleted_pyp').filter(p => !deletedSet.has(p.id));
   });
 
   useEffect(() => {

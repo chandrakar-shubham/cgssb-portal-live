@@ -83,6 +83,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Zap,
+  Play,
 } from 'lucide-react';
 
 interface AdminBundleStudioProps {
@@ -101,6 +102,7 @@ interface AdminBundleStudioProps {
   }) => void;
   onDeleteTest?: (testId: string) => void;
   onTogglePublishTest?: (testId: string) => void;
+  onStartTest?: (test: MockTest) => void;
 }
 
 export type IngestionTargetSection = 'mock' | 'chapter' | 'pyp';
@@ -166,6 +168,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   onOpenUniversalIngest,
   onDeleteTest,
   onTogglePublishTest,
+  onStartTest,
 }) => {
   const [bundles, setBundles] = useState<TestSeriesBundle[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -2489,437 +2492,433 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
         {/* TAB 7: ATTACHED TESTS & INGESTION STUDIO ENGINE */}
         {activeTab === 'tests' && (
           <div className="space-y-6">
-            {/* Universal Ingestion Studio Master Banner for Bundle */}
-            {onOpenUniversalIngest && (
-              <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-950/60 via-indigo-950/60 to-slate-900 border border-amber-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
-                <div className="flex items-center space-x-3.5">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                    <Sparkles className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-white flex items-center space-x-2">
-                      <span>Universal Ingestion Studio for {editingBundle.title}</span>
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30">
-                        Bundle Optimized
-                      </span>
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Ingest Full Mocks, Chapter Tests, or PYPs from Text/PDF, JSON, or Gemini AI directly into this Pack.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onOpenUniversalIngest({
-                      type: 'MOCK_TEST',
-                      lockType: false,
-                      authority: editingBundle.authority || 'CGSSB',
-                      examName: editingBundle.title,
-                      cadre: editingBundle.targetPost || editingBundle.title,
-                      bundleId: editingBundle.id,
-                    })
-                  }
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 cursor-pointer shrink-0"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>⚡ Ingest Test Directly into Pack</span>
-                </button>
-              </div>
-            )}
+            {(() => {
+              const renderTestItemRow = (test: BundleTestItem, section: IngestionTargetSection, idx: number, listName: 'testItems' | 'chapterTests' | 'pypTests') => {
+                const testObj = availableTests.find(t => t.id === test.id || t.id === test.mockTestRef?.id);
+                const isPublished = testObj ? testObj.isPublished !== false : true;
 
-            {/* Smart Auto-Link Catalog Tests Banner */}
-            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-950/90 via-slate-900 to-slate-950 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
-              <div className="flex items-center space-x-3.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-white flex items-center space-x-2">
-                    <span>⚡ Auto-Link Matching Tests from Catalog</span>
-                    <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-bold border border-indigo-500/30">
-                      Smart Match
-                    </span>
-                  </h4>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    Instantly sync all created tests matching <strong>{editingBundle.targetPost || editingBundle.title}</strong> into this bundle's curriculum.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleAutoLinkMatchingTests}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/30 shrink-0 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Auto-Link Tests ({availableTests.filter(t => doesTestMatchBundle(t, editingBundle)).length} Matching)</span>
-              </button>
-            </div>
-            
-            {/* Top Ingestion CTA Cards (Using the Proven Ingestion Studio Engine) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
-              {/* Option A: Chapter Test JSON */}
-              <div className="p-5 rounded-3xl bg-slate-900 border border-indigo-900/40 hover:border-indigo-500/40 transition flex flex-col justify-between space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
-                        <BookOpen className="w-4 h-4" />
+                return (
+                  <div key={test.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-white">{test.title}</span>
+                        {test.isFreePreview ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">Free Preview</span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300">Pro Only</span>
+                        )}
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border flex items-center space-x-1 ${
+                          isPublished ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        }`}>
+                          <span>{isPublished ? 'Published' : 'Draft'}</span>
+                        </span>
                       </div>
-                      <span className="text-xs font-bold text-indigo-300">Chapter & Topic Quizzes</span>
-                    </div>
-                    <span className="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded font-bold border border-indigo-500/30">
-                      Ingestion Studio
-                    </span>
-                  </div>
-                  <h4 className="text-sm font-black text-white">Import Chapter Test</h4>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Ingest topic-wise test with live question editor, hierarchy tagging, and subject weightage.
-                  </p>
-                </div>
-                
-                <div className="space-y-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenIngestionTrigger('chapter')}
-                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-indigo-600/20 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Import JSON to Chapter</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenAttachExistingModal('chapter')}
-                    className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center space-x-1.5 transition cursor-pointer border border-slate-700"
-                  >
-                    <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Attach Existing Chapter Test</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Option B: Full Mock Test JSON */}
-              <div className="p-5 rounded-3xl bg-slate-900 border border-emerald-900/40 hover:border-emerald-500/40 transition flex flex-col justify-between space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                        <Layers className="w-4 h-4" />
+                      <div className="text-[11px] text-slate-400 mt-0.5 flex items-center space-x-2">
+                        <span>{test.questionCount} Questions</span>
+                        <span>•</span>
+                        <span>{test.durationMinutes} Mins</span>
+                        <span>•</span>
+                        <span>{test.marks} Marks</span>
                       </div>
-                      <span className="text-xs font-bold text-emerald-300">100-150 Qs Full Mocks</span>
                     </div>
-                    <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-500/30">
-                      Ingestion Studio
-                    </span>
-                  </div>
-                  <h4 className="text-sm font-black text-white">Import Full Mock Test</h4>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Load 100-150 bilingual questions with live card preview, timer, and automatic section distribution.
-                  </p>
-                </div>
 
-                <div className="space-y-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenIngestionTrigger('mock')}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-emerald-600/20 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Import JSON to Full Mock</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenAttachExistingModal('mock')}
-                    className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center space-x-1.5 transition cursor-pointer border border-slate-700"
-                  >
-                    <FolderPlus className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Attach Existing Mock Test</span>
-                  </button>
-                </div>
-              </div>
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                      {/* 1. Preview / Give Test */}
+                      {onStartTest && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const runTest = testObj || test.mockTestRef || {
+                              id: test.id,
+                              title: test.title,
+                              category: editingBundle.authority === 'CGPSC' ? 'CGPSC' : 'CGSSB',
+                              description: '',
+                              durationMinutes: test.durationMinutes,
+                              questionCount: test.questionCount,
+                              marksPerQuestion: 1.0,
+                              negativeMarksPerQuestion: 0.25,
+                              sections: [{ id: `sec-${test.id}`, name: 'Section', questionIds: [] }],
+                              attemptsCount: 0,
+                              isPublished: true,
+                              createdAt: new Date().toISOString()
+                            };
+                            onStartTest(runTest);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center space-x-1 transition cursor-pointer"
+                          title="Preview or Take Test Simulation"
+                        >
+                          <Play className="w-3 h-3 fill-emerald-300" />
+                          <span>Preview</span>
+                        </button>
+                      )}
 
-              {/* Option C: PYP Test JSON */}
-              <div className="p-5 rounded-3xl bg-slate-900 border border-amber-900/40 hover:border-amber-500/40 transition flex flex-col justify-between space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-bold text-amber-300">Original Past Papers</span>
+                      {/* 2. Publish / Unpublish */}
+                      {testObj && onTogglePublishTest && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onTogglePublishTest(testObj.id);
+                            showToast(isPublished ? `Unpublished "${test.title}"` : `Published "${test.title}"`);
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition cursor-pointer border ${
+                            isPublished
+                              ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
+                              : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30'
+                          }`}
+                          title={isPublished ? 'Unpublish test' : 'Publish test'}
+                        >
+                          {isPublished ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          <span>{isPublished ? 'Unpublish' : 'Publish'}</span>
+                        </button>
+                      )}
+
+                      {/* 3. Toggle Free */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = [...(editingBundle[listName] || [])];
+                          list[idx].isFreePreview = !list[idx].isFreePreview;
+                          setEditingBundle({ ...editingBundle, [listName]: list });
+                          showToast(`Toggled free preview for "${test.title}"`);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
+                        title="Toggle Free Preview vs Pro Only"
+                      >
+                        {test.isFreePreview ? 'Make Pro' : 'Make Free'}
+                      </button>
+
+                      {/* 4. Delete / Unlink */}
+                      <button
+                        type="button"
+                        onClick={() => handleRequestDeleteTestItem(test, section, idx)}
+                        className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                        title="Delete or Unlink Test"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <span className="text-[10px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30">
-                      Ingestion Studio
-                    </span>
                   </div>
-                  <h4 className="text-sm font-black text-white">Import PYQ / Past Paper</h4>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Attach past year official question papers tagged with examination year, shift, and syllabus mapping.
-                  </p>
-                </div>
+                );
+              };
 
-                <div className="space-y-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenIngestionTrigger('pyp')}
-                    className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-amber-600/20 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Import JSON to PYQ</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenAttachExistingModal('pyp')}
-                    className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center space-x-1.5 transition cursor-pointer border border-slate-700"
-                  >
-                    <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Attach Existing PYQ Paper</span>
-                  </button>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Attached Tests Lists */}
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
-              
-              {/* Section 1: Full Mock Tests */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2">
-                    <Layers className="w-4 h-4 text-emerald-400" />
-                    <h4 className="text-sm font-black text-white">Full-Length Mock Tests ({editingBundle.testItems?.length || 0})</h4>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAttachExistingModal('mock')}
-                      className="text-xs text-slate-400 hover:text-white font-bold flex items-center space-x-1"
-                    >
-                      <FolderPlus className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Attach Existing</span>
-                    </button>
-                    <span className="text-slate-600">•</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenIngestionTrigger('mock')}
-                      className="text-xs text-emerald-400 hover:underline font-bold flex items-center space-x-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Ingest New JSON</span>
-                    </button>
-                  </div>
-                </div>
-
-                {(!editingBundle.testItems || editingBundle.testItems.length === 0) ? (
-                  <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-500">
-                    No full-length mock tests attached yet. Use the buttons above to import or attach tests.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {editingBundle.testItems.map((test, idx) => (
-                      <div key={test.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-white">{test.title}</span>
-                            {test.isFreePreview ? (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">Free Preview</span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300">Pro Only</span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center space-x-2">
-                            <span>{test.questionCount} Questions</span>
-                            <span>•</span>
-                            <span>{test.durationMinutes} Mins</span>
-                            <span>•</span>
-                            <span>{test.marks} Marks</span>
-                          </div>
+              return (
+                <>
+                  {/* Universal Ingestion Studio Master Banner for Bundle */}
+                  {onOpenUniversalIngest && (
+                    <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-950/60 via-indigo-950/60 to-slate-900 border border-amber-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+                      <div className="flex items-center space-x-3.5">
+                        <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                          <Sparkles className="w-6 h-6" />
                         </div>
+                        <div>
+                          <h4 className="text-sm font-black text-white flex items-center space-x-2">
+                            <span>Universal Ingestion Studio for {editingBundle.title}</span>
+                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30">
+                              Bundle Optimized
+                            </span>
+                          </h4>
+                          <p className="text-xs text-slate-300 mt-0.5">
+                            Ingest Full Mocks, Chapter Tests, or PYPs from Text/PDF, JSON, or Gemini AI directly into this Pack.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenUniversalIngest({
+                            type: 'MOCK_TEST',
+                            lockType: false,
+                            authority: editingBundle.authority || 'CGSSB',
+                            examName: editingBundle.title,
+                            cadre: editingBundle.targetPost || editingBundle.title,
+                            bundleId: editingBundle.id,
+                          })
+                        }
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs sm:text-sm flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 cursor-pointer shrink-0"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>⚡ Ingest Test Directly into Pack</span>
+                      </button>
+                    </div>
+                  )}
 
+                  {/* Smart Auto-Link Catalog Tests Banner */}
+                  <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-950/90 via-slate-900 to-slate-950 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-white flex items-center space-x-2">
+                          <span>⚡ Auto-Link Matching Tests from Catalog</span>
+                          <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-bold border border-indigo-500/30">
+                            Smart Match
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          Instantly sync all created tests matching <strong>{editingBundle.targetPost || editingBundle.title}</strong> into this bundle's curriculum.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoLinkMatchingTests}
+                      className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/30 shrink-0 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Auto-Link Tests ({availableTests.filter(t => doesTestMatchBundle(t, editingBundle)).length} Matching)</span>
+                    </button>
+                  </div>
+                  
+                  {/* Top Ingestion CTA Cards (Using the Proven Ingestion Studio Engine) */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    
+                    {/* Option A: Chapter Test JSON */}
+                    <div className="p-5 rounded-3xl bg-slate-900 border border-indigo-900/40 hover:border-indigo-500/40 transition flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
+                              <BookOpen className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-indigo-300">Chapter & Topic Quizzes</span>
+                          </div>
+                          <span className="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded font-bold border border-indigo-500/30">
+                            Ingestion Studio
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black text-white">Import Chapter Test</h4>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Ingest topic-wise test with live question editor, hierarchy tagging, and subject weightage.
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenIngestionTrigger('chapter')}
+                          className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Import JSON to Chapter</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAttachExistingModal('chapter')}
+                          className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center space-x-1.5 transition cursor-pointer border border-slate-700"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Attach Existing Chapter Test</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Option B: Full Mock Test JSON */}
+                    <div className="p-5 rounded-3xl bg-slate-900 border border-emerald-900/40 hover:border-emerald-500/40 transition flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                              <Layers className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-emerald-300">100-150 Qs Full Mocks</span>
+                          </div>
+                          <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-500/30">
+                            Ingestion Studio
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black text-white">Import Full Mock Test</h4>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Load 100-150 bilingual questions with live card preview, timer, and automatic section distribution.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenIngestionTrigger('mock')}
+                          className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-emerald-600/20 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Import JSON to Full Mock</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAttachExistingModal('mock')}
+                          className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center space-x-1.5 transition cursor-pointer border border-slate-700"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Attach Existing Mock Test</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Option C: PYP Test JSON */}
+                    <div className="p-5 rounded-3xl bg-slate-900 border border-amber-900/40 hover:border-amber-500/40 transition flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-amber-300">Original Past Papers</span>
+                          </div>
+                          <span className="text-[10px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30">
+                            Ingestion Studio
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black text-white">Import PYQ / Past Paper</h4>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Attach past year official question papers tagged with examination year, shift, and syllabus mapping.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenIngestionTrigger('pyp')}
+                          className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-amber-600/20 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Import JSON to PYQ</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAttachExistingModal('pyp')}
+                          className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center space-x-1.5 transition cursor-pointer border border-slate-700"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Attach Existing PYQ Paper</span>
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Attached Tests Lists */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
+                    
+                    {/* Section 1: Full Mock Tests */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <Layers className="w-4 h-4 text-emerald-400" />
+                          <h4 className="text-sm font-black text-white">Full-Length Mock Tests ({editingBundle.testItems?.length || 0})</h4>
+                        </div>
                         <div className="flex items-center space-x-2">
                           <button
                             type="button"
-                            onClick={() => {
-                              const updated = [...editingBundle.testItems];
-                              updated[idx].isFreePreview = !updated[idx].isFreePreview;
-                              setEditingBundle({ ...editingBundle, testItems: updated });
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold transition"
+                            onClick={() => handleOpenAttachExistingModal('mock')}
+                            className="text-xs text-slate-400 hover:text-white font-bold flex items-center space-x-1"
                           >
-                            Toggle Free
+                            <FolderPlus className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Attach Existing</span>
                           </button>
+                          <span className="text-slate-600">•</span>
                           <button
                             type="button"
-                            onClick={() => handleRequestDeleteTestItem(test, 'mock', idx)}
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
-                            title="Delete or Unlink Test"
+                            onClick={() => handleOpenIngestionTrigger('mock')}
+                            className="text-xs text-emerald-400 hover:underline font-bold flex items-center space-x-1"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Ingest New JSON</span>
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Section 2: Chapter / Sectional Tests */}
-              <div className="pt-4 border-t border-slate-800">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2">
-                    <BookOpen className="w-4 h-4 text-indigo-400" />
-                    <h4 className="text-sm font-black text-white">Chapter & Sectional Tests ({editingBundle.chapterTests?.length || 0})</h4>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAttachExistingModal('chapter')}
-                      className="text-xs text-slate-400 hover:text-white font-bold flex items-center space-x-1"
-                    >
-                      <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Attach Existing</span>
-                    </button>
-                    <span className="text-slate-600">•</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenIngestionTrigger('chapter')}
-                      className="text-xs text-indigo-400 hover:underline font-bold flex items-center space-x-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Ingest New JSON</span>
-                    </button>
-                  </div>
-                </div>
-
-                {(!editingBundle.chapterTests || editingBundle.chapterTests.length === 0) ? (
-                  <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-500">
-                    No chapter tests attached. Use the buttons above to import topic quizzes via Ingestion Studio.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {editingBundle.chapterTests.map((test, idx) => (
-                      <div key={test.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-white">{test.title}</span>
-                            {test.isFreePreview && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">Free Preview</span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center space-x-2">
-                            <span>{test.questionCount} Questions</span>
-                            <span>•</span>
-                            <span>{test.durationMinutes} Mins</span>
-                          </div>
+                      {(!editingBundle.testItems || editingBundle.testItems.length === 0) ? (
+                        <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-500">
+                          No full-length mock tests attached yet. Use the buttons above to import or attach tests.
                         </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {editingBundle.testItems.map((test, idx) => renderTestItemRow(test, 'mock', idx, 'testItems'))}
+                        </div>
+                      )}
+                    </div>
 
+                    {/* Section 2: Chapter / Sectional Tests */}
+                    <div className="pt-4 border-t border-slate-800">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <BookOpen className="w-4 h-4 text-indigo-400" />
+                          <h4 className="text-sm font-black text-white">Chapter & Sectional Tests ({editingBundle.chapterTests?.length || 0})</h4>
+                        </div>
                         <div className="flex items-center space-x-2">
                           <button
                             type="button"
-                            onClick={() => {
-                              const updated = [...(editingBundle.chapterTests || [])];
-                              updated[idx].isFreePreview = !updated[idx].isFreePreview;
-                              setEditingBundle({ ...editingBundle, chapterTests: updated });
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold transition"
+                            onClick={() => handleOpenAttachExistingModal('chapter')}
+                            className="text-xs text-slate-400 hover:text-white font-bold flex items-center space-x-1"
                           >
-                            Toggle Free
+                            <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Attach Existing</span>
                           </button>
+                          <span className="text-slate-600">•</span>
                           <button
                             type="button"
-                            onClick={() => handleRequestDeleteTestItem(test, 'chapter', idx)}
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
-                            title="Delete or Unlink Test"
+                            onClick={() => handleOpenIngestionTrigger('chapter')}
+                            className="text-xs text-indigo-400 hover:underline font-bold flex items-center space-x-1"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Ingest New JSON</span>
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Section 3: PYP Papers */}
-              <div className="pt-4 border-t border-slate-800">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2">
-                    <FileText className="w-4 h-4 text-amber-400" />
-                    <h4 className="text-sm font-black text-white">Previous Year Question Papers ({editingBundle.pypTests?.length || 0})</h4>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAttachExistingModal('pyp')}
-                      className="text-xs text-slate-400 hover:text-white font-bold flex items-center space-x-1"
-                    >
-                      <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Attach Existing</span>
-                    </button>
-                    <span className="text-slate-600">•</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenIngestionTrigger('pyp')}
-                      className="text-xs text-amber-400 hover:underline font-bold flex items-center space-x-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Ingest New JSON</span>
-                    </button>
-                  </div>
-                </div>
-
-                {(!editingBundle.pypTests || editingBundle.pypTests.length === 0) ? (
-                  <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-500">
-                    No past year papers attached yet. Click "Ingest New JSON" or "Attach Existing" to add official papers.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {editingBundle.pypTests.map((test, idx) => (
-                      <div key={test.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-white">{test.title}</span>
-                            {test.isFreePreview && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">Free Preview</span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center space-x-2">
-                            <span>{test.questionCount} Questions</span>
-                            <span>•</span>
-                            <span>{test.durationMinutes} Mins</span>
-                          </div>
+                      {(!editingBundle.chapterTests || editingBundle.chapterTests.length === 0) ? (
+                        <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-500">
+                          No chapter tests attached. Use the buttons above to import topic quizzes via Ingestion Studio.
                         </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {editingBundle.chapterTests.map((test, idx) => renderTestItemRow(test, 'chapter', idx, 'chapterTests'))}
+                        </div>
+                      )}
+                    </div>
 
+                    {/* Section 3: PYP Papers */}
+                    <div className="pt-4 border-t border-slate-800">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <FileText className="w-4 h-4 text-amber-400" />
+                          <h4 className="text-sm font-black text-white">Previous Year Question Papers ({editingBundle.pypTests?.length || 0})</h4>
+                        </div>
                         <div className="flex items-center space-x-2">
                           <button
                             type="button"
-                            onClick={() => {
-                              const updated = [...(editingBundle.pypTests || [])];
-                              updated[idx].isFreePreview = !updated[idx].isFreePreview;
-                              setEditingBundle({ ...editingBundle, pypTests: updated });
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold transition"
+                            onClick={() => handleOpenAttachExistingModal('pyp')}
+                            className="text-xs text-slate-400 hover:text-white font-bold flex items-center space-x-1"
                           >
-                            Toggle Free
+                            <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Attach Existing</span>
                           </button>
+                          <span className="text-slate-600">•</span>
                           <button
                             type="button"
-                            onClick={() => handleRequestDeleteTestItem(test, 'pyp', idx)}
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
-                            title="Delete or Unlink Test"
+                            onClick={() => handleOpenIngestionTrigger('pyp')}
+                            className="text-xs text-amber-400 hover:underline font-bold flex items-center space-x-1"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Ingest New JSON</span>
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-            </div>
+                      {(!editingBundle.pypTests || editingBundle.pypTests.length === 0) ? (
+                        <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-500">
+                          No past year papers attached yet. Click "Ingest New JSON" or "Attach Existing" to add official papers.
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {editingBundle.pypTests.map((test, idx) => renderTestItemRow(test, 'pyp', idx, 'pypTests'))}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
