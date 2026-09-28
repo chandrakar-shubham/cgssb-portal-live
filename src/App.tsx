@@ -573,14 +573,27 @@ function MainApp() {
   }, []);
 
   const handleSyncDefaultCatalog = () => {
-    setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests'));
-    setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions'));
-    setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp'));
-    try {
-      localStorage.setItem('cgssb_tests', JSON.stringify(mergeWithInitial(INITIAL_MOCK_TESTS, tests, 'cgssb_deleted_tests')));
-      localStorage.setItem('cgssb_questions', JSON.stringify(mergeWithInitial(INITIAL_QUESTIONS, questions, 'cgssb_deleted_questions')));
-      localStorage.setItem('cgssb_pyp', JSON.stringify(mergeWithInitial(INITIAL_PYP_PAPERS, pypPapers, 'cgssb_deleted_pyp')));
-    } catch {}
+    setTests(prev => {
+      const updated = mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests');
+      try {
+        localStorage.setItem('cgssb_tests', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setQuestions(prev => {
+      const updated = mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions');
+      try {
+        localStorage.setItem('cgssb_questions', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setPypPapers(prev => {
+      const updated = mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp');
+      try {
+        localStorage.setItem('cgssb_pyp', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   // Sync to localStorage with quota protection
