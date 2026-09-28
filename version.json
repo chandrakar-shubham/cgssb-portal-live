@@ -1,7 +1,7 @@
 {
   "version": "2.5.2",
-  "buildId": "B#260928.1514",
-  "commitSha": "88a960c",
-  "buildTime": "28 Sept 2026, 08:44:48 pm IST",
-  "platform": "Hostinger & AI Studio Cloud"
+  "buildId": "B#260928.1510",
+  "commitSha": "sha-915f0c",
+  "buildTime": "28 Sept 2026, 08:40:36 pm IST",
+  "platform": "Firebase Hosting & Cloud Run (Production)"
 }
