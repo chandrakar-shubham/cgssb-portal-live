@@ -13,17 +13,17 @@ import { PYPSection } from './components/PYPSection';
 import { AnalyticsHub } from './components/AnalyticsHub';
 import { ExamEngine } from './components/ExamEngine';
 import { SolutionsScreen } from './components/SolutionsScreen';
-import { AdminQuestionBank } from './components/AdminQuestionBank';
-import { AdminPYPManager } from './components/AdminPYPManager';
-import { AdminAITestCreator } from './components/AdminAITestCreator';
-import { AdminTestCatalog } from './components/AdminTestCatalog';
-import { AdminAndroidAPIManager } from './components/AdminAndroidAPIManager';
-import { AdminPortalLogin } from './components/AdminPortalLogin';
-import { AdminCurrentAffairsStudio } from './components/AdminCurrentAffairsStudio';
-import { AdminCMSDashboard } from './components/AdminCMSDashboard';
-import { AdminDatabaseView } from './components/AdminDatabaseView';
-import { AdminHeader } from './components/AdminHeader';
-import { AdminSubNav } from './components/AdminSubNav';
+const AdminQuestionBank = React.lazy(() => import('./components/AdminQuestionBank').then(m => ({ default: m.AdminQuestionBank })));
+const AdminPYPManager = React.lazy(() => import('./components/AdminPYPManager').then(m => ({ default: m.AdminPYPManager })));
+const AdminAITestCreator = React.lazy(() => import('./components/AdminAITestCreator').then(m => ({ default: m.AdminAITestCreator })));
+const AdminTestCatalog = React.lazy(() => import('./components/AdminTestCatalog').then(m => ({ default: m.AdminTestCatalog })));
+const AdminAndroidAPIManager = React.lazy(() => import('./components/AdminAndroidAPIManager').then(m => ({ default: m.AdminAndroidAPIManager })));
+const AdminPortalLogin = React.lazy(() => import('./components/AdminPortalLogin').then(m => ({ default: m.AdminPortalLogin })));
+const AdminCurrentAffairsStudio = React.lazy(() => import('./components/AdminCurrentAffairsStudio').then(m => ({ default: m.AdminCurrentAffairsStudio })));
+const AdminCMSDashboard = React.lazy(() => import('./components/AdminCMSDashboard').then(m => ({ default: m.AdminCMSDashboard })));
+const AdminDatabaseView = React.lazy(() => import('./components/AdminDatabaseView').then(m => ({ default: m.AdminDatabaseView })));
+const AdminHeader = React.lazy(() => import('./components/AdminHeader').then(m => ({ default: m.AdminHeader })));
+const AdminSubNav = React.lazy(() => import('./components/AdminSubNav').then(m => ({ default: m.AdminSubNav })));
 import { AuthModal } from './components/AuthModal';
 import { ExamInstructionsScreen } from './components/ExamInstructionsScreen';
 import { CGPSCHeroPage } from './components/CGPSCHeroPage';
@@ -33,26 +33,30 @@ import { MistakeNotebook } from './components/MistakeNotebook';
 import { BookmarksManager } from './components/BookmarksManager';
 import { ChhattisgarhiRevisionModule } from './components/ChhattisgarhiRevisionModule';
 import { StudentProfileModal } from './components/StudentProfileModal';
-import { AdminToolsAndBackupsModal } from './components/AdminToolsAndBackupsModal';
-import { AdminCMSPageBuilder } from './components/AdminCMSPageBuilder';
+const AdminToolsAndBackupsModal = React.lazy(() => import('./components/AdminToolsAndBackupsModal').then(m => ({ default: m.AdminToolsAndBackupsModal })));
+const AdminCMSPageBuilder = React.lazy(() => import('./components/AdminCMSPageBuilder').then(m => ({ default: m.AdminCMSPageBuilder })));
 import { DynamicPageRenderer } from './components/DynamicPageRenderer';
-import { AdminCMSPostManager } from './components/AdminCMSPostManager';
+const AdminCMSPostManager = React.lazy(() => import('./components/AdminCMSPostManager').then(m => ({ default: m.AdminCMSPostManager })));
 import { DynamicPostRenderer } from './components/DynamicPostRenderer';
-import { AdminCMSTestSeriesManager } from './components/AdminCMSTestSeriesManager';
-import { AdminCMSThemeCustomizer } from './components/AdminCMSThemeCustomizer';
-import { AdminWorkspaceLayout } from './components/AdminWorkspaceLayout';
-import { AdminBundleStudio } from './components/AdminBundleStudio';
+const AdminCMSTestSeriesManager = React.lazy(() => import('./components/AdminCMSTestSeriesManager').then(m => ({ default: m.AdminCMSTestSeriesManager })));
+const AdminCMSThemeCustomizer = React.lazy(() => import('./components/AdminCMSThemeCustomizer').then(m => ({ default: m.AdminCMSThemeCustomizer })));
+const AdminWorkspaceLayout = React.lazy(() => import('./components/AdminWorkspaceLayout').then(m => ({ default: m.AdminWorkspaceLayout })));
+const AdminBundleStudio = React.lazy(() => import('./components/AdminBundleStudio').then(m => ({ default: m.AdminBundleStudio })));
 import { UniversalIngestionStudio, IngestionContentType } from './components/UniversalIngestionStudio';
 import { ChapterTestSection } from './components/ChapterTestSection';
 import { PracticeSetSection } from './components/PracticeSetSection';
 import { SEOQuestionView } from './components/SEOQuestionView';
-import { AdminChapterTestManager } from './components/AdminChapterTestManager';
-import { AdminPracticeSetManager } from './components/AdminPracticeSetManager';
+const AdminChapterTestManager = React.lazy(() => import('./components/AdminChapterTestManager').then(m => ({ default: m.AdminChapterTestManager })));
+const AdminPracticeSetManager = React.lazy(() => import('./components/AdminPracticeSetManager').then(m => ({ default: m.AdminPracticeSetManager })));
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
 import { syncBundlesFromFirestore, autoLinkTestToBundles, cleanTestFromAllBundles } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
-import { AdminRemoteConfigStudio } from './components/AdminRemoteConfigStudio';
+const AdminRemoteConfigStudio = React.lazy(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
+import { useTestManager } from './hooks/useTestManager';
+import { useQuestionManager } from './hooks/useQuestionManager';
+import { usePypManager } from './hooks/usePypManager';
+import { useCmsManager } from './hooks/useCmsManager';
 import { ArrowLeft, Trophy, Bell, AlertTriangle, Radio, X } from 'lucide-react';
 import {
   CMSPage,
@@ -377,160 +381,40 @@ function MainApp() {
     return Array.from(map.values());
   }
 
-  // App Data State (Synced with localStorage and backend endpoints)
-  const [tests, setTests] = useState<MockTest[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_tests');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_MOCK_TESTS, parsed, 'cgssb_deleted_tests');
-        }
-      }
-    } catch {}
-    return mergeWithInitial(INITIAL_MOCK_TESTS, [], 'cgssb_deleted_tests');
-  });
+  // App Data State (Encapsulated via Headless Domain Hooks)
+  const {
+    tests,
+    setTests,
+    syncDefaultCatalog: handleSyncDefaultCatalog,
+  } = useTestManager();
 
-  const [questions, setQuestions] = useState<Question[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_questions');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const migrated = parsed.map(migrateLegacyQuestion);
-          return mergeWithInitial(INITIAL_QUESTIONS, migrated, 'cgssb_deleted_questions');
-        }
-      }
-    } catch {}
-    return mergeWithInitial(INITIAL_QUESTIONS, [], 'cgssb_deleted_questions');
-  });
+  const {
+    questions,
+    setQuestions,
+  } = useQuestionManager();
 
-  const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_pyp');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_PYP_PAPERS, parsed, 'cgssb_deleted_pyp');
-        }
-      }
-    } catch {}
-    return mergeWithInitial(INITIAL_PYP_PAPERS, [], 'cgssb_deleted_pyp');
-  });
+  const {
+    pypPapers,
+    setPypPapers,
+  } = usePypManager();
 
-  const [cmsPages, setCmsPages] = useState<CMSPage[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_cms_pages');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return INITIAL_CMS_PAGES;
-  });
-
-  const [cmsPosts, setCmsPosts] = useState<CMSPost[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_cms_posts');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return INITIAL_CMS_POSTS;
-  });
-
-  const [cmsSeriesPacks, setCmsSeriesPacks] = useState<CMSTestSeriesPack[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_cms_series');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return INITIAL_CMS_SERIES_PACKS;
-  });
-
-  const [cmsSettings, setCmsSettings] = useState<CMSSiteSettings>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_cms_settings');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return INITIAL_CMS_SETTINGS;
-  });
+  const {
+    cmsPages,
+    cmsPosts,
+    cmsSeriesPacks,
+    cmsSettings,
+    handleSaveCmsPage,
+    handleDeleteCmsPage,
+    handleSaveCmsPost,
+    handleDeleteCmsPost,
+    handleSaveCmsSeriesPack,
+    handleDeleteCmsSeriesPack,
+    handleSaveCmsSettings,
+  } = useCmsManager();
 
   // Selected slug for dynamic page or post viewing
   const [activePageSlug, setActivePageSlug] = useState<string | null>(null);
   const [activePostSlug, setActivePostSlug] = useState<string | null>(null);
-
-  // Sync CMS state to localStorage
-  useEffect(() => {
-    try { localStorage.setItem('cgssb_cms_pages', JSON.stringify(cmsPages)); } catch {}
-  }, [cmsPages]);
-
-  useEffect(() => {
-    try { localStorage.setItem('cgssb_cms_posts', JSON.stringify(cmsPosts)); } catch {}
-  }, [cmsPosts]);
-
-  useEffect(() => {
-    try { localStorage.setItem('cgssb_cms_series', JSON.stringify(cmsSeriesPacks)); } catch {}
-  }, [cmsSeriesPacks]);
-
-  useEffect(() => {
-    try { localStorage.setItem('cgssb_cms_settings', JSON.stringify(cmsSettings)); } catch {}
-  }, [cmsSettings]);
-
-  const handleSaveCmsPage = async (page: CMSPage) => {
-    setCmsPages(prev => {
-      const idx = prev.findIndex(p => p.id === page.id);
-      if (idx !== -1) {
-        const updated = [...prev];
-        updated[idx] = page;
-        return updated;
-      }
-      return [page, ...prev];
-    });
-  };
-
-  const handleDeleteCmsPage = async (id: string) => {
-    setCmsPages(prev => prev.filter(p => p.id !== id));
-  };
-
-  const handleSaveCmsPost = async (post: CMSPost) => {
-    setCmsPosts(prev => {
-      const idx = prev.findIndex(p => p.id === post.id);
-      if (idx !== -1) {
-        const updated = [...prev];
-        updated[idx] = post;
-        return updated;
-      }
-      return [post, ...prev];
-    });
-  };
-
-  const handleDeleteCmsPost = async (id: string) => {
-    setCmsPosts(prev => prev.filter(p => p.id !== id));
-  };
-
-  const handleSaveCmsSeriesPack = async (pack: CMSTestSeriesPack) => {
-    setCmsSeriesPacks(prev => {
-      const idx = prev.findIndex(p => p.id === pack.id);
-      if (idx !== -1) {
-        const updated = [...prev];
-        updated[idx] = pack;
-        return updated;
-      }
-      return [pack, ...prev];
-    });
-  };
-
-  const handleDeleteCmsSeriesPack = async (id: string) => {
-    setCmsSeriesPacks(prev => prev.filter(p => p.id !== id));
-  };
-
-  const handleSaveCmsSettings = async (settings: CMSSiteSettings) => {
-    setCmsSettings(settings);
-  };
 
   const [attempts, setAttempts] = useState<TestAttempt[]>(() => {
     try {
@@ -571,30 +455,6 @@ function MainApp() {
       window.removeEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
     };
   }, []);
-
-  const handleSyncDefaultCatalog = () => {
-    setTests(prev => {
-      const updated = mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests');
-      try {
-        localStorage.setItem('cgssb_tests', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-    setQuestions(prev => {
-      const updated = mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions');
-      try {
-        localStorage.setItem('cgssb_questions', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-    setPypPapers(prev => {
-      const updated = mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp');
-      try {
-        localStorage.setItem('cgssb_pyp', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-  };
 
   // Sync to localStorage with quota protection
   useEffect(() => {
@@ -1385,207 +1245,212 @@ function MainApp() {
   // Accessible at https://darkorange-chimpanzee-661223.hostingersite.com/admin
   // =========================================================================
   if (currentRoute === 'admin') {
-    // If not logged in as Admin, show dedicated AdminPortalLogin
-    if (!isAdminAuthenticated) {
-      return (
-        <AdminPortalLogin
-          onSuccess={() => {}}
-          onNavigateHome={navigateToStudent}
-        />
-      );
-    }
-
-    // Authenticated Admin Dashboard (FAANG Workspace OS)
     return (
-      <AdminWorkspaceLayout
-        activeTab={adminActiveTab}
-        setActiveTab={setAdminActiveTab}
-        onNavigateToStudent={navigateToStudent}
-        onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
-        onOpenUniversalIngest={() => openUniversalIngestion()}
-        onQuickCreateQuestion={() => setAdminActiveTab('admin-questions')}
-        onQuickCreateTest={() => setAdminActiveTab('admin-tests')}
-      >
-        {adminActiveTab === 'admin-overview' && (
-          <AdminCMSDashboard
-            tests={tests}
-            questions={questions}
-            pypPapers={pypPapers}
-            attempts={attempts}
-            onNavigateTab={tab => setAdminActiveTab(tab)}
-            onSyncDefaultCatalog={handleSyncDefaultCatalog}
+      <React.Suspense fallback={
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center space-y-4">
+          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-bold text-slate-300">Loading Admin Portal OS...</p>
+        </div>
+      }>
+        {/* If not logged in as Admin, show dedicated AdminPortalLogin */}
+        {!isAdminAuthenticated ? (
+          <AdminPortalLogin
+            onSuccess={() => {}}
+            onNavigateHome={navigateToStudent}
           />
-        )}
-
-        {adminActiveTab === 'admin-cms-pages' && (
-          <AdminCMSPageBuilder
-            pages={cmsPages}
-            onSavePage={handleSaveCmsPage}
-            onDeletePage={handleDeleteCmsPage}
-          />
-        )}
-
-        {adminActiveTab === 'admin-cms-posts' && (
-          <AdminCMSPostManager
-            posts={cmsPosts}
-            onSavePost={handleSaveCmsPost}
-            onDeletePost={handleDeleteCmsPost}
-          />
-        )}
-
-        {adminActiveTab === 'admin-cms-customizer' && (
-          <AdminCMSThemeCustomizer
-            settings={cmsSettings}
-            onSaveSettings={handleSaveCmsSettings}
-          />
-        )}
-
-        {adminActiveTab === 'admin-database' && (
-          <AdminDatabaseView
-            tests={tests}
-            questions={questions}
-            pypPapers={pypPapers}
-            attempts={attempts}
-            onRestoreSnapshot={handleRestoreSnapshot}
+        ) : (
+          // Authenticated Admin Dashboard (FAANG Workspace OS)
+          <AdminWorkspaceLayout
+            activeTab={adminActiveTab}
+            setActiveTab={setAdminActiveTab}
+            onNavigateToStudent={navigateToStudent}
             onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
-          />
+            onOpenUniversalIngest={() => openUniversalIngestion()}
+            onQuickCreateQuestion={() => setAdminActiveTab('admin-questions')}
+            onQuickCreateTest={() => setAdminActiveTab('admin-tests')}
+          >
+            {adminActiveTab === 'admin-overview' && (
+              <AdminCMSDashboard
+                tests={tests}
+                questions={questions}
+                pypPapers={pypPapers}
+                attempts={attempts}
+                onNavigateTab={tab => setAdminActiveTab(tab)}
+                onSyncDefaultCatalog={handleSyncDefaultCatalog}
+              />
+            )}
+
+            {adminActiveTab === 'admin-cms-pages' && (
+              <AdminCMSPageBuilder
+                pages={cmsPages}
+                onSavePage={handleSaveCmsPage}
+                onDeletePage={handleDeleteCmsPage}
+              />
+            )}
+
+            {adminActiveTab === 'admin-cms-posts' && (
+              <AdminCMSPostManager
+                posts={cmsPosts}
+                onSavePost={handleSaveCmsPost}
+                onDeletePost={handleDeleteCmsPost}
+              />
+            )}
+
+            {adminActiveTab === 'admin-cms-customizer' && (
+              <AdminCMSThemeCustomizer
+                settings={cmsSettings}
+                onSaveSettings={handleSaveCmsSettings}
+              />
+            )}
+
+            {adminActiveTab === 'admin-database' && (
+              <AdminDatabaseView
+                tests={tests}
+                questions={questions}
+                pypPapers={pypPapers}
+                attempts={attempts}
+                onRestoreSnapshot={handleRestoreSnapshot}
+                onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
+              />
+            )}
+
+            {adminActiveTab === 'admin-cms-series' && (
+              <AdminBundleStudio
+                availableTests={tests}
+                availableQuestions={questions}
+                onNavigateToPreview={(bundle) => {
+                  setCurrentRoute('student');
+                  setStudentActiveTabState('tests');
+                  if (typeof window !== 'undefined') {
+                    window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
+                  }
+                }}
+                onTestsAdded={handleBulkTestsAdded}
+                onQuestionsAdded={handleBulkQuestionsAdded}
+                onOpenUniversalIngest={openUniversalIngestion}
+                onDeleteTest={handleDeleteTest}
+                onTogglePublishTest={handleTogglePublishTest}
+              />
+            )}
+
+            {adminActiveTab === 'admin-pyp' && (
+              <AdminPYPManager
+                pypPapers={pypPapers}
+                tests={tests}
+                questions={questions}
+                onAddPYP={handleAddPYP}
+                onDeletePYP={handleDeletePYP}
+                onConvertPYPToMockTest={handleConvertPYPToMockTest}
+                onTogglePublishTest={handleTogglePublishTest}
+                onStartTest={handleStartTest}
+                onQuestionsAdded={handleBulkQuestionsAdded}
+                onTestAdded={handleAddTest}
+                onUpdateTest={handleUpdateTest}
+                onOpenUniversalIngest={openUniversalIngestion}
+                onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
+              />
+            )}
+
+            {adminActiveTab === 'admin-chapters' && (
+              <AdminChapterTestManager
+                tests={tests}
+                questions={questions}
+                onAddTest={handleAddTest}
+                onUpdateTest={handleUpdateTest}
+                onDeleteTest={handleDeleteTest}
+                onStartTest={handleStartTest}
+                onOpenUniversalIngest={openUniversalIngestion}
+              />
+            )}
+
+            {adminActiveTab === 'admin-practice' && (
+              <AdminPracticeSetManager
+                questions={questions}
+                onAddQuestion={handleAddQuestion}
+                onUpdateQuestion={handleUpdateQuestion}
+                onDeleteQuestion={handleDeleteQuestion}
+                onOpenUniversalIngest={openUniversalIngestion}
+              />
+            )}
+
+            {adminActiveTab === 'admin-questions' && (
+              <AdminQuestionBank
+                questions={questions}
+                onAddQuestion={handleAddQuestion}
+                onUpdateQuestion={handleUpdateQuestion}
+                onDeleteQuestion={handleDeleteQuestion}
+                allHierarchyRecords={extractHierarchyFromApp(tests, pypPapers, questions)}
+                onAddPYP={handleAddPYP}
+                onQuestionsAdded={handleBulkQuestionsAdded}
+                onTestAdded={handleAddTest}
+              />
+            )}
+
+            {adminActiveTab === 'admin-ca-studio' && (
+              <AdminCurrentAffairsStudio />
+            )}
+
+            {adminActiveTab === 'admin-ai' && (
+              <AdminAITestCreator
+                pypPapers={pypPapers}
+                onTestPublished={handleTestPublished}
+                onNavigateToCatalog={() => setAdminActiveTab('admin-tests')}
+              />
+            )}
+
+            {adminActiveTab === 'admin-tests' && (
+              <AdminTestCatalog
+                tests={tests}
+                questions={questions}
+                onStartTest={handleStartTest}
+                onTogglePublishTest={handleTogglePublishTest}
+                onUpdateTest={handleUpdateTest}
+                onDeleteTest={handleDeleteTest}
+                onAddTest={handleAddTest}
+                onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
+                onAddPYP={handleAddPYP}
+                onQuestionsAdded={handleBulkQuestionsAdded}
+                onTestAdded={handleAddTest}
+                onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
+              />
+            )}
+
+            {adminActiveTab === 'admin-android-api' && (
+              <AdminAndroidAPIManager />
+            )}
+
+            {adminActiveTab === 'admin-remote-config' && (
+              <AdminRemoteConfigStudio />
+            )}
+
+            {/* Global Admin Modals */}
+            <AdminToolsAndBackupsModal
+              isOpen={isAdminToolsModalOpen}
+              onClose={() => setIsAdminToolsModalOpen(false)}
+              tests={tests}
+              questions={questions}
+              pypPapers={pypPapers}
+              attempts={attempts}
+              onRestoreSnapshot={handleRestoreSnapshot}
+            />
+
+            <UniversalIngestionStudio
+              isOpen={isUniversalIngestOpen}
+              onClose={() => setIsUniversalIngestOpen(false)}
+              initialType={universalIngestConfig.type || 'MOCK_TEST'}
+              lockType={universalIngestConfig.lockType || false}
+              initialInputTab={universalIngestConfig.initialInputTab || 'SMART_PASTE'}
+              defaultAuthority={universalIngestConfig.authority || 'CGSSB'}
+              defaultExamName={universalIngestConfig.examName || 'CG Teacher Recruitment 2026'}
+              defaultCadre={universalIngestConfig.cadre || 'Assistant Teacher (Sahayak Shikshak)'}
+              defaultBundleId={universalIngestConfig.bundleId || ''}
+              onQuestionsIngested={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
+              onMockTestCreated={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
+              onPypCreated={newPyp => setPypPapers(prev => dedupeById([newPyp, ...prev]))}
+            />
+          </AdminWorkspaceLayout>
         )}
-
-        {adminActiveTab === 'admin-cms-series' && (
-          <AdminBundleStudio
-            availableTests={tests}
-            availableQuestions={questions}
-            onNavigateToPreview={(bundle) => {
-              setCurrentRoute('student');
-              setStudentActiveTabState('tests');
-              if (typeof window !== 'undefined') {
-                window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
-              }
-            }}
-            onTestsAdded={handleBulkTestsAdded}
-            onQuestionsAdded={handleBulkQuestionsAdded}
-            onOpenUniversalIngest={openUniversalIngestion}
-            onDeleteTest={handleDeleteTest}
-            onTogglePublishTest={handleTogglePublishTest}
-          />
-        )}
-
-        {adminActiveTab === 'admin-pyp' && (
-          <AdminPYPManager
-            pypPapers={pypPapers}
-            tests={tests}
-            questions={questions}
-            onAddPYP={handleAddPYP}
-            onDeletePYP={handleDeletePYP}
-            onConvertPYPToMockTest={handleConvertPYPToMockTest}
-            onTogglePublishTest={handleTogglePublishTest}
-            onStartTest={handleStartTest}
-            onQuestionsAdded={handleBulkQuestionsAdded}
-            onTestAdded={handleAddTest}
-            onUpdateTest={handleUpdateTest}
-            onOpenUniversalIngest={openUniversalIngestion}
-            onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
-          />
-        )}
-
-        {adminActiveTab === 'admin-chapters' && (
-          <AdminChapterTestManager
-            tests={tests}
-            questions={questions}
-            onAddTest={handleAddTest}
-            onUpdateTest={handleUpdateTest}
-            onDeleteTest={handleDeleteTest}
-            onStartTest={handleStartTest}
-            onOpenUniversalIngest={openUniversalIngestion}
-          />
-        )}
-
-        {adminActiveTab === 'admin-practice' && (
-          <AdminPracticeSetManager
-            questions={questions}
-            onAddQuestion={handleAddQuestion}
-            onUpdateQuestion={handleUpdateQuestion}
-            onDeleteQuestion={handleDeleteQuestion}
-            onOpenUniversalIngest={openUniversalIngestion}
-          />
-        )}
-
-        {adminActiveTab === 'admin-questions' && (
-          <AdminQuestionBank
-            questions={questions}
-            onAddQuestion={handleAddQuestion}
-            onUpdateQuestion={handleUpdateQuestion}
-            onDeleteQuestion={handleDeleteQuestion}
-            allHierarchyRecords={extractHierarchyFromApp(tests, pypPapers, questions)}
-            onAddPYP={handleAddPYP}
-            onQuestionsAdded={handleBulkQuestionsAdded}
-            onTestAdded={handleAddTest}
-          />
-        )}
-
-        {adminActiveTab === 'admin-ca-studio' && (
-          <AdminCurrentAffairsStudio />
-        )}
-
-        {adminActiveTab === 'admin-ai' && (
-          <AdminAITestCreator
-            pypPapers={pypPapers}
-            onTestPublished={handleTestPublished}
-            onNavigateToCatalog={() => setAdminActiveTab('admin-tests')}
-          />
-        )}
-
-        {adminActiveTab === 'admin-tests' && (
-          <AdminTestCatalog
-            tests={tests}
-            questions={questions}
-            onStartTest={handleStartTest}
-            onTogglePublishTest={handleTogglePublishTest}
-            onUpdateTest={handleUpdateTest}
-            onDeleteTest={handleDeleteTest}
-            onAddTest={handleAddTest}
-            onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
-            onAddPYP={handleAddPYP}
-            onQuestionsAdded={handleBulkQuestionsAdded}
-            onTestAdded={handleAddTest}
-            onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
-          />
-        )}
-
-        {adminActiveTab === 'admin-android-api' && (
-          <AdminAndroidAPIManager />
-        )}
-
-        {adminActiveTab === 'admin-remote-config' && (
-          <AdminRemoteConfigStudio />
-        )}
-
-        {/* Global Admin Modals */}
-        <AdminToolsAndBackupsModal
-          isOpen={isAdminToolsModalOpen}
-          onClose={() => setIsAdminToolsModalOpen(false)}
-          tests={tests}
-          questions={questions}
-          pypPapers={pypPapers}
-          attempts={attempts}
-          onRestoreSnapshot={handleRestoreSnapshot}
-        />
-
-        <UniversalIngestionStudio
-          isOpen={isUniversalIngestOpen}
-          onClose={() => setIsUniversalIngestOpen(false)}
-          initialType={universalIngestConfig.type || 'MOCK_TEST'}
-          lockType={universalIngestConfig.lockType || false}
-          initialInputTab={universalIngestConfig.initialInputTab || 'SMART_PASTE'}
-          defaultAuthority={universalIngestConfig.authority || 'CGSSB'}
-          defaultExamName={universalIngestConfig.examName || 'CG Teacher Recruitment 2026'}
-          defaultCadre={universalIngestConfig.cadre || 'Assistant Teacher (Sahayak Shikshak)'}
-          defaultBundleId={universalIngestConfig.bundleId || ''}
-          onQuestionsIngested={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
-          onMockTestCreated={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
-          onPypCreated={newPyp => setPypPapers(prev => dedupeById([newPyp, ...prev]))}
-        />
-      </AdminWorkspaceLayout>
+      </React.Suspense>
     );
   }
 
