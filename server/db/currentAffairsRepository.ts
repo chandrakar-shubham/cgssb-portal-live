@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { CurrentAffairsTopic, DailyEdition, MonthlyEdition, CurrentAffairsSourceRegistryItem } from '../../src/types/currentAffairs';
-import { INITIAL_OFFICIAL_SOURCES } from '../../src/data/officialSources';
+import type { CurrentAffairsTopic, DailyEdition, MonthlyEdition, CurrentAffairsSourceRegistryItem } from '../../src/types/currentAffairs.ts';
+import { INITIAL_OFFICIAL_SOURCES } from '../../src/data/officialSources.ts';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const CA_DB_FILE = path.join(DATA_DIR, 'current-affairs-db.json');

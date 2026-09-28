@@ -8,18 +8,18 @@ import type {
   PreviousYearPaper,
   TestAttempt,
   ExamCategory,
-  SectorAnalysis
+  SectorAnalysis,
+  AppRemoteConfig
 } from '../../src/types.ts';
+import { DEFAULT_REMOTE_CONFIG } from '../../src/types.ts';
 import {
   INITIAL_QUESTIONS,
   INITIAL_MOCK_TESTS,
   INITIAL_PYP_PAPERS,
   SAMPLE_USER_ATTEMPTS
 } from '../../src/mockData.ts';
-import {
-  TestSeriesBundle,
-  OFFICIAL_BUNDLES_CATALOG
-} from '../../src/data/bundleCatalog.ts';
+import type { TestSeriesBundle } from '../../src/data/bundleCatalog.ts';
+import { OFFICIAL_BUNDLES_CATALOG } from '../../src/data/bundleCatalog.ts';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'cgssb-db.json');
@@ -102,12 +102,19 @@ export async function syncWithFirestore(): Promise<{
     };
   }
 
+  const timeoutPromise = <T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))
+    ]);
+  };
+
   try {
-    // 1. Fetch live questions from Cloud Firestore
-    const qSnap = await getDocs(collection(db, 'questions'));
-    if (!qSnap.empty) {
+    // 1. Fetch live questions from Cloud Firestore with timeout protection
+    const qSnap = await timeoutPromise(getDocs(collection(db, 'questions')), 4000, null as any);
+    if (qSnap && !qSnap.empty) {
       const firestoreQuestions: Question[] = [];
-      qSnap.forEach(d => {
+      qSnap.forEach((d: any) => {
         firestoreQuestions.push(d.data() as Question);
       });
       const qMap = new Map<string, Question>();
@@ -121,11 +128,11 @@ export async function syncWithFirestore(): Promise<{
       }
     }
 
-    // 2. Fetch live mock tests from Cloud Firestore
-    const tSnap = await getDocs(collection(db, 'mockTests'));
-    if (!tSnap.empty) {
+    // 2. Fetch live mock tests from Cloud Firestore with timeout protection
+    const tSnap = await timeoutPromise(getDocs(collection(db, 'mockTests')), 4000, null as any);
+    if (tSnap && !tSnap.empty) {
       const firestoreTests: MockTest[] = [];
-      tSnap.forEach(d => {
+      tSnap.forEach((d: any) => {
         firestoreTests.push(d.data() as MockTest);
       });
       const tMap = new Map<string, MockTest>();
@@ -138,11 +145,11 @@ export async function syncWithFirestore(): Promise<{
       }
     }
 
-    // 3. Fetch live attempts
-    const aSnap = await getDocs(collection(db, 'attempts'));
-    if (!aSnap.empty) {
+    // 3. Fetch live attempts with timeout protection
+    const aSnap = await timeoutPromise(getDocs(collection(db, 'attempts')), 4000, null as any);
+    if (aSnap && !aSnap.empty) {
       const firestoreAttempts: TestAttempt[] = [];
-      aSnap.forEach(d => {
+      aSnap.forEach((d: any) => {
         firestoreAttempts.push(d.data() as TestAttempt);
       });
       const aMap = new Map<string, TestAttempt>();
@@ -694,7 +701,6 @@ export async function getTestLeaderboardData(testId: string) {
 // ==========================================
 // SERVER-DRIVEN REMOTE CONFIG REPOSITORY
 // ==========================================
-import { DEFAULT_REMOTE_CONFIG, AppRemoteConfig } from '../../src/types.ts';
 
 let appRemoteConfigDb: AppRemoteConfig = { ...DEFAULT_REMOTE_CONFIG };
 

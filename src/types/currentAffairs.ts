@@ -1,4 +1,4 @@
-import { Question, DifficultyLevel } from '../types';
+import type { Question, DifficultyLevel } from '../types.ts';
 
 export type SourceType =
   | 'government'

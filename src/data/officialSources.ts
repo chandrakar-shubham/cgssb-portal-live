@@ -1,4 +1,4 @@
-import { CurrentAffairsSourceRegistryItem, CurrentAffairSource } from '../types/currentAffairs';
+import type { CurrentAffairsSourceRegistryItem, CurrentAffairSource } from '../types/currentAffairs.ts';
 
 export const INITIAL_OFFICIAL_SOURCES: CurrentAffairsSourceRegistryItem[] = [
   {

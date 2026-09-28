@@ -569,11 +569,13 @@ function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Questi
 }
 
 async function startServer() {
-  // Bootstrap & Auto-migrate database tables and initial snapshot
-  await bootstrapAndMigrate();
-
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
+
+  // Run database migration & firestore sync in the background without blocking port binding
+  bootstrapAndMigrate().catch(err => {
+    console.warn('⚠️ Background bootstrap and migration note:', err);
+  });
 
   app.use(express.json({ limit: '50mb' }));
 

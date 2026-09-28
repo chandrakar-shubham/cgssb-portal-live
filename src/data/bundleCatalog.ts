@@ -1,4 +1,4 @@
-import { MockTest } from '../types';
+import type { MockTest } from '../types.ts';
 
 export interface BundleSyllabusSection {
   subject: string;
