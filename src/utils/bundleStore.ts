@@ -62,9 +62,15 @@ export const getAdminHeaders = (): Record<string, string> => {
  * Intelligent bundle entity merger that never wipes official curriculum items with empty arrays
  */
 export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<TestSeriesBundle>): TestSeriesBundle => {
-  const mergedTestItems = incoming.testItems !== undefined ? incoming.testItems : (base.testItems || []);
-  const mergedChapterTests = incoming.chapterTests !== undefined ? incoming.chapterTests : (base.chapterTests || []);
-  const mergedPypTests = incoming.pypTests !== undefined ? incoming.pypTests : (base.pypTests || []);
+  const mergedTestItems = (incoming.testItems && incoming.testItems.length > 0)
+    ? incoming.testItems
+    : (base.testItems && base.testItems.length > 0 ? base.testItems : (incoming.testItems || []));
+  const mergedChapterTests = (incoming.chapterTests && incoming.chapterTests.length > 0)
+    ? incoming.chapterTests
+    : (base.chapterTests && base.chapterTests.length > 0 ? base.chapterTests : (incoming.chapterTests || []));
+  const mergedPypTests = (incoming.pypTests && incoming.pypTests.length > 0)
+    ? incoming.pypTests
+    : (base.pypTests && base.pypTests.length > 0 ? base.pypTests : (incoming.pypTests || []));
 
   const totalCount = mergedTestItems.length + mergedChapterTests.length + mergedPypTests.length;
   const allTests = [...mergedTestItems, ...mergedChapterTests, ...mergedPypTests];
@@ -109,6 +115,16 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
   try {
     const deletedSet = getDeletedBundleIds();
     const raw = localStorage.getItem(BUNDLE_STORAGE_KEY);
+    // Clear stale empty cache if any official bundle has 0 test items
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.some(b => b.id === 'bundle-cgssb-lecturer-english-2026' && (!b.testItems || b.testItems.length === 0))) {
+          localStorage.removeItem(BUNDLE_STORAGE_KEY);
+        }
+      } catch {}
+    }
+    const freshRaw = localStorage.getItem(BUNDLE_STORAGE_KEY);
     const bundleMap = new Map<string, TestSeriesBundle>();
 
     // 1. Populate official catalog excluding any deleted bundles
@@ -119,8 +135,8 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
     });
 
     // 2. Overlay user stored bundles excluding any deleted
-    if (raw) {
-      const parsed = JSON.parse(raw);
+    if (freshRaw) {
+      const parsed = JSON.parse(freshRaw);
       if (Array.isArray(parsed)) {
         parsed.forEach(stored => {
           if (stored && stored.id && !deletedSet.has(stored.id) && !deletedSet.has(stored.slug)) {
