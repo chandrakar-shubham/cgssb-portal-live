@@ -4,6 +4,11 @@ export const LECTURER_ENGLISH_MOCK_01: MockTest = {
   "id": "test-1790519847815",
   "title": "CG Lecturer English 2026 - Comprehensive Full Mock 01",
   "category": "CGSSB",
+  "authority": "CGSSB",
+  "subCategory": "Teacher Recruitment 2026",
+  "postName": "CG Lecturer 2026",
+  "examName": "CG English Lecturer 2026",
+  "bundleId": "bundle-cgssb-lecturer-english-2026",
   "description": "Lecturer English (Higher Secondary Classes 9 to 12 / PGT) full length simulation exam",
   "durationMinutes": 120,
   "totalMarks": 100,
@@ -121,10 +126,7 @@ export const LECTURER_ENGLISH_MOCK_01: MockTest = {
   "attemptsCount": 1202,
   "passingPercentage": 45,
   "isPublished": true,
-  "createdAt": "2026-09-27",
-  "postName": "CG Lecturer 2026",
-  "examName": "CG English Lecturer 2026",
-  "subCategory": "Lecturer English 2026 Test Series"
+  "createdAt": "2026-09-27"
 };
 
 export const LECTURER_ENGLISH_QUESTIONS: Question[] = [

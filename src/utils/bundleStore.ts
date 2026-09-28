@@ -62,21 +62,9 @@ export const getAdminHeaders = (): Record<string, string> => {
  * Intelligent bundle entity merger that never wipes official curriculum items with empty arrays
  */
 export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<TestSeriesBundle>): TestSeriesBundle => {
-  const testItemMap = new Map<string, BundleTestItem>();
-  (base.testItems || []).forEach(item => { if (item && item.id) testItemMap.set(item.id, item); });
-  (incoming.testItems || []).forEach(item => { if (item && item.id) testItemMap.set(item.id, item); });
-
-  const chapterMap = new Map<string, BundleTestItem>();
-  (base.chapterTests || []).forEach(item => { if (item && item.id) chapterMap.set(item.id, item); });
-  (incoming.chapterTests || []).forEach(item => { if (item && item.id) chapterMap.set(item.id, item); });
-
-  const pypMap = new Map<string, BundleTestItem>();
-  (base.pypTests || []).forEach(item => { if (item && item.id) pypMap.set(item.id, item); });
-  (incoming.pypTests || []).forEach(item => { if (item && item.id) pypMap.set(item.id, item); });
-
-  const mergedTestItems = Array.from(testItemMap.values());
-  const mergedChapterTests = Array.from(chapterMap.values());
-  const mergedPypTests = Array.from(pypMap.values());
+  const mergedTestItems = incoming.testItems !== undefined ? incoming.testItems : (base.testItems || []);
+  const mergedChapterTests = incoming.chapterTests !== undefined ? incoming.chapterTests : (base.chapterTests || []);
+  const mergedPypTests = incoming.pypTests !== undefined ? incoming.pypTests : (base.pypTests || []);
 
   const totalCount = mergedTestItems.length + mergedChapterTests.length + mergedPypTests.length;
   const allTests = [...mergedTestItems, ...mergedChapterTests, ...mergedPypTests];
@@ -625,36 +613,67 @@ export const cascadeBundlePublishStatus = (
 export const doesTestMatchBundle = (test: MockTest, bundle: TestSeriesBundle): boolean => {
   if (!test || !bundle) return false;
 
-  const tTitle = (test.title || '').toLowerCase();
-  const tTitleHindi = (test.titleHindi || '').toLowerCase();
-  const tSub = (test.subCategory || '').toLowerCase();
-  const tPost = (test.postName || '').toLowerCase();
-  const tCat = (test.category || '').toLowerCase();
-  const tId = (test.id || '').toLowerCase();
+  const tTitle = (test.title || '').trim().toLowerCase();
+  const tTitleHindi = (test.titleHindi || '').trim().toLowerCase();
+  const tSub = (test.subCategory || '').trim().toLowerCase();
+  const tPost = (test.postName || '').trim().toLowerCase();
+  const tExam = (((test as any).examName || '') as string).trim().toLowerCase();
+  const tCat = (test.category || '').trim().toLowerCase();
+  const tId = (test.id || '').trim().toLowerCase();
 
-  const bId = (bundle.id || '').toLowerCase();
-  const bSlug = (bundle.slug || '').toLowerCase();
-  const bPost = (bundle.targetPost || '').toLowerCase();
-  const bTitle = (bundle.title || '').toLowerCase();
-  const bAuth = (bundle.authority || '').toLowerCase();
+  const bId = (bundle.id || '').trim().toLowerCase();
+  const bSlug = (bundle.slug || '').trim().toLowerCase();
+  const bPost = (bundle.targetPost || '').trim().toLowerCase();
+  const bTitle = (bundle.title || '').trim().toLowerCase();
+  const bAuth = (bundle.authority || '').trim().toLowerCase();
 
-  // 1. Exact ID or direct slug association
+  // 1. Explicit bundle reference on the test object
+  if ((test as any).bundleId && (test as any).bundleId.trim().toLowerCase() === bId) {
+    return true;
+  }
+
+  // 2. Specific CGSSB / CGPSC Bundles with strict exclusivity
+  
+  // A. Lecturer English 2026 (वर्ग-1 व्याख्याता अंग्रेजी)
   if (bId === 'bundle-cgssb-lecturer-english-2026' || bSlug === 'lecturer-english-2026') {
     if (
+      tTitle.includes('assistant') ||
+      tTitleHindi.includes('सहायक') ||
+      tTitle.includes('physics') ||
+      tTitle.includes('shikshak-paper1') ||
+      tTitle.includes('warden') ||
+      tTitle.includes('patwari') ||
+      tTitle.includes('si ') ||
+      tPost.includes('assistant') ||
+      tPost.includes('shikshak paper')
+    ) {
+      return false;
+    }
+    return (
       tId.includes('lecturer-english') ||
       tId.includes('lecturer_eng') ||
       tId.includes('lecturer-eng') ||
+      tId.includes('cg-lecturer-english') ||
       (tTitle.includes('lecturer') && tTitle.includes('english')) ||
       (tTitleHindi.includes('व्याख्याता') && tTitleHindi.includes('अंग्रेजी')) ||
-      (tPost.includes('lecturer') && tPost.includes('english')) ||
+      (tPost.includes('lecturer') && (tPost.includes('english') || tExam.includes('english'))) ||
       (tSub.includes('lecturer') && tSub.includes('english'))
-    ) {
-      return true;
-    }
+    );
   }
 
+  // B. Assistant Teacher 2026 (वर्ग-3 सहायक शिक्षक)
   if (bId === 'bundle-cgssb-asst-teacher-2026' || bSlug === 'assistant-teacher-2026') {
     if (
+      tTitle.includes('lecturer') ||
+      tTitleHindi.includes('व्याख्याता') ||
+      tTitle.includes('वर्ग-1') ||
+      tTitle.includes('वर्ग-2') ||
+      tTitle.includes('warden') ||
+      tTitle.includes('patwari')
+    ) {
+      return false;
+    }
+    return (
       tId.includes('shikshak-paper1') ||
       tId.includes('asst-teacher') ||
       tTitle.includes('assistant teacher') ||
@@ -662,33 +681,49 @@ export const doesTestMatchBundle = (test: MockTest, bundle: TestSeriesBundle): b
       tPost.includes('assistant teacher') ||
       tSub.includes('assistant teacher') ||
       tTitle.includes('वर्ग-3')
-    ) {
-      return true;
-    }
+    );
   }
 
+  // C. Teacher English 2026 (वर्ग-2 शिक्षक अंग्रेजी)
   if (bId === 'bundle-cgssb-teacher-english-2026' || bSlug === 'teacher-english-2026') {
     if (
-      (tId.includes('shikshak-paper2') && (tId.includes('eng') || tTitle.includes('english'))) ||
-      (tTitle.includes('teacher') && tTitle.includes('english') && !tTitle.includes('assistant') && !tTitle.includes('lecturer')) ||
-      (tTitleHindi.includes('शिक्षक') && tTitleHindi.includes('अंग्रेजी') && !tTitleHindi.includes('सहायक') && !tTitleHindi.includes('व्याख्याता'))
+      tTitle.includes('assistant') ||
+      tTitleHindi.includes('सहायक') ||
+      tTitle.includes('lecturer') ||
+      tTitleHindi.includes('व्याख्याता') ||
+      tTitle.includes('वर्ग-1') ||
+      tTitle.includes('वर्ग-3')
     ) {
-      return true;
+      return false;
     }
+    return (
+      (tId.includes('shikshak-paper2') && (tId.includes('eng') || tTitle.includes('english'))) ||
+      (tTitle.includes('teacher') && tTitle.includes('english')) ||
+      (tTitleHindi.includes('शिक्षक') && tTitleHindi.includes('अंग्रेजी'))
+    );
   }
 
+  // D. Teacher Maths & Science 2026 (वर्ग-2 शिक्षक गणित)
   if (bId === 'bundle-cgssb-teacher-maths-2026' || bSlug === 'teacher-maths-2026') {
     if (
-      (tId.includes('shikshak-paper2') && (tId.includes('math') || tTitle.includes('math'))) ||
-      (tTitle.includes('teacher') && (tTitle.includes('math') || tTitle.includes('science')) && !tTitle.includes('assistant') && !tTitle.includes('lecturer')) ||
-      (tTitleHindi.includes('शिक्षक') && (tTitleHindi.includes('गणित') || tTitleHindi.includes('विज्ञान')) && !tTitleHindi.includes('सहायक') && !tTitleHindi.includes('व्याख्याता'))
+      tTitle.includes('assistant') ||
+      tTitleHindi.includes('सहायक') ||
+      tTitle.includes('lecturer') ||
+      tTitleHindi.includes('व्याख्याता') ||
+      tTitle.includes('english')
     ) {
-      return true;
+      return false;
     }
+    return (
+      (tId.includes('shikshak-paper2') && (tId.includes('math') || tTitle.includes('math') || tTitle.includes('science'))) ||
+      (tTitle.includes('teacher') && (tTitle.includes('math') || tTitle.includes('science'))) ||
+      (tTitleHindi.includes('शिक्षक') && (tTitleHindi.includes('गणित') || tTitleHindi.includes('विज्ञान')))
+    );
   }
 
+  // E. CG Police SI 2026
   if (bId === 'bundle-cgssb-si-2026' || bSlug === 'cgssb-si-2026') {
-    if (
+    return (
       tId.includes('si-') ||
       tId.includes('sub-inspector') ||
       tTitle.includes('sub inspector') ||
@@ -696,29 +731,45 @@ export const doesTestMatchBundle = (test: MockTest, bundle: TestSeriesBundle): b
       tTitle.includes('si 2026') ||
       tTitleHindi.includes('सब इंस्पेक्टर') ||
       tTitleHindi.includes('सूबेदार')
-    ) {
-      return true;
-    }
+    );
   }
 
+  // F. CGPSC Prelims 2026
   if (bId === 'bundle-cgpsc-pre-2026' || bSlug === 'cgpsc-pre-2026') {
-    if (
+    if (tTitle.includes('vyapam') || tCat === 'cgssb') return false;
+    return (
       tId.includes('cgpsc') ||
       tCat === 'cgpsc' ||
       tTitle.includes('cgpsc') ||
       tTitle.includes('state service') ||
       tTitleHindi.includes('राज्य सेवा')
-    ) {
-      return true;
-    }
+    );
   }
 
-  // 2. Generic keyword match on authority, postName, or subCategory
+  // G. Hostel Warden
+  if (bId === 'bundle-cgssb-warden-2024' || bSlug === 'cgssb-hostel-warden-2024') {
+    return (
+      tId.includes('warden') ||
+      tTitle.includes('hostel warden') ||
+      tTitleHindi.includes('छात्रावास अधीक्षक') ||
+      tPost.includes('warden') ||
+      tSub.includes('warden')
+    );
+  }
+
+  // H. Patwari
+  if (bId === 'bundle-cgssb-patwari-2024' || bSlug === 'cgssb-patwari-2024') {
+    return (
+      tId.includes('patwari') ||
+      tTitle.includes('patwari') ||
+      tTitleHindi.includes('पटवारी') ||
+      tPost.includes('patwari')
+    );
+  }
+
+  // 3. Strict fallback: only if authority matches AND specific exam name matches
   if (tCat && bAuth && tCat === bAuth) {
-    if (bPost && (tPost.includes(bPost) || bPost.includes(tPost) || tSub.includes(bPost) || bPost.includes(tSub))) {
-      return true;
-    }
-    if (bTitle && (tTitle.includes(bTitle) || bTitle.includes(tTitle))) {
+    if (tExam && bSlug && tExam.length > 5 && (bSlug.includes(tExam) || tExam.includes(bSlug))) {
       return true;
     }
   }

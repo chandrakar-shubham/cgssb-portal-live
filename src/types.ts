@@ -206,6 +206,7 @@ export interface MockTest {
   attemptsCount: number;
   passingPercentage?: number;
   isPublished?: boolean;
+  bundleId?: string;
   difficultyDistribution?: { easy: number; medium: number; hard: number };
   createdAt?: string;
 }
