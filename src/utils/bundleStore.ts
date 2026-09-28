@@ -328,6 +328,236 @@ export const resetBundlesToDefault = (): TestSeriesBundle[] => {
   return OFFICIAL_BUNDLES_CATALOG;
 };
 
+// =========================================================================
+// GOVERNANCE & TRASH RECOVERY REPOSITORY
+// =========================================================================
+export interface TrashedItem {
+  id: string;
+  type: 'BUNDLE' | 'TEST';
+  title: string;
+  titleHindi?: string;
+  deletedAt: string;
+  deletedBy?: string;
+  itemCount?: number;
+  data: any;
+}
+
+const TRASH_STORAGE_KEY = 'cgssb_trash_bin_v1';
+
+export const getTrashItems = (): TrashedItem[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(TRASH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveTrashItems = (items: TrashedItem[]): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(TRASH_STORAGE_KEY, JSON.stringify(items));
+    window.dispatchEvent(new CustomEvent('cgssb-trash-updated', { detail: items }));
+  } catch {}
+};
+
+/**
+ * Move a bundle to Trash Bin (Soft Delete)
+ */
+export const moveToTrashBundle = (bundle: TestSeriesBundle, userEmail?: string): void => {
+  const trashed: TrashedItem = {
+    id: bundle.id,
+    type: 'BUNDLE',
+    title: bundle.title,
+    titleHindi: bundle.titleHindi,
+    deletedAt: new Date().toISOString(),
+    deletedBy: userEmail || 'Administrator',
+    itemCount: (bundle.testItems?.length || 0) + (bundle.chapterTests?.length || 0) + (bundle.pypTests?.length || 0),
+    data: bundle
+  };
+  const currentTrash = getTrashItems().filter(i => i.id !== bundle.id);
+  saveTrashItems([trashed, ...currentTrash]);
+  deleteStoredBundle(bundle.id);
+};
+
+/**
+ * Restore a bundle from Trash Bin
+ */
+export const restoreBundleFromTrash = (bundleId: string): TestSeriesBundle | null => {
+  const currentTrash = getTrashItems();
+  const target = currentTrash.find(i => i.id === bundleId && i.type === 'BUNDLE');
+  if (!target || !target.data) return null;
+
+  saveTrashItems(currentTrash.filter(i => i.id !== bundleId));
+  const restoredBundle: TestSeriesBundle = {
+    ...target.data,
+    isPublished: true,
+    isDraft: false
+  };
+  saveSingleBundle(restoredBundle);
+  return restoredBundle;
+};
+
+/**
+ * Permanently purge an item from Trash
+ */
+export const purgeTrashItem = (itemId: string): void => {
+  const currentTrash = getTrashItems().filter(i => i.id !== itemId);
+  saveTrashItems(currentTrash);
+};
+
+/**
+ * Move a mock test to Trash Bin (Soft Delete)
+ */
+export const moveToTrashTest = (test: MockTest, userEmail?: string): void => {
+  const trashed: TrashedItem = {
+    id: test.id,
+    type: 'TEST',
+    title: test.title,
+    titleHindi: test.titleHindi,
+    deletedAt: new Date().toISOString(),
+    deletedBy: userEmail || 'Administrator',
+    itemCount: test.questionCount || 0,
+    data: test
+  };
+  const currentTrash = getTrashItems().filter(i => i.id !== test.id);
+  saveTrashItems([trashed, ...currentTrash]);
+};
+
+/**
+ * Restore a test from Trash Bin
+ */
+export const restoreTestFromTrash = (testId: string): MockTest | null => {
+  const currentTrash = getTrashItems();
+  const target = currentTrash.find(i => i.id === testId && i.type === 'TEST');
+  if (!target || !target.data) return null;
+
+  saveTrashItems(currentTrash.filter(i => i.id !== testId));
+  
+  // Remove from deleted registry if present
+  try {
+    const raw = localStorage.getItem('cgssb_deleted_tests');
+    if (raw) {
+      const set = new Set(JSON.parse(raw));
+      set.delete(testId);
+      localStorage.setItem('cgssb_deleted_tests', JSON.stringify(Array.from(set)));
+    }
+  } catch {}
+
+  const restoredTest: MockTest = {
+    ...target.data,
+    isPublished: true
+  };
+
+  // Dispatch restore event
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cgssb-test-restored', { detail: restoredTest }));
+  }
+
+  return restoredTest;
+};
+
+/**
+ * Removes a test from all active bundles across the system
+ */
+export const cleanTestFromAllBundles = (testId: string): TestSeriesBundle[] => {
+  const bundles = getStoredBundles();
+  let modified = false;
+
+  const updated = bundles.map(bundle => {
+    const directMockCount = (bundle.testItems || []).length;
+    const directChapterCount = (bundle.chapterTests || []).length;
+    const directPypCount = (bundle.pypTests || []).length;
+
+    const newMocks = (bundle.testItems || []).filter(t => t.id !== testId && t.mockTestRef?.id !== testId);
+    const newChapters = (bundle.chapterTests || []).filter(t => t.id !== testId && t.mockTestRef?.id !== testId);
+    const newPyps = (bundle.pypTests || []).filter(t => t.id !== testId && t.mockTestRef?.id !== testId);
+
+    if (
+      newMocks.length !== directMockCount ||
+      newChapters.length !== directChapterCount ||
+      newPyps.length !== directPypCount
+    ) {
+      modified = true;
+      const totalCount = newMocks.length + newChapters.length + newPyps.length;
+      const freeCount = [...newMocks, ...newChapters, ...newPyps].filter(t => t.isFreePreview).length;
+      return {
+        ...bundle,
+        testItems: newMocks,
+        chapterTests: newChapters,
+        pypTests: newPyps,
+        totalTestsCount: totalCount > 0 ? totalCount : 1,
+        freeTestsCount: freeCount > 0 ? freeCount : 1,
+      };
+    }
+    return bundle;
+  });
+
+  if (modified) {
+    saveStoredBundles(updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updated }));
+    }
+  }
+  return updated;
+};
+
+/**
+ * Finds all bundles that currently contain a given test ID
+ */
+export const findBundlesContainingTest = (testId: string): TestSeriesBundle[] => {
+  const bundles = getStoredBundles();
+  return bundles.filter(b => {
+    const inMocks = (b.testItems || []).some(t => t.id === testId || t.mockTestRef?.id === testId);
+    const inChapters = (b.chapterTests || []).some(t => t.id === testId || t.mockTestRef?.id === testId);
+    const inPyps = (b.pypTests || []).some(t => t.id === testId || t.mockTestRef?.id === testId);
+    return inMocks || inChapters || inPyps;
+  });
+};
+
+/**
+ * Cascades publish/unpublish status from a Bundle to its attached tests
+ */
+export const cascadeBundlePublishStatus = (
+  bundleId: string,
+  newPublishStatus: boolean
+): { bundle: TestSeriesBundle | null; affectedTestIds: string[] } => {
+  const bundles = getStoredBundles();
+  const targetBundle = bundles.find(b => b.id === bundleId || b.slug === bundleId);
+  if (!targetBundle) return { bundle: null, affectedTestIds: [] };
+
+  const affectedTestIds: string[] = [];
+  const collectIds = (items?: BundleTestItem[]) => {
+    (items || []).forEach(item => {
+      if (item.id) affectedTestIds.push(item.id);
+    });
+  };
+
+  collectIds(targetBundle.testItems);
+  collectIds(targetBundle.chapterTests);
+  collectIds(targetBundle.pypTests);
+
+  const updatedBundle: TestSeriesBundle = {
+    ...targetBundle,
+    isPublished: newPublishStatus,
+    isDraft: !newPublishStatus
+  };
+
+  saveSingleBundle(updatedBundle);
+
+  // Dispatch cross-tab & global governance sync
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('cgssb-governance-publish-cascade', {
+        detail: { bundleId, newPublishStatus, affectedTestIds }
+      })
+    );
+  }
+
+  return { bundle: updatedBundle, affectedTestIds };
+};
+
 /**
  * Determines whether a given MockTest matches a TestSeriesBundle by category, post, slug, or title
  */

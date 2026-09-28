@@ -102,6 +102,51 @@
         "date": { "type": "string", "description": "Date of current affair" }
       },
       "required": ["id", "titleEn", "titleHindi", "region", "date"]
+    },
+    "RemoteConfig": {
+      "title": "RemoteConfig",
+      "description": "Server-driven application remote configuration, feature flags, maintenance mode, and dynamic rules",
+      "type": "object",
+      "properties": {
+        "version": { "type": "string", "description": "Configuration version" },
+        "updatedAt": { "type": "string", "description": "Last updated ISO timestamp" },
+        "updatedBy": { "type": "string", "description": "Email or ID of updating admin" }
+      },
+      "required": ["version", "updatedAt"]
+    },
+    "CMSPage": {
+      "title": "CMSPage",
+      "description": "Dynamic landing and informational pages with block schema and theme tokens",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique page ID" },
+        "slug": { "type": "string", "description": "URL slug" },
+        "title": { "type": "string", "description": "Page title" },
+        "isPublished": { "type": "boolean", "description": "Published state" }
+      },
+      "required": ["id", "slug", "title"]
+    },
+    "CMSPost": {
+      "title": "CMSPost",
+      "description": "Exam alerts, current affairs articles, and study notes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique post ID" },
+        "slug": { "type": "string", "description": "URL slug" },
+        "title": { "type": "string", "description": "Post title" },
+        "isPublished": { "type": "boolean", "description": "Published state" }
+      },
+      "required": ["id", "slug", "title"]
+    },
+    "CMSSiteSettings": {
+      "title": "CMSSiteSettings",
+      "description": "Site navigation, brand identity, theme tokens, and monetization ad unit configurations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Settings doc ID" },
+        "brandName": { "type": "string", "description": "Brand name" }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
@@ -132,6 +177,26 @@
     "/currentAffairsTopics/{topicId}": {
       "schema": { "$ref": "#/entities/CurrentAffairsTopic" },
       "description": "Current affairs exam topics repository"
+    },
+    "/remoteConfig/{configId}": {
+      "schema": { "$ref": "#/entities/RemoteConfig" },
+      "description": "Global server-driven UI configuration and feature flags"
+    },
+    "/pages/{pageId}": {
+      "schema": { "$ref": "#/entities/CMSPage" },
+      "description": "Dynamic CMS landing pages and theme templates"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/CMSPost" },
+      "description": "Dynamic CMS articles, notifications, and study guides"
+    },
+    "/seriesPacks/{packId}": {
+      "schema": { "$ref": "#/entities/TestSeriesBundle" },
+      "description": "Test series curated packages"
+    },
+    "/cmsSettings/{settingsId}": {
+      "schema": { "$ref": "#/entities/CMSSiteSettings" },
+      "description": "Site navigation, dynamic themes, and ad configurations"
     }
   }
 }

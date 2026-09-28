@@ -15,7 +15,8 @@ import {
   ExternalLink,
   Search,
   Command,
-  ArrowLeft
+  ArrowLeft,
+  Sliders,
 } from 'lucide-react';
 
 interface AdminSubNavProps {
@@ -66,9 +67,10 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
     },
     {
       groupId: 'system',
-      groupName: 'System & APIs',
+      groupName: 'System & Remote Control',
       icon: Database,
       items: [
+        { id: 'admin-remote-config', label: 'Remote Config & Flags', icon: Sliders, badge: 'Live SDUI', desc: 'Control frontend features, banners & rules' },
         { id: 'admin-database', label: 'Database & Schema', icon: Database, badge: 'Firestore', desc: 'Firestore collections & backups' },
         { id: 'admin-android-api', label: 'Android API', icon: Smartphone, highlight: true, desc: 'Mobile app sync & endpoints' },
       ],

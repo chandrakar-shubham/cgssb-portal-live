@@ -55,6 +55,12 @@ export function toggleBookmark(
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
     window.dispatchEvent(new CustomEvent(BOOKMARKS_CHANGED_EVENT, { detail: { questionId, isBookmarked: isBookmarkedNow } }));
+    // Asynchronously sync with server
+    fetch('/api/user/bookmarks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookmarks })
+    }).catch(() => null);
   } catch (err) {
     console.warn('Failed to save bookmark to localStorage:', err);
   }

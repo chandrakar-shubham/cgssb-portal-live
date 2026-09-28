@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useRemoteConfig } from '../context/RemoteConfigContext';
 import {
   BookOpen,
   FileText,
@@ -42,17 +43,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   mistakesCount = 0,
 }) => {
   const { user, logout } = useAuth();
+  const { config } = useRemoteConfig();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'tests' | 'exams' | 'hub' | null>(null);
   const navContainerRef = useRef<HTMLDivElement>(null);
 
-  // Group 1: Tests & Practice Engine
-  const testItems = [
-    { id: 'tests', label: 'Full Mock Tests', icon: BookOpen, desc: 'Timed simulated exams with state ranks' },
-    { id: 'pyp', label: 'PYP Archives', icon: FileText, desc: 'Official solved papers (2014-2024)' },
-    { id: 'chapters', label: 'Chapter Tests', icon: Layers, desc: 'Subject & Topic-wise revision quizzes' },
-    { id: 'practice', label: 'Practice Drills', icon: Zap, desc: 'Untimed daily MCQs with instant solutions' },
-  ];
+  // Group 1: Tests & Practice Engine (Filtered by Server-Driven Remote Config)
+  const testItems = useMemo(() => {
+    const items = [
+      { id: 'tests', label: 'Full Mock Tests', icon: BookOpen, desc: 'Timed simulated exams with state ranks', enabled: true },
+      { id: 'pyp', label: 'PYP Archives', icon: FileText, desc: 'Official solved papers (2014-2024)', enabled: config.featureFlags.enablePYPSection !== false },
+      { id: 'chapters', label: 'Chapter Tests', icon: Layers, desc: 'Subject & Topic-wise revision quizzes', enabled: config.featureFlags.enableChapterTests !== false },
+      { id: 'practice', label: 'Practice Drills', icon: Zap, desc: 'Untimed daily MCQs with instant solutions', enabled: true },
+    ];
+    return items.filter(i => i.enabled);
+  }, [config.featureFlags]);
 
   // Group 2: Dedicated Exam Portals
   const examItems = [
@@ -60,14 +65,17 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'cgssb', label: 'CG Vyapam Hub', icon: Sparkles, desc: 'Hostel Warden, Patwari & RI Exams', color: 'text-teal-400' },
   ];
 
-  // Group 3: Study Lounge & Analytics
-  const studyItems = [
-    { id: 'leaderboard', label: 'State Leaderboard', icon: Trophy, desc: 'Live statewide merit & percentile rankings', color: 'text-amber-400' },
-    { id: 'mistakes', label: 'Mistake Notebook', icon: AlertTriangle, desc: 'Review & re-test incorrect questions', badge: mistakesCount > 0 ? mistakesCount : undefined, color: 'text-rose-400' },
-    { id: 'bookmarks', label: 'Starred Bookmarks', icon: Bookmark, desc: 'Saved questions and custom notes', color: 'text-amber-400' },
-    { id: 'chhattisgarh-deck', label: 'CG Flashcards', icon: Sparkles, desc: 'Chhattisgarhi language & GK quick cards', color: 'text-teal-300' },
-    { id: 'analytics', label: 'Analytics Hub', icon: BarChart3, desc: 'Score trends & subject weak areas', color: 'text-indigo-400' },
-  ];
+  // Group 3: Study Lounge & Analytics (Filtered by Server-Driven Remote Config)
+  const studyItems = useMemo(() => {
+    const items = [
+      { id: 'leaderboard', label: 'State Leaderboard', icon: Trophy, desc: 'Live statewide merit & percentile rankings', color: 'text-amber-400', enabled: config.featureFlags.enableLiveLeaderboard !== false },
+      { id: 'mistakes', label: 'Mistake Notebook', icon: AlertTriangle, desc: 'Review & re-test incorrect questions', badge: mistakesCount > 0 ? mistakesCount : undefined, color: 'text-rose-400', enabled: config.featureFlags.enableMistakeNotebook !== false },
+      { id: 'bookmarks', label: 'Starred Bookmarks', icon: Bookmark, desc: 'Saved questions and custom notes', color: 'text-amber-400', enabled: config.featureFlags.enableBookmarks !== false },
+      { id: 'chhattisgarh-deck', label: 'CG Flashcards', icon: Sparkles, desc: 'Chhattisgarhi language & GK quick cards', color: 'text-teal-300', enabled: config.featureFlags.enableChhattisgarhiRevision !== false },
+      { id: 'analytics', label: 'Analytics Hub', icon: BarChart3, desc: 'Score trends & subject weak areas', color: 'text-indigo-400', enabled: config.featureFlags.enableStudentAnalytics !== false },
+    ];
+    return items.filter(i => i.enabled);
+  }, [config.featureFlags, mistakesCount]);
 
   const isTestActive = testItems.some(i => i.id === activeTab);
   const isExamActive = examItems.some(i => i.id === activeTab);

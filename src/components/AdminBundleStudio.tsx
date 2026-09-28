@@ -17,6 +17,16 @@ import {
   doesTestMatchBundle,
   reconcileAllTestsWithBundles,
   convertMockTestToBundleItem,
+  getTrashItems,
+  moveToTrashBundle,
+  restoreBundleFromTrash,
+  moveToTrashTest,
+  restoreTestFromTrash,
+  purgeTrashItem,
+  cleanTestFromAllBundles,
+  findBundlesContainingTest,
+  cascadeBundlePublishStatus,
+  TrashedItem,
 } from '../utils/bundleStore';
 import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
@@ -68,7 +78,11 @@ import {
   FileCode,
   CheckSquare,
   Square,
-  X
+  X,
+  Archive,
+  RotateCcw,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 
 interface AdminBundleStudioProps {
@@ -85,6 +99,8 @@ interface AdminBundleStudioProps {
     cadre?: string;
     bundleId?: string;
   }) => void;
+  onDeleteTest?: (testId: string) => void;
+  onTogglePublishTest?: (testId: string) => void;
 }
 
 export type IngestionTargetSection = 'mock' | 'chapter' | 'pyp';
@@ -148,6 +164,8 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   onTestsAdded,
   onQuestionsAdded,
   onOpenUniversalIngest,
+  onDeleteTest,
+  onTogglePublishTest,
 }) => {
   const [bundles, setBundles] = useState<TestSeriesBundle[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -186,6 +204,36 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   const [bulkTopicsSectionIdx, setBulkTopicsSectionIdx] = useState<number | null>(null);
   const [bulkTopicsText, setBulkTopicsText] = useState('');
   const [newTopicInputs, setNewTopicInputs] = useState<Record<number, string>>({});
+
+  // =========================================================================
+  // ENTERPRISE GOVERNANCE & CASCADE MODAL STATES
+  // =========================================================================
+  const [testDeleteCandidate, setTestDeleteCandidate] = useState<{
+    item: BundleTestItem;
+    section: IngestionTargetSection;
+    index: number;
+    otherBundles: TestSeriesBundle[];
+  } | null>(null);
+
+  const [cascadePublishCandidate, setCascadePublishCandidate] = useState<{
+    bundle: TestSeriesBundle;
+    targetPublishStatus: boolean;
+    attachedCount: number;
+  } | null>(null);
+
+  const [isTrashHubOpen, setIsTrashHubOpen] = useState(false);
+  const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
+
+  useEffect(() => {
+    setTrashedItems(getTrashItems());
+    const handleTrashUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setTrashedItems(e.detail);
+      }
+    };
+    window.addEventListener('cgssb-trash-updated', handleTrashUpdate);
+    return () => window.removeEventListener('cgssb-trash-updated', handleTrashUpdate);
+  }, []);
 
   useEffect(() => {
     let initialList = getStoredBundles();
@@ -233,14 +281,160 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     }
   };
 
-  const handleTogglePublish = (bundleId: string, title: string) => {
-    const { updatedList, newStatus } = toggleBundlePublish(bundleId);
+  // Triggered when unpublishing / publishing a bundle with cascade options
+  const handleTogglePublishWithCascade = (bundle: TestSeriesBundle) => {
+    const isCurrentlyPublished = bundle.isPublished !== false && !bundle.isDraft;
+    const targetStatus = !isCurrentlyPublished;
+    const attachedCount = (bundle.testItems?.length || 0) + (bundle.chapterTests?.length || 0) + (bundle.pypTests?.length || 0);
+
+    // If unpublishing and bundle has attached tests, prompt with cascade dialog
+    if (!targetStatus && attachedCount > 0) {
+      setCascadePublishCandidate({
+        bundle,
+        targetPublishStatus: false,
+        attachedCount
+      });
+      return;
+    }
+
+    // Direct toggle
+    const { updatedList, newStatus } = toggleBundlePublish(bundle.id);
     setBundles(updatedList);
     showToast(
       newStatus
-        ? `Published "${title}" — Live on Student Portal!`
-        : `Unpublished "${title}" — Moved to Drafts (Hidden from students).`
+        ? `Published "${bundle.title}" — Live on Student Portal!`
+        : `Unpublished "${bundle.title}" — Moved to Drafts.`
     );
+  };
+
+  const handleConfirmCascadePublish = (cascadeToTests: boolean) => {
+    if (!cascadePublishCandidate) return;
+    const { bundle, targetPublishStatus } = cascadePublishCandidate;
+
+    const { affectedTestIds } = cascadeBundlePublishStatus(bundle.id, targetPublishStatus);
+    
+    // If cascade to tests requested, toggle tests in global catalog too
+    if (cascadeToTests && affectedTestIds.length > 0) {
+      affectedTestIds.forEach(tId => {
+        const testObj = availableTests.find(t => t.id === tId);
+        if (testObj && testObj.isPublished !== targetPublishStatus && onTogglePublishTest) {
+          onTogglePublishTest(tId);
+        }
+      });
+    }
+
+    setBundles(getStoredBundles());
+    setCascadePublishCandidate(null);
+    showToast(`Unpublished "${bundle.title}"${cascadeToTests ? ` and cascaded to ${affectedTestIds.length} attached tests.` : '.'}`);
+  };
+
+  // Triggered when deleting a test item from within a bundle in Tab 7
+  const handleRequestDeleteTestItem = (item: BundleTestItem, section: IngestionTargetSection, idx: number) => {
+    const otherBundles = findBundlesContainingTest(item.id).filter(b => b.id !== editingBundle?.id);
+    setTestDeleteCandidate({
+      item,
+      section,
+      index: idx,
+      otherBundles
+    });
+  };
+
+  const handleConfirmUnlinkOnly = () => {
+    if (!testDeleteCandidate || !editingBundle) return;
+    const { section, index, item } = testDeleteCandidate;
+
+    if (section === 'mock') {
+      const updated = editingBundle.testItems.filter((_, i) => i !== index);
+      setEditingBundle({ ...editingBundle, testItems: updated });
+    } else if (section === 'chapter') {
+      const updated = (editingBundle.chapterTests || []).filter((_, i) => i !== index);
+      setEditingBundle({ ...editingBundle, chapterTests: updated });
+    } else if (section === 'pyp') {
+      const updated = (editingBundle.pypTests || []).filter((_, i) => i !== index);
+      setEditingBundle({ ...editingBundle, pypTests: updated });
+    }
+
+    setTestDeleteCandidate(null);
+    showToast(`Unlinked "${item.title}" from this bundle (remains in mock catalog).`);
+  };
+
+  const handleConfirmUniversalDelete = () => {
+    if (!testDeleteCandidate || !editingBundle) return;
+    const { section, index, item } = testDeleteCandidate;
+
+    // 1. Remove from editing bundle
+    if (section === 'mock') {
+      const updated = editingBundle.testItems.filter((_, i) => i !== index);
+      setEditingBundle({ ...editingBundle, testItems: updated });
+    } else if (section === 'chapter') {
+      const updated = (editingBundle.chapterTests || []).filter((_, i) => i !== index);
+      setEditingBundle({ ...editingBundle, chapterTests: updated });
+    } else if (section === 'pyp') {
+      const updated = (editingBundle.pypTests || []).filter((_, i) => i !== index);
+      setEditingBundle({ ...editingBundle, pypTests: updated });
+    }
+
+    // 2. Remove from all other bundles
+    cleanTestFromAllBundles(item.id);
+
+    // 3. Move to soft-delete Trash Recovery Bin
+    const targetTest = availableTests.find(t => t.id === item.id) || item.mockTestRef || {
+      id: item.id,
+      title: item.title,
+      titleHindi: item.titleHindi,
+      category: 'CGSSB' as any,
+      description: '',
+      durationMinutes: item.durationMinutes,
+      marksPerQuestion: 1,
+      negativeMarksPerQuestion: 0.33,
+      sections: [],
+      questionCount: item.questionCount,
+      attemptsCount: item.attemptsCount,
+    };
+    moveToTrashTest(targetTest);
+
+    // 4. Delete globally from tests catalog & Firestore & API if prop passed
+    if (onDeleteTest) {
+      onDeleteTest(item.id);
+    }
+
+    setTestDeleteCandidate(null);
+    showToast(`Deleted "${item.title}" universally across all bundles & moved to Trash Bin.`);
+  };
+
+  // Soft-delete bundle (Moves to Trash Bin)
+  const handleDeleteBundle = (bundleId: string, title: string) => {
+    const target = bundles.find(b => b.id === bundleId);
+    if (!target) return;
+
+    moveToTrashBundle(target);
+    const updated = getStoredBundles();
+    setBundles(updated);
+    showToast(`Test Series "${title}" moved to Trash Bin.`);
+  };
+
+  const handleRestoreBundle = (bundleId: string) => {
+    const restored = restoreBundleFromTrash(bundleId);
+    if (restored) {
+      setBundles(getStoredBundles());
+      showToast(`Restored "${restored.title}" back to active Test Series!`);
+    }
+  };
+
+  const handleRestoreTest = (testId: string) => {
+    const restored = restoreTestFromTrash(testId);
+    if (restored) {
+      if (onTestsAdded) onTestsAdded([restored]);
+      showToast(`Restored "${restored.title}" back to Mock Tests catalog!`);
+    }
+  };
+
+  const handlePurgeTrash = (itemId: string, title: string) => {
+    if (window.confirm(`Permanently purge "${title}"? This cannot be undone.`)) {
+      purgeTrashItem(itemId);
+      setTrashedItems(getTrashItems());
+      showToast(`Permanently purged "${title}".`);
+    }
   };
 
   const allHierarchyRecords = useMemo(() => {
@@ -2558,11 +2752,9 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              const updated = editingBundle.testItems.filter((_, i) => i !== idx);
-                              setEditingBundle({ ...editingBundle, testItems: updated });
-                            }}
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition"
+                            onClick={() => handleRequestDeleteTestItem(test, 'mock', idx)}
+                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                            title="Delete or Unlink Test"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2637,11 +2829,9 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              const updated = (editingBundle.chapterTests || []).filter((_, i) => i !== idx);
-                              setEditingBundle({ ...editingBundle, chapterTests: updated });
-                            }}
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition"
+                            onClick={() => handleRequestDeleteTestItem(test, 'chapter', idx)}
+                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                            title="Delete or Unlink Test"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2716,11 +2906,9 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              const updated = (editingBundle.pypTests || []).filter((_, i) => i !== idx);
-                              setEditingBundle({ ...editingBundle, pypTests: updated });
-                            }}
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition"
+                            onClick={() => handleRequestDeleteTestItem(test, 'pyp', idx)}
+                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                            title="Delete or Unlink Test"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2937,6 +3125,21 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* Trash & Recovery Bin Button */}
+            <button
+              onClick={() => setIsTrashHubOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 hover:border-slate-600 font-bold text-xs flex items-center space-x-2 transition cursor-pointer relative"
+              title="View and restore soft-deleted test series and mock tests"
+            >
+              <Archive className="w-4 h-4 text-amber-400" />
+              <span>Trash Bin & Recovery</span>
+              {trashedItems.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 ml-1">
+                  {trashedItems.length}
+                </span>
+              )}
+            </button>
+
             <button
               onClick={() => setIsSyncModalOpen(true)}
               className="px-4 py-2.5 rounded-2xl bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center space-x-2 transition cursor-pointer shadow-lg shadow-indigo-950/40"
@@ -3157,16 +3360,16 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                   <Eye className="w-4 h-4" />
                 </button>
 
-                {/* Publish / Unpublish Button */}
+                {/* Publish / Unpublish Button with Cascade Option */}
                 <button
                   type="button"
-                  onClick={() => handleTogglePublish(bundle.id, bundle.title)}
+                  onClick={() => handleTogglePublishWithCascade(bundle)}
                   className={`px-2.5 py-2 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition cursor-pointer border shrink-0 ${
                     isPublished
                       ? 'bg-slate-800/90 hover:bg-amber-500/15 text-slate-300 hover:text-amber-300 border-slate-700/80 hover:border-amber-500/30'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-600/30'
                   }`}
-                  title={isPublished ? 'Unpublish bundle (hide from students)' : 'Publish bundle (make live for students)'}
+                  title={isPublished ? 'Unpublish bundle & attached tests' : 'Publish bundle (make live for students)'}
                 >
                   {isPublished ? (
                     <>
@@ -3213,9 +3416,9 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => handleDelete(bundle.id, bundle.title)}
-                  className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition shrink-0"
-                  title="Delete Series"
+                  onClick={() => handleDeleteBundle(bundle.id, bundle.title)}
+                  className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition shrink-0 cursor-pointer"
+                  title="Move to Trash Bin"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -3224,6 +3427,278 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
           );
         })}
       </div>
+
+      {/* ================================================================= */}
+      {/* 1. UNIVERSAL DELETE VS UNLINK MODAL                              */}
+      {/* ================================================================= */}
+      {testDeleteCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 relative">
+            <button
+              onClick={() => setTestDeleteCandidate(null)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-3 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Delete Test Item</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Choose how you want to remove <span className="text-white font-bold">"{testDeleteCandidate.item.title}"</span>.
+                </p>
+              </div>
+            </div>
+
+            {/* Impact Analysis Warning */}
+            {testDeleteCandidate.otherBundles.length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-300 space-y-1.5">
+                <div className="flex items-center space-x-1.5 font-bold">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Cross-Series Reference Warning:</span>
+                </div>
+                <p className="text-amber-200/90 text-[11px] leading-relaxed">
+                  This test is also currently attached in <strong>{testDeleteCandidate.otherBundles.length} other Test Series</strong>:
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {testDeleteCandidate.otherBundles.map(ob => (
+                    <span key={ob.id} className="px-2 py-0.5 rounded-md bg-amber-900/60 border border-amber-700/50 text-[10px] font-bold text-amber-200">
+                      {ob.title}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Choice Options */}
+            <div className="space-y-3 pt-1">
+              {/* Option A: Unlink Only */}
+              <button
+                type="button"
+                onClick={handleConfirmUnlinkOnly}
+                className="w-full text-left p-4 rounded-2xl bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-indigo-500/50 transition cursor-pointer group space-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-indigo-400 group-hover:text-indigo-300 flex items-center space-x-1.5">
+                    <span>1. Unlink from this Test Series Only</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded font-bold">Recommended</span>
+                </div>
+                <p className="text-[11px] text-slate-400 group-hover:text-slate-300">
+                  Safely removes the test from this series. The mock test remains fully accessible in the global test catalog and any other series.
+                </p>
+              </button>
+
+              {/* Option B: Universal Delete */}
+              <button
+                type="button"
+                onClick={handleConfirmUniversalDelete}
+                className="w-full text-left p-4 rounded-2xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/30 hover:border-rose-500/60 transition cursor-pointer group space-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-rose-400 group-hover:text-rose-300 flex items-center space-x-1.5">
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>2. Universal Delete (Everywhere)</span>
+                  </span>
+                  <span className="text-[10px] text-rose-400 bg-rose-500/20 px-2 py-0.5 rounded font-bold">Soft Delete / Trash</span>
+                </div>
+                <p className="text-[11px] text-slate-400 group-hover:text-slate-300">
+                  Permanently deletes from all bundles, removes from mock test listings, and archives it into the <strong>Trash Recovery Bin</strong> (can be restored anytime).
+                </p>
+              </button>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setTestDeleteCandidate(null)}
+                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-bold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* 2. CASCADE PUBLISH / UNPUBLISH MODAL                             */}
+      {/* ================================================================= */}
+      {cascadePublishCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 relative">
+            <button
+              onClick={() => setCascadePublishCandidate(null)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <EyeOff className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Cascade Unpublish Action</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Unpublishing <span className="text-white font-bold">"{cascadePublishCandidate.bundle.title}"</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs text-slate-300">
+              <p className="leading-relaxed">
+                This series contains <strong>{cascadePublishCandidate.attachedCount} attached mock and chapter tests</strong>.
+              </p>
+              <p className="text-slate-400 text-[11px] leading-relaxed">
+                Would you also like to unpublish all attached tests so candidates cannot access them through standalone search or direct links?
+              </p>
+            </div>
+
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => handleConfirmCascadePublish(true)}
+                className="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center space-x-2 transition shadow-lg shadow-amber-600/20 cursor-pointer"
+              >
+                <EyeOff className="w-4 h-4" />
+                <span>Yes, Cascade Unpublish to All Attached Tests</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleConfirmCascadePublish(false)}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center space-x-2 transition cursor-pointer"
+              >
+                <span>Unpublish Bundle Only (Keep Standalone Mocks Active)</span>
+              </button>
+            </div>
+
+            <div className="pt-1 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setCascadePublishCandidate(null)}
+                className="text-xs text-slate-500 hover:text-slate-300 font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* 3. TRASH & RECOVERY BIN HUB MODAL                                 */}
+      {/* ================================================================= */}
+      {isTrashHubOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white flex items-center space-x-2">
+                    <span>Admin Trash & Recovery Bin</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300">
+                      {trashedItems.length} Soft-Deleted Items
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Items deleted from bundles or mock catalogs are safely quarantined here. Restore anytime in 1 click.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsTrashHubOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Trashed Items List */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-[220px]">
+              {trashedItems.length === 0 ? (
+                <div className="p-10 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto opacity-70" />
+                  <p className="text-xs font-bold text-slate-300">Trash Bin is Empty</p>
+                  <p className="text-[11px] text-slate-500">
+                    No soft-deleted test series or mock tests in quarantine.
+                  </p>
+                </div>
+              ) : (
+                trashedItems.map(item => (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-2xl bg-slate-950 border border-slate-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                          item.type === 'BUNDLE'
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        }`}>
+                          {item.type === 'BUNDLE' ? 'Test Series' : 'Mock Test'}
+                        </span>
+                        <span className="text-xs font-bold text-white">{item.title}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 flex items-center space-x-2">
+                        <span>Deleted on: {new Date(item.deletedAt).toLocaleString()}</span>
+                        <span>•</span>
+                        <span>By: {item.deletedBy || 'Admin'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (item.type === 'BUNDLE') {
+                            handleRestoreBundle(item.id);
+                          } else {
+                            handleRestoreTest(item.id);
+                          }
+                          setTrashedItems(getTrashItems());
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 transition shadow-sm cursor-pointer"
+                        title="Restore item back to live catalog"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Restore</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handlePurgeTrash(item.id, item.title)}
+                        className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition cursor-pointer"
+                        title="Permanently Purge"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsTrashHubOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cloud & Remote Sync Modal */}
       {isSyncModalOpen && (

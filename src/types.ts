@@ -304,3 +304,125 @@ export interface BulkImportQuestion {
   timesRepeated?: number;
   repeatedInExams?: string[] | string;
 }
+
+// ==========================================
+// SERVER-DRIVEN UI & REMOTE CONFIG (FAANG GRADE)
+// ==========================================
+export interface AppRemoteConfig {
+  version: string;
+  updatedAt: string;
+  updatedBy?: string;
+  featureFlags: {
+    enableMistakeNotebook: boolean;
+    enablePYPSection: boolean;
+    enableChapterTests: boolean;
+    enableLiveLeaderboard: boolean;
+    enableCurrentAffairsAI: boolean;
+    enableTestPassPaywall: boolean;
+    enableChhattisgarhiRevision: boolean;
+    enableSocialShareChallenges: boolean;
+    enableAITestGenerator: boolean;
+    enableStudentAnalytics: boolean;
+    enableBookmarks: boolean;
+    enableLanguageToggle: boolean;
+  };
+  maintenanceMode: {
+    enabled: boolean;
+    title: string;
+    message: string;
+    estimatedEndTime?: string;
+  };
+  globalAlertBanner: {
+    enabled: boolean;
+    message: string;
+    messageHindi: string;
+    type: 'info' | 'warning' | 'alert' | 'success';
+    actionText?: string;
+    actionLinkTab?: string;
+    isDismissible: boolean;
+  };
+  examEngineRules: {
+    enforceStrictFullscreen: boolean;
+    disableCopyPaste: boolean;
+    allowSectionSwitching: boolean;
+    showWatermark: boolean;
+    watermarkText: string;
+    autoSubmitOnTimerExpiry: boolean;
+    showRealtimeRemainingWarning: boolean;
+  };
+  pricingConfig: {
+    annualPassPrice: number;
+    quarterlyPassPrice: number;
+    discountPercentage: number;
+    signupBonusCredits: number;
+    creditsPerAIGeneration: number;
+    currencySymbol: string;
+  };
+  brandingConfig: {
+    siteTitle: string;
+    tagline: string;
+    primaryExamCadre: string;
+    supportContactPhone: string;
+    supportContactEmail: string;
+  };
+}
+
+export const DEFAULT_REMOTE_CONFIG: AppRemoteConfig = {
+  version: '1.4.0',
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'System Default',
+  featureFlags: {
+    enableMistakeNotebook: true,
+    enablePYPSection: true,
+    enableChapterTests: true,
+    enableLiveLeaderboard: true,
+    enableCurrentAffairsAI: true,
+    enableTestPassPaywall: true,
+    enableChhattisgarhiRevision: true,
+    enableSocialShareChallenges: true,
+    enableAITestGenerator: true,
+    enableStudentAnalytics: true,
+    enableBookmarks: true,
+    enableLanguageToggle: true,
+  },
+  maintenanceMode: {
+    enabled: false,
+    title: 'Platform Maintenance in Progress',
+    message: 'We are performing scheduled server upgrades to ensure seamless live exam delivery. Portal will resume shortly.',
+    estimatedEndTime: '15 mins',
+  },
+  globalAlertBanner: {
+    enabled: true,
+    message: 'CGSSB 2026 Official Test Series & PYP Solved Papers now live with instant state-wide ranking!',
+    messageHindi: 'सीजीएसएसबी 2026 आधिकारिक टेस्ट सीरीज़ और पिछले वर्षों के हल प्रश्नपत्र अब लाइव हैं!',
+    type: 'info',
+    actionText: 'Explore Series',
+    actionLinkTab: 'tests',
+    isDismissible: true,
+  },
+  examEngineRules: {
+    enforceStrictFullscreen: false,
+    disableCopyPaste: true,
+    allowSectionSwitching: true,
+    showWatermark: true,
+    watermarkText: 'CGSSB TEST OFFICIAL',
+    autoSubmitOnTimerExpiry: true,
+    showRealtimeRemainingWarning: true,
+  },
+  pricingConfig: {
+    annualPassPrice: 499,
+    quarterlyPassPrice: 299,
+    discountPercentage: 60,
+    signupBonusCredits: 50,
+    creditsPerAIGeneration: 10,
+    currencySymbol: '₹',
+  },
+  brandingConfig: {
+    siteTitle: 'CGSSB & CGPSC Test Portal',
+    tagline: 'Authentic State Examination Preparation & CBT Testing Platform',
+    primaryExamCadre: 'CGSSB + CGPSC Combined Cadre',
+    supportContactPhone: '+91 98765 43210',
+    supportContactEmail: 'support@cgssbtest.com',
+  },
+};
+

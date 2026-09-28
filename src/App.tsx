@@ -40,6 +40,7 @@ import { AdminCMSPostManager } from './components/AdminCMSPostManager';
 import { DynamicPostRenderer } from './components/DynamicPostRenderer';
 import { AdminCMSTestSeriesManager } from './components/AdminCMSTestSeriesManager';
 import { AdminCMSThemeCustomizer } from './components/AdminCMSThemeCustomizer';
+import { AdminWorkspaceLayout } from './components/AdminWorkspaceLayout';
 import { AdminBundleStudio } from './components/AdminBundleStudio';
 import { UniversalIngestionStudio, IngestionContentType } from './components/UniversalIngestionStudio';
 import { ChapterTestSection } from './components/ChapterTestSection';
@@ -50,7 +51,9 @@ import { AdminPracticeSetManager } from './components/AdminPracticeSetManager';
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
 import { syncBundlesFromFirestore, autoLinkTestToBundles } from './utils/bundleStore';
-import { ArrowLeft, Trophy } from 'lucide-react';
+import { useRemoteConfig } from './context/RemoteConfigContext';
+import { AdminRemoteConfigStudio } from './components/AdminRemoteConfigStudio';
+import { ArrowLeft, Trophy, Bell, AlertTriangle, Radio, X } from 'lucide-react';
 import {
   CMSPage,
   CMSPost,
@@ -111,15 +114,27 @@ import {
 
 function MainApp() {
   const { user, deductCredits, isAdminAuthenticated } = useAuth();
+  const { config, isMaintenanceMode } = useRemoteConfig();
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   // Route & SEO State
-  const parseRouteFromLocation = (): { route: 'student' | 'admin'; tab: string } => {
+  const parseRouteFromLocation = (): { route: 'student' | 'admin'; tab: string; pageSlug?: string; postSlug?: string } => {
     if (typeof window === 'undefined') return { route: 'student', tab: 'tests' };
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
 
     if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
       return { route: 'admin', tab: 'admin-pyp' };
+    }
+    if (path.startsWith('/page/') || path.startsWith('/pages/')) {
+      const parts = path.split('/');
+      const slug = parts[2] || '';
+      return { route: 'student', tab: 'page', pageSlug: slug };
+    }
+    if (path.startsWith('/post/') || path.startsWith('/posts/')) {
+      const parts = path.split('/');
+      const slug = parts[2] || '';
+      return { route: 'student', tab: 'posts', postSlug: slug };
     }
     if (path.includes('chapter') || hash.includes('chapter')) {
       return { route: 'student', tab: 'chapters' };
@@ -203,6 +218,7 @@ function MainApp() {
 
   // Navigates and updates browser URL + document title for SEO
   const setStudentActiveTab = (tab: string) => {
+    setActivePageSlug(null);
     setStudentActiveTabState(tab);
     setCurrentRoute('student');
     const targetPath = getTabPath(tab);
@@ -220,9 +236,11 @@ function MainApp() {
   // Track browser forward / back button and hash changes
   useEffect(() => {
     const handleLocationChange = () => {
-      const { route, tab } = parseRouteFromLocation();
+      const { route, tab, pageSlug, postSlug } = parseRouteFromLocation();
       setCurrentRoute(route);
       setStudentActiveTabState(tab);
+      if (pageSlug) setActivePageSlug(pageSlug);
+      if (postSlug) setActivePostSlug(postSlug);
       document.title = route === 'admin' ? 'Admin Portal & CMS | CGSSB Test' : getPageTitle(tab);
     };
 
@@ -523,6 +541,28 @@ function MainApp() {
     setTests(prev => mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests'));
     setQuestions(prev => mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions'));
     setPypPapers(prev => mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp'));
+
+    // Listen for governance events (Test restore, Cascade publish)
+    const handleRestored = (e: any) => {
+      if (e.detail && e.detail.id) {
+        setTests(prev => dedupeById([e.detail, ...prev]));
+      }
+    };
+
+    const handleCascadePublish = (e: any) => {
+      if (e.detail && Array.isArray(e.detail.affectedTestIds)) {
+        const { newPublishStatus, affectedTestIds } = e.detail;
+        const targetIds = new Set(affectedTestIds);
+        setTests(prev => prev.map(t => targetIds.has(t.id) ? { ...t, isPublished: newPublishStatus } : t));
+      }
+    };
+
+    window.addEventListener('cgssb-test-restored', handleRestored);
+    window.addEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
+    return () => {
+      window.removeEventListener('cgssb-test-restored', handleRestored);
+      window.removeEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
+    };
   }, []);
 
   const handleSyncDefaultCatalog = () => {
@@ -1337,193 +1377,170 @@ function MainApp() {
       );
     }
 
-    // Authenticated Admin Dashboard
+    // Authenticated Admin Dashboard (FAANG Workspace OS)
     return (
-      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-        <AdminHeader
-          activeTab={adminActiveTab}
-          setActiveTab={setAdminActiveTab}
-          onNavigateToStudent={navigateToStudent}
-          onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
-          onOpenUniversalIngest={() => openUniversalIngestion()}
-        />
-        <AdminSubNav
-          activeTab={adminActiveTab}
-          setActiveTab={setAdminActiveTab}
-          onNavigateToStudent={navigateToStudent}
-          onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
-        />
+      <AdminWorkspaceLayout
+        activeTab={adminActiveTab}
+        setActiveTab={setAdminActiveTab}
+        onNavigateToStudent={navigateToStudent}
+        onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
+        onOpenUniversalIngest={() => openUniversalIngestion()}
+        onQuickCreateQuestion={() => setAdminActiveTab('admin-questions')}
+        onQuickCreateTest={() => setAdminActiveTab('admin-tests')}
+      >
+        {adminActiveTab === 'admin-overview' && (
+          <AdminCMSDashboard
+            tests={tests}
+            questions={questions}
+            pypPapers={pypPapers}
+            attempts={attempts}
+            onNavigateTab={tab => setAdminActiveTab(tab)}
+            onSyncDefaultCatalog={handleSyncDefaultCatalog}
+          />
+        )}
 
-        <main className="flex-1">
-          {adminActiveTab === 'admin-overview' && (
-            <AdminCMSDashboard
-              tests={tests}
-              questions={questions}
-              pypPapers={pypPapers}
-              attempts={attempts}
-              onNavigateTab={tab => setAdminActiveTab(tab)}
-              onSyncDefaultCatalog={handleSyncDefaultCatalog}
-            />
-          )}
+        {adminActiveTab === 'admin-cms-pages' && (
+          <AdminCMSPageBuilder
+            pages={cmsPages}
+            onSavePage={handleSaveCmsPage}
+            onDeletePage={handleDeleteCmsPage}
+          />
+        )}
 
-          {adminActiveTab === 'admin-cms-pages' && (
-            <AdminCMSPageBuilder
-              pages={cmsPages}
-              onSavePage={handleSaveCmsPage}
-              onDeletePage={handleDeleteCmsPage}
-            />
-          )}
+        {adminActiveTab === 'admin-cms-posts' && (
+          <AdminCMSPostManager
+            posts={cmsPosts}
+            onSavePost={handleSaveCmsPost}
+            onDeletePost={handleDeleteCmsPost}
+          />
+        )}
 
-          {adminActiveTab === 'admin-cms-posts' && (
-            <AdminCMSPostManager
-              posts={cmsPosts}
-              onSavePost={handleSaveCmsPost}
-              onDeletePost={handleDeleteCmsPost}
-            />
-          )}
+        {adminActiveTab === 'admin-cms-customizer' && (
+          <AdminCMSThemeCustomizer
+            settings={cmsSettings}
+            onSaveSettings={handleSaveCmsSettings}
+          />
+        )}
 
-          {adminActiveTab === 'admin-cms-customizer' && (
-            <AdminCMSThemeCustomizer
-              settings={cmsSettings}
-              onSaveSettings={handleSaveCmsSettings}
-            />
-          )}
+        {adminActiveTab === 'admin-database' && (
+          <AdminDatabaseView
+            tests={tests}
+            questions={questions}
+            pypPapers={pypPapers}
+            attempts={attempts}
+            onRestoreSnapshot={handleRestoreSnapshot}
+            onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
+          />
+        )}
 
-          {adminActiveTab === 'admin-database' && (
-            <AdminDatabaseView
-              tests={tests}
-              questions={questions}
-              pypPapers={pypPapers}
-              attempts={attempts}
-              onRestoreSnapshot={handleRestoreSnapshot}
-              onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
-            />
-          )}
+        {adminActiveTab === 'admin-cms-series' && (
+          <AdminBundleStudio
+            availableTests={tests}
+            availableQuestions={questions}
+            onNavigateToPreview={(bundle) => {
+              setCurrentRoute('student');
+              setStudentActiveTabState('tests');
+              if (typeof window !== 'undefined') {
+                window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
+              }
+            }}
+            onTestsAdded={handleBulkTestsAdded}
+            onQuestionsAdded={handleBulkQuestionsAdded}
+            onOpenUniversalIngest={openUniversalIngestion}
+            onDeleteTest={handleDeleteTest}
+            onTogglePublishTest={handleTogglePublishTest}
+          />
+        )}
 
-          {adminActiveTab === 'admin-cms-series' && (
-            <AdminBundleStudio
-              availableTests={tests}
-              availableQuestions={questions}
-              onNavigateToPreview={(bundle) => {
-                setCurrentRoute('student');
-                setStudentActiveTabState('tests');
-                if (typeof window !== 'undefined') {
-                  window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
-                }
-              }}
-              onTestsAdded={handleBulkTestsAdded}
-              onQuestionsAdded={handleBulkQuestionsAdded}
-              onOpenUniversalIngest={openUniversalIngestion}
-            />
-          )}
+        {adminActiveTab === 'admin-pyp' && (
+          <AdminPYPManager
+            pypPapers={pypPapers}
+            tests={tests}
+            questions={questions}
+            onAddPYP={handleAddPYP}
+            onDeletePYP={handleDeletePYP}
+            onConvertPYPToMockTest={handleConvertPYPToMockTest}
+            onTogglePublishTest={handleTogglePublishTest}
+            onStartTest={handleStartTest}
+            onQuestionsAdded={handleBulkQuestionsAdded}
+            onTestAdded={handleAddTest}
+            onUpdateTest={handleUpdateTest}
+            onOpenUniversalIngest={openUniversalIngestion}
+            onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
+          />
+        )}
 
-          {adminActiveTab === 'admin-pyp' && (
-            <AdminPYPManager
-              pypPapers={pypPapers}
-              tests={tests}
-              questions={questions}
-              onAddPYP={handleAddPYP}
-              onDeletePYP={handleDeletePYP}
-              onConvertPYPToMockTest={handleConvertPYPToMockTest}
-              onTogglePublishTest={handleTogglePublishTest}
-              onStartTest={handleStartTest}
-              onQuestionsAdded={handleBulkQuestionsAdded}
-              onTestAdded={handleAddTest}
-              onUpdateTest={handleUpdateTest}
-              onOpenUniversalIngest={openUniversalIngestion}
-              onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
-            />
-          )}
+        {adminActiveTab === 'admin-chapters' && (
+          <AdminChapterTestManager
+            tests={tests}
+            questions={questions}
+            onAddTest={handleAddTest}
+            onUpdateTest={handleUpdateTest}
+            onDeleteTest={handleDeleteTest}
+            onStartTest={handleStartTest}
+            onOpenUniversalIngest={openUniversalIngestion}
+          />
+        )}
 
-          {adminActiveTab === 'admin-chapters' && (
-            <AdminChapterTestManager
-              tests={tests}
-              questions={questions}
-              onAddTest={handleAddTest}
-              onUpdateTest={handleUpdateTest}
-              onDeleteTest={handleDeleteTest}
-              onStartTest={handleStartTest}
-              onOpenUniversalIngest={openUniversalIngestion}
-            />
-          )}
+        {adminActiveTab === 'admin-practice' && (
+          <AdminPracticeSetManager
+            questions={questions}
+            onAddQuestion={handleAddQuestion}
+            onUpdateQuestion={handleUpdateQuestion}
+            onDeleteQuestion={handleDeleteQuestion}
+            onOpenUniversalIngest={openUniversalIngestion}
+          />
+        )}
 
-          {adminActiveTab === 'admin-practice' && (
-            <AdminPracticeSetManager
-              questions={questions}
-              onAddQuestion={handleAddQuestion}
-              onUpdateQuestion={handleUpdateQuestion}
-              onDeleteQuestion={handleDeleteQuestion}
-              onOpenUniversalIngest={openUniversalIngestion}
-            />
-          )}
+        {adminActiveTab === 'admin-questions' && (
+          <AdminQuestionBank
+            questions={questions}
+            onAddQuestion={handleAddQuestion}
+            onUpdateQuestion={handleUpdateQuestion}
+            onDeleteQuestion={handleDeleteQuestion}
+            allHierarchyRecords={extractHierarchyFromApp(tests, pypPapers, questions)}
+            onAddPYP={handleAddPYP}
+            onQuestionsAdded={handleBulkQuestionsAdded}
+            onTestAdded={handleAddTest}
+          />
+        )}
 
-          {adminActiveTab === 'admin-questions' && (
-            <AdminQuestionBank
-              questions={questions}
-              onAddQuestion={handleAddQuestion}
-              onUpdateQuestion={handleUpdateQuestion}
-              onDeleteQuestion={handleDeleteQuestion}
-              allHierarchyRecords={extractHierarchyFromApp(tests, pypPapers, questions)}
-              onAddPYP={handleAddPYP}
-              onQuestionsAdded={handleBulkQuestionsAdded}
-              onTestAdded={handleAddTest}
-            />
-          )}
+        {adminActiveTab === 'admin-ca-studio' && (
+          <AdminCurrentAffairsStudio />
+        )}
 
-          {adminActiveTab === 'admin-ca-studio' && (
-            <AdminCurrentAffairsStudio />
-          )}
+        {adminActiveTab === 'admin-ai' && (
+          <AdminAITestCreator
+            pypPapers={pypPapers}
+            onTestPublished={handleTestPublished}
+            onNavigateToCatalog={() => setAdminActiveTab('admin-tests')}
+          />
+        )}
 
-          {adminActiveTab === 'admin-ai' && (
-            <AdminAITestCreator
-              pypPapers={pypPapers}
-              onTestPublished={handleTestPublished}
-              onNavigateToCatalog={() => setAdminActiveTab('admin-tests')}
-            />
-          )}
+        {adminActiveTab === 'admin-tests' && (
+          <AdminTestCatalog
+            tests={tests}
+            questions={questions}
+            onStartTest={handleStartTest}
+            onTogglePublishTest={handleTogglePublishTest}
+            onUpdateTest={handleUpdateTest}
+            onDeleteTest={handleDeleteTest}
+            onAddTest={handleAddTest}
+            onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
+            onAddPYP={handleAddPYP}
+            onQuestionsAdded={handleBulkQuestionsAdded}
+            onTestAdded={handleAddTest}
+            onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
+          />
+        )}
 
-          {adminActiveTab === 'admin-tests' && (
-            <AdminTestCatalog
-              tests={tests}
-              questions={questions}
-              onStartTest={handleStartTest}
-              onTogglePublishTest={handleTogglePublishTest}
-              onUpdateTest={handleUpdateTest}
-              onDeleteTest={handleDeleteTest}
-              onAddTest={handleAddTest}
-              onNavigateToAICreator={() => setAdminActiveTab('admin-ai')}
-              onAddPYP={handleAddPYP}
-              onQuestionsAdded={handleBulkQuestionsAdded}
-              onTestAdded={handleAddTest}
-              onSaveCompletedTest={handleSaveCompletedTestAndQuestions}
-            />
-          )}
+        {adminActiveTab === 'admin-android-api' && (
+          <AdminAndroidAPIManager />
+        )}
 
-          {adminActiveTab === 'admin-android-api' && (
-            <AdminAndroidAPIManager />
-          )}
-        </main>
-
-        <footer className="bg-slate-950 border-t border-indigo-950/60 py-5 text-xs text-slate-500">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center space-x-2">
-              <Shield className="w-4 h-4 text-indigo-400" />
-              <span className="font-bold text-slate-300">CGSSB Admin & Exam Controller Console</span>
-              <span className="text-slate-700">•</span>
-              <span className="font-mono text-emerald-400 text-[11px]">/admin</span>
-            </div>
-            <div className="flex items-center space-x-3 text-[11px]">
-              <span className="text-slate-400">Hostinger Live Server Ready</span>
-              <span className="text-slate-700">•</span>
-              <button
-                onClick={navigateToStudent}
-                className="text-indigo-400 hover:text-indigo-300 font-semibold transition"
-              >
-                Go to Candidate Portal
-              </button>
-            </div>
-          </div>
-        </footer>
+        {adminActiveTab === 'admin-remote-config' && (
+          <AdminRemoteConfigStudio />
+        )}
 
         {/* Global Admin Modals */}
         <AdminToolsAndBackupsModal
@@ -1550,15 +1567,94 @@ function MainApp() {
           onMockTestCreated={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
           onPypCreated={newPyp => setPypPapers(prev => dedupeById([newPyp, ...prev]))}
         />
+      </AdminWorkspaceLayout>
+    );
+  }
+
+  // =========================================================================
+  // VIEW 4: MAINTENANCE MODE INTERCEPTOR (SERVER-DRIVEN CONTROL)
+  // =========================================================================
+  if (isMaintenanceMode) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-5 rounded-3xl bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-2xl animate-pulse">
+          <AlertTriangle className="w-12 h-12" />
+        </div>
+        <div className="max-w-md space-y-2">
+          <h1 className="text-2xl font-black text-white">{config.maintenanceMode?.title || 'System Maintenance'}</h1>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            {config.maintenanceMode?.message || 'We are performing routine server upgrades. The portal will resume shortly.'}
+          </p>
+          {config.maintenanceMode?.estimatedEndTime && (
+            <div className="pt-2">
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-900 border border-slate-800 text-amber-300">
+                Estimated Resumption: {config.maintenanceMode.estimatedEndTime}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="pt-4 flex items-center space-x-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold border border-slate-700 transition cursor-pointer"
+          >
+            Check Status (Refresh)
+          </button>
+          <button
+            onClick={() => {
+              setCurrentRoute('admin');
+              if (typeof window !== 'undefined') window.history.pushState({}, '', '/admin');
+            }}
+            className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+          >
+            Admin Controller Access
+          </button>
+        </div>
       </div>
     );
   }
 
   // =========================================================================
-  // VIEW 4: STUDENT / CANDIDATE PORTAL (/)
+  // VIEW 5: STUDENT / CANDIDATE PORTAL (/)
   // =========================================================================
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+      {/* Dynamic Global Announcement Banner (Server-Controlled) */}
+      {config.globalAlertBanner?.enabled && !isBannerDismissed && (
+        <div className={`px-4 py-2 text-xs font-bold flex items-center justify-between border-b transition ${
+          config.globalAlertBanner.type === 'alert'
+            ? 'bg-rose-950/90 text-rose-200 border-rose-800/80'
+            : config.globalAlertBanner.type === 'warning'
+            ? 'bg-amber-950/90 text-amber-200 border-amber-800/80'
+            : config.globalAlertBanner.type === 'success'
+            ? 'bg-emerald-950/90 text-emerald-200 border-emerald-800/80'
+            : 'bg-indigo-950/90 text-indigo-200 border-indigo-800/80'
+        }`}>
+          <div className="max-w-7xl mx-auto flex items-center space-x-2.5 flex-1 justify-center">
+            <span className="w-2 h-2 rounded-full bg-current animate-ping shrink-0" />
+            <span className="truncate">{config.globalAlertBanner.message}</span>
+            {config.globalAlertBanner.actionText && (
+              <button
+                type="button"
+                onClick={() => setStudentActiveTab(config.globalAlertBanner.actionLinkTab || 'tests')}
+                className="ml-2 px-2.5 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white font-black text-[11px] underline cursor-pointer transition shrink-0"
+              >
+                {config.globalAlertBanner.actionText}
+              </button>
+            )}
+          </div>
+          {config.globalAlertBanner.isDismissible && (
+            <button
+              onClick={() => setIsBannerDismissed(true)}
+              className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer ml-2 shrink-0"
+              title="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       <Navbar
         activeTab={studentActiveTab}
         setActiveTab={setStudentActiveTab}
@@ -1718,12 +1814,53 @@ function MainApp() {
           </div>
         )}
 
+        {!selectedSEOQuestion && (studentActiveTab === 'page' || activePageSlug) && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+            <button
+              onClick={() => {
+                setActivePageSlug(null);
+                setStudentActiveTab('tests');
+              }}
+              className="inline-flex items-center space-x-2 text-xs sm:text-sm font-bold text-slate-400 hover:text-white transition px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-emerald-400" />
+              <span>Back to All Tests</span>
+            </button>
+            {(() => {
+              const targetPage = cmsPages.find(p => p.slug === activePageSlug || p.id === activePageSlug) || cmsPages[0];
+              if (!targetPage) {
+                return (
+                  <div className="p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-3">
+                    <p className="text-sm font-bold text-slate-300">Page Not Found</p>
+                    <p className="text-xs text-slate-500">The requested page does not exist or has been removed.</p>
+                  </div>
+                );
+              }
+              return (
+                <DynamicPageRenderer
+                  page={targetPage}
+                  onNavigateToTests={() => {
+                    setActivePageSlug(null);
+                    setStudentActiveTab('tests');
+                  }}
+                  siteSettingsTheme={cmsSettings?.pageThemes?.[targetPage.themeArchetype || 'hero_landing']}
+                />
+              );
+            })()}
+          </div>
+        )}
+
         {!selectedSEOQuestion && studentActiveTab === 'posts' && (
           <DynamicPostRenderer
             posts={cmsPosts}
             selectedPostSlug={activePostSlug}
             onSelectPost={slug => setActivePostSlug(slug)}
             onBackToList={() => setActivePostSlug(null)}
+            siteSettingsTheme={
+              activePostSlug
+                ? cmsSettings?.postThemes?.[cmsPosts.find(p => p.slug === activePostSlug)?.themeArchetype || 'exam_notification']
+                : undefined
+            }
           />
         )}
       </main>

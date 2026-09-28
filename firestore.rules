@@ -90,6 +90,26 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Global Server-Driven Remote Config & Feature Flags - Public read, write operations restricted to Admin
+    match /remoteConfig/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // User Bookmarks & Mistake Notebooks
+    match /userBookmarks/{userId} {
+      allow read, write: if isValidId(userId) && (isAdmin() || isOwner(userId));
+    }
+
+    match /userMistakes/{userId} {
+      allow read, write: if isValidId(userId) && (isAdmin() || isOwner(userId));
+    }
+
+    match /userEntitlements/{userId} {
+      allow read: if isValidId(userId) && (isAdmin() || isOwner(userId));
+      allow write: if isAdmin();
+    }
+
     // Current Affairs Repositories - Public read, modifications strictly restricted to Admin
     match /currentAffairsSources/{docId} {
       allow read: if true;
@@ -117,6 +137,27 @@ service cloud.firestore {
     }
 
     match /monthlyEditions/{docId}/sections/{sectionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // CMS Dynamic Pages, Posts, Series Packs, and Site Settings
+    match /pages/{pageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /seriesPacks/{packId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /cmsSettings/{settingsId} {
       allow read: if true;
       allow write: if isAdmin();
     }
