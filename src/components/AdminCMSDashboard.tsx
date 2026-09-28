@@ -21,10 +21,12 @@ import {
   GitBranch,
   RefreshCw,
   Globe,
-  Palette
+  Palette,
+  Power
 } from 'lucide-react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
+import { getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
 
 interface AdminCMSDashboardProps {
   tests: MockTest[];
@@ -44,6 +46,14 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
   onSyncDefaultCatalog,
 }) => {
   const [syncedToast, setSyncedToast] = useState(false);
+  const [trueZeroMode, setTrueZeroModeState] = useState(getTrueZeroDataMode());
+
+  const handleToggleZeroMode = (enabled: boolean) => {
+    setTrueZeroDataMode(enabled);
+    setTrueZeroModeState(enabled);
+    window.location.reload();
+  };
+
   const publishedTests = tests.filter(t => t.isPublished !== false);
   const proTests = tests.filter(t => t.isPro);
   const freeTests = tests.filter(t => !t.isPro);
@@ -490,6 +500,29 @@ export const AdminCMSDashboard: React.FC<AdminCMSDashboardProps> = ({
             >
               <Database className="w-3.5 h-3.5 text-indigo-400" />
               <span>Inspect Cloud Firestore Schema</span>
+            </button>
+          </div>
+
+          {/* True 0 Data Mode Control Card */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                <Power className={`w-4 h-4 ${trueZeroMode ? 'text-emerald-400' : 'text-slate-400'}`} />
+                <span>True 0 Data Mode</span>
+              </h2>
+              <span className={`text-[11px] font-mono px-2 py-0.5 rounded border ${trueZeroMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                {trueZeroMode ? 'Active (0 Tests)' : 'Default Seeding'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Disables automatic official curriculum test seeding. When enabled, empty storage will show 0 tests instead of default exam bundles.
+            </p>
+            <button
+              onClick={() => handleToggleZeroMode(!trueZeroMode)}
+              className={`w-full py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer shadow-md ${trueZeroMode ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}`}
+            >
+              <Power className="w-4 h-4" />
+              <span>{trueZeroMode ? 'Disable True 0 Data Mode' : 'Enable True 0 Data Mode (0 Tests)'}</span>
             </button>
           </div>
         </div>

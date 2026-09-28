@@ -897,50 +897,75 @@ export const AdminCurrentAffairsStudio: React.FC = () => {
                   const demoJson = {
                     "topic": {
                       "id": `quiz-${Date.now()}`,
-                      "titleEn": "Weekly Comprehensive Current Affairs Quiz — March 2026",
-                      "titleHindi": "साप्ताहिक व्यापक समसामयिक क्विज़ — मार्च 2026",
+                      "titleEn": "Weekly Comprehensive Current Affairs Quiz & Analysis — March 2026",
+                      "titleHindi": "साप्ताहिक व्यापक समसामयिक क्विज़ एवं विश्लेषण — मार्च 2026",
                       "region": "chhattisgarh",
-                      "subjects": ["Polity", "Economy", "Environment"],
+                      "subjects": ["Polity", "Economy", "Environment", "Chhattisgarh General Studies"],
                       "exams": ["CGPSC", "CGSSB", "UPSC"],
                       "difficulty": "Medium",
                       "importance": "high",
                       "date": "2026-03-27",
                       "monthYear": "2026-03",
                       "examAngle": {
-                        "whyInNews": "Weekly review of top state and national developments.",
-                        "background": "Designed for comprehensive revision.",
-                        "keyFacts": ["Fact 1", "Fact 2"],
-                        "examTakeaways": ["Takeaway 1"]
+                        "whyInNews": "Weekly review of top state economic policies, administrative initiatives, and national developments.",
+                        "background": "Designed according to latest TCS iON CBT & CGPSC pattern.",
+                        "keyFacts": ["State Innovation Mission expanded", "New industrial corridor sanctioned", "Renewable energy targets updated"],
+                        "examTakeaways": ["Focus on district-level administrative schemes", "Understand economic survey linkages"]
                       },
-                      "keywords": ["Weekly Quiz", "CGPSC"],
-                      "tags": ["Quiz"]
+                      "keywords": ["Weekly Quiz", "CGPSC Pre", "Current Affairs 2026"],
+                      "tags": ["Quiz", "Current Affairs"]
                     },
                     "questions": [
                       {
                         "id": `q-demo-1`,
                         "category": "CGPSC",
                         "subject": "Chhattisgarh General Studies",
-                        "topic": "Weekly Quiz",
+                        "topic": "State Governance",
                         "difficulty": "Medium",
                         "marks": 2,
                         "negativeMarks": 0.67,
                         "questionType": "mcq",
-                        "questionText": "What is the primary focus of the Chhattisgarh State Innovation Mission?",
-                        "questionHindi": "छत्तीसगढ़ राज्य नवाचार मिशन का मुख्य फोकस क्या है?",
+                        "questionText": "What is the primary focus of the newly announced Chhattisgarh State Innovation Mission?",
+                        "questionHindi": "नव-घोषित छत्तीसगढ़ राज्य नवाचार मिशन का मुख्य फोकस क्या है?",
                         "options": [
-                          {"id": "A", "text": "Institutional capacity & regional growth", "textHindi": "संस्थागत क्षमता और क्षेत्रीय विकास"},
-                          {"id": "B", "text": "Urban areas only", "textHindi": "केवल शहरी क्षेत्र"},
-                          {"id": "C", "text": "No financial allocation", "textHindi": "कोई वित्तीय आवंटन नहीं"},
+                          {"id": "A", "text": "Institutional capacity & decentralized regional growth", "textHindi": "संस्थागत क्षमता और विकेंद्रीकृत क्षेत्रीय विकास"},
+                          {"id": "B", "text": "Urban infrastructure development only", "textHindi": "केवल शहरी बुनियादी ढांचा विकास"},
+                          {"id": "C", "text": "Industrial tax exemptions", "textHindi": "औद्योगिक कर छूट"},
                           {"id": "D", "text": "None of the above", "textHindi": "इनमें से कोई नहीं"}
                         ],
                         "correctOption": "A",
-                        "explanation": "It enhances institutional capacity and regional growth.",
-                        "explanationHindi": "यह संस्थागत क्षमता और क्षेत्रीय विकास को बढ़ाता है।"
+                        "explanation": "The mission emphasizes decentralized institutional capacity and regional economic growth.",
+                        "explanationHindi": "यह मिशन विकेंद्रीकृत संस्थागत क्षमता और क्षेत्रीय आर्थिक विकास पर जोर देता है।"
+                      },
+                      {
+                        "id": `q-demo-2`,
+                        "category": "CGPSC",
+                        "subject": "Indian Economy",
+                        "topic": "Monetary Policy",
+                        "difficulty": "Hard",
+                        "marks": 2,
+                        "negativeMarks": 0.67,
+                        "questionType": "assertion_reason",
+                        "questionText": "Consider Assertion (A) and Reason (R) regarding monetary policy adjustments:",
+                        "questionHindi": "मौद्रिक नीति समायोजन के संबंध में अभिकथन (A) और कारण (R) पर विचार करें:",
+                        "assertion": "When RBI increases the repo rate, commercial banks usually increase their lending rates.",
+                        "assertionHindi": "जब आरबीआई रेपो दर बढ़ाता है, तो वाणिज्यिक बैंक आमतौर पर अपनी ऋण दरों में वृद्धि करते हैं।",
+                        "reason": "Increase in repo rate raises the cost of borrowing for commercial banks from the central bank.",
+                        "reasonHindi": "रेपो दर में वृद्धि से वाणिज्यिक बैंकों के लिए केंद्रीय बैंक से उधार लेने की लागत बढ़ जाती है।",
+                        "options": [
+                          {"id": "A", "text": "Both (A) and (R) are true and (R) is the correct explanation of (A)", "textHindi": "(A) और (R) दोनों सही हैं और (R), (A) की सही व्याख्या है"},
+                          {"id": "B", "text": "Both (A) and (R) are true but (R) is NOT the correct explanation of (A)", "textHindi": "(A) और (R) दोनों सही हैं परंतु (R), (A) की सही व्याख्या नहीं है"},
+                          {"id": "C", "text": "(A) is true but (R) is false", "textHindi": "(A) सही है लेकिन (R) गलत है"},
+                          {"id": "D", "text": "(A) is false but (R) is true", "textHindi": "(A) गलत है लेकिन (R) सही है"}
+                        ],
+                        "correctOption": "A",
+                        "explanation": "Higher repo rate increases cost of funds for banks, leading to higher consumer lending rates.",
+                        "explanationHindi": "उच्च रेपो दर बैंकों के लिए निधि की लागत बढ़ाती है, जिससे उपभोक्ता ऋण दरों में वृद्धि होती है।"
                       }
                     ]
                   };
                   setOneClickJson(JSON.stringify(demoJson, null, 2));
-                  showToast('Loaded sample quiz JSON into editor!');
+                  showToast('Loaded updated comprehensive demo quiz JSON!');
                 }}
                 className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 transition cursor-pointer shadow-lg shrink-0"
               >

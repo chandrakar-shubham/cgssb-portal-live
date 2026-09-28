@@ -110,10 +110,26 @@ export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<Te
   };
 };
 
+export const getTrueZeroDataMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('cgssb_true_zero_data_mode') === 'true';
+};
+
+export const setTrueZeroDataMode = (enabled: boolean): void => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('cgssb_true_zero_data_mode', enabled ? 'true' : 'false');
+  if (enabled) {
+    localStorage.removeItem(BUNDLE_STORAGE_KEY);
+    localStorage.removeItem('cgssb_custom_mock_tests');
+  }
+  window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: getStoredBundles() }));
+};
+
 export const getStoredBundles = (): TestSeriesBundle[] => {
   if (typeof window === 'undefined') return OFFICIAL_BUNDLES_CATALOG;
   try {
     const deletedSet = getDeletedBundleIds();
+    const trueZeroMode = getTrueZeroDataMode();
     const raw = localStorage.getItem(BUNDLE_STORAGE_KEY);
     // Clear stale empty cache if any official bundle has 0 test items
     if (raw) {
@@ -127,12 +143,14 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
     const freshRaw = localStorage.getItem(BUNDLE_STORAGE_KEY);
     const bundleMap = new Map<string, TestSeriesBundle>();
 
-    // 1. Populate official catalog excluding any deleted bundles
-    OFFICIAL_BUNDLES_CATALOG.forEach(b => {
-      if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
-        bundleMap.set(b.id, { ...b });
-      }
-    });
+    // 1. Populate official catalog excluding any deleted bundles (unless True 0 Data mode is enabled)
+    if (!trueZeroMode) {
+      OFFICIAL_BUNDLES_CATALOG.forEach(b => {
+        if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
+          bundleMap.set(b.id, { ...b });
+        }
+      });
+    }
 
     // 2. Overlay user stored bundles excluding any deleted
     if (freshRaw) {
