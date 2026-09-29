@@ -136,10 +136,13 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
               <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
             </button>
 
-            {/* Admin User Chip */}
-            <div className="hidden md:flex items-center space-x-2 px-3 py-1 rounded-lg bg-indigo-950/40 border border-indigo-800/40 text-xs">
+            {/* Admin User Chip with RBAC Role */}
+            <div className="hidden md:flex items-center space-x-2 px-3 py-1 rounded-xl bg-indigo-950/60 border border-indigo-800/60 text-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="font-semibold text-indigo-200">{adminUser?.name || 'Admin'}</span>
+              <span className="font-bold text-white">{adminUser?.name || 'Admin'}</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 uppercase font-black">
+                {adminUser?.role === 'superadmin' ? 'SUPER' : adminUser?.role === 'content_manager' ? 'FACULTY' : adminUser?.role === 'support' ? 'SUPPORT' : 'ADMIN'}
+              </span>
             </div>
 
             {/* Admin Logout */}

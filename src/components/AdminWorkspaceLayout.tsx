@@ -25,7 +25,9 @@ import {
   Wrench,
   CheckCircle2,
   Bell,
-  RefreshCw
+  RefreshCw,
+  Users,
+  UserCheck
 } from 'lucide-react';
 import { AdminCommandPalette } from './AdminCommandPalette';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
@@ -95,7 +97,7 @@ export const AdminWorkspaceLayout: React.FC<AdminWorkspaceLayoutProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  // 4 Core Functional Domains
+  // Core Functional Domains
   const navigationDomains: NavDomain[] = [
     {
       domainId: 'exams',
@@ -108,6 +110,14 @@ export const AdminWorkspaceLayout: React.FC<AdminWorkspaceLayoutProps> = ({
         { id: 'admin-practice', label: 'Daily Practice Drills', icon: Sparkles },
         { id: 'admin-ca-studio', label: 'Current Affairs Studio', icon: Sparkles, badge: 'AI' },
         { id: 'admin-ai', label: 'AI Test Generator', icon: Sparkles },
+      ],
+    },
+    {
+      domainId: 'students',
+      domainTitle: 'Students & Marketing',
+      items: [
+        { id: 'admin-students', label: 'Student Profile CRM', icon: Users, badge: 'Growth' },
+        { id: 'admin-marketing', label: 'WhatsApp & Campaigns', icon: Sparkles },
       ],
     },
     {
@@ -129,8 +139,9 @@ export const AdminWorkspaceLayout: React.FC<AdminWorkspaceLayoutProps> = ({
     },
     {
       domainId: 'system',
-      domainTitle: 'System & Remote Cloud',
+      domainTitle: 'System & Security (RBAC)',
       items: [
+        { id: 'admin-roles', label: 'Admin Roles & Team', icon: UserCheck, badge: 'RBAC' },
         { id: 'admin-remote-config', label: 'Remote Config (SDUI)', icon: Sliders, badge: 'Live' },
         { id: 'admin-database', label: 'Firestore Collections', icon: Database },
         { id: 'admin-android-api', label: 'Android Mobile REST API', icon: Smartphone },

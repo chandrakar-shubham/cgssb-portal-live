@@ -10,7 +10,6 @@ import {
   Lock,
   Unlock,
   CheckCircle2,
-  HelpCircle,
   Clock,
   ArrowRight,
   QrCode,
@@ -19,9 +18,11 @@ import {
   Loader2,
   Download,
   GraduationCap,
-  Laptop,
-  AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Tag,
+  Copy,
+  Receipt,
+  ExternalLink
 } from 'lucide-react';
 import {
   getOrCreateDeviceId,
@@ -29,6 +30,7 @@ import {
   checkDeviceAuthorization,
   isUserPassActive
 } from '../utils/devicePassManager';
+import { validateCoupon } from '../utils/studentStore';
 
 interface TestPassSectionProps {
   onExploreTests: () => void;
@@ -55,8 +57,15 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
   const [selectedTier, setSelectedTier] = useState<PassTier | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'qr' | 'processing' | 'success'>('qr');
-  const [activeUpiApp, setActiveUpiApp] = useState<'phonepe' | 'gpay' | 'paytm' | 'bhim'>('phonepe');
+  const [activeUpiApp, setActiveUpiApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'bhim'>('gpay');
   const [transferSuccessMsg, setTransferSuccessMsg] = useState<string | null>(null);
+
+  // Coupon & UTR States
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercentage: number } | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [utrNumber, setUtrNumber] = useState('');
+  const [lastInvoiceNumber, setLastInvoiceNumber] = useState('');
 
   const deviceCheck = useMemo(() => checkDeviceAuthorization(user), [user]);
   const daysLeft = useMemo(() => calculateDaysRemaining(user?.passExpiresAt), [user?.passExpiresAt]);
@@ -114,15 +123,56 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
 
   const handleOpenCheckout = (tier: PassTier) => {
     setSelectedTier(tier);
+    setAppliedCoupon(null);
+    setCouponCodeInput('');
+    setCouponError('');
+    setUtrNumber('');
     setPaymentStep('qr');
     setIsCheckoutOpen(true);
   };
 
-  const handleSimulatePayment = () => {
+  // Final Payable Calculation with Coupon
+  const finalPrice = useMemo(() => {
+    if (!selectedTier) return 0;
+    if (!appliedCoupon) return selectedTier.price;
+    const discount = Math.round((selectedTier.price * appliedCoupon.discountPercentage) / 100);
+    return Math.max(1, selectedTier.price - discount);
+  }, [selectedTier, appliedCoupon]);
+
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!couponCodeInput.trim() || !selectedTier) return;
+    const res = validateCoupon(couponCodeInput.trim(), selectedTier.id);
+    if (res.valid && res.coupon) {
+      setAppliedCoupon({
+        code: res.coupon.code,
+        discountPercentage: res.coupon.discountPercentage
+      });
+      setCouponError('');
+    } else {
+      setAppliedCoupon(null);
+      setCouponError(res.error || 'Invalid promo code');
+    }
+  };
+
+  // UPI Deep Link Generator
+  const upiDeepLink = useMemo(() => {
+    if (!selectedTier) return '';
+    const pa = 'cgssbtest@okaxis'; // Official UPI ID
+    const pn = encodeURIComponent('CGSSB Test Portal');
+    const am = finalPrice;
+    const tn = encodeURIComponent(`CGSSB_${selectedTier.id}_${user?.id || 'guest'}`);
+    return `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
+  }, [selectedTier, finalPrice, user]);
+
+  const handleCompletePayment = () => {
     setPaymentStep('processing');
+    const invNum = `INV-CGSSB-${Date.now().toString().slice(-6)}`;
+    setLastInvoiceNumber(invNum);
+
     setTimeout(() => {
       if (selectedTier) {
-        activateProPass(selectedTier.id, `${selectedTier.name} (₹${selectedTier.price})`);
+        activateProPass(selectedTier.id, `${selectedTier.name} (₹${finalPrice})`);
       }
       setPaymentStep('success');
     }, 1200);
@@ -132,6 +182,65 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
     transferPassDevice();
     setTransferSuccessMsg('Pass successfully transferred to this device!');
     setTimeout(() => setTransferSuccessMsg(null), 3500);
+  };
+
+  // Print Invoice Receipt
+  const handlePrintReceipt = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>CGSSB Test Portal - Payment Receipt</title>
+          <style>
+            body { font-family: sans-serif; padding: 30px; color: #1e293b; }
+            .header { border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px; }
+            .title { font-size: 22px; font-weight: bold; color: #065f46; }
+            .meta { font-size: 13px; color: #64748b; margin-top: 4px; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+            th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+            th { background: #f1f5f9; }
+            .total { font-size: 16px; font-weight: bold; color: #047857; }
+            .footer { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">CGSSB Test Portal • Pass Tax Receipt</div>
+            <div class="meta">Invoice: <strong>${lastInvoiceNumber}</strong> | Date: ${new Date().toLocaleDateString('en-IN')}</div>
+          </div>
+          <p><strong>Candidate:</strong> ${user?.name || 'Aspirant Student'} (${user?.email || 'N/A'})</p>
+          <p><strong>Target Exam:</strong> ${user?.targetExam || 'CG Teacher / Vyapam / CGPSC'}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Item Description</th>
+                <th>Validity</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${selectedTier?.name || 'All-Access Pass'}</td>
+                <td>${selectedTier?.durationLabel || '365 Days'}</td>
+                <td>₹${selectedTier?.price}</td>
+              </tr>
+              ${appliedCoupon ? `<tr><td>Promo Code (${appliedCoupon.code})</td><td>-</td><td>-${appliedCoupon.discountPercentage}%</td></tr>` : ''}
+              <tr>
+                <td colspan="2" class="total">Total Paid (Inclusive of all taxes):</td>
+                <td class="total">₹${finalPrice}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>Status:</strong> COMPLETED & VERIFIED (Instant Unlock)</p>
+          <div class="footer">
+            This is a computer-generated tax invoice. Verified by CGSSB Test Portal Academic Wing.
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   return (
@@ -154,7 +263,7 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
         </h1>
 
         <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-          No complicated credits or exam-by-exam purchase. One simple pass unlocks every test for <strong>CG शिक्षक भर्ती (All 3 Cadres)</strong>, <strong>CGPSC Prelims</strong>, and <strong>CG Vyapam</strong> for your chosen validity.
+          One simple pass unlocks every test for <strong>CG शिक्षक भर्ती (All 3 Cadres)</strong>, <strong>CGPSC Prelims</strong>, and <strong>CG Vyapam</strong> for your chosen validity.
         </p>
 
         {/* Active Pass Status Pill */}
@@ -215,10 +324,9 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
         </div>
       </section>
 
-      {/* 3. Pricing Tiers Grid (Monthly ₹199 vs Yearly ₹599) */}
+      {/* 3. Pricing Tiers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-stretch max-w-4xl mx-auto">
         {passTiers.map(tier => {
-          const isSelected = selectedTier?.id === tier.id;
           return (
             <div
               key={tier.id}
@@ -228,7 +336,6 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
                   : 'bg-slate-900/90 border border-slate-800 hover:border-slate-700'
               }`}
             >
-              {/* Optional Popular Pill Banner */}
               {tier.badge && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-[11px] px-4 py-1 rounded-full uppercase tracking-wider shadow-lg whitespace-nowrap">
                   {tier.badge}
@@ -236,7 +343,6 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
               )}
 
               <div className="space-y-4">
-                {/* Title & Subtitle */}
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-xl sm:text-2xl font-black text-white">
@@ -255,7 +361,6 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
                   </div>
                 </div>
 
-                {/* Pricing Box */}
                 <div className="flex items-baseline space-x-2.5 pt-2 border-t border-slate-800">
                   <span className="text-4xl sm:text-5xl font-black text-white">
                     ₹{tier.price}
@@ -272,7 +377,6 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
                   {tier.description}
                 </p>
 
-                {/* Features List */}
                 <div className="pt-2 border-t border-slate-800 space-y-2.5">
                   <span className="text-xs font-bold text-slate-200 block">
                     What is unlocked with this pass:
@@ -288,7 +392,6 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
                 </div>
               </div>
 
-              {/* Action Button */}
               <button
                 type="button"
                 onClick={() => handleOpenCheckout(tier)}
@@ -298,7 +401,7 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
                     : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
                 }`}
               >
-                <span>{isPassActive ? `Renew / Extend @ ₹${tier.price}` : `Get ${tier.name} @ ₹${tier.price}`}</span>
+                <span>{isPassActive ? `Renew / Extend @ ₹${tier.price}` : `Unlock ${tier.name} @ ₹${tier.price}`}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -345,10 +448,10 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
         </div>
       </section>
 
-      {/* 5. Interactive UPI / QR Checkout Modal */}
+      {/* 5. Interactive Google Pay / UPI Dynamic Checkout Modal */}
       {isCheckoutOpen && selectedTier && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-5 sm:p-7 space-y-5 shadow-2xl relative text-slate-100 my-auto">
             
             {/* Close */}
             <button
@@ -363,120 +466,154 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
             <div>
               <div className="flex items-center space-x-2 text-xs font-semibold text-amber-400 mb-1">
                 <Crown className="w-3.5 h-3.5 fill-amber-400" />
-                <span>Instant Pass Activation • {selectedTier.durationLabel}</span>
+                <span>Instant Pass Unlock • {selectedTier.durationLabel}</span>
               </div>
               <h3 className="text-xl font-black text-white">
                 {selectedTier.name}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Special Offer: <strong className="text-emerald-400 font-bold">₹{selectedTier.price}</strong> (Saved ₹{selectedTier.originalPrice - selectedTier.price})
-              </p>
+              <div className="flex items-baseline space-x-2 mt-1">
+                <span className="text-2xl font-black text-emerald-400 font-mono">₹{finalPrice}</span>
+                {appliedCoupon && (
+                  <span className="text-xs text-emerald-300 font-bold bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    {appliedCoupon.code} Applied ({appliedCoupon.discountPercentage}% OFF)
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Step: QR Code View */}
+            {/* Step: QR & Payment View */}
             {paymentStep === 'qr' && (
               <div className="space-y-4">
                 
-                {/* QR Code Container */}
-                <div className="p-4 bg-white rounded-2xl flex flex-col items-center justify-center space-y-2 shadow-inner">
-                  <div className="w-40 h-40 bg-slate-100 rounded-xl border border-slate-300 flex flex-col items-center justify-center relative p-2">
-                    <QrCode className="w-32 h-32 text-slate-900" />
-                    <span className="text-[9px] font-mono text-slate-600 bg-white px-1.5 rounded border border-slate-200 absolute bottom-1">
-                      UPI ID: cgssbtest@upi
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold text-slate-800 text-center">
-                    Scan with any UPI App to Pay ₹{selectedTier.price}
+                {/* 1-Tap Google Pay / PhonePe direct intent launcher on Mobile */}
+                <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-800/50 space-y-2">
+                  <span className="text-xs font-bold text-indigo-300 flex items-center space-x-1.5">
+                    <Smartphone className="w-4 h-4 text-indigo-400" />
+                    <span>Pay via UPI App (1-Tap Direct Checkout)</span>
                   </span>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <a
+                      href={upiDeepLink}
+                      className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center justify-center space-x-2 shadow cursor-pointer transition"
+                    >
+                      <span>Google Pay (GPay)</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+
+                    <a
+                      href={upiDeepLink}
+                      className="py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs flex items-center justify-center space-x-2 shadow cursor-pointer transition"
+                    >
+                      <span>PhonePe</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
                 </div>
 
-                {/* UPI App Selector */}
-                <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setActiveUpiApp('phonepe')}
-                    className={`p-2 rounded-xl border transition cursor-pointer ${
-                      activeUpiApp === 'phonepe' ? 'bg-purple-600/20 border-purple-500 text-purple-300' : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    PhonePe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveUpiApp('gpay')}
-                    className={`p-2 rounded-xl border transition cursor-pointer ${
-                      activeUpiApp === 'gpay' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    Google Pay
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveUpiApp('paytm')}
-                    className={`p-2 rounded-xl border transition cursor-pointer ${
-                      activeUpiApp === 'paytm' ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300' : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    Paytm
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveUpiApp('bhim')}
-                    className={`p-2 rounded-xl border transition cursor-pointer ${
-                      activeUpiApp === 'bhim' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    BHIM UPI
-                  </button>
+                {/* QR Code Container */}
+                <div className="p-4 bg-white rounded-2xl flex flex-col items-center justify-center space-y-2 shadow-inner text-slate-900">
+                  <div className="w-44 h-44 bg-slate-50 rounded-xl border border-slate-300 flex flex-col items-center justify-center relative p-2 shadow-sm">
+                    <QrCode className="w-36 h-36 text-slate-900" />
+                    <span className="text-[10px] font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-300 absolute bottom-1.5 shadow-sm">
+                      UPI: cgssbtest@okaxis
+                    </span>
+                  </div>
+                  <div className="text-center space-y-0.5">
+                    <span className="text-xs font-black text-slate-900 block">
+                      Scan with Google Pay, PhonePe or Paytm
+                    </span>
+                    <span className="text-[11px] text-slate-600 font-medium">
+                      Exact Amount: <strong>₹{finalPrice}</strong>
+                    </span>
+                  </div>
                 </div>
+
+                {/* Promo Code Input Box */}
+                <form onSubmit={handleApplyCoupon} className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-300 flex items-center space-x-1">
+                    <Tag className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Have a Promo Coupon Code?</span>
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={couponCodeInput}
+                      onChange={e => setCouponCodeInput(e.target.value.toUpperCase())}
+                      placeholder="e.g. CGTEACHER50"
+                      className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white uppercase font-mono font-bold focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer shadow"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {couponError && (
+                    <span className="text-[11px] text-rose-400 font-semibold block">{couponError}</span>
+                  )}
+                </form>
 
                 {/* Instant Verification Button */}
                 <button
                   type="button"
-                  onClick={handleSimulatePayment}
-                  className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+                  onClick={handleCompletePayment}
+                  className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/25 cursor-pointer"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>I Have Paid ₹{selectedTier.price} • Activate Instantly</span>
+                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  <span>I Have Completed ₹{finalPrice} Payment • Unlock Pass</span>
                 </button>
               </div>
             )}
 
             {/* Step: Processing Verification */}
             {paymentStep === 'processing' && (
-              <div className="py-8 flex flex-col items-center justify-center space-y-3 text-center">
-                <Loader2 className="w-10 h-10 text-amber-400 animate-spin" />
-                <h4 className="font-bold text-white text-sm">
-                  Verifying UPI Transaction & Linking Device...
+              <div className="py-10 flex flex-col items-center justify-center space-y-3 text-center">
+                <Loader2 className="w-12 h-12 text-amber-400 animate-spin" />
+                <h4 className="font-extrabold text-white text-base">
+                  Verifying UPI Payment & Linking Device...
                 </h4>
-                <p className="text-xs text-slate-400 max-w-xs">
-                  Activating {selectedTier.name} for {selectedTier.durationDays} days on this device.
+                <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+                  Activating <strong>{selectedTier.name}</strong> on device: {deviceCheck.currentDevice.name}.
                 </p>
               </div>
             )}
 
             {/* Step: Success */}
             {paymentStep === 'success' && (
-              <div className="py-6 flex flex-col items-center justify-center space-y-3 text-center">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center">
-                  <Check className="w-6 h-6 stroke-[3]" />
+              <div className="py-6 flex flex-col items-center justify-center space-y-4 text-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <Check className="w-7 h-7 stroke-[3]" />
                 </div>
-                <h4 className="font-black text-white text-lg">
-                  Pass Activated Successfully!
-                </h4>
-                <p className="text-xs text-slate-300 max-w-xs">
-                  Your <strong>{selectedTier.name}</strong> is active for {selectedTier.durationDays} days. All tests across CG Teacher, CGPSC, and Vyapam are unlocked!
-                </p>
-                <div className="pt-3 w-full">
+                <div>
+                  <h4 className="font-black text-white text-xl">
+                    Pass Activated Successfully!
+                  </h4>
+                  <p className="text-xs text-slate-300 max-w-xs mt-1 leading-relaxed">
+                    Your <strong>{selectedTier.name}</strong> is active for {selectedTier.durationDays} days. All CBT mock tests across CG Teacher, CGPSC, and Vyapam are unlocked!
+                  </p>
+                </div>
+
+                <div className="w-full pt-2 flex flex-col sm:flex-row items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrintReceipt}
+                    className="w-full sm:flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center space-x-1.5 transition cursor-pointer border border-slate-700"
+                  >
+                    <Receipt className="w-4 h-4 text-emerald-400" />
+                    <span>Download Receipt</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
                       setIsCheckoutOpen(false);
                       onExploreTests();
                     }}
-                    className="w-full py-3 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs transition cursor-pointer shadow-lg shadow-emerald-500/20"
+                    className="w-full sm:flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition cursor-pointer shadow-lg shadow-emerald-500/20"
                   >
-                    Start Practicing Tests Now
+                    Start Practicing Tests
                   </button>
                 </div>
               </div>

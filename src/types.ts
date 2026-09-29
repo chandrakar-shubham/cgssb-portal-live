@@ -1,4 +1,14 @@
-export type UserRole = 'student' | 'admin';
+export type UserRole = 'student' | 'admin' | 'superadmin' | 'content_manager' | 'support';
+
+export interface AdminPermissions {
+  manageStudents: boolean;
+  manageAdmins: boolean;
+  manageTests: boolean;
+  manageQuestions: boolean;
+  manageCMS: boolean;
+  managePayments: boolean;
+  manageSystem: boolean;
+}
 
 export interface User {
   id: string;
@@ -6,7 +16,10 @@ export interface User {
   email: string;
   phone?: string;
   role: UserRole;
-  credits?: number; // legacy optional (credit system removed in favor of tenure pass)
+  status?: 'active' | 'blocked' | 'suspended';
+  isBlocked?: boolean;
+  blockReason?: string;
+  credits?: number; // legacy optional
   hasProPass?: boolean;
   proPassPlan?: 'monthly' | 'yearly' | string;
   passExpiresAt?: string; // ISO date string of pass expiry
@@ -16,8 +29,9 @@ export interface User {
   avatar?: string;
   token?: string;
   registeredAt: string;
+  lastLoginAt?: string;
   // Extended Student Profile Fields
-  targetExam?: string;             // e.g. "CGPSC State Service", "CG Vyapam Hostel Warden", "CG Shikshak 2026"
+  targetExam?: string;             // e.g. "CG Teacher 2026", "CGPSC State Service", "CG Police SI"
   targetYear?: number;             // e.g. 2026
   district?: string;               // e.g. "Raipur", "Bilaspur", "Durg", "Bastar", "Surguja"
   categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
@@ -26,7 +40,34 @@ export interface User {
   medium?: 'Hindi' | 'English';
   bio?: string;                    // e.g. "Aspiring CGPSC Deputy Collector 2026"
   dailyGoalQuestions?: number;      // e.g. 50
+  notes?: string;                  // Admin notes on student
+  marketingTags?: string[];        // e.g. ["lead_teacher_2026", "pass_lead"]
+  adminPermissions?: AdminPermissions;
 }
+
+export interface DiscountCoupon {
+  id: string;
+  code: string;
+  discountPercentage: number;
+  maxDiscountAmount?: number;
+  applicablePlan: 'all' | 'monthly' | 'yearly';
+  validUntil: string;
+  usageCount: number;
+  maxUses: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface MarketingCampaign {
+  id: string;
+  title: string;
+  targetCadre: string;
+  channel: 'whatsapp' | 'sms' | 'email';
+  messageTemplate: string;
+  deepLinkUrl: string;
+  createdAt: string;
+}
+
 
 export type ExamCategory = 'CGSSB' | 'CGPSC' | 'SWAMI_ATMANAND' | 'CENTRAL_EXAMS' | 'TEACHER_RECRUITMENT';
 

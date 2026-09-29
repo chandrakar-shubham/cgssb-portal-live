@@ -48,6 +48,8 @@ import { PracticeSetSection } from './components/PracticeSetSection';
 import { SEOQuestionView } from './components/SEOQuestionView';
 const AdminChapterTestManager = React.lazy(() => import('./components/AdminChapterTestManager').then(m => ({ default: m.AdminChapterTestManager })));
 const AdminPracticeSetManager = React.lazy(() => import('./components/AdminPracticeSetManager').then(m => ({ default: m.AdminPracticeSetManager })));
+const AdminStudentManagement = React.lazy(() => import('./components/AdminStudentManagement').then(m => ({ default: m.AdminStudentManagement })));
+const AdminRoleManagement = React.lazy(() => import('./components/AdminRoleManagement').then(m => ({ default: m.AdminRoleManagement })));
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
 import { syncBundlesFromFirestore, cleanTestFromAllBundles } from './utils/bundleStore';
@@ -117,7 +119,7 @@ import {
 } from './firebase/firestoreService';
 
 function MainApp() {
-  const { user, deductCredits, isAdminAuthenticated } = useAuth();
+  const { user, deductCredits, isAdminAuthenticated, isStudentBlocked } = useAuth();
   const { config, isMaintenanceMode } = useRemoteConfig();
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
@@ -563,6 +565,10 @@ function MainApp() {
 
   // START TEST HANDLER (Routes through TCS iON Pre-Flight Screen)
   const handleStartTest = (test: MockTest) => {
+    if (isStudentBlocked) {
+      alert(`Account Suspended: ${user?.blockReason || 'Your student account has been suspended by the administrator.'}`);
+      return;
+    }
     // If test is marked as Pro and candidate does not have pass
     if (test.isPro && !user?.hasProPass) {
       setStudentActiveTab('pass');
@@ -1418,6 +1424,14 @@ function MainApp() {
 
             {adminActiveTab === 'admin-remote-config' && (
               <AdminRemoteConfigStudio />
+            )}
+
+            {(adminActiveTab === 'admin-students' || adminActiveTab === 'admin-marketing') && (
+              <AdminStudentManagement attempts={attempts} />
+            )}
+
+            {adminActiveTab === 'admin-roles' && (
+              <AdminRoleManagement />
             )}
 
             {/* Global Admin Modals */}

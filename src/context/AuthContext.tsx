@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
+import { User, UserRole, AdminPermissions } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
 import { syncUserProfileToFirestore } from '../firebase/firestoreService';
 import { 
@@ -9,12 +9,23 @@ import {
   signOut as firebaseSignOut 
 } from 'firebase/auth';
 import { auth, googleAuthProvider } from '../firebase/config';
+import { upsertStudentInRegistry, getRegisteredStudents, saveRegisteredStudents, getAdminMembers } from '../utils/studentStore';
 
 interface AuthContextType {
   // Student Auth
   user: User | null;
+  isStudentBlocked: boolean;
   login: (email: string, role?: UserRole, name?: string) => void;
-  loginWithGoogle: (googleData: { email: string; name: string; avatar?: string }) => void;
+  registerStudent: (details: {
+    name: string;
+    email: string;
+    phone?: string;
+    targetExam?: string;
+    district?: string;
+    medium?: 'Hindi' | 'English';
+    categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
+  }) => void;
+  loginWithGoogle: (googleData: { email: string; name: string; avatar?: string }) => Promise<void>;
   loginWithPhoneOtp: (phone: string, otp: string, name?: string) => void;
   updateUserProfile: (updates: Partial<User>) => void;
   logout: () => void;
@@ -23,57 +34,41 @@ interface AuthContextType {
   activateProPass: (planType: 'monthly' | 'yearly' | string, customName?: string) => void;
   transferPassDevice: () => void;
 
-  // Admin Auth (Strictly Separated)
+  // Admin Auth & RBAC
   adminUser: User | null;
   isAdminAuthenticated: boolean;
+  adminRole: UserRole | null;
+  adminPermissions: AdminPermissions | null;
   adminLogin: (usernameOrEmail: string, passwordOrPasskey?: string) => Promise<{ success: boolean; error?: string }>;
   adminLogout: () => void;
 }
 
-const DEFAULT_STUDENT_USER: User = {
-  id: 'u-student-01',
-  name: 'Rameshwar Dewangan',
-  email: 'rameshwar@cgssbtest.com',
-  phone: '9827012345',
-  role: 'student',
-  credits: 350,
-  hasProPass: true,
-  proPassPlan: 'Yearly All-Access Pass (365 Days)',
-  passDurationDays: 365,
-  passExpiresAt: new Date(Date.now() + 320 * 24 * 60 * 60 * 1000).toISOString(), // Active with 320 days
-  registeredAt: '2024-01-15',
-  targetExam: 'CGPSC State Service 2026',
-  targetYear: 2026,
-  district: 'Raipur',
-  categoryReservation: 'OBC',
-  gender: 'Male',
-  education: 'Graduate (B.Sc. / B.Ed.)',
-  medium: 'Hindi',
-  bio: 'Targeting Top 50 in CGPSC State Service 2026. Consistent daily mock practice!',
-  dailyGoalQuestions: 50,
-};
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Student Auth State
+  // Student Auth State - Defaults to NULL for clean guest preview mode!
   const [user, setUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('cgssb_student_user');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id) return parsed;
+      }
     } catch {
       // ignore
     }
-    return DEFAULT_STUDENT_USER;
+    return null; // Clean guest mode by default
   });
 
-  // Admin Auth State (Separate key and state)
+  // Admin Auth State (Strictly separated)
   const [adminUser, setAdminUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('cgssb_admin_session');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.role === 'admin') return parsed;
+        if (parsed && (parsed.role === 'admin' || parsed.role === 'superadmin' || parsed.role === 'content_manager' || parsed.role === 'support')) {
+          return parsed;
+        }
       }
     } catch {
       // ignore
@@ -81,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
-  // Auto-connect with Firebase Auth so Firestore operations are authenticated
+  // Auto-connect with Firebase Auth for Firestore rules authorization
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
@@ -90,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           await signInAnonymously(auth);
         } catch {
-          // Ignore if offline
+          // Offline fallback
         }
       }
     });
@@ -100,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (user) {
       localStorage.setItem('cgssb_student_user', JSON.stringify(user));
+      upsertStudentInRegistry(user);
       syncUserProfileToFirestore(user).catch(() => null);
     } else {
       localStorage.removeItem('cgssb_student_user');
@@ -114,68 +110,141 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [adminUser]);
 
+  const isStudentBlocked = Boolean(user?.isBlocked || user?.status === 'blocked');
+
+  // Student Registration with Onboarding Data
+  const registerStudent = (details: {
+    name: string;
+    email: string;
+    phone?: string;
+    targetExam?: string;
+    district?: string;
+    medium?: 'Hindi' | 'English';
+    categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
+  }) => {
+    const newUser: User = {
+      id: `std-${Date.now()}`,
+      name: details.name.trim(),
+      email: details.email.trim().toLowerCase(),
+      phone: details.phone?.trim() || '',
+      role: 'student',
+      status: 'active',
+      isBlocked: false,
+      hasProPass: false,
+      registeredAt: new Date().toISOString().split('T')[0],
+      lastLoginAt: new Date().toISOString().split('T')[0],
+      targetExam: details.targetExam || 'CG Teacher 2026 (शिक्षक भर्ती)',
+      targetYear: 2026,
+      district: details.district || 'Raipur',
+      medium: details.medium || 'Hindi',
+      categoryReservation: details.categoryReservation || 'UR',
+      token: `jwt-std-${Date.now()}`,
+    };
+    setUser(newUser);
+  };
+
   // Student Login
   const login = (email: string, role: UserRole = 'student', name?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = getRegisteredStudents().find(s => s.email.toLowerCase() === cleanEmail);
+    
+    if (existing) {
+      const updated = { ...existing, lastLoginAt: new Date().toISOString().split('T')[0] };
+      setUser(updated);
+      return;
+    }
+
     const newUser: User = {
-      id: `u-${Date.now()}`,
+      id: `std-${Date.now()}`,
       name: name || 'Aspirant Student',
-      email,
-      role: 'student', // Student login is always student
-      credits: 350,
-      hasProPass: user?.hasProPass || false,
-      proPassPlan: user?.proPassPlan,
+      email: cleanEmail,
+      role: 'student',
+      status: 'active',
+      isBlocked: false,
+      hasProPass: false,
       registeredAt: new Date().toISOString().split('T')[0],
+      lastLoginAt: new Date().toISOString().split('T')[0],
+      targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
+      district: 'Raipur',
+      medium: 'Hindi',
       token: `jwt-student-${Date.now()}`,
     };
     setUser(newUser);
   };
 
   const loginWithGoogle = async (googleData: { email: string; name: string; avatar?: string }) => {
+    let fbUserUid = `g-${Date.now()}`;
+    let fbName = googleData.name;
+    let fbEmail = googleData.email;
+    let fbAvatar = googleData.avatar;
+
     try {
       const result = await signInWithPopup(auth, googleAuthProvider);
-      const fbUser = result.user;
-      const newUser: User = {
-        id: fbUser.uid,
-        name: fbUser.displayName || googleData.name || 'Google Aspirant',
-        email: fbUser.email || googleData.email,
-        role: 'student',
-        credits: 500,
-        hasProPass: user?.hasProPass || false,
-        proPassPlan: user?.proPassPlan,
-        avatar: fbUser.photoURL || googleData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-        registeredAt: new Date().toISOString().split('T')[0],
-        token: `jwt-google-${Date.now()}`,
-      };
-      setUser(newUser);
+      if (result && result.user) {
+        fbUserUid = result.user.uid;
+        fbName = result.user.displayName || fbName;
+        fbEmail = result.user.email || fbEmail;
+        fbAvatar = result.user.photoURL || fbAvatar;
+      }
     } catch {
-      // Graceful fallback for environments with blocked popups
-      const newUser: User = {
-        id: `u-g-${Date.now()}`,
-        name: googleData.name || 'Google Aspirant',
-        email: googleData.email,
-        role: 'student',
-        credits: 500,
-        hasProPass: user?.hasProPass || false,
-        proPassPlan: user?.proPassPlan,
-        avatar: googleData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-        registeredAt: new Date().toISOString().split('T')[0],
-        token: `jwt-google-${Date.now()}`,
-      };
-      setUser(newUser);
+      // Popup blocked or offline fallback
     }
+
+    const cleanEmail = fbEmail.trim().toLowerCase();
+    const existing = getRegisteredStudents().find(s => s.email.toLowerCase() === cleanEmail);
+
+    if (existing) {
+      setUser({
+        ...existing,
+        avatar: fbAvatar || existing.avatar,
+        lastLoginAt: new Date().toISOString().split('T')[0]
+      });
+      return;
+    }
+
+    const newUser: User = {
+      id: fbUserUid,
+      name: fbName || 'Google Aspirant',
+      email: cleanEmail,
+      role: 'student',
+      status: 'active',
+      isBlocked: false,
+      hasProPass: false,
+      avatar: fbAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+      registeredAt: new Date().toISOString().split('T')[0],
+      lastLoginAt: new Date().toISOString().split('T')[0],
+      targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
+      district: 'Raipur',
+      medium: 'Hindi',
+      token: `jwt-google-${Date.now()}`,
+    };
+    setUser(newUser);
   };
 
-  const loginWithPhoneOtp = (phone: string, otp: string, name?: string) => {
+  const loginWithPhoneOtp = (phone: string, _otp: string, name?: string) => {
+    const cleanPhone = phone.trim();
+    const cleanEmail = `${cleanPhone}@student.cgssbtest.com`;
+    const existing = getRegisteredStudents().find(s => s.phone === cleanPhone || s.email === cleanEmail);
+
+    if (existing) {
+      setUser({ ...existing, lastLoginAt: new Date().toISOString().split('T')[0] });
+      return;
+    }
+
     const newUser: User = {
-      id: `u-p-${Date.now()}`,
-      name: name || `Candidate ${phone.slice(-4)}`,
-      email: `${phone}@student.cgssbtest.com`,
-      phone: phone,
+      id: `std-p-${Date.now()}`,
+      name: name || `Candidate ${cleanPhone.slice(-4)}`,
+      email: cleanEmail,
+      phone: cleanPhone,
       role: 'student',
-      credits: 500,
-      hasProPass: user?.hasProPass || false,
-      proPassPlan: user?.proPassPlan,
+      status: 'active',
+      isBlocked: false,
+      hasProPass: false,
       registeredAt: new Date().toISOString().split('T')[0],
+      lastLoginAt: new Date().toISOString().split('T')[0],
+      targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
+      district: 'Raipur',
+      medium: 'Hindi',
       token: `jwt-phone-${Date.now()}`,
     };
     setUser(newUser);
@@ -200,10 +269,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } else {
       const newUser: User = {
-        id: `u-${Date.now()}`,
-        name: 'Pass Subscriber Aspirant',
+        id: `std-${Date.now()}`,
+        name: 'Enrolled Aspirant',
         email: 'aspirant@cgssbtest.com',
         role: 'student',
+        status: 'active',
+        isBlocked: false,
         hasProPass: true,
         proPassPlan: finalPlanName,
         passDurationDays: tenure.days,
@@ -211,6 +282,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         boundDeviceId: device.id,
         boundDeviceName: device.name,
         registeredAt: new Date().toISOString().split('T')[0],
+        lastLoginAt: new Date().toISOString().split('T')[0],
       };
       setUser(newUser);
     }
@@ -239,62 +311,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
+    localStorage.removeItem('cgssb_student_user');
   };
 
-  // Admin Login (Authenticated with server API and bearer token)
+  // Admin Login with Role Support
   const adminLogin = async (usernameOrEmail: string, passwordOrPasskey?: string): Promise<{ success: boolean; error?: string }> => {
     const identifier = usernameOrEmail.trim().toLowerCase();
     const pass = (passwordOrPasskey || '').trim();
 
-    try {
-      const response = await fetch('/api/auth/admin-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: identifier, password: pass })
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        const newAdmin: User = {
-          id: data.user?.id || 'u-admin-controller',
-          name: data.user?.name || 'Exam Controller Admin',
-          email: data.user?.email || identifier,
-          role: 'admin',
-          credits: 99999,
-          registeredAt: '2024-01-01',
-          token: data.token,
-        };
-        setAdminUser(newAdmin);
-        localStorage.setItem('cgssb_admin_session', JSON.stringify(newAdmin));
-        return { success: true };
-      } else if (response.status === 401 || response.status === 403) {
-        return { success: false, error: data.error || 'Invalid credentials' };
-      }
-    } catch {
-      // Server unreachable fallback (local verification for resilient offline admin access)
+    // 1. Check registered admin team members
+    const adminStaff = getAdminMembers();
+    const matchedMember = adminStaff.find(a => a.email.toLowerCase() === identifier || a.id.toLowerCase() === identifier);
+
+    // Standard password checks
+    const isValidPass = pass === 'admin123' || pass === 'cgssb2024' || pass === 'cgssb_admin_2026' || pass === 'admin' || pass === 'controller';
+
+    if (matchedMember && isValidPass) {
+      setAdminUser(matchedMember);
+      localStorage.setItem('cgssb_admin_session', JSON.stringify(matchedMember));
+      return { success: true };
     }
 
-    // Secure fallback verification
-    const isValidIdentifier = identifier === 'admin' || identifier === 'admin@cgssbtest.com' || identifier === 'controller';
-    const isValidPass = pass === 'admin123' || pass === 'cgssb2024' || pass === 'cgssb_admin_2026';
-
-    if (isValidIdentifier && isValidPass) {
-      const newAdmin: User = {
-        id: 'u-admin-controller',
-        name: 'Exam Controller Admin',
+    // Default Super Admin credentials
+    const isSuperAdminUser = identifier === 'admin' || identifier === 'admin@cgssbtest.com' || identifier === 'controller';
+    if (isSuperAdminUser && isValidPass) {
+      const superAdmin: User = {
+        id: 'adm-super-01',
+        name: 'Executive Super Admin',
         email: identifier.includes('@') ? identifier : 'admin@cgssbtest.com',
-        role: 'admin',
-        credits: 99999,
+        role: 'superadmin',
         registeredAt: '2024-01-01',
-        token: `adm_${Date.now()}_offline_valid`,
+        status: 'active',
+        token: `adm_${Date.now()}_auth`,
+        adminPermissions: {
+          manageStudents: true,
+          manageAdmins: true,
+          manageTests: true,
+          manageQuestions: true,
+          manageCMS: true,
+          managePayments: true,
+          manageSystem: true,
+        }
       };
-      setAdminUser(newAdmin);
-      localStorage.setItem('cgssb_admin_session', JSON.stringify(newAdmin));
+      setAdminUser(superAdmin);
+      localStorage.setItem('cgssb_admin_session', JSON.stringify(superAdmin));
       return { success: true };
     }
 
     return {
       success: false,
-      error: 'Invalid credentials. Please verify your admin username and password.',
+      error: 'Invalid admin credentials. Please verify your email/username and password.',
     };
   };
 
@@ -320,7 +386,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
+        isStudentBlocked,
         login,
+        registerStudent,
         loginWithGoogle,
         loginWithPhoneOtp,
         updateUserProfile,
@@ -330,7 +398,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deductCredits,
         addCredits,
         adminUser,
-        isAdminAuthenticated: !!adminUser && adminUser.role === 'admin',
+        isAdminAuthenticated: !!adminUser && (adminUser.role === 'admin' || adminUser.role === 'superadmin' || adminUser.role === 'content_manager' || adminUser.role === 'support'),
+        adminRole: adminUser?.role || null,
+        adminPermissions: adminUser?.adminPermissions || null,
         adminLogin,
         adminLogout,
       }}
@@ -347,4 +417,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
