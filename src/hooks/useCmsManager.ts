@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   CMSPage,
   CMSPost,
@@ -12,6 +12,23 @@ import {
   INITIAL_CMS_SETTINGS
 } from '../defaultCmsData';
 import { isDemoDataPurged } from '../utils/bundleStore';
+import {
+  fetchCmsPagesFromFirestore,
+  saveCmsPageToFirestore,
+  deleteCmsPageFromFirestore,
+  subscribeToCmsPages,
+  fetchCmsPostsFromFirestore,
+  saveCmsPostToFirestore,
+  deleteCmsPostFromFirestore,
+  subscribeToCmsPosts,
+  fetchCmsSeriesPacksFromFirestore,
+  saveCmsSeriesPackToFirestore,
+  deleteCmsSeriesPackFromFirestore,
+  subscribeToCmsSeriesPacks,
+  fetchCmsSettingsFromFirestore,
+  saveCmsSettingsToFirestore,
+  subscribeToCmsSettings
+} from '../firebase/firestoreService';
 
 export function useCmsManager() {
   const [cmsPages, setCmsPages] = useState<CMSPage[]>(() => {
@@ -19,8 +36,7 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_pages');
       if (saved) {
         const parsed: CMSPage[] = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          // Merge with initial core pages so core routes are never missing
+        if (Array.isArray(parsed) && parsed.length > 0) {
           const pageMap = new Map<string, CMSPage>();
           INITIAL_CMS_PAGES.forEach(p => pageMap.set(p.id, p));
           parsed.forEach(p => pageMap.set(p.id, p));
@@ -35,8 +51,8 @@ export function useCmsManager() {
     try {
       const saved = localStorage.getItem('cgssb_cms_posts');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        const parsed: CMSPost[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {}
     return isDemoDataPurged() ? [] : INITIAL_CMS_POSTS;
@@ -47,7 +63,7 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_series');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {}
     return isDemoDataPurged() ? [] : INITIAL_CMS_SERIES_PACKS;
@@ -60,6 +76,70 @@ export function useCmsManager() {
     } catch {}
     return INITIAL_CMS_SETTINGS;
   });
+
+  // Real-time Cloud Firestore synchronization across all devices
+  useEffect(() => {
+    const unsubPages = subscribeToCmsPages((remotePages) => {
+      if (remotePages.length > 0) {
+        const pageMap = new Map<string, CMSPage>();
+        INITIAL_CMS_PAGES.forEach(p => pageMap.set(p.id, p));
+        remotePages.forEach(p => pageMap.set(p.id, p));
+        const merged = Array.from(pageMap.values());
+        setCmsPages(merged);
+        try { localStorage.setItem('cgssb_cms_pages', JSON.stringify(merged)); } catch {}
+      }
+    });
+
+    const unsubPosts = subscribeToCmsPosts((remotePosts) => {
+      if (remotePosts.length > 0) {
+        setCmsPosts(remotePosts);
+        try { localStorage.setItem('cgssb_cms_posts', JSON.stringify(remotePosts)); } catch {}
+      }
+    });
+
+    const unsubSeries = subscribeToCmsSeriesPacks((remoteSeries) => {
+      if (remoteSeries.length > 0) {
+        setCmsSeriesPacks(remoteSeries);
+        try { localStorage.setItem('cgssb_cms_series', JSON.stringify(remoteSeries)); } catch {}
+      }
+    });
+
+    const unsubSettings = subscribeToCmsSettings((remoteSettings) => {
+      if (remoteSettings) {
+        setCmsSettings(remoteSettings);
+        try { localStorage.setItem('cgssb_cms_settings', JSON.stringify(remoteSettings)); } catch {}
+      }
+    });
+
+    // Initial fetch fallbacks
+    fetchCmsPagesFromFirestore().then(p => {
+      if (p.length > 0) {
+        const pageMap = new Map<string, CMSPage>();
+        INITIAL_CMS_PAGES.forEach(x => pageMap.set(x.id, x));
+        p.forEach(x => pageMap.set(x.id, x));
+        setCmsPages(Array.from(pageMap.values()));
+      }
+    }).catch(() => {});
+
+    fetchCmsPostsFromFirestore().then(p => {
+      if (p.length > 0) setCmsPosts(p);
+    }).catch(() => {});
+
+    fetchCmsSeriesPacksFromFirestore().then(s => {
+      if (s.length > 0) setCmsSeriesPacks(s);
+    }).catch(() => {});
+
+    fetchCmsSettingsFromFirestore().then(s => {
+      if (s) setCmsSettings(s);
+    }).catch(() => {});
+
+    return () => {
+      unsubPages();
+      unsubPosts();
+      unsubSeries();
+      unsubSettings();
+    };
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem('cgssb_cms_pages', JSON.stringify(cmsPages)); } catch {}
@@ -77,7 +157,7 @@ export function useCmsManager() {
     try { localStorage.setItem('cgssb_cms_settings', JSON.stringify(cmsSettings)); } catch {}
   }, [cmsSettings]);
 
-  const handleSaveCmsPage = async (page: CMSPage) => {
+  const handleSaveCmsPage = useCallback(async (page: CMSPage) => {
     setCmsPages(prev => {
       const idx = prev.findIndex(p => p.id === page.id);
       if (idx !== -1) {
@@ -87,13 +167,15 @@ export function useCmsManager() {
       }
       return [page, ...prev];
     });
-  };
+    saveCmsPageToFirestore(page).catch(err => console.warn('Cloud save CMS page warning:', err));
+  }, []);
 
-  const handleDeleteCmsPage = async (id: string) => {
+  const handleDeleteCmsPage = useCallback(async (id: string) => {
     setCmsPages(prev => prev.filter(p => p.id !== id));
-  };
+    deleteCmsPageFromFirestore(id).catch(err => console.warn('Cloud delete CMS page warning:', err));
+  }, []);
 
-  const handleSaveCmsPost = async (post: CMSPost) => {
+  const handleSaveCmsPost = useCallback(async (post: CMSPost) => {
     setCmsPosts(prev => {
       const idx = prev.findIndex(p => p.id === post.id);
       if (idx !== -1) {
@@ -103,13 +185,15 @@ export function useCmsManager() {
       }
       return [post, ...prev];
     });
-  };
+    saveCmsPostToFirestore(post).catch(err => console.warn('Cloud save CMS post warning:', err));
+  }, []);
 
-  const handleDeleteCmsPost = async (id: string) => {
+  const handleDeleteCmsPost = useCallback(async (id: string) => {
     setCmsPosts(prev => prev.filter(p => p.id !== id));
-  };
+    deleteCmsPostFromFirestore(id).catch(err => console.warn('Cloud delete CMS post warning:', err));
+  }, []);
 
-  const handleSaveCmsSeriesPack = async (pack: CMSTestSeriesPack) => {
+  const handleSaveCmsSeriesPack = useCallback(async (pack: CMSTestSeriesPack) => {
     setCmsSeriesPacks(prev => {
       const idx = prev.findIndex(p => p.id === pack.id);
       if (idx !== -1) {
@@ -119,15 +203,18 @@ export function useCmsManager() {
       }
       return [pack, ...prev];
     });
-  };
+    saveCmsSeriesPackToFirestore(pack).catch(err => console.warn('Cloud save CMS series pack warning:', err));
+  }, []);
 
-  const handleDeleteCmsSeriesPack = async (id: string) => {
+  const handleDeleteCmsSeriesPack = useCallback(async (id: string) => {
     setCmsSeriesPacks(prev => prev.filter(p => p.id !== id));
-  };
+    deleteCmsSeriesPackFromFirestore(id).catch(err => console.warn('Cloud delete CMS series pack warning:', err));
+  }, []);
 
-  const handleSaveCmsSettings = async (settings: CMSSiteSettings) => {
+  const handleSaveCmsSettings = useCallback(async (settings: CMSSiteSettings) => {
     setCmsSettings(settings);
-  };
+    saveCmsSettingsToFirestore(settings).catch(err => console.warn('Cloud save CMS settings warning:', err));
+  }, []);
 
   return {
     cmsPages,

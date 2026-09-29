@@ -4,18 +4,18 @@ import {
   getDocs,
   getDoc,
   setDoc,
-  updateDoc,
   deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp
+  onSnapshot,
+  serverTimestamp,
+  Unsubscribe
 } from 'firebase/firestore';
 import { db, auth } from './config';
-import { MockTest, Question, TestAttempt, User, PreviousYearPaper } from '../types';
+import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG } from '../types';
 import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
+import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../types/cms';
+import { INITIAL_CMS_PAGES, INITIAL_CMS_POSTS, INITIAL_CMS_SERIES_PACKS, INITIAL_CMS_SETTINGS } from '../defaultCmsData';
+import { DEFAULT_SLIDER_BANNERS } from '../utils/sliderStore';
 
 export enum OperationType {
   CREATE = 'create',
@@ -64,18 +64,27 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Collection References
-const USERS_COLLECTION = 'users';
-const TESTS_COLLECTION = 'mockTests';
-const QUESTIONS_COLLECTION = 'questions';
-const BUNDLES_COLLECTION = 'bundles';
-const ATTEMPTS_COLLECTION = 'attempts';
-const PYP_PAPERS_COLLECTION = 'pypPapers';
+// Collection Names
+export const COLLECTIONS = {
+  USERS: 'users',
+  TESTS: 'mockTests',
+  QUESTIONS: 'questions',
+  BUNDLES: 'bundles',
+  ATTEMPTS: 'attempts',
+  PYP_PAPERS: 'pypPapers',
+  PAGES: 'pages',
+  POSTS: 'posts',
+  SERIES_PACKS: 'seriesPacks',
+  CMS_SETTINGS: 'cmsSettings',
+  SLIDER_BANNERS: 'slider_banners',
+  REMOTE_CONFIG: 'remoteConfig',
+  REFERRALS: 'referrals'
+} as const;
 
 /**
- * Executes a promise with an upper-bound timeout to avoid stalling on poor connections
+ * Timeout wrapper to guarantee that network hiccups don't freeze the client
  */
-async function withTimeout<T>(promise: Promise<T>, timeoutMs = 3500, fallbackValue: T): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = 4000, fallbackValue: T): Promise<T> {
   let timer: any;
   const timeout = new Promise<T>((resolve) => {
     timer = setTimeout(() => resolve(fallbackValue), timeoutMs);
@@ -94,8 +103,9 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 3500, fallbackVal
 // USER SERVICES
 // ==========================================
 export async function syncUserProfileToFirestore(user: User): Promise<void> {
+  if (!db || !user?.id) return;
   try {
-    const userDocRef = doc(db, USERS_COLLECTION, user.id);
+    const userDocRef = doc(db, COLLECTIONS.USERS, user.id);
     await setDoc(userDocRef, {
       ...user,
       lastSyncedAt: serverTimestamp()
@@ -106,11 +116,12 @@ export async function syncUserProfileToFirestore(user: User): Promise<void> {
 }
 
 export async function fetchUserProfileFromFirestore(userId: string): Promise<User | null> {
+  if (!db || !userId) return null;
   try {
-    const userDocRef = doc(db, USERS_COLLECTION, userId);
+    const userDocRef = doc(db, COLLECTIONS.USERS, userId);
     return await withTimeout(
       getDoc(userDocRef).then(snap => snap.exists() ? (snap.data() as User) : null),
-      3500,
+      4000,
       null
     );
   } catch (err) {
@@ -120,19 +131,20 @@ export async function fetchUserProfileFromFirestore(userId: string): Promise<Use
 }
 
 // ==========================================
-// MOCK TESTS SERVICES
+// MOCK TESTS SERVICES & REALTIME SYNC
 // ==========================================
 export async function fetchTestsFromFirestore(): Promise<MockTest[]> {
+  if (!db) return [];
   try {
     return await withTimeout(
-      getDocs(collection(db, TESTS_COLLECTION)).then(snap => {
+      getDocs(collection(db, COLLECTIONS.TESTS)).then(snap => {
         const items: MockTest[] = [];
         snap.forEach(d => {
           items.push(d.data() as MockTest);
         });
         return items;
       }),
-      3500,
+      4000,
       []
     );
   } catch (err) {
@@ -141,29 +153,62 @@ export async function fetchTestsFromFirestore(): Promise<MockTest[]> {
   }
 }
 
-export async function saveTestToFirestore(test: MockTest): Promise<void> {
+export function subscribeToTests(callback: (tests: MockTest[]) => void): Unsubscribe {
+  if (!db) return () => {};
   try {
-    const testDocRef = doc(db, TESTS_COLLECTION, test.id);
+    return onSnapshot(
+      collection(db, COLLECTIONS.TESTS),
+      (snap) => {
+        const items: MockTest[] = [];
+        snap.forEach(d => items.push(d.data() as MockTest));
+        if (items.length > 0) {
+          callback(items);
+        }
+      },
+      (err) => {
+        console.warn('Tests snapshot listener note:', err);
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveTestToFirestore(test: MockTest): Promise<void> {
+  if (!db || !test?.id) return;
+  try {
+    const testDocRef = doc(db, COLLECTIONS.TESTS, test.id);
     await setDoc(testDocRef, test, { merge: true });
   } catch (err) {
     console.warn('Error saving test to Firestore:', err);
   }
 }
 
+export async function deleteTestFromFirestore(testId: string): Promise<void> {
+  if (!db || !testId) return;
+  try {
+    const testDocRef = doc(db, COLLECTIONS.TESTS, testId);
+    await deleteDoc(testDocRef);
+  } catch (err) {
+    console.warn('Error deleting test from Firestore:', err);
+  }
+}
+
 // ==========================================
-// QUESTIONS SERVICES
+// QUESTIONS SERVICES & REALTIME SYNC
 // ==========================================
 export async function fetchQuestionsFromFirestore(): Promise<Question[]> {
+  if (!db) return [];
   try {
     return await withTimeout(
-      getDocs(collection(db, QUESTIONS_COLLECTION)).then(snap => {
+      getDocs(collection(db, COLLECTIONS.QUESTIONS)).then(snap => {
         const items: Question[] = [];
         snap.forEach(d => {
           items.push(d.data() as Question);
         });
         return items;
       }),
-      3500,
+      4000,
       []
     );
   } catch (err) {
@@ -172,98 +217,58 @@ export async function fetchQuestionsFromFirestore(): Promise<Question[]> {
   }
 }
 
+export function subscribeToQuestions(callback: (questions: Question[]) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      collection(db, COLLECTIONS.QUESTIONS),
+      (snap) => {
+        const items: Question[] = [];
+        snap.forEach(d => items.push(d.data() as Question));
+        if (items.length > 0) {
+          callback(items);
+        }
+      },
+      (err) => {
+        console.warn('Questions snapshot listener note:', err);
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
 export async function saveQuestionsToFirestore(questions: Question[]): Promise<void> {
+  if (!db) return;
   try {
     for (const q of questions) {
-      const qDocRef = doc(db, QUESTIONS_COLLECTION, q.id);
-      await setDoc(qDocRef, q, { merge: true });
+      if (q && q.id) {
+        const qDocRef = doc(db, COLLECTIONS.QUESTIONS, q.id);
+        await setDoc(qDocRef, q, { merge: true });
+      }
     }
   } catch (err) {
     console.warn('Error saving questions to Firestore:', err);
   }
 }
 
-// ==========================================
-// BUNDLES SERVICES
-// ==========================================
-export async function fetchBundlesFromFirestore(): Promise<TestSeriesBundle[]> {
+export async function saveSingleQuestionToFirestore(question: Question): Promise<void> {
+  if (!db || !question?.id) return;
   try {
-    return await withTimeout(
-      getDocs(collection(db, BUNDLES_COLLECTION)).then(snap => {
-        const items: TestSeriesBundle[] = [];
-        snap.forEach(d => {
-          items.push(d.data() as TestSeriesBundle);
-        });
-        return items;
-      }),
-      3500,
-      []
-    );
+    const qDocRef = doc(db, COLLECTIONS.QUESTIONS, question.id);
+    await setDoc(qDocRef, question, { merge: true });
   } catch (err) {
-    console.warn('Error fetching bundles from Firestore:', err);
-    return [];
-  }
-}
-
-export async function saveBundleToFirestore(bundle: TestSeriesBundle): Promise<void> {
-  try {
-    const bundleDocRef = doc(db, BUNDLES_COLLECTION, bundle.id);
-    await setDoc(bundleDocRef, bundle, { merge: true });
-  } catch (err) {
-    console.warn('Error saving bundle to Firestore:', err);
-  }
-}
-
-export async function deleteBundleFromFirestore(bundleId: string): Promise<void> {
-  try {
-    const bundleDocRef = doc(db, BUNDLES_COLLECTION, bundleId);
-    await deleteDoc(bundleDocRef);
-  } catch (err) {
-    console.warn('Error deleting bundle from Firestore:', err);
-  }
-}
-
-export async function deleteTestFromFirestore(testId: string): Promise<void> {
-  try {
-    const testDocRef = doc(db, TESTS_COLLECTION, testId);
-    await deleteDoc(testDocRef);
-  } catch (err) {
-    console.warn('Error deleting test from Firestore:', err);
+    console.warn('Error saving question to Firestore:', err);
   }
 }
 
 export async function deleteQuestionFromFirestore(questionId: string): Promise<void> {
+  if (!db || !questionId) return;
   try {
-    const qDocRef = doc(db, QUESTIONS_COLLECTION, questionId);
+    const qDocRef = doc(db, COLLECTIONS.QUESTIONS, questionId);
     await deleteDoc(qDocRef);
   } catch (err) {
     console.warn('Error deleting question from Firestore:', err);
-  }
-}
-
-export async function purgeFirestoreDemoData(): Promise<void> {
-  try {
-    const testSnap = await getDocs(collection(db, TESTS_COLLECTION)).catch(() => null);
-    if (testSnap && !testSnap.empty) {
-      await Promise.allSettled(testSnap.docs.map(d => deleteDoc(d.ref)));
-    }
-
-    const qSnap = await getDocs(collection(db, QUESTIONS_COLLECTION)).catch(() => null);
-    if (qSnap && !qSnap.empty) {
-      await Promise.allSettled(qSnap.docs.map(d => deleteDoc(d.ref)));
-    }
-
-    const pypSnap = await getDocs(collection(db, PYP_PAPERS_COLLECTION)).catch(() => null);
-    if (pypSnap && !pypSnap.empty) {
-      await Promise.allSettled(pypSnap.docs.map(d => deleteDoc(d.ref)));
-    }
-
-    const bundleSnap = await getDocs(collection(db, BUNDLES_COLLECTION)).catch(() => null);
-    if (bundleSnap && !bundleSnap.empty) {
-      await Promise.allSettled(bundleSnap.docs.map(d => deleteDoc(d.ref)));
-    }
-  } catch (err) {
-    console.warn('Error purging Firestore demo data:', err);
   }
 }
 
@@ -271,16 +276,17 @@ export async function purgeFirestoreDemoData(): Promise<void> {
 // PREVIOUS YEAR PAPERS (PYP) SERVICES
 // ==========================================
 export async function fetchPypPapersFromFirestore(): Promise<PreviousYearPaper[]> {
+  if (!db) return [];
   try {
     return await withTimeout(
-      getDocs(collection(db, PYP_PAPERS_COLLECTION)).then(snap => {
+      getDocs(collection(db, COLLECTIONS.PYP_PAPERS)).then(snap => {
         const items: PreviousYearPaper[] = [];
         snap.forEach(d => {
           items.push(d.data() as PreviousYearPaper);
         });
         return items;
       }),
-      3500,
+      4000,
       []
     );
   } catch (err) {
@@ -289,9 +295,31 @@ export async function fetchPypPapersFromFirestore(): Promise<PreviousYearPaper[]
   }
 }
 
-export async function savePypPaperToFirestore(paper: PreviousYearPaper): Promise<void> {
+export function subscribeToPypPapers(callback: (papers: PreviousYearPaper[]) => void): Unsubscribe {
+  if (!db) return () => {};
   try {
-    const paperDocRef = doc(db, PYP_PAPERS_COLLECTION, paper.id);
+    return onSnapshot(
+      collection(db, COLLECTIONS.PYP_PAPERS),
+      (snap) => {
+        const items: PreviousYearPaper[] = [];
+        snap.forEach(d => items.push(d.data() as PreviousYearPaper));
+        if (items.length > 0) {
+          callback(items);
+        }
+      },
+      (err) => {
+        console.warn('PYP snapshot listener note:', err);
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function savePypPaperToFirestore(paper: PreviousYearPaper): Promise<void> {
+  if (!db || !paper?.id) return;
+  try {
+    const paperDocRef = doc(db, COLLECTIONS.PYP_PAPERS, paper.id);
     await setDoc(paperDocRef, paper, { merge: true });
   } catch (err) {
     console.warn('Error saving PYP paper to Firestore:', err);
@@ -299,11 +327,464 @@ export async function savePypPaperToFirestore(paper: PreviousYearPaper): Promise
 }
 
 export async function deletePypPaperFromFirestore(paperId: string): Promise<void> {
+  if (!db || !paperId) return;
   try {
-    const paperDocRef = doc(db, PYP_PAPERS_COLLECTION, paperId);
+    const paperDocRef = doc(db, COLLECTIONS.PYP_PAPERS, paperId);
     await deleteDoc(paperDocRef);
   } catch (err) {
     console.warn('Error deleting PYP paper from Firestore:', err);
+  }
+}
+
+// ==========================================
+// BUNDLES SERVICES & REALTIME SYNC
+// ==========================================
+export async function fetchBundlesFromFirestore(): Promise<TestSeriesBundle[]> {
+  if (!db) return [];
+  try {
+    return await withTimeout(
+      getDocs(collection(db, COLLECTIONS.BUNDLES)).then(snap => {
+        const items: TestSeriesBundle[] = [];
+        snap.forEach(d => {
+          items.push(d.data() as TestSeriesBundle);
+        });
+        return items;
+      }),
+      4000,
+      []
+    );
+  } catch (err) {
+    console.warn('Error fetching bundles from Firestore:', err);
+    return [];
+  }
+}
+
+export function subscribeToBundles(callback: (bundles: TestSeriesBundle[]) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      collection(db, COLLECTIONS.BUNDLES),
+      (snap) => {
+        const items: TestSeriesBundle[] = [];
+        snap.forEach(d => items.push(d.data() as TestSeriesBundle));
+        if (items.length > 0) {
+          callback(items);
+        }
+      },
+      (err) => {
+        console.warn('Bundles snapshot listener note:', err);
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveBundleToFirestore(bundle: TestSeriesBundle): Promise<void> {
+  if (!db || !bundle?.id) return;
+  try {
+    const bundleDocRef = doc(db, COLLECTIONS.BUNDLES, bundle.id);
+    await setDoc(bundleDocRef, bundle, { merge: true });
+  } catch (err) {
+    console.warn('Error saving bundle to Firestore:', err);
+  }
+}
+
+export async function deleteBundleFromFirestore(bundleId: string): Promise<void> {
+  if (!db || !bundleId) return;
+  try {
+    const bundleDocRef = doc(db, COLLECTIONS.BUNDLES, bundleId);
+    await deleteDoc(bundleDocRef);
+  } catch (err) {
+    console.warn('Error deleting bundle from Firestore:', err);
+  }
+}
+
+// ==========================================
+// CMS PAGES, POSTS, SERIES & SETTINGS SERVICES
+// ==========================================
+export async function fetchCmsPagesFromFirestore(): Promise<CMSPage[]> {
+  if (!db) return [];
+  try {
+    return await withTimeout(
+      getDocs(collection(db, COLLECTIONS.PAGES)).then(snap => {
+        const items: CMSPage[] = [];
+        snap.forEach(d => items.push(d.data() as CMSPage));
+        return items;
+      }),
+      4000,
+      []
+    );
+  } catch (err) {
+    console.warn('Error fetching CMS pages from Firestore:', err);
+    return [];
+  }
+}
+
+export function subscribeToCmsPages(callback: (pages: CMSPage[]) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      collection(db, COLLECTIONS.PAGES),
+      (snap) => {
+        const items: CMSPage[] = [];
+        snap.forEach(d => items.push(d.data() as CMSPage));
+        if (items.length > 0) callback(items);
+      },
+      (err) => console.warn('CMS pages listener note:', err)
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveCmsPageToFirestore(page: CMSPage): Promise<void> {
+  if (!db || !page?.id) return;
+  try {
+    const ref = doc(db, COLLECTIONS.PAGES, page.id);
+    await setDoc(ref, page, { merge: true });
+  } catch (err) {
+    console.warn('Error saving CMS page to Firestore:', err);
+  }
+}
+
+export async function deleteCmsPageFromFirestore(pageId: string): Promise<void> {
+  if (!db || !pageId) return;
+  try {
+    const ref = doc(db, COLLECTIONS.PAGES, pageId);
+    await deleteDoc(ref);
+  } catch (err) {
+    console.warn('Error deleting CMS page from Firestore:', err);
+  }
+}
+
+export async function fetchCmsPostsFromFirestore(): Promise<CMSPost[]> {
+  if (!db) return [];
+  try {
+    return await withTimeout(
+      getDocs(collection(db, COLLECTIONS.POSTS)).then(snap => {
+        const items: CMSPost[] = [];
+        snap.forEach(d => items.push(d.data() as CMSPost));
+        return items;
+      }),
+      4000,
+      []
+    );
+  } catch (err) {
+    console.warn('Error fetching CMS posts from Firestore:', err);
+    return [];
+  }
+}
+
+export function subscribeToCmsPosts(callback: (posts: CMSPost[]) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      collection(db, COLLECTIONS.POSTS),
+      (snap) => {
+        const items: CMSPost[] = [];
+        snap.forEach(d => items.push(d.data() as CMSPost));
+        if (items.length > 0) callback(items);
+      },
+      (err) => console.warn('CMS posts listener note:', err)
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveCmsPostToFirestore(post: CMSPost): Promise<void> {
+  if (!db || !post?.id) return;
+  try {
+    const ref = doc(db, COLLECTIONS.POSTS, post.id);
+    await setDoc(ref, post, { merge: true });
+  } catch (err) {
+    console.warn('Error saving CMS post to Firestore:', err);
+  }
+}
+
+export async function deleteCmsPostFromFirestore(postId: string): Promise<void> {
+  if (!db || !postId) return;
+  try {
+    const ref = doc(db, COLLECTIONS.POSTS, postId);
+    await deleteDoc(ref);
+  } catch (err) {
+    console.warn('Error deleting CMS post from Firestore:', err);
+  }
+}
+
+export async function fetchCmsSeriesPacksFromFirestore(): Promise<CMSTestSeriesPack[]> {
+  if (!db) return [];
+  try {
+    return await withTimeout(
+      getDocs(collection(db, COLLECTIONS.SERIES_PACKS)).then(snap => {
+        const items: CMSTestSeriesPack[] = [];
+        snap.forEach(d => items.push(d.data() as CMSTestSeriesPack));
+        return items;
+      }),
+      4000,
+      []
+    );
+  } catch (err) {
+    console.warn('Error fetching CMS series packs from Firestore:', err);
+    return [];
+  }
+}
+
+export function subscribeToCmsSeriesPacks(callback: (packs: CMSTestSeriesPack[]) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      collection(db, COLLECTIONS.SERIES_PACKS),
+      (snap) => {
+        const items: CMSTestSeriesPack[] = [];
+        snap.forEach(d => items.push(d.data() as CMSTestSeriesPack));
+        if (items.length > 0) callback(items);
+      },
+      (err) => console.warn('CMS series packs listener note:', err)
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveCmsSeriesPackToFirestore(pack: CMSTestSeriesPack): Promise<void> {
+  if (!db || !pack?.id) return;
+  try {
+    const ref = doc(db, COLLECTIONS.SERIES_PACKS, pack.id);
+    await setDoc(ref, pack, { merge: true });
+  } catch (err) {
+    console.warn('Error saving CMS series pack to Firestore:', err);
+  }
+}
+
+export async function deleteCmsSeriesPackFromFirestore(packId: string): Promise<void> {
+  if (!db || !packId) return;
+  try {
+    const ref = doc(db, COLLECTIONS.SERIES_PACKS, packId);
+    await deleteDoc(ref);
+  } catch (err) {
+    console.warn('Error deleting CMS series pack from Firestore:', err);
+  }
+}
+
+export async function fetchCmsSettingsFromFirestore(): Promise<CMSSiteSettings | null> {
+  if (!db) return null;
+  try {
+    const ref = doc(db, COLLECTIONS.CMS_SETTINGS, 'global');
+    return await withTimeout(
+      getDoc(ref).then(snap => snap.exists() ? (snap.data() as CMSSiteSettings) : null),
+      4000,
+      null
+    );
+  } catch (err) {
+    console.warn('Error fetching CMS settings from Firestore:', err);
+    return null;
+  }
+}
+
+export function subscribeToCmsSettings(callback: (settings: CMSSiteSettings) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      doc(db, COLLECTIONS.CMS_SETTINGS, 'global'),
+      (snap) => {
+        if (snap.exists()) {
+          callback(snap.data() as CMSSiteSettings);
+        }
+      },
+      (err) => console.warn('CMS settings listener note:', err)
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveCmsSettingsToFirestore(settings: CMSSiteSettings): Promise<void> {
+  if (!db) return;
+  try {
+    const ref = doc(db, COLLECTIONS.CMS_SETTINGS, 'global');
+    await setDoc(ref, settings, { merge: true });
+  } catch (err) {
+    console.warn('Error saving CMS settings to Firestore:', err);
+  }
+}
+
+// ==========================================
+// HERO SLIDER BANNERS & REALTIME SYNC
+// ==========================================
+export async function fetchSliderBannersFromFirestore(): Promise<SliderBanner[]> {
+  if (!db) return [];
+  try {
+    return await withTimeout(
+      getDocs(collection(db, COLLECTIONS.SLIDER_BANNERS)).then(snap => {
+        const items: SliderBanner[] = [];
+        snap.forEach(d => items.push(d.data() as SliderBanner));
+        return items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      }),
+      4000,
+      []
+    );
+  } catch (err) {
+    console.warn('Error fetching slider banners from Firestore:', err);
+    return [];
+  }
+}
+
+export function subscribeToSliderBanners(callback: (banners: SliderBanner[]) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      collection(db, COLLECTIONS.SLIDER_BANNERS),
+      (snap) => {
+        const items: SliderBanner[] = [];
+        snap.forEach(d => items.push(d.data() as SliderBanner));
+        if (items.length > 0) {
+          callback(items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)));
+        }
+      },
+      (err) => console.warn('Slider banners listener note:', err)
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+// ==========================================
+// REMOTE CONFIG (GLOBAL SERVER DRIVEN)
+// ==========================================
+export async function fetchRemoteConfigFromFirestore(): Promise<AppRemoteConfig | null> {
+  if (!db) return null;
+  try {
+    const ref = doc(db, COLLECTIONS.REMOTE_CONFIG, 'global');
+    return await withTimeout(
+      getDoc(ref).then(snap => snap.exists() ? (snap.data() as AppRemoteConfig) : null),
+      4000,
+      null
+    );
+  } catch (err) {
+    console.warn('Error fetching remote config from Firestore:', err);
+    return null;
+  }
+}
+
+export function subscribeToRemoteConfig(callback: (config: AppRemoteConfig) => void): Unsubscribe {
+  if (!db) return () => {};
+  try {
+    return onSnapshot(
+      doc(db, COLLECTIONS.REMOTE_CONFIG, 'global'),
+      (snap) => {
+        if (snap.exists()) {
+          callback(snap.data() as AppRemoteConfig);
+        }
+      },
+      (err) => console.warn('Remote config listener note:', err)
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveRemoteConfigToFirestore(config: Partial<AppRemoteConfig>): Promise<void> {
+  if (!db) return;
+  try {
+    const ref = doc(db, COLLECTIONS.REMOTE_CONFIG, 'global');
+    await setDoc(ref, {
+      ...config,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Error saving remote config to Firestore:', err);
+  }
+}
+
+// ==========================================
+// SEEDING INITIAL DATA TO FIRESTORE
+// ==========================================
+export async function seedInitialDataIfEmpty(): Promise<void> {
+  if (!db) return;
+  try {
+    // Check if tests exist
+    const testSnap = await getDocs(collection(db, COLLECTIONS.TESTS)).catch(() => null);
+    if (!testSnap || testSnap.empty) {
+      console.log('🌱 Seeding initial verified Mock Tests into Firestore...');
+      for (const t of INITIAL_MOCK_TESTS) {
+        await setDoc(doc(db, COLLECTIONS.TESTS, t.id), t, { merge: true });
+      }
+    }
+
+    // Check if questions exist
+    const qSnap = await getDocs(collection(db, COLLECTIONS.QUESTIONS)).catch(() => null);
+    if (!qSnap || qSnap.empty) {
+      console.log('🌱 Seeding initial verified Question Bank into Firestore...');
+      for (const q of INITIAL_QUESTIONS) {
+        await setDoc(doc(db, COLLECTIONS.QUESTIONS, q.id), q, { merge: true });
+      }
+    }
+
+    // Check if PYP papers exist
+    const pypSnap = await getDocs(collection(db, COLLECTIONS.PYP_PAPERS)).catch(() => null);
+    if (!pypSnap || pypSnap.empty) {
+      console.log('🌱 Seeding initial verified PYP Papers into Firestore...');
+      for (const p of INITIAL_PYP_PAPERS) {
+        await setDoc(doc(db, COLLECTIONS.PYP_PAPERS, p.id), p, { merge: true });
+      }
+    }
+
+    // Check if bundles exist
+    const bundleSnap = await getDocs(collection(db, COLLECTIONS.BUNDLES)).catch(() => null);
+    if (!bundleSnap || bundleSnap.empty) {
+      console.log('🌱 Seeding initial verified Test Series Bundles into Firestore...');
+      for (const b of OFFICIAL_BUNDLES_CATALOG) {
+        await setDoc(doc(db, COLLECTIONS.BUNDLES, b.id), b, { merge: true });
+      }
+    }
+
+    // Check if CMS pages exist
+    const pageSnap = await getDocs(collection(db, COLLECTIONS.PAGES)).catch(() => null);
+    if (!pageSnap || pageSnap.empty) {
+      for (const page of INITIAL_CMS_PAGES) {
+        await setDoc(doc(db, COLLECTIONS.PAGES, page.id), page, { merge: true });
+      }
+    }
+
+    // Check if CMS posts exist
+    const postSnap = await getDocs(collection(db, COLLECTIONS.POSTS)).catch(() => null);
+    if (!postSnap || postSnap.empty) {
+      for (const post of INITIAL_CMS_POSTS) {
+        await setDoc(doc(db, COLLECTIONS.POSTS, post.id), post, { merge: true });
+      }
+    }
+
+    // Check if CMS series packs exist
+    const seriesSnap = await getDocs(collection(db, COLLECTIONS.SERIES_PACKS)).catch(() => null);
+    if (!seriesSnap || seriesSnap.empty) {
+      for (const pack of INITIAL_CMS_SERIES_PACKS) {
+        await setDoc(doc(db, COLLECTIONS.SERIES_PACKS, pack.id), pack, { merge: true });
+      }
+    }
+
+    // Check if CMS settings exist
+    const settingsSnap = await getDoc(doc(db, COLLECTIONS.CMS_SETTINGS, 'global')).catch(() => null);
+    if (!settingsSnap || !settingsSnap.exists()) {
+      await setDoc(doc(db, COLLECTIONS.CMS_SETTINGS, 'global'), INITIAL_CMS_SETTINGS, { merge: true });
+    }
+
+    // Check if slider banners exist
+    const bannerSnap = await getDocs(collection(db, COLLECTIONS.SLIDER_BANNERS)).catch(() => null);
+    if (!bannerSnap || bannerSnap.empty) {
+      for (const banner of DEFAULT_SLIDER_BANNERS) {
+        await setDoc(doc(db, COLLECTIONS.SLIDER_BANNERS, banner.id), banner, { merge: true });
+      }
+    }
+
+    // Check if remote config exists
+    const configSnap = await getDoc(doc(db, COLLECTIONS.REMOTE_CONFIG, 'global')).catch(() => null);
+    if (!configSnap || !configSnap.exists()) {
+      await setDoc(doc(db, COLLECTIONS.REMOTE_CONFIG, 'global'), DEFAULT_REMOTE_CONFIG, { merge: true });
+    }
+  } catch (err) {
+    console.warn('Initial seeding note:', err);
   }
 }
 
@@ -342,7 +823,7 @@ export async function migrateAllLocalDataToFirestore(params: {
     // 1. Sync Questions in small chunks
     for (const q of questions) {
       if (q && q.id) {
-        const qRef = doc(db, QUESTIONS_COLLECTION, q.id);
+        const qRef = doc(db, COLLECTIONS.QUESTIONS, q.id);
         await setDoc(qRef, q, { merge: true });
         qCount++;
       }
@@ -355,7 +836,7 @@ export async function migrateAllLocalDataToFirestore(params: {
     // 2. Sync Tests
     for (const t of tests) {
       if (t && t.id) {
-        const tRef = doc(db, TESTS_COLLECTION, t.id);
+        const tRef = doc(db, COLLECTIONS.TESTS, t.id);
         await setDoc(tRef, t, { merge: true });
         tCount++;
       }
@@ -368,7 +849,7 @@ export async function migrateAllLocalDataToFirestore(params: {
     // 3. Sync Bundles
     for (const b of bundles) {
       if (b && b.id) {
-        const bRef = doc(db, BUNDLES_COLLECTION, b.id);
+        const bRef = doc(db, COLLECTIONS.BUNDLES, b.id);
         await setDoc(bRef, b, { merge: true });
         bCount++;
       }
@@ -381,7 +862,7 @@ export async function migrateAllLocalDataToFirestore(params: {
     // 4. Sync PYP Papers
     for (const p of pypPapers) {
       if (p && p.id) {
-        const pRef = doc(db, PYP_PAPERS_COLLECTION, p.id);
+        const pRef = doc(db, COLLECTIONS.PYP_PAPERS, p.id);
         await setDoc(pRef, p, { merge: true });
         pCount++;
       }
@@ -394,7 +875,7 @@ export async function migrateAllLocalDataToFirestore(params: {
     // 5. Sync Attempts
     for (const a of attempts) {
       if (a && a.id) {
-        const aRef = doc(db, ATTEMPTS_COLLECTION, a.id);
+        const aRef = doc(db, COLLECTIONS.ATTEMPTS, a.id);
         await setDoc(aRef, a, { merge: true });
         aCount++;
       }
@@ -427,12 +908,10 @@ export async function migrateAllLocalDataToFirestore(params: {
   }
 }
 
-// ==========================================
-// TEST ATTEMPTS & LEADERBOARD
-// ==========================================
 export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void> {
+  if (!db || !attempt?.id) return;
   try {
-    const attemptDocRef = doc(db, ATTEMPTS_COLLECTION, attempt.id);
+    const attemptDocRef = doc(db, COLLECTIONS.ATTEMPTS, attempt.id);
     await setDoc(attemptDocRef, {
       ...attempt,
       submittedAtServer: serverTimestamp()
@@ -443,9 +922,9 @@ export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void
 }
 
 export async function fetchLeaderboardFromFirestore(testId?: string): Promise<TestAttempt[]> {
+  if (!db) return [];
   try {
-    let q = collection(db, ATTEMPTS_COLLECTION);
-    const snap = await getDocs(q);
+    const snap = await getDocs(collection(db, COLLECTIONS.ATTEMPTS));
     const items: TestAttempt[] = [];
     snap.forEach(d => {
       const data = d.data() as TestAttempt;
@@ -453,9 +932,36 @@ export async function fetchLeaderboardFromFirestore(testId?: string): Promise<Te
         items.push(data);
       }
     });
-    return items.sort((a, b) => b.score - a.score);
+    return items.sort((a, b) => (b.score || 0) - (a.score || 0));
   } catch (err) {
     console.warn('Error fetching leaderboard from Firestore:', err);
     return [];
+  }
+}
+
+export async function purgeFirestoreDemoData(): Promise<void> {
+  if (!db) return;
+  try {
+    const testSnap = await getDocs(collection(db, COLLECTIONS.TESTS)).catch(() => null);
+    if (testSnap && !testSnap.empty) {
+      await Promise.allSettled(testSnap.docs.map(d => deleteDoc(d.ref)));
+    }
+
+    const qSnap = await getDocs(collection(db, COLLECTIONS.QUESTIONS)).catch(() => null);
+    if (qSnap && !qSnap.empty) {
+      await Promise.allSettled(qSnap.docs.map(d => deleteDoc(d.ref)));
+    }
+
+    const pypSnap = await getDocs(collection(db, COLLECTIONS.PYP_PAPERS)).catch(() => null);
+    if (pypSnap && !pypSnap.empty) {
+      await Promise.allSettled(pypSnap.docs.map(d => deleteDoc(d.ref)));
+    }
+
+    const bundleSnap = await getDocs(collection(db, COLLECTIONS.BUNDLES)).catch(() => null);
+    if (bundleSnap && !bundleSnap.empty) {
+      await Promise.allSettled(bundleSnap.docs.map(d => deleteDoc(d.ref)));
+    }
+  } catch (err) {
+    console.warn('Error purging Firestore demo data:', err);
   }
 }

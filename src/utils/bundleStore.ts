@@ -5,6 +5,7 @@ import {
   saveBundleToFirestore,
   deleteBundleFromFirestore,
   purgeFirestoreDemoData,
+  subscribeToBundles
 } from '../firebase/firestoreService';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 
@@ -59,6 +60,32 @@ export const getAdminHeaders = (): Record<string, string> => {
   } catch {}
   return headers;
 };
+
+// Automatic real-time cross-browser Firestore subscription for bundles
+if (typeof window !== 'undefined') {
+  try {
+    subscribeToBundles((firestoreBundles) => {
+      if (Array.isArray(firestoreBundles) && firestoreBundles.length > 0 && !isDemoDataPurged()) {
+        const deletedSet = getDeletedBundleIds();
+        const map = new Map<string, TestSeriesBundle>();
+        OFFICIAL_BUNDLES_CATALOG.forEach(b => {
+          if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
+            map.set(b.id, { ...b });
+          }
+        });
+        firestoreBundles.forEach(b => {
+          if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
+            const base = map.get(b.id) || b;
+            map.set(b.id, mergeBundleEntities(base, b));
+          }
+        });
+        const merged = Array.from(map.values());
+        saveStoredBundles(merged);
+        window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: merged }));
+      }
+    });
+  } catch {}
+}
 
 /**
  * Intelligent bundle entity merger that never wipes official curriculum items with empty arrays

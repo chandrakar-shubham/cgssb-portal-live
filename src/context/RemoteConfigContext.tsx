@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AppRemoteConfig, DEFAULT_REMOTE_CONFIG } from '../types';
+import {
+  fetchRemoteConfigFromFirestore,
+  saveRemoteConfigToFirestore,
+  subscribeToRemoteConfig
+} from '../firebase/firestoreService';
 
 interface RemoteConfigContextType {
   config: AppRemoteConfig;
@@ -43,61 +48,73 @@ export const RemoteConfigProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const refreshConfig = useCallback(async () => {
     try {
-      const res = await fetch('/api/config/remote');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.config) {
-          const merged: AppRemoteConfig = {
-            ...DEFAULT_REMOTE_CONFIG,
-            ...data.config,
-            featureFlags: { ...DEFAULT_REMOTE_CONFIG.featureFlags, ...(data.config.featureFlags || {}) },
-            maintenanceMode: { ...DEFAULT_REMOTE_CONFIG.maintenanceMode, ...(data.config.maintenanceMode || {}) },
-            globalAlertBanner: { ...DEFAULT_REMOTE_CONFIG.globalAlertBanner, ...(data.config.globalAlertBanner || {}) },
-            examEngineRules: { ...DEFAULT_REMOTE_CONFIG.examEngineRules, ...(data.config.examEngineRules || {}) },
-            pricingConfig: { ...DEFAULT_REMOTE_CONFIG.pricingConfig, ...(data.config.pricingConfig || {}) },
-            brandingConfig: { ...DEFAULT_REMOTE_CONFIG.brandingConfig, ...(data.config.brandingConfig || {}) },
-          };
-          setConfig(merged);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(merged));
-          }
+      const remote = await fetchRemoteConfigFromFirestore();
+      if (remote) {
+        const merged: AppRemoteConfig = {
+          ...DEFAULT_REMOTE_CONFIG,
+          ...remote,
+          featureFlags: { ...DEFAULT_REMOTE_CONFIG.featureFlags, ...(remote.featureFlags || {}) },
+          maintenanceMode: { ...DEFAULT_REMOTE_CONFIG.maintenanceMode, ...(remote.maintenanceMode || {}) },
+          globalAlertBanner: { ...DEFAULT_REMOTE_CONFIG.globalAlertBanner, ...(remote.globalAlertBanner || {}) },
+          examEngineRules: { ...DEFAULT_REMOTE_CONFIG.examEngineRules, ...(remote.examEngineRules || {}) },
+          pricingConfig: { ...DEFAULT_REMOTE_CONFIG.pricingConfig, ...(remote.pricingConfig || {}) },
+          brandingConfig: { ...DEFAULT_REMOTE_CONFIG.brandingConfig, ...(remote.brandingConfig || {}) },
+        };
+        setConfig(merged);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(merged));
         }
       }
     } catch (err) {
-      console.warn('Could not reach remote config endpoint, using cached state:', err);
+      console.warn('Could not reach remote config Firestore, using cached state:', err);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  // Real-time Cloud Firestore subscription
   useEffect(() => {
+    const unsubscribe = subscribeToRemoteConfig((remote) => {
+      const merged: AppRemoteConfig = {
+        ...DEFAULT_REMOTE_CONFIG,
+        ...remote,
+        featureFlags: { ...DEFAULT_REMOTE_CONFIG.featureFlags, ...(remote.featureFlags || {}) },
+        maintenanceMode: { ...DEFAULT_REMOTE_CONFIG.maintenanceMode, ...(remote.maintenanceMode || {}) },
+        globalAlertBanner: { ...DEFAULT_REMOTE_CONFIG.globalAlertBanner, ...(remote.globalAlertBanner || {}) },
+        examEngineRules: { ...DEFAULT_REMOTE_CONFIG.examEngineRules, ...(remote.examEngineRules || {}) },
+        pricingConfig: { ...DEFAULT_REMOTE_CONFIG.pricingConfig, ...(remote.pricingConfig || {}) },
+        brandingConfig: { ...DEFAULT_REMOTE_CONFIG.brandingConfig, ...(remote.brandingConfig || {}) },
+      };
+      setConfig(merged);
+      setIsLoading(false);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(merged));
+      }
+    });
+
     refreshConfig();
-    // Re-check remote config every 60 seconds
-    const interval = setInterval(refreshConfig, 60000);
-    return () => clearInterval(interval);
+    return () => unsubscribe();
   }, [refreshConfig]);
 
   const updateConfig = async (newConfig: Partial<AppRemoteConfig>): Promise<boolean> => {
     try {
-      const res = await fetch('/api/admin/config/remote', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'cgssb_admin_2026',
-        },
-        body: JSON.stringify({ config: newConfig }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.config) {
-          setConfig(data.config);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(data.config));
-          }
-          return true;
-        }
+      const merged: AppRemoteConfig = {
+        ...config,
+        ...newConfig,
+        featureFlags: { ...config.featureFlags, ...(newConfig.featureFlags || {}) },
+        maintenanceMode: { ...config.maintenanceMode, ...(newConfig.maintenanceMode || {}) },
+        globalAlertBanner: { ...config.globalAlertBanner, ...(newConfig.globalAlertBanner || {}) },
+        examEngineRules: { ...config.examEngineRules, ...(newConfig.examEngineRules || {}) },
+        pricingConfig: { ...config.pricingConfig, ...(newConfig.pricingConfig || {}) },
+        brandingConfig: { ...config.brandingConfig, ...(newConfig.brandingConfig || {}) },
+        updatedAt: new Date().toISOString(),
+      };
+      setConfig(merged);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(merged));
       }
-      return false;
+      await saveRemoteConfigToFirestore(merged);
+      return true;
     } catch (err) {
       console.error('Failed to update remote config:', err);
       return false;
@@ -106,24 +123,12 @@ export const RemoteConfigProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const resetToDefaults = async (): Promise<boolean> => {
     try {
-      const res = await fetch('/api/admin/config/reset', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'cgssb_admin_2026',
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.config) {
-          setConfig(data.config);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(data.config));
-          }
-          return true;
-        }
+      setConfig(DEFAULT_REMOTE_CONFIG);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(DEFAULT_REMOTE_CONFIG));
       }
-      return false;
+      await saveRemoteConfigToFirestore(DEFAULT_REMOTE_CONFIG);
+      return true;
     } catch (err) {
       console.error('Failed to reset remote config:', err);
       return false;

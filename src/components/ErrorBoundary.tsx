@@ -25,6 +25,22 @@ export class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error caught by ErrorBoundary:', error, errorInfo);
     this.setState({ errorInfo });
+
+    // Automatic auto-heal for stale bundle chunk errors
+    const isChunkError =
+      error?.message?.includes('Failed to fetch dynamically imported module') ||
+      error?.message?.includes('Importing a module script failed') ||
+      error?.name === 'ChunkLoadError';
+
+    if (isChunkError && typeof window !== 'undefined') {
+      const reloadKey = 'cgtest_auto_chunk_heal';
+      if (!sessionStorage.getItem(reloadKey)) {
+        sessionStorage.setItem(reloadKey, 'true');
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      }
+    }
   }
 
   private handleReload = () => {

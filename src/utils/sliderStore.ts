@@ -1,8 +1,22 @@
 import { SliderBanner } from '../types';
 import { db } from '../firebase/config';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { subscribeToSliderBanners } from '../firebase/firestoreService';
 
 const SLIDER_STORAGE_KEY = 'cgtest_slider_banners_v1';
+
+// Auto-subscribe to Firestore real-time banner updates across devices
+if (typeof window !== 'undefined') {
+  try {
+    subscribeToSliderBanners((remoteBanners) => {
+      if (Array.isArray(remoteBanners) && remoteBanners.length > 0) {
+        const sorted = remoteBanners.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+        localStorage.setItem(SLIDER_STORAGE_KEY, JSON.stringify(sorted));
+        window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
+      }
+    });
+  } catch {}
+}
 
 export const DEFAULT_SLIDER_BANNERS: SliderBanner[] = [
   {

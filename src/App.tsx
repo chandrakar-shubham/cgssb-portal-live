@@ -13,17 +13,19 @@ import { PYPSection } from './components/PYPSection';
 import { AnalyticsHub } from './components/AnalyticsHub';
 import { ExamEngine } from './components/ExamEngine';
 import { SolutionsScreen } from './components/SolutionsScreen';
-const AdminQuestionBank = React.lazy(() => import('./components/AdminQuestionBank').then(m => ({ default: m.AdminQuestionBank })));
-const AdminPYPManager = React.lazy(() => import('./components/AdminPYPManager').then(m => ({ default: m.AdminPYPManager })));
-const AdminAITestCreator = React.lazy(() => import('./components/AdminAITestCreator').then(m => ({ default: m.AdminAITestCreator })));
-const AdminTestCatalog = React.lazy(() => import('./components/AdminTestCatalog').then(m => ({ default: m.AdminTestCatalog })));
-const AdminAndroidAPIManager = React.lazy(() => import('./components/AdminAndroidAPIManager').then(m => ({ default: m.AdminAndroidAPIManager })));
-const AdminPortalLogin = React.lazy(() => import('./components/AdminPortalLogin').then(m => ({ default: m.AdminPortalLogin })));
-const AdminCurrentAffairsStudio = React.lazy(() => import('./components/AdminCurrentAffairsStudio').then(m => ({ default: m.AdminCurrentAffairsStudio })));
-const AdminCMSDashboard = React.lazy(() => import('./components/AdminCMSDashboard').then(m => ({ default: m.AdminCMSDashboard })));
-const AdminDatabaseView = React.lazy(() => import('./components/AdminDatabaseView').then(m => ({ default: m.AdminDatabaseView })));
-const AdminHeader = React.lazy(() => import('./components/AdminHeader').then(m => ({ default: m.AdminHeader })));
-const AdminSubNav = React.lazy(() => import('./components/AdminSubNav').then(m => ({ default: m.AdminSubNav })));
+import { lazyWithRetry } from './utils/lazyWithRetry';
+
+const AdminQuestionBank = lazyWithRetry(() => import('./components/AdminQuestionBank').then(m => ({ default: m.AdminQuestionBank })));
+const AdminPYPManager = lazyWithRetry(() => import('./components/AdminPYPManager').then(m => ({ default: m.AdminPYPManager })));
+const AdminAITestCreator = lazyWithRetry(() => import('./components/AdminAITestCreator').then(m => ({ default: m.AdminAITestCreator })));
+const AdminTestCatalog = lazyWithRetry(() => import('./components/AdminTestCatalog').then(m => ({ default: m.AdminTestCatalog })));
+const AdminAndroidAPIManager = lazyWithRetry(() => import('./components/AdminAndroidAPIManager').then(m => ({ default: m.AdminAndroidAPIManager })));
+const AdminPortalLogin = lazyWithRetry(() => import('./components/AdminPortalLogin').then(m => ({ default: m.AdminPortalLogin })));
+const AdminCurrentAffairsStudio = lazyWithRetry(() => import('./components/AdminCurrentAffairsStudio').then(m => ({ default: m.AdminCurrentAffairsStudio })));
+const AdminCMSDashboard = lazyWithRetry(() => import('./components/AdminCMSDashboard').then(m => ({ default: m.AdminCMSDashboard })));
+const AdminDatabaseView = lazyWithRetry(() => import('./components/AdminDatabaseView').then(m => ({ default: m.AdminDatabaseView })));
+const AdminHeader = lazyWithRetry(() => import('./components/AdminHeader').then(m => ({ default: m.AdminHeader })));
+const AdminSubNav = lazyWithRetry(() => import('./components/AdminSubNav').then(m => ({ default: m.AdminSubNav })));
 import { AuthModal } from './components/AuthModal';
 import { MilestoneCelebrationModal } from './components/MilestoneCelebrationModal';
 import { ExamInstructionsScreen } from './components/ExamInstructionsScreen';
@@ -35,29 +37,29 @@ import { BookmarksManager } from './components/BookmarksManager';
 import { ChhattisgarhiRevisionModule } from './components/ChhattisgarhiRevisionModule';
 import { StudentProfileModal } from './components/StudentProfileModal';
 import { StudentReferral } from './components/StudentReferral';
-const AdminToolsAndBackupsModal = React.lazy(() => import('./components/AdminToolsAndBackupsModal').then(m => ({ default: m.AdminToolsAndBackupsModal })));
-const AdminCMSPageBuilder = React.lazy(() => import('./components/AdminCMSPageBuilder').then(m => ({ default: m.AdminCMSPageBuilder })));
+const AdminToolsAndBackupsModal = lazyWithRetry(() => import('./components/AdminToolsAndBackupsModal').then(m => ({ default: m.AdminToolsAndBackupsModal })));
+const AdminCMSPageBuilder = lazyWithRetry(() => import('./components/AdminCMSPageBuilder').then(m => ({ default: m.AdminCMSPageBuilder })));
 import { DynamicPageRenderer } from './components/DynamicPageRenderer';
-const AdminCMSPostManager = React.lazy(() => import('./components/AdminCMSPostManager').then(m => ({ default: m.AdminCMSPostManager })));
+const AdminCMSPostManager = lazyWithRetry(() => import('./components/AdminCMSPostManager').then(m => ({ default: m.AdminCMSPostManager })));
 import { DynamicPostRenderer } from './components/DynamicPostRenderer';
-const AdminCMSTestSeriesManager = React.lazy(() => import('./components/AdminCMSTestSeriesManager').then(m => ({ default: m.AdminCMSTestSeriesManager })));
-const AdminCMSThemeCustomizer = React.lazy(() => import('./components/AdminCMSThemeCustomizer').then(m => ({ default: m.AdminCMSThemeCustomizer })));
-const AdminWorkspaceLayout = React.lazy(() => import('./components/AdminWorkspaceLayout').then(m => ({ default: m.AdminWorkspaceLayout })));
-const AdminBundleStudio = React.lazy(() => import('./components/AdminBundleStudio').then(m => ({ default: m.AdminBundleStudio })));
+const AdminCMSTestSeriesManager = lazyWithRetry(() => import('./components/AdminCMSTestSeriesManager').then(m => ({ default: m.AdminCMSTestSeriesManager })));
+const AdminCMSThemeCustomizer = lazyWithRetry(() => import('./components/AdminCMSThemeCustomizer').then(m => ({ default: m.AdminCMSThemeCustomizer })));
+const AdminWorkspaceLayout = lazyWithRetry(() => import('./components/AdminWorkspaceLayout').then(m => ({ default: m.AdminWorkspaceLayout })));
+const AdminBundleStudio = lazyWithRetry(() => import('./components/AdminBundleStudio').then(m => ({ default: m.AdminBundleStudio })));
 import { UniversalIngestionStudio, IngestionContentType } from './components/UniversalIngestionStudio';
 import { ChapterTestSection } from './components/ChapterTestSection';
 import { PracticeSetSection } from './components/PracticeSetSection';
 import { SEOQuestionView } from './components/SEOQuestionView';
-const AdminChapterTestManager = React.lazy(() => import('./components/AdminChapterTestManager').then(m => ({ default: m.AdminChapterTestManager })));
-const AdminPracticeSetManager = React.lazy(() => import('./components/AdminPracticeSetManager').then(m => ({ default: m.AdminPracticeSetManager })));
-const AdminStudentManagement = React.lazy(() => import('./components/AdminStudentManagement').then(m => ({ default: m.AdminStudentManagement })));
-const AdminRoleManagement = React.lazy(() => import('./components/AdminRoleManagement').then(m => ({ default: m.AdminRoleManagement })));
+const AdminChapterTestManager = lazyWithRetry(() => import('./components/AdminChapterTestManager').then(m => ({ default: m.AdminChapterTestManager })));
+const AdminPracticeSetManager = lazyWithRetry(() => import('./components/AdminPracticeSetManager').then(m => ({ default: m.AdminPracticeSetManager })));
+const AdminStudentManagement = lazyWithRetry(() => import('./components/AdminStudentManagement').then(m => ({ default: m.AdminStudentManagement })));
+const AdminRoleManagement = lazyWithRetry(() => import('./components/AdminRoleManagement').then(m => ({ default: m.AdminRoleManagement })));
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
 import { syncBundlesFromFirestore, cleanTestFromAllBundles, isDemoDataPurged } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
-const AdminRemoteConfigStudio = React.lazy(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
-const AdminSliderStudio = React.lazy(() => import('./components/AdminSliderStudio').then(m => ({ default: m.AdminSliderStudio })));
+const AdminRemoteConfigStudio = lazyWithRetry(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
+const AdminSliderStudio = lazyWithRetry(() => import('./components/AdminSliderStudio').then(m => ({ default: m.AdminSliderStudio })));
 import { useTestManager } from './hooks/useTestManager';
 import { useQuestionManager } from './hooks/useQuestionManager';
 import { usePypManager } from './hooks/usePypManager';
@@ -118,7 +120,8 @@ import {
   deleteTestFromFirestore,
   fetchPypPapersFromFirestore,
   savePypPaperToFirestore,
-  deletePypPaperFromFirestore
+  deletePypPaperFromFirestore,
+  seedInitialDataIfEmpty
 } from './firebase/firestoreService';
 
 function MainApp() {
@@ -525,8 +528,9 @@ function MainApp() {
   // Fetch initial data from server or Firebase Firestore
   useEffect(() => {
     async function loadData() {
-      // 1. Verify Firestore Connection
+      // 1. Verify Firestore Connection and seed initial verified catalog if database is empty
       testConnection().catch(() => null);
+      seedInitialDataIfEmpty().catch(() => null);
 
       try {
         const [testsRes, pypRes, qRes, firestoreTests, firestoreQuestions, firestorePyp] = await Promise.all([
