@@ -15,22 +15,6 @@ function getDeletedIds(key: string): Set<string> {
   return new Set<string>();
 }
 
-function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
-  const deletedSet = getDeletedIds(deletedKey);
-  const map = new Map<string, T>();
-  if (!isDemoDataPurged()) {
-    initial.forEach(item => {
-      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
-    });
-  }
-  saved.forEach(item => {
-    if (item && item.id && !deletedSet.has(item.id)) {
-      map.set(item.id, item);
-    }
-  });
-  return Array.from(map.values());
-}
-
 export function useQuestionManager() {
   const [questions, setQuestions] = useState<Question[]>(() => {
     try {
@@ -46,16 +30,15 @@ export function useQuestionManager() {
         return [];
       }
       const saved = localStorage.getItem('cgssb_questions');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          const migrated = parsed.map(migrateLegacyQuestion);
-          return mergeWithInitial(INITIAL_QUESTIONS, migrated, 'cgssb_deleted_questions');
+          return parsed.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
         }
       }
+      return INITIAL_QUESTIONS.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
     } catch {}
-    if (isDemoDataPurged()) return [];
-    return mergeWithInitial(INITIAL_QUESTIONS, [], 'cgssb_deleted_questions');
+    return isDemoDataPurged() ? [] : INITIAL_QUESTIONS.map(migrateLegacyQuestion);
   });
 
   // Listen for broadcast question updates (e.g. Purge/Restore)
@@ -100,13 +83,11 @@ export function useQuestionManager() {
   };
 
   const syncQuestions = () => {
-    setQuestions(prev => {
-      const updated = mergeWithInitial(INITIAL_QUESTIONS, prev, 'cgssb_deleted_questions');
-      try {
-        localStorage.setItem('cgssb_questions', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    if (isDemoDataPurged()) return;
+    setQuestions(INITIAL_QUESTIONS.map(migrateLegacyQuestion));
+    try {
+      localStorage.setItem('cgssb_questions', JSON.stringify(INITIAL_QUESTIONS.map(migrateLegacyQuestion)));
+    } catch {}
   };
 
   return {
@@ -116,6 +97,5 @@ export function useQuestionManager() {
     updateQuestion,
     deleteQuestion,
     syncQuestions,
-    mergeWithInitial,
   };
 }

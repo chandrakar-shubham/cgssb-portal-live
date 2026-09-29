@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
+import { TestSeriesBundle } from '../data/bundleCatalog';
 import { isFirebaseConfigured } from '../firebase/config';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
 import { migrateAllLocalDataToFirestore, MigrationSummary } from '../firebase/firestoreService';
@@ -196,7 +197,15 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [migrationProgress, setMigrationProgress] = useState<{ current: number; total: number } | null>(null);
   const [migrationResult, setMigrationResult] = useState<MigrationSummary | null>(null);
 
-  const storedBundles = useMemo(() => getStoredBundles(), []);
+  const [storedBundles, setStoredBundles] = useState<TestSeriesBundle[]>(() => getStoredBundles());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setStoredBundles(getStoredBundles());
+    };
+    window.addEventListener('cgssb-bundles-updated', handleUpdate);
+    return () => window.removeEventListener('cgssb-bundles-updated', handleUpdate);
+  }, []);
 
   // Compute FAANG Database Analytics
   const analytics = useMemo(() => {

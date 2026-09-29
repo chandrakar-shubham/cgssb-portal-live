@@ -14,22 +14,6 @@ function getDeletedIds(key: string): Set<string> {
   return new Set<string>();
 }
 
-function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
-  const deletedSet = getDeletedIds(deletedKey);
-  const map = new Map<string, T>();
-  if (!isDemoDataPurged()) {
-    initial.forEach(item => {
-      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
-    });
-  }
-  saved.forEach(item => {
-    if (item && item.id && !deletedSet.has(item.id)) {
-      map.set(item.id, item);
-    }
-  });
-  return Array.from(map.values());
-}
-
 export function useTestManager() {
   const [tests, setTests] = useState<MockTest[]>(() => {
     try {
@@ -43,16 +27,16 @@ export function useTestManager() {
         return [];
       }
       const saved = localStorage.getItem('cgssb_tests');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_MOCK_TESTS, parsed, 'cgssb_deleted_tests').filter(t => !deletedSet.has(t.id));
+          return parsed.filter((t: MockTest) => !deletedSet.has(t.id));
         }
       }
+      // Only use INITIAL_MOCK_TESTS if first ever run and not purged
+      return INITIAL_MOCK_TESTS.filter(t => !deletedSet.has(t.id));
     } catch {}
-    if (isDemoDataPurged()) return [];
-    const deletedSet = getDeletedIds('cgssb_deleted_tests');
-    return mergeWithInitial(INITIAL_MOCK_TESTS, [], 'cgssb_deleted_tests').filter(t => !deletedSet.has(t.id));
+    return isDemoDataPurged() ? [] : INITIAL_MOCK_TESTS;
   });
 
   // Listen for broadcast test updates (e.g. Purge/Restore)
@@ -119,13 +103,11 @@ export function useTestManager() {
   };
 
   const syncDefaultCatalog = () => {
-    setTests(prev => {
-      const updated = mergeWithInitial(INITIAL_MOCK_TESTS, prev, 'cgssb_deleted_tests');
-      try {
-        localStorage.setItem('cgssb_tests', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    if (isDemoDataPurged()) return;
+    setTests(INITIAL_MOCK_TESTS);
+    try {
+      localStorage.setItem('cgssb_tests', JSON.stringify(INITIAL_MOCK_TESTS));
+    } catch {}
   };
 
   return {
@@ -136,6 +118,6 @@ export function useTestManager() {
     deleteTest,
     togglePublishTest,
     syncDefaultCatalog,
-    mergeWithInitial,
   };
 }
+

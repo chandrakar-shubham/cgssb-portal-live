@@ -232,6 +232,9 @@ export const saveStoredBundles = (bundles: TestSeriesBundle[]): void => {
 export const syncBundlesFromFirestore = async (
   remoteUrl?: string
 ): Promise<{ list: TestSeriesBundle[]; count: number; source: string }> => {
+  if (isDemoDataPurged()) {
+    return { list: [], count: 0, source: 'purged' };
+  }
   const current = getStoredBundles();
   const deletedSet = getDeletedBundleIds();
   const map = new Map<string, TestSeriesBundle>();

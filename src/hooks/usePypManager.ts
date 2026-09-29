@@ -14,22 +14,6 @@ function getDeletedIds(key: string): Set<string> {
   return new Set<string>();
 }
 
-function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
-  const deletedSet = getDeletedIds(deletedKey);
-  const map = new Map<string, T>();
-  if (!isDemoDataPurged()) {
-    initial.forEach(item => {
-      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
-    });
-  }
-  saved.forEach(item => {
-    if (item && item.id && !deletedSet.has(item.id)) {
-      map.set(item.id, item);
-    }
-  });
-  return Array.from(map.values());
-}
-
 export function usePypManager() {
   const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
     try {
@@ -45,16 +29,15 @@ export function usePypManager() {
         return [];
       }
       const saved = localStorage.getItem('cgssb_pyp');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return mergeWithInitial(INITIAL_PYP_PAPERS, parsed, 'cgssb_deleted_pyp').filter(p => !deletedSet.has(p.id));
+          return parsed.filter(p => !deletedSet.has(p.id));
         }
       }
+      return INITIAL_PYP_PAPERS.filter(p => !deletedSet.has(p.id));
     } catch {}
-    if (isDemoDataPurged()) return [];
-    const deletedSet = getDeletedIds('cgssb_deleted_pyp');
-    return mergeWithInitial(INITIAL_PYP_PAPERS, [], 'cgssb_deleted_pyp').filter(p => !deletedSet.has(p.id));
+    return isDemoDataPurged() ? [] : INITIAL_PYP_PAPERS;
   });
 
   // Listen for broadcast pyp updates (e.g. Purge/Restore)
@@ -106,13 +89,11 @@ export function usePypManager() {
   };
 
   const syncPyp = () => {
-    setPypPapers(prev => {
-      const updated = mergeWithInitial(INITIAL_PYP_PAPERS, prev, 'cgssb_deleted_pyp');
-      try {
-        localStorage.setItem('cgssb_pyp', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    if (isDemoDataPurged()) return;
+    setPypPapers(INITIAL_PYP_PAPERS);
+    try {
+      localStorage.setItem('cgssb_pyp', JSON.stringify(INITIAL_PYP_PAPERS));
+    } catch {}
   };
 
   return {
@@ -121,6 +102,5 @@ export function usePypManager() {
     addPypPaper,
     deletePypPaper,
     syncPyp,
-    mergeWithInitial,
   };
 }

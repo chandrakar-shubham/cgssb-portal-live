@@ -555,9 +555,13 @@ function MainApp() {
           const list = Array.isArray(t) ? t : (t?.tests || []);
           const filtered = list.filter((test: MockTest) => !deletedTests.has(test.id) && (!isPurged || !demoTestIds.has(test.id)));
           setTests(filtered);
-        } else if (firestoreTests && firestoreTests.length > 0) {
+        } else if (Array.isArray(firestoreTests)) {
           const filtered = firestoreTests.filter(t => !deletedTests.has(t.id) && (!isPurged || !demoTestIds.has(t.id)));
-          setTests(filtered);
+          if (filtered.length > 0 || isPurged) {
+            setTests(filtered);
+          }
+        } else if (isPurged) {
+          setTests([]);
         }
 
         if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
@@ -565,9 +569,13 @@ function MainApp() {
           const list = Array.isArray(q) ? q : (q?.questions || []);
           const filtered = list.filter((question: Question) => !deletedQs.has(question.id) && (!isPurged || !demoQIds.has(question.id)));
           setQuestions(filtered);
-        } else if (firestoreQuestions && firestoreQuestions.length > 0) {
+        } else if (Array.isArray(firestoreQuestions)) {
           const filtered = firestoreQuestions.filter(q => !deletedQs.has(q.id) && (!isPurged || !demoQIds.has(q.id)));
-          setQuestions(filtered);
+          if (filtered.length > 0 || isPurged) {
+            setQuestions(filtered);
+          }
+        } else if (isPurged) {
+          setQuestions([]);
         }
 
         if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
@@ -575,9 +583,13 @@ function MainApp() {
           const list = Array.isArray(p) ? p : (p?.papers || []);
           const filtered = list.filter((paper: PreviousYearPaper) => !deletedPyps.has(paper.id) && (!isPurged || !demoPypIds.has(paper.id)));
           setPypPapers(filtered);
-        } else if (firestorePyp && firestorePyp.length > 0) {
+        } else if (Array.isArray(firestorePyp)) {
           const filtered = firestorePyp.filter(p => !deletedPyps.has(p.id) && (!isPurged || !demoPypIds.has(p.id)));
-          setPypPapers(filtered);
+          if (filtered.length > 0 || isPurged) {
+            setPypPapers(filtered);
+          }
+        } else if (isPurged) {
+          setPypPapers([]);
         }
 
         // Sync and refresh Test Series bundles from Cloud Firestore & server (only if not in purged state)
