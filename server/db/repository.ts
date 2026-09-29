@@ -121,12 +121,11 @@ export async function syncWithFirestore(): Promise<{
       qSnap.forEach((d: any) => {
         firestoreQuestions.push(d.data() as Question);
       });
-      const qMap = new Map<string, Question>();
-      localDb.questions.forEach(q => qMap.set(q.id, q));
-      firestoreQuestions.forEach(q => qMap.set(q.id, q));
-      localDb.questions = Array.from(qMap.values());
-    } else if (canServerWriteFirestore()) {
-      // Auto-seed initial questions to Firestore only if server has authenticated write credentials
+      localDb.questions = firestoreQuestions;
+    } else if (qSnap && qSnap.empty && localDb.demoDataPurged) {
+      localDb.questions = [];
+    } else if (canServerWriteFirestore() && !localDb.demoDataPurged) {
+      // Auto-seed initial questions to Firestore only on first startup if not purged
       for (const q of localDb.questions.slice(0, 50)) {
         await setDoc(doc(db, 'questions', q.id), q, { merge: true }).catch(() => null);
       }
@@ -139,11 +138,10 @@ export async function syncWithFirestore(): Promise<{
       tSnap.forEach((d: any) => {
         firestoreTests.push(d.data() as MockTest);
       });
-      const tMap = new Map<string, MockTest>();
-      localDb.mockTests.forEach(t => tMap.set(t.id, t));
-      firestoreTests.forEach(t => tMap.set(t.id, t));
-      localDb.mockTests = Array.from(tMap.values());
-    } else if (canServerWriteFirestore()) {
+      localDb.mockTests = firestoreTests;
+    } else if (tSnap && tSnap.empty && localDb.demoDataPurged) {
+      localDb.mockTests = [];
+    } else if (canServerWriteFirestore() && !localDb.demoDataPurged) {
       for (const t of localDb.mockTests) {
         await setDoc(doc(db, 'mockTests', t.id), t, { merge: true }).catch(() => null);
       }
