@@ -54,7 +54,7 @@ const AdminStudentManagement = React.lazy(() => import('./components/AdminStuden
 const AdminRoleManagement = React.lazy(() => import('./components/AdminRoleManagement').then(m => ({ default: m.AdminRoleManagement })));
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
-import { syncBundlesFromFirestore, cleanTestFromAllBundles } from './utils/bundleStore';
+import { syncBundlesFromFirestore, cleanTestFromAllBundles, isDemoDataPurged } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
 const AdminRemoteConfigStudio = React.lazy(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
 const AdminSliderStudio = React.lazy(() => import('./components/AdminSliderStudio').then(m => ({ default: m.AdminSliderStudio })));
@@ -445,7 +445,7 @@ function MainApp() {
   useEffect(() => {
     runTaxonomyMigration(INITIAL_QUESTIONS, INITIAL_ATTEMPTS);
 
-    // Listen for governance events (Test restore, Cascade publish)
+    // Listen for governance events (Test restore, Cascade publish, Data Purge/Restore)
     const handleRestored = (e: any) => {
       if (e.detail && e.detail.id) {
         setTests(prev => dedupeById([e.detail, ...prev]));
@@ -460,11 +460,29 @@ function MainApp() {
       }
     };
 
+    const handleTestsUpdated = (e: any) => {
+      if (Array.isArray(e.detail)) setTests(e.detail);
+    };
+
+    const handleQuestionsUpdated = (e: any) => {
+      if (Array.isArray(e.detail)) setQuestions(e.detail.map(migrateLegacyQuestion));
+    };
+
+    const handlePypUpdated = (e: any) => {
+      if (Array.isArray(e.detail)) setPypPapers(e.detail);
+    };
+
     window.addEventListener('cgssb-test-restored', handleRestored);
     window.addEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
+    window.addEventListener('cgssb-tests-updated', handleTestsUpdated);
+    window.addEventListener('cgssb-questions-updated', handleQuestionsUpdated);
+    window.addEventListener('cgssb-pyp-updated', handlePypUpdated);
     return () => {
       window.removeEventListener('cgssb-test-restored', handleRestored);
       window.removeEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
+      window.removeEventListener('cgssb-tests-updated', handleTestsUpdated);
+      window.removeEventListener('cgssb-questions-updated', handleQuestionsUpdated);
+      window.removeEventListener('cgssb-pyp-updated', handlePypUpdated);
     };
   }, []);
 
@@ -517,6 +535,11 @@ function MainApp() {
           fetchPypPapersFromFirestore().catch(() => [])
         ]);
 
+        const isPurged = isDemoDataPurged();
+        const demoTestIds = new Set(INITIAL_MOCK_TESTS.map(t => t.id));
+        const demoQIds = new Set(INITIAL_QUESTIONS.map(q => q.id));
+        const demoPypIds = new Set(INITIAL_PYP_PAPERS.map(p => p.id));
+
         const deletedTests = getDeletedIds('cgssb_deleted_tests');
         const deletedQs = getDeletedIds('cgssb_deleted_questions');
         const deletedPyps = getDeletedIds('cgssb_deleted_pyp');
@@ -524,35 +547,37 @@ function MainApp() {
         if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
           const t = await testsRes.json();
           const list = Array.isArray(t) ? t : (t?.tests || []);
-          if (list.length > 0) {
-            setTests(list.filter((test: MockTest) => !deletedTests.has(test.id)));
-          }
+          const filtered = list.filter((test: MockTest) => !deletedTests.has(test.id) && (!isPurged || !demoTestIds.has(test.id)));
+          setTests(filtered);
         } else if (firestoreTests && firestoreTests.length > 0) {
-          setTests(firestoreTests.filter(t => !deletedTests.has(t.id)));
+          const filtered = firestoreTests.filter(t => !deletedTests.has(t.id) && (!isPurged || !demoTestIds.has(t.id)));
+          setTests(filtered);
         }
 
         if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
           const q = await qRes.json();
           const list = Array.isArray(q) ? q : (q?.questions || []);
-          if (list.length > 0) {
-            setQuestions(list.filter((question: Question) => !deletedQs.has(question.id)));
-          }
+          const filtered = list.filter((question: Question) => !deletedQs.has(question.id) && (!isPurged || !demoQIds.has(question.id)));
+          setQuestions(filtered);
         } else if (firestoreQuestions && firestoreQuestions.length > 0) {
-          setQuestions(firestoreQuestions.filter(q => !deletedQs.has(q.id)));
+          const filtered = firestoreQuestions.filter(q => !deletedQs.has(q.id) && (!isPurged || !demoQIds.has(q.id)));
+          setQuestions(filtered);
         }
 
         if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
           const p = await pypRes.json();
           const list = Array.isArray(p) ? p : (p?.papers || []);
-          if (list.length > 0) {
-            setPypPapers(list.filter((paper: PreviousYearPaper) => !deletedPyps.has(paper.id)));
-          }
+          const filtered = list.filter((paper: PreviousYearPaper) => !deletedPyps.has(paper.id) && (!isPurged || !demoPypIds.has(paper.id)));
+          setPypPapers(filtered);
         } else if (firestorePyp && firestorePyp.length > 0) {
-          setPypPapers(firestorePyp.filter(p => !deletedPyps.has(p.id)));
+          const filtered = firestorePyp.filter(p => !deletedPyps.has(p.id) && (!isPurged || !demoPypIds.has(p.id)));
+          setPypPapers(filtered);
         }
 
-        // Sync and refresh Test Series bundles from Cloud Firestore & server
-        await syncBundlesFromFirestore().catch(() => null);
+        // Sync and refresh Test Series bundles from Cloud Firestore & server (only if not in purged state)
+        if (!isPurged) {
+          await syncBundlesFromFirestore().catch(() => null);
+        }
       } catch (err) {
         console.warn('Backend API unavailable or non-JSON response received. Falling back to local state:', err);
       }

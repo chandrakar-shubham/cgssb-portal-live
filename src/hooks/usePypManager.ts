@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PreviousYearPaper } from '../types';
 import { INITIAL_PYP_PAPERS } from '../mockData';
+import { isDemoDataPurged } from '../utils/bundleStore';
 
 function getDeletedIds(key: string): Set<string> {
   try {
@@ -16,9 +17,11 @@ function getDeletedIds(key: string): Set<string> {
 function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
   const deletedSet = getDeletedIds(deletedKey);
   const map = new Map<string, T>();
-  initial.forEach(item => {
-    if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
-  });
+  if (!isDemoDataPurged()) {
+    initial.forEach(item => {
+      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
+    });
+  }
   saved.forEach(item => {
     if (item && item.id && !deletedSet.has(item.id)) {
       map.set(item.id, item);
@@ -31,6 +34,16 @@ export function usePypManager() {
   const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
     try {
       const deletedSet = getDeletedIds('cgssb_deleted_pyp');
+      if (isDemoDataPurged()) {
+        const saved = localStorage.getItem('cgssb_pyp');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(p => !deletedSet.has(p.id));
+          }
+        }
+        return [];
+      }
       const saved = localStorage.getItem('cgssb_pyp');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -39,9 +52,21 @@ export function usePypManager() {
         }
       }
     } catch {}
+    if (isDemoDataPurged()) return [];
     const deletedSet = getDeletedIds('cgssb_deleted_pyp');
     return mergeWithInitial(INITIAL_PYP_PAPERS, [], 'cgssb_deleted_pyp').filter(p => !deletedSet.has(p.id));
   });
+
+  // Listen for broadcast pyp updates (e.g. Purge/Restore)
+  useEffect(() => {
+    const handleUpdate = (e: any) => {
+      if (Array.isArray(e.detail)) {
+        setPypPapers(e.detail);
+      }
+    };
+    window.addEventListener('cgssb-pyp-updated', handleUpdate);
+    return () => window.removeEventListener('cgssb-pyp-updated', handleUpdate);
+  }, []);
 
   useEffect(() => {
     try {

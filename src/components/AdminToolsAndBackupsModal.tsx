@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
-import { getStoredBundles } from '../utils/bundleStore';
+import { getStoredBundles, purgeAllDemoDatabaseData, restoreFactoryDemoData } from '../utils/bundleStore';
 import {
   Database,
   Download,
@@ -940,19 +940,32 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                   </label>
 
                   <button
-                    onClick={() => {
-                      if (window.confirm('Reset all mock tests and question banks to factory default? Any unexported local drafts will be overwritten.')) {
-                        localStorage.removeItem('cgssb_tests');
-                        localStorage.removeItem('cgssb_questions');
-                        localStorage.removeItem('cgssb_pyp');
-                        localStorage.removeItem('kavya_custom_hierarchy_v2');
+                    onClick={async () => {
+                      if (window.confirm('⚠️ TOTAL DATABASE PURGE:\n\nWipe ALL demo mock tests, demo PYQs, and dummy questions from database and server storage? This will leave your database 100% clean.')) {
+                        await purgeAllDemoDatabaseData();
+                        if (onRestoreSnapshot) {
+                          onRestoreSnapshot({ tests: [], questions: [], pypPapers: [] });
+                        }
+                        alert('Demo data successfully purged. Database is clean for production.');
+                      }
+                    }}
+                    className="inline-flex items-center px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition space-x-2 cursor-pointer shadow-lg shadow-rose-600/30"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Purge All Demo Data (Clean Slate)</span>
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('Reset all mock tests, PYQs, and question banks to factory default demo catalog?')) {
+                        await restoreFactoryDemoData();
                         window.location.reload();
                       }
                     }}
-                    className="inline-flex items-center px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold border border-rose-500/30 transition space-x-2 cursor-pointer"
+                    className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition space-x-2 cursor-pointer"
                   >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Purge Local Storage & Reload Master Catalog</span>
+                    <RefreshCw className="w-4 h-4 text-sky-400" />
+                    <span>Reload Master Demo Catalog</span>
                   </button>
                 </div>
               </div>

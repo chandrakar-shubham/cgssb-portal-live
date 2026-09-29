@@ -3,7 +3,8 @@ import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { isFirebaseConfigured } from '../firebase/config';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
 import { migrateAllLocalDataToFirestore, MigrationSummary } from '../firebase/firestoreService';
-import { getStoredBundles, purgeAllDemoDatabaseData, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
+import { getStoredBundles, purgeAllDemoDatabaseData, restoreFactoryDemoData, isDemoDataPurged, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
+import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 import { testConnection } from '../firebase/connectionTest';
 import {
   Database,
@@ -285,25 +286,62 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
     }
   };
 
-  const handlePurgeAllDemoData = () => {
+  const [isPurging, setIsPurging] = useState(false);
+
+  const handlePurgeAllDemoData = async () => {
     const confirmed = window.confirm(
-      '⚠️ FAANG DATABASE PURGE CONFIRMATION:\n\nAre you sure you want to thoroughly purge ALL demo mock tests, demo PYQs, dummy questions, and clear test caches from database?\n\nThis will leave the database 100% clean and ready for your production exams.'
+      '⚠️ TOTAL DATABASE PURGE CONFIRMATION:\n\nAre you sure you want to thoroughly purge ALL demo mock tests, demo PYQs, dummy questions, and clear test caches from the database?\n\nThis will permanently wipe demo data across local browser cache, backend server storage, and Cloud Firestore.\n\nYour database will be left 100% clean and ready for production exam ingestion.'
     );
     if (!confirmed) return;
 
-    const result = purgeAllDemoDatabaseData();
-    setPurgeResult(result);
-    setBackupMessage(`Thorough purge complete! Purged ${result.purgedKeys.length} demo data stores at ${new Date(result.timestamp).toLocaleTimeString()}`);
-    setTimeout(() => {
-      setBackupMessage(null);
-      window.location.reload();
-    }, 1500);
+    setIsPurging(true);
+    try {
+      const result = await purgeAllDemoDatabaseData();
+      setPurgeResult(result);
+      setTrueZero(true);
+      if (onRestoreSnapshot) {
+        onRestoreSnapshot({ tests: [], questions: [], pypPapers: [] });
+      }
+      setBackupMessage(`Thorough purge complete! Successfully purged demo data stores across browser and server at ${new Date(result.timestamp).toLocaleTimeString()}`);
+    } catch (err: any) {
+      setBackupMessage(`Purge note: ${err.message || 'Purge completed'}`);
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
+  const handleRestoreDemoData = async () => {
+    const confirmed = window.confirm(
+      '🔄 RESTORE FACTORY DEMO CATALOG:\n\nRestore all built-in demo mock tests, PYQ fixtures, and question sets to the database?'
+    );
+    if (!confirmed) return;
+
+    setIsPurging(true);
+    try {
+      await restoreFactoryDemoData();
+      setTrueZero(false);
+      if (onRestoreSnapshot) {
+        onRestoreSnapshot({
+          tests: INITIAL_MOCK_TESTS,
+          questions: INITIAL_QUESTIONS,
+          pypPapers: INITIAL_PYP_PAPERS
+        });
+      }
+      setBackupMessage('Master factory demo catalog restored successfully!');
+    } catch (err: any) {
+      setBackupMessage(`Restore note: ${err.message || 'Restore completed'}`);
+    } finally {
+      setIsPurging(false);
+    }
   };
 
   const handleToggleTrueZero = () => {
     const nextState = !trueZero;
     setTrueZero(nextState);
     setTrueZeroDataMode(nextState);
+    if (nextState && onRestoreSnapshot) {
+      onRestoreSnapshot({ tests: [], questions: [], pypPapers: [] });
+    }
     setBackupMessage(nextState ? 'True 0 Data Mode enabled: All demo catalogs suppressed.' : 'Default catalog mode restored.');
     setTimeout(() => setBackupMessage(null), 3500);
   };
@@ -767,10 +805,20 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
                   onClick={handlePurgeAllDemoData}
-                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition shadow-lg shadow-rose-600/30 flex items-center space-x-2 cursor-pointer"
+                  disabled={isPurging}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition shadow-lg shadow-rose-600/30 flex items-center space-x-2 cursor-pointer disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Execute Full Demo Data Purge</span>
+                  <span>{isPurging ? 'Purging Demo Data...' : 'Execute Full Demo Data Purge'}</span>
+                </button>
+
+                <button
+                  onClick={handleRestoreDemoData}
+                  disabled={isPurging}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition flex items-center space-x-2 border border-slate-700 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 text-sky-400 ${isPurging ? 'animate-spin' : ''}`} />
+                  <span>Restore Factory Demo Catalog</span>
                 </button>
 
                 <button

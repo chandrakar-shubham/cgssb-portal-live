@@ -11,6 +11,7 @@ import {
   INITIAL_CMS_SERIES_PACKS,
   INITIAL_CMS_SETTINGS
 } from '../defaultCmsData';
+import { isDemoDataPurged } from '../utils/bundleStore';
 
 export function useCmsManager() {
   const [cmsPages, setCmsPages] = useState<CMSPage[]>(() => {
@@ -18,10 +19,10 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_pages');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return INITIAL_CMS_PAGES;
+    return isDemoDataPurged() ? [] : INITIAL_CMS_PAGES;
   });
 
   const [cmsPosts, setCmsPosts] = useState<CMSPost[]>(() => {
@@ -29,10 +30,10 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_posts');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return INITIAL_CMS_POSTS;
+    return isDemoDataPurged() ? [] : INITIAL_CMS_POSTS;
   });
 
   const [cmsSeriesPacks, setCmsSeriesPacks] = useState<CMSTestSeriesPack[]>(() => {
@@ -40,10 +41,10 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_series');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return INITIAL_CMS_SERIES_PACKS;
+    return isDemoDataPurged() ? [] : INITIAL_CMS_SERIES_PACKS;
   });
 
   const [cmsSettings, setCmsSettings] = useState<CMSSiteSettings>(() => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MockTest } from '../types';
 import { INITIAL_MOCK_TESTS } from '../mockData';
-import { cleanTestFromAllBundles } from '../utils/bundleStore';
+import { cleanTestFromAllBundles, isDemoDataPurged } from '../utils/bundleStore';
 
 function getDeletedIds(key: string): Set<string> {
   try {
@@ -17,9 +17,11 @@ function getDeletedIds(key: string): Set<string> {
 function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
   const deletedSet = getDeletedIds(deletedKey);
   const map = new Map<string, T>();
-  initial.forEach(item => {
-    if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
-  });
+  if (!isDemoDataPurged()) {
+    initial.forEach(item => {
+      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
+    });
+  }
   saved.forEach(item => {
     if (item && item.id && !deletedSet.has(item.id)) {
       map.set(item.id, item);
@@ -32,6 +34,14 @@ export function useTestManager() {
   const [tests, setTests] = useState<MockTest[]>(() => {
     try {
       const deletedSet = getDeletedIds('cgssb_deleted_tests');
+      if (isDemoDataPurged()) {
+        const saved = localStorage.getItem('cgssb_tests');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed.filter((t: MockTest) => !deletedSet.has(t.id));
+        }
+        return [];
+      }
       const saved = localStorage.getItem('cgssb_tests');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -40,9 +50,21 @@ export function useTestManager() {
         }
       }
     } catch {}
+    if (isDemoDataPurged()) return [];
     const deletedSet = getDeletedIds('cgssb_deleted_tests');
     return mergeWithInitial(INITIAL_MOCK_TESTS, [], 'cgssb_deleted_tests').filter(t => !deletedSet.has(t.id));
   });
+
+  // Listen for broadcast test updates (e.g. Purge/Restore)
+  useEffect(() => {
+    const handleUpdate = (e: any) => {
+      if (Array.isArray(e.detail)) {
+        setTests(e.detail);
+      }
+    };
+    window.addEventListener('cgssb-tests-updated', handleUpdate);
+    return () => window.removeEventListener('cgssb-tests-updated', handleUpdate);
+  }, []);
 
   useEffect(() => {
     try {

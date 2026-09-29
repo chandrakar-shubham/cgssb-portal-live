@@ -29,6 +29,7 @@ export interface DatabaseShape {
   mockTests: MockTest[];
   pypPapers: PreviousYearPaper[];
   attempts: TestAttempt[];
+  demoDataPurged?: boolean;
 }
 
 function ensureDataDir() {
@@ -44,11 +45,13 @@ function loadLocalJsonDb(): DatabaseShape {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
+        const isPurged = parsed.demoDataPurged === true;
         return {
-          questions: Array.isArray(parsed.questions) ? parsed.questions : [...INITIAL_QUESTIONS],
-          mockTests: Array.isArray(parsed.mockTests) ? parsed.mockTests : [...INITIAL_MOCK_TESTS],
-          pypPapers: Array.isArray(parsed.pypPapers) ? parsed.pypPapers : [...INITIAL_PYP_PAPERS],
-          attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [...SAMPLE_USER_ATTEMPTS],
+          questions: Array.isArray(parsed.questions) ? parsed.questions : (isPurged ? [] : [...INITIAL_QUESTIONS]),
+          mockTests: Array.isArray(parsed.mockTests) ? parsed.mockTests : (isPurged ? [] : [...INITIAL_MOCK_TESTS]),
+          pypPapers: Array.isArray(parsed.pypPapers) ? parsed.pypPapers : (isPurged ? [] : [...INITIAL_PYP_PAPERS]),
+          attempts: Array.isArray(parsed.attempts) ? parsed.attempts : (isPurged ? [] : [...SAMPLE_USER_ATTEMPTS]),
+          demoDataPurged: isPurged,
         };
       }
     }
@@ -62,6 +65,7 @@ function loadLocalJsonDb(): DatabaseShape {
     mockTests: [...INITIAL_MOCK_TESTS],
     pypPapers: [...INITIAL_PYP_PAPERS],
     attempts: [...SAMPLE_USER_ATTEMPTS],
+    demoDataPurged: false,
   };
 
   try {
@@ -795,5 +799,96 @@ export function exportCompleteDatabaseSnapshot() {
     }
   };
 }
+
+// ==========================================
+// DEMO DATA PURGE & RESTORE ENGINES
+// ==========================================
+export function isServerDemoDataPurged(): boolean {
+  return localDb.demoDataPurged === true;
+}
+
+export async function purgeServerDemoData(purgeAll = true): Promise<{
+  purgedQuestions: number;
+  purgedTests: number;
+  purgedPyp: number;
+  purgedBundles: number;
+  timestamp: string;
+}> {
+  const initialTestIds = new Set(INITIAL_MOCK_TESTS.map(t => t.id));
+  const initialQuestionIds = new Set(INITIAL_QUESTIONS.map(q => q.id));
+  const initialPypIds = new Set(INITIAL_PYP_PAPERS.map(p => p.id));
+  const initialBundleIds = new Set(OFFICIAL_BUNDLES_CATALOG.map(b => b.id));
+
+  const questionsCountBefore = localDb.questions.length;
+  const testsCountBefore = localDb.mockTests.length;
+  const pypCountBefore = localDb.pypPapers.length;
+  const bundlesCountBefore = localBundles.length;
+
+  if (purgeAll) {
+    localDb.questions = [];
+    localDb.mockTests = [];
+    localDb.pypPapers = [];
+    localBundles = [];
+  } else {
+    localDb.questions = localDb.questions.filter(q => !initialQuestionIds.has(q.id));
+    localDb.mockTests = localDb.mockTests.filter(t => !initialTestIds.has(t.id));
+    localDb.pypPapers = localDb.pypPapers.filter(p => !initialPypIds.has(p.id));
+    localBundles = localBundles.filter(b => !initialBundleIds.has(b.id));
+  }
+  localDb.attempts = [];
+  localDb.demoDataPurged = true;
+
+  saveLocalJsonDb(true);
+
+  if (canServerWriteFirestore()) {
+    const db = getFirestoreServer();
+    if (db) {
+      for (const tId of initialTestIds) {
+        await deleteDoc(doc(db, 'mockTests', tId)).catch(() => null);
+      }
+      for (const qId of initialQuestionIds) {
+        await deleteDoc(doc(db, 'questions', qId)).catch(() => null);
+      }
+      for (const pId of initialPypIds) {
+        await deleteDoc(doc(db, 'pypPapers', pId)).catch(() => null);
+      }
+      for (const bId of initialBundleIds) {
+        await deleteDoc(doc(db, 'bundles', bId)).catch(() => null);
+      }
+    }
+  }
+
+  return {
+    purgedQuestions: questionsCountBefore - localDb.questions.length,
+    purgedTests: testsCountBefore - localDb.mockTests.length,
+    purgedPyp: pypCountBefore - localDb.pypPapers.length,
+    purgedBundles: bundlesCountBefore - localBundles.length,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export async function restoreServerDemoData(): Promise<{
+  questions: number;
+  mockTests: number;
+  pypPapers: number;
+  bundles: number;
+}> {
+  localDb.questions = [...INITIAL_QUESTIONS];
+  localDb.mockTests = [...INITIAL_MOCK_TESTS];
+  localDb.pypPapers = [...INITIAL_PYP_PAPERS];
+  localDb.attempts = [...SAMPLE_USER_ATTEMPTS];
+  localDb.demoDataPurged = false;
+  localBundles = [...OFFICIAL_BUNDLES_CATALOG];
+
+  saveLocalJsonDb(true);
+
+  return {
+    questions: localDb.questions.length,
+    mockTests: localDb.mockTests.length,
+    pypPapers: localDb.pypPapers.length,
+    bundles: localBundles.length,
+  };
+}
+
 
 

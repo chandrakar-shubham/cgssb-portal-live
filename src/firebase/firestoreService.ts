@@ -14,7 +14,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './config';
 import { MockTest, Question, TestAttempt, User, PreviousYearPaper } from '../types';
-import { TestSeriesBundle } from '../data/bundleCatalog';
+import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
+import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 
 export enum OperationType {
   CREATE = 'create',
@@ -237,6 +238,25 @@ export async function deleteQuestionFromFirestore(questionId: string): Promise<v
     await deleteDoc(qDocRef);
   } catch (err) {
     console.warn('Error deleting question from Firestore:', err);
+  }
+}
+
+export async function purgeFirestoreDemoData(): Promise<void> {
+  try {
+    const testIds = INITIAL_MOCK_TESTS.map(t => t.id);
+    const qIds = INITIAL_QUESTIONS.map(q => q.id);
+    const pypIds = INITIAL_PYP_PAPERS.map(p => p.id);
+    const bundleIds = OFFICIAL_BUNDLES_CATALOG.map(b => b.id);
+
+    const promises: Promise<any>[] = [];
+    testIds.forEach(id => promises.push(deleteTestFromFirestore(id)));
+    qIds.forEach(id => promises.push(deleteQuestionFromFirestore(id)));
+    pypIds.forEach(id => promises.push(deleteDoc(doc(db, PYP_PAPERS_COLLECTION, id)).catch(() => null)));
+    bundleIds.forEach(id => promises.push(deleteBundleFromFirestore(id)));
+
+    await Promise.allSettled(promises);
+  } catch (err) {
+    console.warn('Error purging Firestore demo data:', err);
   }
 }
 

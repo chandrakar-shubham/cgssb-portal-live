@@ -63,6 +63,9 @@ import {
   getAppRemoteConfig,
   saveAppRemoteConfig,
   resetAppRemoteConfig,
+  purgeServerDemoData,
+  restoreServerDemoData,
+  isServerDemoDataPurged,
 } from './server/db/repository.ts';
 import {
   getAllCaTopics,
@@ -2534,6 +2537,52 @@ Respond strictly with a JSON object having key "questions" containing an array o
         message: 'Database snapshot safely written to persistent disk storage and synced.',
         timestamp: new Date().toISOString(),
         counts
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // --- Database Demo Purge & Production Hygiene APIs ---
+  app.post('/api/admin/database/purge', requireAdmin, async (req, res) => {
+    try {
+      const result = await purgeServerDemoData();
+      invalidateCacheTags('tests', 'bundles', 'questions', 'pyp', 'sync', 'leaderboard');
+      const counts = await getDatabaseCounts();
+      res.json({
+        success: true,
+        message: 'All demo datasets permanently purged from database.',
+        result,
+        counts,
+        demoDataPurged: true,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/admin/database/restore', requireAdmin, async (req, res) => {
+    try {
+      const counts = await restoreServerDemoData();
+      invalidateCacheTags('tests', 'bundles', 'questions', 'pyp', 'sync', 'leaderboard');
+      res.json({
+        success: true,
+        message: 'Master factory demo datasets restored.',
+        counts,
+        demoDataPurged: false,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/admin/database/status', requireAdmin, async (req, res) => {
+    try {
+      const counts = await getDatabaseCounts();
+      res.json({
+        success: true,
+        demoDataPurged: isServerDemoDataPurged(),
+        counts,
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });

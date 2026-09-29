@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Question } from '../types';
 import { INITIAL_QUESTIONS } from '../mockData';
 import { migrateLegacyQuestion } from '../utils/taxonomyMigration';
+import { isDemoDataPurged } from '../utils/bundleStore';
 
 function getDeletedIds(key: string): Set<string> {
   try {
@@ -17,9 +18,11 @@ function getDeletedIds(key: string): Set<string> {
 function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
   const deletedSet = getDeletedIds(deletedKey);
   const map = new Map<string, T>();
-  initial.forEach(item => {
-    if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
-  });
+  if (!isDemoDataPurged()) {
+    initial.forEach(item => {
+      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
+    });
+  }
   saved.forEach(item => {
     if (item && item.id && !deletedSet.has(item.id)) {
       map.set(item.id, item);
@@ -31,6 +34,17 @@ function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], de
 export function useQuestionManager() {
   const [questions, setQuestions] = useState<Question[]>(() => {
     try {
+      const deletedSet = getDeletedIds('cgssb_deleted_questions');
+      if (isDemoDataPurged()) {
+        const saved = localStorage.getItem('cgssb_questions');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
+          }
+        }
+        return [];
+      }
       const saved = localStorage.getItem('cgssb_questions');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -40,8 +54,20 @@ export function useQuestionManager() {
         }
       }
     } catch {}
+    if (isDemoDataPurged()) return [];
     return mergeWithInitial(INITIAL_QUESTIONS, [], 'cgssb_deleted_questions');
   });
+
+  // Listen for broadcast question updates (e.g. Purge/Restore)
+  useEffect(() => {
+    const handleUpdate = (e: any) => {
+      if (Array.isArray(e.detail)) {
+        setQuestions(e.detail.map(migrateLegacyQuestion));
+      }
+    };
+    window.addEventListener('cgssb-questions-updated', handleUpdate);
+    return () => window.removeEventListener('cgssb-questions-updated', handleUpdate);
+  }, []);
 
   useEffect(() => {
     try {

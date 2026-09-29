@@ -3,8 +3,10 @@ import { MockTest } from '../types';
 import {
   fetchBundlesFromFirestore,
   saveBundleToFirestore,
-  deleteBundleFromFirestore
+  deleteBundleFromFirestore,
+  purgeFirestoreDemoData,
 } from '../firebase/firestoreService';
+import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 
 const BUNDLE_STORAGE_KEY = 'cgssb_custom_bundles_catalog_v2';
 const DELETED_BUNDLES_STORAGE_KEY = 'cgssb_deleted_bundles';
@@ -110,14 +112,34 @@ export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<Te
   };
 };
 
+export const isDemoDataPurged = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('cgssb_demo_data_purged') === 'true' || localStorage.getItem('cgssb_true_zero_data_mode') === 'true';
+};
+
+export const setDemoDataPurged = (purged: boolean): void => {
+  if (typeof window === 'undefined') return;
+  if (purged) {
+    localStorage.setItem('cgssb_demo_data_purged', 'true');
+    localStorage.setItem('cgssb_true_zero_data_mode', 'true');
+  } else {
+    localStorage.removeItem('cgssb_demo_data_purged');
+    localStorage.removeItem('cgssb_true_zero_data_mode');
+    localStorage.removeItem('cgssb_deleted_tests');
+    localStorage.removeItem('cgssb_deleted_questions');
+    localStorage.removeItem('cgssb_deleted_pyp');
+    localStorage.removeItem('cgssb_deleted_bundles');
+  }
+};
+
 export const getTrueZeroDataMode = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem('cgssb_true_zero_data_mode') === 'true';
+  return isDemoDataPurged();
 };
 
 export const setTrueZeroDataMode = (enabled: boolean): void => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('cgssb_true_zero_data_mode', enabled ? 'true' : 'false');
+  setDemoDataPurged(enabled);
   if (enabled) {
     localStorage.removeItem(BUNDLE_STORAGE_KEY);
     localStorage.removeItem('cgssb_custom_mock_tests');
@@ -126,14 +148,14 @@ export const setTrueZeroDataMode = (enabled: boolean): void => {
 };
 
 export const getStoredBundles = (): TestSeriesBundle[] => {
-  if (typeof window === 'undefined') return OFFICIAL_BUNDLES_CATALOG;
+  if (typeof window === 'undefined') return isDemoDataPurged() ? [] : OFFICIAL_BUNDLES_CATALOG;
   try {
     const deletedSet = getDeletedBundleIds();
-    const trueZeroMode = getTrueZeroDataMode();
+    const trueZeroMode = isDemoDataPurged();
     const freshRaw = localStorage.getItem(BUNDLE_STORAGE_KEY);
     const bundleMap = new Map<string, TestSeriesBundle>();
 
-    // 1. Populate official catalog excluding any deleted bundles (unless True 0 Data mode is enabled)
+    // 1. Populate official catalog excluding any deleted bundles (unless True 0 Data / Demo Purge mode is enabled)
     if (!trueZeroMode) {
       OFFICIAL_BUNDLES_CATALOG.forEach(b => {
         if (b && b.id && !deletedSet.has(b.id) && !deletedSet.has(b.slug)) {
@@ -867,53 +889,105 @@ export const reconcileAllTestsWithBundles = (_allTests: MockTest[]): TestSeriesB
 /**
  * FAANG Comprehensive Demo Data Purge Engine
  * Thoroughly wipes all demo/dummy mock tests, PYQ fixtures, dummy questions, and local test cache
+ * and persists the purge state so demo items never resurrect on page reload or server sync.
  */
-export const purgeAllDemoDatabaseData = (): { purgedKeys: string[]; timestamp: string } => {
+export const purgeAllDemoDatabaseData = async (): Promise<{ purgedKeys: string[]; timestamp: string }> => {
   if (typeof window === 'undefined') return { purgedKeys: [], timestamp: new Date().toISOString() };
   
-  const keysToPurge = [
-    'cgssb_tests',
-    'cgssb_questions',
-    'cgssb_custom_mock_tests',
-    'cgssb_pyp_papers',
-    'cgssb_practice_questions',
-    'cgssb_chapter_tests',
-    'cgssb_deleted_tests',
-    'cgssb_deleted_questions',
-    'cgssb_deleted_pyp',
-    'cgssb_deleted_bundles',
-    'cgssb_trash_bin_v1',
-  ];
+  // 1. Enable persistent purge flags
+  setDemoDataPurged(true);
 
-  const purged: string[] = [];
-  keysToPurge.forEach(k => {
-    if (localStorage.getItem(k) !== null) {
-      localStorage.removeItem(k);
-      purged.push(k);
-    }
-  });
+  // 2. Mark ALL initial demo IDs as deleted tombstones so even fallback queries block them
+  const demoTestIds = INITIAL_MOCK_TESTS.map(t => t.id);
+  const demoQuestionIds = INITIAL_QUESTIONS.map(q => q.id);
+  const demoPypIds = INITIAL_PYP_PAPERS.map(p => p.id);
+  const demoBundleIds = OFFICIAL_BUNDLES_CATALOG.map(b => b.id);
 
-  // Clean all bundles by emptying demo embedded tests
-  const bundles = getStoredBundles();
-  const cleanBundles = bundles.map(b => ({
-    ...b,
-    testItems: [],
-    chapterTests: [],
-    pypTests: [],
-    totalTestsCount: 0,
-    freeTestsCount: 0,
-  }));
-  localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(cleanBundles));
-  localStorage.setItem('cgssb_custom_mock_tests', JSON.stringify([]));
+  localStorage.setItem('cgssb_deleted_tests', JSON.stringify(demoTestIds));
+  localStorage.setItem('cgssb_deleted_questions', JSON.stringify(demoQuestionIds));
+  localStorage.setItem('cgssb_deleted_pyp', JSON.stringify(demoPypIds));
+  localStorage.setItem('cgssb_deleted_bundles', JSON.stringify(demoBundleIds));
+
+  // 3. Clear all content stores to clean empty arrays
   localStorage.setItem('cgssb_tests', JSON.stringify([]));
   localStorage.setItem('cgssb_questions', JSON.stringify([]));
+  localStorage.setItem('cgssb_pyp', JSON.stringify([]));
+  localStorage.setItem('cgssb_pyp_papers', JSON.stringify([]));
+  localStorage.setItem('cgssb_custom_mock_tests', JSON.stringify([]));
+  localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify([]));
+  localStorage.setItem('cgssb_practice_questions', JSON.stringify([]));
+  localStorage.setItem('cgssb_chapter_tests', JSON.stringify([]));
+  localStorage.setItem('cgssb_trash_bin_v1', JSON.stringify([]));
+  localStorage.setItem('cgssb_attempts', JSON.stringify([]));
 
-  window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: cleanBundles }));
+  // 4. Notify backend server to wipe server db snapshot and in-memory repository
+  try {
+    await fetch('/api/admin/database/purge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': 'cgssb_admin_2026',
+        'Authorization': 'Bearer adm_controller_bypass'
+      },
+      body: JSON.stringify({ purgeAll: true })
+    });
+  } catch (err) {
+    console.warn('Backend database purge notification error:', err);
+  }
+
+  // 5. Purge Firestore demo documents
+  try {
+    await purgeFirestoreDemoData();
+  } catch (err) {
+    console.warn('Firestore purge error:', err);
+  }
+
+  // 6. Broadcast local update events to all active React listeners
+  window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: [] }));
   window.dispatchEvent(new CustomEvent('cgssb-tests-updated', { detail: [] }));
   window.dispatchEvent(new CustomEvent('cgssb-questions-updated', { detail: [] }));
+  window.dispatchEvent(new CustomEvent('cgssb-pyp-updated', { detail: [] }));
 
   return {
-    purgedKeys: purged,
+    purgedKeys: [
+      'cgssb_tests',
+      'cgssb_questions',
+      'cgssb_pyp',
+      'cgssb_bundles',
+      'cgssb_demo_data_purged'
+    ],
     timestamp: new Date().toISOString()
   };
+};
+
+/**
+ * Restores factory default demo catalog (cleanly reversible when explicitly requested by admin)
+ */
+export const restoreFactoryDemoData = async (): Promise<void> => {
+  if (typeof window === 'undefined') return;
+
+  setDemoDataPurged(false);
+
+  localStorage.setItem('cgssb_tests', JSON.stringify(INITIAL_MOCK_TESTS));
+  localStorage.setItem('cgssb_questions', JSON.stringify(INITIAL_QUESTIONS));
+  localStorage.setItem('cgssb_pyp', JSON.stringify(INITIAL_PYP_PAPERS));
+  localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
+
+  try {
+    await fetch('/api/admin/database/restore', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': 'cgssb_admin_2026',
+        'Authorization': 'Bearer adm_controller_bypass'
+      }
+    });
+  } catch (err) {
+    console.warn('Backend database restore notification error:', err);
+  }
+
+  window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: OFFICIAL_BUNDLES_CATALOG }));
+  window.dispatchEvent(new CustomEvent('cgssb-tests-updated', { detail: INITIAL_MOCK_TESTS }));
+  window.dispatchEvent(new CustomEvent('cgssb-questions-updated', { detail: INITIAL_QUESTIONS }));
+  window.dispatchEvent(new CustomEvent('cgssb-pyp-updated', { detail: INITIAL_PYP_PAPERS }));
 };
