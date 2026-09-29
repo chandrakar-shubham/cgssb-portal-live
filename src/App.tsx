@@ -135,10 +135,13 @@ function MainApp() {
     if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
       return { route: 'admin', tab: 'admin-pyp' };
     }
-    if (path.startsWith('/page/') || path.startsWith('/pages/')) {
+    if (path.startsWith('/page/') || path.startsWith('/pages/') || path.startsWith('/p/')) {
       const parts = path.split('/');
       const slug = parts[2] || '';
       return { route: 'student', tab: 'page', pageSlug: slug };
+    }
+    if (path === '/about' || path === '/syllabus-guide' || path === '/legal') {
+      return { route: 'student', tab: 'page', pageSlug: path.replace('/', '') };
     }
     if (path.startsWith('/post/') || path.startsWith('/posts/')) {
       const parts = path.split('/');

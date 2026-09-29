@@ -18,8 +18,14 @@ export function useCmsManager() {
     try {
       const saved = localStorage.getItem('cgssb_cms_pages');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        const parsed: CMSPage[] = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Merge with initial core pages so core routes are never missing
+          const pageMap = new Map<string, CMSPage>();
+          INITIAL_CMS_PAGES.forEach(p => pageMap.set(p.id, p));
+          parsed.forEach(p => pageMap.set(p.id, p));
+          return Array.from(pageMap.values());
+        }
       }
     } catch {}
     return isDemoDataPurged() ? [] : INITIAL_CMS_PAGES;

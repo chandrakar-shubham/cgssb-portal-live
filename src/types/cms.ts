@@ -298,6 +298,15 @@ export interface PageBlock {
   };
 }
 
+export interface PageRevision {
+  id: string;
+  timestamp: string;
+  title: string;
+  author?: string;
+  blockCount: number;
+  data: CMSPage;
+}
+
 export interface CMSPage {
   id: string;
   slug: string;
@@ -305,9 +314,13 @@ export interface CMSPage {
   metaTitle?: string;
   metaDescription?: string;
   isPublished: boolean;
+  pageType?: 'core_system' | 'custom_landing' | 'study_guide' | 'legal_policy';
+  author?: string;
+  customCss?: string;
   themeArchetype?: PageThemeArchetype;
   themeOverride?: Partial<ThemeTokens>;
   blocks: PageBlock[];
+  revisions?: PageRevision[];
   createdAt: string;
   updatedAt: string;
 }
@@ -328,8 +341,11 @@ export interface CMSPost {
   themeArchetype?: PostThemeArchetype;
   themeOverride?: Partial<ThemeTokens>;
   blocks?: PageBlock[];
+  revisions?: PageRevision[];
+  visibility?: 'public' | 'password' | 'private';
   notificationMeta?: {
     examName?: string;
+    authority?: string;
     applicationEndDate?: string;
     examDate?: string;
     totalVacancies?: string;

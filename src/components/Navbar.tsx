@@ -610,6 +610,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Sidebar Bottom Footer */}
             <div className="pt-4 border-t border-slate-800 space-y-3">
+              {onNavigateToAdmin && (
+                <button
+                  onClick={() => {
+                    onNavigateToAdmin();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 hover:text-white border border-indigo-800/60 font-bold text-xs transition flex items-center justify-center space-x-2 cursor-pointer shadow-md"
+                >
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span>Admin Portal & CMS</span>
+                </button>
+              )}
+
               {user && (
                 <button
                   onClick={() => {
