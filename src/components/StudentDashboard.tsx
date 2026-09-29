@@ -40,6 +40,7 @@ import { getStoredBundles, findBundleBySlugOrId, syncBundlesFromFirestore, recon
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
+import { ProPassMilestoneCard } from './ProPassMilestoneCard';
 import { ChangeTargetModal, TARGET_EXAM_OPTIONS, TargetExamOption } from './ChangeTargetModal';
 import { LiveTestLeaderboard } from './LiveTestLeaderboard';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
@@ -53,6 +54,7 @@ interface StudentDashboardProps {
   selectedCategory: ExamCategory | 'ALL';
   onExplorePass?: () => void;
   onOpenLeaderboardPage?: () => void;
+  onOpenAuthModal?: () => void;
   onUpdateTest?: (testId: string, updates: Partial<MockTest>) => void;
   onDeleteTest?: (testId: string) => void;
   onTogglePublishTest?: (testId: string) => void;
@@ -67,6 +69,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   selectedCategory,
   onExplorePass,
   onOpenLeaderboardPage,
+  onOpenAuthModal,
   onUpdateTest,
   onDeleteTest,
   onTogglePublishTest,
@@ -906,6 +909,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       )}
 
+      {/* 3 Months Free Pro Pass Milestone Progress Banner */}
+      {!isAdmin && (
+        <ProPassMilestoneCard
+          onStartPractice={() => {
+            if (filteredTests.length > 0) onStartTest(filteredTests[0]);
+          }}
+          onOpenAuthModal={onOpenAuthModal}
+        />
+      )}
+
       {/* Animated Slider for Hot Test Series & Advertisement of Offers */}
       {!isAdmin && (
         <HotSliderAndOffers
@@ -930,7 +943,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <div>
             <h2 className="text-base sm:text-lg font-black text-white flex items-center space-x-2">
               <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>Browse CGSSB and CGPSC Test Series</span>
+              <span>Browse cgtest.in Exam Series</span>
             </h2>
             <p className="text-xs text-slate-400">
               Browse launched exam bundles with dedicated syllabus and test portals, or practice full-length mock tests.

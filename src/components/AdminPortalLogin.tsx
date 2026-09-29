@@ -24,7 +24,7 @@ export const AdminPortalLogin: React.FC<AdminPortalLoginProps> = ({
   onNavigateHome,
 }) => {
   const { adminLogin } = useAuth();
-  const [identifier, setIdentifier] = useState('admin@cgssbtest.com');
+  const [identifier, setIdentifier] = useState('admin@cgtest.in');
   const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,7 +105,7 @@ export const AdminPortalLogin: React.FC<AdminPortalLoginProps> = ({
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
                 required
-                placeholder="admin@cgssbtest.com"
+                placeholder="admin@cgtest.in"
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
               />
             </div>

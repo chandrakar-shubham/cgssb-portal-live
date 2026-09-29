@@ -81,7 +81,7 @@ export function getChapterTestSeoUrl(subject: string, topic: string): string {
  * Generates schema.org QAPage JSON-LD structured data for Google Search snippet indexing
  */
 export function generateQuestionSchemaJsonLd(q: Question, pageUrl?: string) {
-  const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cgssbtest.com';
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cgtest.in';
   const url = pageUrl || `${siteUrl}${getQuestionSeoUrl(q)}`;
   const correctOpt = q.options?.find(o => o.id === q.correctOption);
   const otherOpts = q.options?.filter(o => o.id !== q.correctOption) || [];

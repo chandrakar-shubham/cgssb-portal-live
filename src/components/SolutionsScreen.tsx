@@ -29,8 +29,11 @@ import {
   Trophy,
   Sparkles,
   Bookmark,
-  Share2
+  Share2,
+  Gift,
+  Crown
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { SocialShareModal } from './SocialShareModal';
 import {
   isQuestionBookmarked,
@@ -45,6 +48,7 @@ interface SolutionsScreenProps {
   questions: Question[];
   onBackToDashboard: () => void;
   onReattempt: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
@@ -52,7 +56,10 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
   questions,
   onBackToDashboard,
   onReattempt,
+  onOpenAuthModal,
 }) => {
+  const { user } = useAuth();
+  const isGuest = !user;
   const [activeTab, setActiveTab] = useState<'summary' | 'solutions' | 'sectors'>('summary');
   const [filterSolution, setFilterSolution] = useState<'all' | 'correct' | 'incorrect' | 'unattempted'>('all');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
@@ -160,6 +167,52 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Guest Conversion Banner: Claim 1-Month Free Pass */}
+      {isGuest && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-amber-500/15 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+              <Gift className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white flex items-center space-x-1.5">
+                <span>🎉 Congratulations on completing your 1st Free Mock Test!</span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Create your free account on <strong>cgtest.in</strong> now to claim <strong>1-Month Free All-Access Pass</strong> + complete 4 more tests to unlock <strong>2 Extra Months</strong> (3 Months Total).
+              </p>
+            </div>
+          </div>
+          {onOpenAuthModal && (
+            <button
+              onClick={onOpenAuthModal}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:brightness-110 text-slate-950 font-black text-xs transition flex items-center justify-center space-x-1.5 shadow-md shadow-amber-500/25 shrink-0 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 fill-slate-950" />
+              <span>Sign Up & Claim 1 Month Free</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Logged-In Student Milestone Counter Banner */}
+      {user && !user.unlockedMilestoneBonus && (user.completedTestsCount || 0) < 5 && (
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-2.5">
+            <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-slate-200">
+              <strong>Milestone Progress:</strong> You have completed <strong>{user.completedTestsCount || 1} of 5 tests</strong>. Complete <strong>{5 - (user.completedTestsCount || 1)} more</strong> to unlock <strong>+2 Extra Months (60 Days Bonus)</strong> for free!
+            </span>
+          </div>
+          <button
+            onClick={onReattempt}
+            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shrink-0 cursor-pointer self-start sm:self-center"
+          >
+            Attempt Next Mock
+          </button>
+        </div>
+      )}
 
       {/* Main Score & Rank Card Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl relative overflow-hidden">

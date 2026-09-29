@@ -113,7 +113,7 @@ const INITIAL_ADMINS: User[] = [
   {
     id: 'adm-super-01',
     name: 'Executive Super Admin',
-    email: 'admin@cgssbtest.com',
+    email: 'admin@cgtest.in',
     role: 'superadmin',
     registeredAt: '2024-01-01',
     status: 'active',
@@ -130,7 +130,7 @@ const INITIAL_ADMINS: User[] = [
   {
     id: 'adm-faculty-01',
     name: 'Academic Content Lead',
-    email: 'faculty@cgssbtest.com',
+    email: 'faculty@cgtest.in',
     role: 'content_manager',
     registeredAt: '2025-06-01',
     status: 'active',
@@ -147,7 +147,7 @@ const INITIAL_ADMINS: User[] = [
   {
     id: 'adm-support-01',
     name: 'Student Support & Telecaller',
-    email: 'support@cgssbtest.com',
+    email: 'support@cgtest.in',
     role: 'support',
     registeredAt: '2025-09-10',
     status: 'active',

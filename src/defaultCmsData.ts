@@ -2,18 +2,18 @@ import type { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from './typ
 import { DEFAULT_PAGE_THEME_TOKENS, DEFAULT_POST_THEME_TOKENS, DEFAULT_AD_SETTINGS } from './types/cms.ts';
 
 export const INITIAL_CMS_SETTINGS: CMSSiteSettings = {
-  siteName: 'CGSSB Test Portal',
+  siteName: 'cgtest.in',
   tagline: 'Official Competitive Examination Simulation Platform for CGPSC & CG Vyapam',
   logoUrl: '',
   contactPhone: '+91 98765 43210',
   contactWhatsapp: '+91 98765 43210',
-  contactEmail: 'support@cgssbtest.com',
-  copyrightText: '© 2026 CGSSB Test Portal. All rights reserved.',
+  contactEmail: 'support@cgtest.in',
+  copyrightText: '© 2026 cgtest.in. All rights reserved.',
   primaryColor: 'indigo',
   announcementBar: {
     enabled: true,
-    message: '🎉 CGPSC Prelims 2026 & Vyapam Hostel Warden New Mock Test Series Live! Free Pass Active.',
-    buttonText: 'Attempt Free Tests',
+    message: '🎉 Sign Up to Claim 1-Month Free Pro Pass + Unlock 2 Extra Months by attempting 5 Tests!',
+    buttonText: 'Claim Free Pass',
     buttonLink: '/test-series',
   },
   navMenu: [

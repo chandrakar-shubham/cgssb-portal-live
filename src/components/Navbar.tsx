@@ -113,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="flex flex-col">
               <div className="flex items-center space-x-1.5">
                 <span className="font-black text-base sm:text-lg tracking-tight text-white">
-                  CGSSB <span className="text-emerald-400">Test</span>
+                  cgtest<span className="text-emerald-400">.in</span>
                 </span>
                 {user?.hasProPass && (
                   <span className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
@@ -417,7 +417,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     CG
                   </div>
                   <span className="font-black text-base text-white">
-                    CGSSB <span className="text-emerald-400">Portal</span>
+                    cgtest<span className="text-emerald-400">.in</span>
                   </span>
                 </div>
 
@@ -623,7 +623,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <div className="text-[10px] text-slate-500 text-center space-y-0.5">
                 <p className="font-semibold text-slate-400">TCS iON CBT Exam Engine Standard</p>
-                <p>CGSSB & CGPSC Test Portal v{APP_BUILD_INFO.version}</p>
+                <p>cgtest.in Exam Portal v{APP_BUILD_INFO.version}</p>
               </div>
             </div>
 

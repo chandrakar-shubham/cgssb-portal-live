@@ -158,10 +158,10 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
   // UPI Deep Link Generator
   const upiDeepLink = useMemo(() => {
     if (!selectedTier) return '';
-    const pa = 'cgssbtest@okaxis'; // Official UPI ID
-    const pn = encodeURIComponent('CGSSB Test Portal');
+    const pa = 'cgtest@okaxis'; // Official UPI ID
+    const pn = encodeURIComponent('cgtest.in Exam Portal');
     const am = finalPrice;
-    const tn = encodeURIComponent(`CGSSB_${selectedTier.id}_${user?.id || 'guest'}`);
+    const tn = encodeURIComponent(`CGTEST_${selectedTier.id}_${user?.id || 'guest'}`);
     return `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
   }, [selectedTier, finalPrice, user]);
 
@@ -516,7 +516,7 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
                   <div className="w-44 h-44 bg-slate-50 rounded-xl border border-slate-300 flex flex-col items-center justify-center relative p-2 shadow-sm">
                     <QrCode className="w-36 h-36 text-slate-900" />
                     <span className="text-[10px] font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-300 absolute bottom-1.5 shadow-sm">
-                      UPI: cgssbtest@okaxis
+                      UPI: cgtest@okaxis
                     </span>
                   </div>
                   <div className="text-center space-y-0.5">

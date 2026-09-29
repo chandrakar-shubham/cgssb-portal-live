@@ -485,7 +485,7 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
                 className="px-6 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 shadow-xl shadow-amber-950/50 hover:brightness-110 transition flex items-center space-x-2 cursor-pointer"
               >
                 <Crown className="w-4 h-4 fill-slate-950" />
-                <span>Unlock Series (₹{bundle.price}) / All-Access Pass</span>
+                <span>Activate All-Access Pass (Unlock All Exams)</span>
                 <ChevronRight className="w-4 h-4 ml-1" />
               </button>
             )}
@@ -1114,7 +1114,7 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
               <div className="space-y-4 text-center">
                 <div className="p-5 rounded-2xl bg-white text-slate-900 inline-block shadow-inner">
                   <QrCode className="w-44 h-44 mx-auto text-slate-950" />
-                  <span className="text-[10px] font-mono text-slate-600 block mt-1">UPI ID: cgexamportal@upi</span>
+                  <span className="text-[10px] font-mono text-slate-600 block mt-1">UPI ID: cgtest@okaxis</span>
                 </div>
 
                 <div className="flex justify-center space-x-2">

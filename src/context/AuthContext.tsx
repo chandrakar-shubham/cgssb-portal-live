@@ -34,6 +34,7 @@ interface AuthContextType {
   addCredits: (amount: number) => void;
   activateProPass: (planType: 'monthly' | 'yearly' | string, customName?: string) => void;
   transferPassDevice: () => void;
+  recordTestCompletion: () => { unlockedBonus: boolean; newCount: number };
 
   // Admin Auth & RBAC
   adminUser: User | null;
@@ -113,7 +114,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isStudentBlocked = Boolean(user?.isBlocked || user?.status === 'blocked');
 
-  // Student Registration with Onboarding Data
+  // Helper: Generates default 1-Month Free Pro Pass for every newly registered/onboarded student
+  const createInitialProPassDetails = () => {
+    const device = getOrCreateDeviceId();
+    const now = Date.now();
+    const thirtyDaysExpiry = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const guestTookTest = typeof window !== 'undefined' && localStorage.getItem('cgtest_guest_test_completed') === 'true';
+    return {
+      hasProPass: true,
+      proPassPlan: '1-Month Free Welcome Pass (30 Days)',
+      passDurationDays: 30,
+      passExpiresAt: thirtyDaysExpiry,
+      boundDeviceId: device.id,
+      boundDeviceName: device.name,
+      completedTestsCount: guestTookTest ? 1 : 0,
+      freePassStage: '1_month_active' as const,
+      unlockedMilestoneBonus: false,
+    };
+  };
+
+  // Student Registration with Onboarding Data & Automatic 1-Month Free Pro Pass
   const registerStudent = (details: {
     name: string;
     email: string;
@@ -123,6 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     medium?: 'Hindi' | 'English';
     categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
   }) => {
+    const passDetails = createInitialProPassDetails();
     const newUser: User = {
       id: `std-${Date.now()}`,
       name: details.name.trim(),
@@ -131,7 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'student',
       status: 'active',
       isBlocked: false,
-      hasProPass: false,
       registeredAt: new Date().toISOString().split('T')[0],
       lastLoginAt: new Date().toISOString().split('T')[0],
       targetExam: details.targetExam || 'CG Teacher 2026 (शिक्षक भर्ती)',
@@ -140,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       medium: details.medium || 'Hindi',
       categoryReservation: details.categoryReservation || 'UR',
       token: `jwt-std-${Date.now()}`,
+      ...passDetails,
     };
     setUser(newUser);
   };
@@ -150,11 +171,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const existing = getRegisteredStudents().find(s => s.email.toLowerCase() === cleanEmail);
     
     if (existing) {
-      const updated = { ...existing, lastLoginAt: new Date().toISOString().split('T')[0] };
+      const updated = {
+        ...existing,
+        lastLoginAt: new Date().toISOString().split('T')[0],
+        completedTestsCount: existing.completedTestsCount || 0,
+        hasProPass: existing.hasProPass ?? true,
+        proPassPlan: existing.proPassPlan || '1-Month Free Welcome Pass (30 Days)',
+        passExpiresAt: existing.passExpiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      };
       setUser(updated);
       return;
     }
 
+    const passDetails = createInitialProPassDetails();
     const newUser: User = {
       id: `std-${Date.now()}`,
       name: name || 'Aspirant Student',
@@ -162,13 +191,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'student',
       status: 'active',
       isBlocked: false,
-      hasProPass: false,
       registeredAt: new Date().toISOString().split('T')[0],
       lastLoginAt: new Date().toISOString().split('T')[0],
       targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
       district: 'Raipur',
       medium: 'Hindi',
       token: `jwt-student-${Date.now()}`,
+      ...passDetails,
     };
     setUser(newUser);
   };
@@ -198,11 +227,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser({
         ...existing,
         avatar: fbAvatar || existing.avatar,
-        lastLoginAt: new Date().toISOString().split('T')[0]
+        lastLoginAt: new Date().toISOString().split('T')[0],
+        hasProPass: existing.hasProPass ?? true,
+        completedTestsCount: existing.completedTestsCount || 0,
       });
       return;
     }
 
+    const passDetails = createInitialProPassDetails();
     const newUser: User = {
       id: fbUserUid,
       name: fbName || 'Google Aspirant',
@@ -210,7 +242,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'student',
       status: 'active',
       isBlocked: false,
-      hasProPass: false,
       avatar: fbAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
       registeredAt: new Date().toISOString().split('T')[0],
       lastLoginAt: new Date().toISOString().split('T')[0],
@@ -218,20 +249,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       district: 'Raipur',
       medium: 'Hindi',
       token: `jwt-google-${Date.now()}`,
+      ...passDetails,
     };
     setUser(newUser);
   };
 
   const loginWithPhoneOtp = (phone: string, _otp: string, name?: string) => {
     const cleanPhone = phone.trim();
-    const cleanEmail = `${cleanPhone}@student.cgssbtest.com`;
+    const cleanEmail = `${cleanPhone}@student.cgtest.in`;
     const existing = getRegisteredStudents().find(s => s.phone === cleanPhone || s.email === cleanEmail);
 
     if (existing) {
-      setUser({ ...existing, lastLoginAt: new Date().toISOString().split('T')[0] });
+      setUser({
+        ...existing,
+        lastLoginAt: new Date().toISOString().split('T')[0],
+        hasProPass: existing.hasProPass ?? true,
+        completedTestsCount: existing.completedTestsCount || 0,
+      });
       return;
     }
 
+    const passDetails = createInitialProPassDetails();
     const newUser: User = {
       id: `std-p-${Date.now()}`,
       name: name || `Candidate ${cleanPhone.slice(-4)}`,
@@ -240,27 +278,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'student',
       status: 'active',
       isBlocked: false,
-      hasProPass: false,
       registeredAt: new Date().toISOString().split('T')[0],
       lastLoginAt: new Date().toISOString().split('T')[0],
       targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
       district: 'Raipur',
       medium: 'Hindi',
       token: `jwt-phone-${Date.now()}`,
+      ...passDetails,
     };
     setUser(newUser);
   };
 
   const loginWithWhatsApp = (phone: string, _tokenOrOtp?: string, name?: string) => {
     const cleanPhone = phone.trim();
-    const cleanEmail = `${cleanPhone}@whatsapp.cgssbtest.com`;
+    const cleanEmail = `${cleanPhone}@whatsapp.cgtest.in`;
     const existing = getRegisteredStudents().find(s => s.phone === cleanPhone || s.email === cleanEmail);
 
     if (existing) {
-      setUser({ ...existing, lastLoginAt: new Date().toISOString().split('T')[0] });
+      setUser({
+        ...existing,
+        lastLoginAt: new Date().toISOString().split('T')[0],
+        hasProPass: existing.hasProPass ?? true,
+        completedTestsCount: existing.completedTestsCount || 0,
+      });
       return;
     }
 
+    const passDetails = createInitialProPassDetails();
     const newUser: User = {
       id: `std-wa-${Date.now()}`,
       name: name || `WhatsApp Candidate (${cleanPhone.slice(-4)})`,
@@ -269,13 +313,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'student',
       status: 'active',
       isBlocked: false,
-      hasProPass: false,
       registeredAt: new Date().toISOString().split('T')[0],
       lastLoginAt: new Date().toISOString().split('T')[0],
       targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
       district: 'Raipur',
       medium: 'Hindi',
       token: `jwt-whatsapp-${Date.now()}`,
+      ...passDetails,
     };
     setUser(newUser);
   };
@@ -301,7 +345,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newUser: User = {
         id: `std-${Date.now()}`,
         name: 'Enrolled Aspirant',
-        email: 'aspirant@cgssbtest.com',
+        email: 'aspirant@cgtest.in',
         role: 'student',
         status: 'active',
         isBlocked: false,
@@ -311,11 +355,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         passExpiresAt: tenure.expiresAt,
         boundDeviceId: device.id,
         boundDeviceName: device.name,
+        completedTestsCount: 0,
+        freePassStage: '1_month_active',
+        unlockedMilestoneBonus: false,
         registeredAt: new Date().toISOString().split('T')[0],
         lastLoginAt: new Date().toISOString().split('T')[0],
       };
       setUser(newUser);
     }
+  };
+
+  // Milestone Test Completion Hook (+2 Months Free on 5 Tests)
+  const recordTestCompletion = (): { unlockedBonus: boolean; newCount: number } => {
+    if (!user) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cgtest_guest_test_completed', 'true');
+      }
+      return { unlockedBonus: false, newCount: 1 };
+    }
+
+    const currentCount = user.completedTestsCount || 0;
+    const newCount = currentCount + 1;
+    const shouldUnlockBonus = newCount >= 5 && !user.unlockedMilestoneBonus;
+
+    let updatedExpiresAt = user.passExpiresAt;
+    let updatedDurationDays = user.passDurationDays || 30;
+    let updatedPlan = user.proPassPlan || '1-Month Free Welcome Pass (30 Days)';
+    let updatedStage = user.freePassStage || '1_month_active';
+
+    if (shouldUnlockBonus) {
+      const baseTime = user.passExpiresAt ? new Date(user.passExpiresAt).getTime() : Date.now();
+      const extendedTime = Math.max(Date.now(), baseTime) + 60 * 24 * 60 * 60 * 1000; // +60 days (2 months)
+      updatedExpiresAt = new Date(extendedTime).toISOString();
+      updatedDurationDays = updatedDurationDays + 60;
+      updatedPlan = '3-Month Milestone Pro Pass (90 Days Total)';
+      updatedStage = '3_months_unlocked';
+    }
+
+    const updatedUser: User = {
+      ...user,
+      hasProPass: true,
+      completedTestsCount: newCount,
+      unlockedMilestoneBonus: Boolean(user.unlockedMilestoneBonus || shouldUnlockBonus),
+      freePassStage: updatedStage,
+      proPassPlan: updatedPlan,
+      passDurationDays: updatedDurationDays,
+      passExpiresAt: updatedExpiresAt,
+    };
+
+    setUser(updatedUser);
+    return { unlockedBonus: shouldUnlockBonus, newCount };
   };
 
   const transferPassDevice = () => {
@@ -363,12 +452,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Default Super Admin credentials
-    const isSuperAdminUser = identifier === 'admin' || identifier === 'admin@cgssbtest.com' || identifier === 'controller';
+    const isSuperAdminUser = identifier === 'admin' || identifier === 'admin@cgtest.in' || identifier === 'admin@cgssbtest.com' || identifier === 'controller';
     if (isSuperAdminUser && isValidPass) {
       const superAdmin: User = {
         id: 'adm-super-01',
         name: 'Executive Super Admin',
-        email: identifier.includes('@') ? identifier : 'admin@cgssbtest.com',
+        email: identifier.includes('@') ? identifier : 'admin@cgtest.in',
         role: 'superadmin',
         registeredAt: '2024-01-01',
         status: 'active',
@@ -425,6 +514,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateUserProfile,
         activateProPass,
         transferPassDevice,
+        recordTestCompletion,
         logout,
         deductCredits,
         addCredits,

@@ -156,7 +156,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, onClose, initial
                 <AlertTriangle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
                 <div>
                   <strong className="block text-amber-300 font-semibold mb-0.5">Non-Government Independent Educational Platform</strong>
-                  CGSSB Test (cgssbtest.com) is an independent private educational technology and exam practice platform. It is <strong>NOT</strong> affiliated with, associated with, endorsed by, or in any way connected to the Chhattisgarh Professional Examination Board (CG Vyapam), the Chhattisgarh Public Service Commission (CGPSC), the Government of Chhattisgarh, or any Central Government agency.
+                  cgtest.in is an independent private educational technology and exam practice platform. It is <strong>NOT</strong> affiliated with, associated with, endorsed by, or in any way connected to the Chhattisgarh Professional Examination Board (CG Vyapam), the Chhattisgarh Public Service Commission (CGPSC), the Government of Chhattisgarh, or any Central Government agency.
                 </div>
               </div>
               <div>
@@ -185,7 +185,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, onClose, initial
               <div>
                 <h3 className="text-base font-bold text-white mb-1.5">2. Refund Request Window</h3>
                 <p>
-                  Candidates who have purchased an exam pass and have attempted fewer than 2 premium tests may request a refund within <strong>48 hours</strong> of purchase by emailing their transaction ID and registered email to <code>support@cgssbtest.com</code>.
+                  Candidates who have purchased an exam pass and have attempted fewer than 2 premium tests may request a refund within <strong>48 hours</strong> of purchase by emailing their transaction ID and registered email to <code>support@cgtest.in</code>.
                 </p>
               </div>
               <div>
@@ -208,7 +208,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, onClose, initial
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
                   <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Candidate Help Desk</span>
-                  <div className="text-sm font-bold text-emerald-400">support@cgssbtest.com</div>
+                  <div className="text-sm font-bold text-emerald-400">support@cgtest.in</div>
                   <div className="text-xs text-slate-400">Typical response time: Within 4 hours</div>
                 </div>
                 <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1">

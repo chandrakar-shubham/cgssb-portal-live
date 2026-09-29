@@ -1897,8 +1897,8 @@ export const AdminCurrentAffairsStudio: React.FC = () => {
             {/* SEO Snippet Preview */}
             <div className="bg-slate-900/90 border border-indigo-950 p-5 rounded-2xl space-y-1.5 text-xs font-mono text-slate-400">
               <div className="text-indigo-300 font-bold uppercase tracking-wider text-[10px]">Google Search SEO Snippet Preview</div>
-              <div className="text-blue-400 font-bold text-sm truncate">{previewTopic.titleEn} — CGSSB Test</div>
-              <div className="text-emerald-400 truncate">https://cgssbtest.com/current-affairs/{previewTopic.monthYear}/{previewTopic.slug}</div>
+              <div className="text-blue-400 font-bold text-sm truncate">{previewTopic.titleEn} — cgtest.in</div>
+              <div className="text-emerald-400 truncate">https://cgtest.in/current-affairs/{previewTopic.monthYear}/{previewTopic.slug}</div>
               <div className="text-slate-300 text-[11px] line-clamp-2">{previewTopic.examAngle?.whyInNews}</div>
             </div>
 

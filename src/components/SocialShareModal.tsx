@@ -36,8 +36,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
   if (!isOpen) return null;
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cgssbtest.com';
-  const testTitle = attempt.testTitle || 'CGSSB Mock Test';
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cgtest.in';
+  const testTitle = attempt.testTitle || 'cgtest.in Mock Test';
   const candidateName = attempt.userName || 'Candidate';
   const score = attempt.score;
   const maxScore = attempt.maxScore;
@@ -45,8 +45,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   const percentile = attempt.percentile || 98.4;
   const accuracy = attempt.accuracy || 88.5;
 
-  const shareTitle = `🎯 ${candidateName}'s CGSSB Test Scorecard: ${score}/${maxScore} Marks!`;
-  const shareText = `🏆 I scored ${score}/${maxScore} Marks (${accuracy}% Accuracy) in "${testTitle}" on CGSSB Test!\n📊 Simulated Rank: #${rank} | ${percentile}%ile\n💬 "${customNote}"\n\nPracticing for CGPSC & Vyapam 2026 exams on TCS iON CBT engine:`;
+  const shareTitle = `🎯 ${candidateName}'s cgtest.in Scorecard: ${score}/${maxScore} Marks!`;
+  const shareText = `🏆 I scored ${score}/${maxScore} Marks (${accuracy}% Accuracy) in "${testTitle}" on cgtest.in!\n📊 Simulated Rank: #${rank} | ${percentile}%ile\n💬 "${customNote}"\n\nPracticing for CGPSC & Vyapam 2026 exams on TCS iON CBT engine:`;
   const shareUrl = `${appUrl}/test-series`;
 
   const fullShareMessage = `${shareText}\n${shareUrl}`;

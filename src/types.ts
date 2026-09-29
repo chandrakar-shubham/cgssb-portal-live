@@ -30,6 +30,10 @@ export interface User {
   token?: string;
   registeredAt: string;
   lastLoginAt?: string;
+  // Free Pass & Habit Milestone Engine (1 Month on Signup + 2 Months on 5 Tests)
+  completedTestsCount?: number;
+  freePassStage?: 'not_started' | '1_month_active' | '3_months_unlocked';
+  unlockedMilestoneBonus?: boolean;
   // Extended Student Profile Fields
   targetExam?: string;             // e.g. "CG Teacher 2026", "CGPSC State Service", "CG Police SI"
   targetYear?: number;             // e.g. 2026
@@ -460,11 +464,11 @@ export const DEFAULT_REMOTE_CONFIG: AppRemoteConfig = {
     currencySymbol: '₹',
   },
   brandingConfig: {
-    siteTitle: 'CGSSB & CGPSC Test Portal',
+    siteTitle: 'cgtest.in - CGPSC & CG Vyapam Test Portal',
     tagline: 'Authentic State Examination Preparation & CBT Testing Platform',
     primaryExamCadre: 'CGSSB + CGPSC Combined Cadre',
     supportContactPhone: '+91 98765 43210',
-    supportContactEmail: 'support@cgssbtest.com',
+    supportContactEmail: 'support@cgtest.in',
   },
 };
 

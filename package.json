@@ -4,9 +4,9 @@
   "version": "2.5.2",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "NODE_ENV=development tsx server.ts",
     "build": "node scripts/build.cjs",
-    "start": "node --import tsx server.ts",
+    "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "./node_modules/.bin/tsc --noEmit"

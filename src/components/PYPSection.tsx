@@ -58,7 +58,7 @@ export const PYPSection: React.FC<PYPSectionProps> = ({
   const handleDownload = (paper: PreviousYearPaper) => {
     // Generate text/pdf simulation download
     const content = `========================================================
-CGSSB TEST (cgssbtest.com) - OFFICIAL PREVIOUS YEAR PAPER
+CGTEST.IN (cgtest.in) - OFFICIAL PREVIOUS YEAR PAPER
 ========================================================
 Title: ${paper.title}
 Exam Category: ${paper.examCategory}
@@ -75,8 +75,8 @@ SUBJECT-WISE WEIGHTAGE ANALYSIS:
 ${paper.subjectsWeightage.map(s => `- ${s.subject}: ${s.questionCount} Questions (${s.percentage}%)`).join('\n')}
 
 ========================================================
-Verified and Archived by CGSSB Test Academic Wing.
-Visit https://cgssbtest.com for online mock test simulation.
+Verified and Archived by cgtest.in Academic Wing.
+Visit https://cgtest.in for online mock test simulation.
 ========================================================
 `;
 

@@ -25,6 +25,7 @@ const AdminDatabaseView = React.lazy(() => import('./components/AdminDatabaseVie
 const AdminHeader = React.lazy(() => import('./components/AdminHeader').then(m => ({ default: m.AdminHeader })));
 const AdminSubNav = React.lazy(() => import('./components/AdminSubNav').then(m => ({ default: m.AdminSubNav })));
 import { AuthModal } from './components/AuthModal';
+import { MilestoneCelebrationModal } from './components/MilestoneCelebrationModal';
 import { ExamInstructionsScreen } from './components/ExamInstructionsScreen';
 import { CGPSCHeroPage } from './components/CGPSCHeroPage';
 import { CGSSBHeroPage } from './components/CGSSBHeroPage';
@@ -119,7 +120,7 @@ import {
 } from './firebase/firestoreService';
 
 function MainApp() {
-  const { user, deductCredits, isAdminAuthenticated, isStudentBlocked } = useAuth();
+  const { user, deductCredits, isAdminAuthenticated, isStudentBlocked, recordTestCompletion } = useAuth();
   const { config, isMaintenanceMode } = useRemoteConfig();
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
@@ -207,18 +208,18 @@ function MainApp() {
 
   const getPageTitle = (tab: string) => {
     switch (tab) {
-      case 'chapters': return 'CG Vyapam & CGPSC Chapter Tests (Topic-wise Quizzes) | CGSSB Test';
-      case 'practice': return 'CG Vyapam Daily Practice Drills & Solved MCQs | CGSSB Test';
-      case 'leaderboard': return 'State-Wide Live Merit Leaderboard & Percentile Ranks | CGSSB Test';
-      case 'cgpsc': return 'CGPSC Prelims & Forest Service Mock Tests 2026 | CGSSB Test';
-      case 'cgssb': return 'CG Vyapam Hostel Warden, Patwari & RI Tests 2026 | CGSSB Test';
-      case 'pass': return 'CG Exam Pass Pro - Unlimited Test Series Access | CGSSB Test';
-      case 'pyp': return 'CGPSC & Vyapam Previous Year Papers (PYQ Bank) | CGSSB Test';
-      case 'analytics': return 'Performance Analytics & Simulated Rank | CGSSB Test';
-      case 'mistakes': return 'Mistake Notebook & Error Log (कमज़ोर विषय री-टेस्ट) | CGSSB Test';
-      case 'bookmarks': return 'Starred Questions & Personal Notes (बुकमार्क) | CGSSB Test';
-      case 'chhattisgarh-deck': return 'Chhattisgarhi Language & GK Flashcards Revision | CGSSB Test';
-      default: return 'CGSSB & CGPSC Test Portal | Mock Tests, Chapter Tests & PYP Archive';
+      case 'chapters': return 'CG Vyapam & CGPSC Chapter Tests (Topic-wise Quizzes) | cgtest.in';
+      case 'practice': return 'CG Vyapam Daily Practice Drills & Solved MCQs | cgtest.in';
+      case 'leaderboard': return 'State-Wide Live Merit Leaderboard & Percentile Ranks | cgtest.in';
+      case 'cgpsc': return 'CGPSC Prelims & Forest Service Mock Tests 2026 | cgtest.in';
+      case 'cgssb': return 'CG Vyapam Hostel Warden, Patwari & RI Tests 2026 | cgtest.in';
+      case 'pass': return 'CG Exam Pass Pro - Unlimited Test Series Access | cgtest.in';
+      case 'pyp': return 'CGPSC & Vyapam Previous Year Papers (PYQ Bank) | cgtest.in';
+      case 'analytics': return 'Performance Analytics & Simulated Rank | cgtest.in';
+      case 'mistakes': return 'Mistake Notebook & Error Log (कमज़ोर विषय री-टेस्ट) | cgtest.in';
+      case 'bookmarks': return 'Starred Questions & Personal Notes (बुकमार्क) | cgtest.in';
+      case 'chhattisgarh-deck': return 'Chhattisgarhi Language & GK Flashcards Revision | cgtest.in';
+      default: return 'cgtest.in | CGPSC, CG Vyapam & Teacher Recruitment Mock Tests';
     }
   };
 
@@ -247,7 +248,7 @@ function MainApp() {
       setStudentActiveTabState(tab);
       if (pageSlug) setActivePageSlug(pageSlug);
       if (postSlug) setActivePostSlug(postSlug);
-      document.title = route === 'admin' ? 'Admin Portal & CMS | CGSSB Test' : getPageTitle(tab);
+      document.title = route === 'admin' ? 'Admin Portal & CMS | cgtest.in' : getPageTitle(tab);
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -282,6 +283,8 @@ function MainApp() {
 
   // Student Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalInitialMode, setAuthModalInitialMode] = useState<'signin' | 'signup'>('signup');
+  const [showMilestoneCelebrationModal, setShowMilestoneCelebrationModal] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
   const [legalTab, setLegalTab] = useState<LegalTab>('privacy');
@@ -569,6 +572,15 @@ function MainApp() {
       alert(`Account Suspended: ${user?.blockReason || 'Your student account has been suspended by the administrator.'}`);
       return;
     }
+    // Guest Policy: 1 Free Test before requiring signup (claims 1-month free pass on signup)
+    if (!user) {
+      const hasTakenGuestTest = typeof window !== 'undefined' && localStorage.getItem('cgtest_guest_test_completed') === 'true';
+      if (hasTakenGuestTest) {
+        setAuthModalInitialMode('signup');
+        setIsAuthModalOpen(true);
+        return;
+      }
+    }
     // If test is marked as Pro and candidate does not have pass
     if (test.isPro && !user?.hasProPass) {
       setStudentActiveTab('pass');
@@ -676,6 +688,14 @@ function MainApp() {
         }
         setActiveExamTest(null);
         setActiveAttemptReview(attempt);
+
+        const milestoneRes = recordTestCompletion();
+        if (milestoneRes.unlockedBonus) {
+          setShowMilestoneCelebrationModal(true);
+        }
+        if (!user && typeof window !== 'undefined') {
+          localStorage.setItem('cgtest_guest_test_completed', 'true');
+        }
         return;
       }
     } catch (e) {
@@ -778,6 +798,14 @@ function MainApp() {
     saveAttemptToFirestore(newAttempt).catch(() => null);
     setActiveExamTest(null);
     setActiveAttemptReview(newAttempt);
+
+    const localMilestoneRes = recordTestCompletion();
+    if (localMilestoneRes.unlockedBonus) {
+      setShowMilestoneCelebrationModal(true);
+    }
+    if (!user && typeof window !== 'undefined') {
+      localStorage.setItem('cgtest_guest_test_completed', 'true');
+    }
   };
 
   // ADMIN QUESTION BANK ACTIONS
@@ -1230,6 +1258,10 @@ function MainApp() {
             attempt={activeAttemptReview}
             questions={resolvedQuestions}
             onBackToDashboard={() => setActiveAttemptReview(null)}
+            onOpenAuthModal={() => {
+              setAuthModalInitialMode('signup');
+              setIsAuthModalOpen(true);
+            }}
             onReattempt={() => {
               const test = tests.find(t => t.id === activeAttemptReview.testId);
               if (test) {
@@ -1567,6 +1599,10 @@ function MainApp() {
             selectedCategory={selectedCategory}
             onExplorePass={() => setStudentActiveTab('pass')}
             onOpenLeaderboardPage={() => setStudentActiveTab('leaderboard')}
+            onOpenAuthModal={() => {
+              setAuthModalInitialMode('signup');
+              setIsAuthModalOpen(true);
+            }}
             onTogglePublishTest={handleTogglePublishTest}
             onUpdateTest={handleUpdateTest}
             onDeleteTest={handleDeleteTest}
@@ -1844,16 +1880,16 @@ function MainApp() {
           {/* Non-Government Disclaimer Banner */}
           <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
             <span className="font-semibold text-amber-400 block mb-0.5">Official Non-Government Platform Notice:</span>
-            CGSSB Test (cgssbtest.com) is an independent examination preparation and diagnostic mock testing platform for students in Chhattisgarh. It is not affiliated with, sponsored by, or endorsed by the Chhattisgarh Professional Examination Board (CG Vyapam), CGPSC, or any State/Central government agency. All exam names and syllabi are used strictly for descriptive educational preparation purposes.
+            cgtest.in is an independent examination preparation and diagnostic mock testing platform for students in Chhattisgarh. It is not affiliated with, sponsored by, or endorsed by the Chhattisgarh Professional Examination Board (CG Vyapam), CGPSC, or any State/Central government agency. All exam names and syllabi are used strictly for descriptive educational preparation purposes.
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-extrabold text-white">
-                CGSSB <span className="text-emerald-400">Test</span>
+                cgtest<span className="text-emerald-400">.in</span>
               </span>
               <span className="text-slate-600">•</span>
-              <span>cgssbtest.com</span>
+              <span>cgtest.in</span>
               <span className="text-slate-600">•</span>
               <span className="text-emerald-400 font-semibold">Chhattisgarh State Exam Preparation Platform</span>
             </div>
@@ -1910,6 +1946,18 @@ function MainApp() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalInitialMode}
+      />
+
+      {/* 5-Test Milestone Celebration Modal (+2 Months Bonus Unlocked) */}
+      <MilestoneCelebrationModal
+        isOpen={showMilestoneCelebrationModal}
+        onClose={() => setShowMilestoneCelebrationModal(false)}
+        onContinuePractice={() => {
+          setShowMilestoneCelebrationModal(false);
+          setStudentActiveTab('tests');
+        }}
+        completedCount={user?.completedTestsCount || 5}
       />
 
       {/* Student Profile & Target Setting Modal */}

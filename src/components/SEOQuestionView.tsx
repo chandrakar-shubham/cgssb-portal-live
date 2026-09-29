@@ -30,12 +30,12 @@ export const SEOQuestionView: React.FC<SEOQuestionViewProps> = ({
   onBackToDashboard,
   onStartRelatedTest,
 }) => {
-  const pageUrl = typeof window !== 'undefined' ? window.location.href : 'https://cgssbtest.com';
+  const pageUrl = typeof window !== 'undefined' ? window.location.href : 'https://cgtest.in';
   const schemaJsonLd = generateQuestionSchemaJsonLd(question, pageUrl);
 
   // Set document title & inject schema JSON-LD on mount
   useEffect(() => {
-    const titleText = `${question.questionHindi || question.questionText || 'Solved Question'} - CG Vyapam & CGPSC MCQ | CGSSB Test`;
+    const titleText = `${question.questionHindi || question.questionText || 'Solved Question'} - CG Vyapam & CGPSC MCQ | cgtest.in`;
     document.title = titleText.slice(0, 75);
 
     const scriptId = 'question-schema-jsonld';

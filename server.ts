@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import {
@@ -2781,9 +2780,15 @@ Ensure all URLs are real official URLs (e.g. jansampark.cg.gov.in, pib.gov.in, f
   });
 
   // Mount Vite middleware for dev or static for production
-  const isProduction = process.env.NODE_ENV === 'production';
+  // In Cloud Run, K_SERVICE is always set. In production containers, dist/index.html exists.
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.K_SERVICE) ||
+    Boolean(process.env.CLOUD_RUN_JOB) ||
+    (process.env.NODE_ENV !== 'development' && fs.existsSync(path.join(process.cwd(), 'dist', 'index.html')));
 
   if (!isProduction) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -2809,20 +2814,13 @@ Ensure all URLs are real official URLs (e.g. jansampark.cg.gov.in, pib.gov.in, f
       next();
     });
   } else {
-    // Dynamic static directory discovery:
-    // Handles cases where dist is a subfolder, OR where dist contents were deployed directly into the web root
-    const possibleStaticDirs = [
-      path.join(process.cwd(), 'dist'),
-      process.cwd(),
-      appDirname,
-      path.join(appDirname, 'dist'),
-    ];
-
-    const staticDir = possibleStaticDirs.find(d =>
-      fs.existsSync(path.join(d, 'index.html')) && fs.existsSync(path.join(d, 'assets'))
-    ) || possibleStaticDirs.find(d =>
-      fs.existsSync(path.join(d, 'index.html'))
-    ) || path.join(process.cwd(), 'dist');
+    // Explicit static directory priority for Cloud Run / production:
+    // Always serve from compiled dist/ directory
+    const staticDir = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'))
+      ? path.join(process.cwd(), 'dist')
+      : fs.existsSync(path.join(appDirname, 'dist', 'index.html'))
+      ? path.join(appDirname, 'dist')
+      : path.join(process.cwd(), 'dist');
 
     console.log(`📁 Serving static files from: ${staticDir}`);
 

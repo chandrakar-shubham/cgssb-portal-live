@@ -137,7 +137,7 @@ export const AdminAndroidAPIManager: React.FC = () => {
     },
   ];
 
-  const retrofitCode = `package com.cgssbtest.app.network
+  const retrofitCode = `package com.cgtest.app.network
 
 import retrofit2.Response
 import retrofit2.http.*

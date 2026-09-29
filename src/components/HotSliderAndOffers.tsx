@@ -52,6 +52,30 @@ export const HotSliderAndOffers: React.FC<HotSliderAndOffersProps> = ({
 
   const slides = [
     {
+      id: 'free-3months-pass-offer',
+      category: 'SPECIAL STUDENT LAUNCH OFFER',
+      categoryIcon: Gift,
+      categoryColor: 'text-amber-300 bg-amber-500/20 border-amber-500/40',
+      badge: '🎁 3 MONTHS FREE PASS · 100% UNLOCKED',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      title: 'Get 3 Months of Free Pro Pass on cgtest.in',
+      subtitle: 'Attempt 1 Free Diagnostic Test first, sign up to claim 1 Month Free Pass immediately, and complete 5 mock tests to unlock 2 additional months free!',
+      highlights: [
+        'Attempt 1 Free Mock Test with 0 Login Friction',
+        'Instant 1-Month Free All-Access Pass on 1-Click Signup',
+        'Complete 5 Tests to Unlock +2 Months (60 Days Extra Free)',
+      ],
+      primaryActionLabel: 'Claim 1st Month Free',
+      primaryAction: onExplorePass,
+      secondaryActionLabel: 'Attempt Free Test Now',
+      secondaryAction: () => {
+        if (tests.length > 0) onStartTest(tests[0]);
+      },
+      bgGradient: 'from-amber-950/40 via-slate-900 to-slate-950',
+      borderAccent: 'border-amber-500/50 hover:border-amber-500/70',
+      accentGlow: 'bg-amber-500/10',
+    },
+    {
       id: 'teacher-hot-series',
       category: 'HOT TEST SERIES',
       categoryIcon: Flame,

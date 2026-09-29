@@ -315,7 +315,7 @@ export const AdminRoleManagement: React.FC = () => {
                   required
                   value={newEmail}
                   onChange={e => setNewEmail(e.target.value)}
-                  placeholder="faculty@cgssbtest.com"
+                  placeholder="faculty@cgtest.in"
                   className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
                 />
               </div>

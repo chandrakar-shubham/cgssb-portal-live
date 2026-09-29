@@ -295,8 +295,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
       setTimeout(() => {
         setIsLoading(false);
-        setSuccessMsg('Account created successfully! Welcome to CGSSB Test Portal.');
-        setTimeout(() => onClose(), 700);
+        setSuccessMsg('Account created successfully! Welcome to cgtest.in. Your 1-Month Free Pro Pass is activated!');
+        setTimeout(() => onClose(), 800);
       }, 500);
     }, 600);
   };
@@ -332,7 +332,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
               </h3>
               <p className="text-xs text-slate-400 font-medium">
                 {mode === 'signup' 
-                  ? 'Access CBT Mocks, Free PYQs & State Ranks' 
+                  ? '🎁 1 Month Free All-Access Pass Instantly + 2 Extra Months on 5 Tests' 
                   : 'Access your test series, test history & analytics'}
               </p>
             </div>
@@ -766,7 +766,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <a
-                    href={`https://wa.me/919827011223?text=VERIFY_CGSSB_ASPIRANT_${waHandshakeCode}`}
+                    href={`https://wa.me/919827011223?text=VERIFY_CGTEST_ASPIRANT_${waHandshakeCode}`}
                     target="_blank"
                     rel="noreferrer"
                     className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-emerald-600/20"

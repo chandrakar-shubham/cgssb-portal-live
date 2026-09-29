@@ -255,10 +255,10 @@ ${campaignHeadline}
 🎟️ *Special Discount Offer:*
 उपयोग करें प्रोमो कोड: *${campaignOfferCode}* और पाएं तुरंत *${campaignDiscount}*!
 
-🔗 *अभी अभ्यास शुरू करें:* https://cgssbtest.com
+🔗 *अभी अभ्यास शुरू करें:* https://cgtest.in
 
 _शुभकामनाएं,_
-*CGSSB Test Portal Academic Wing*`;
+*cgtest.in Academic Wing*`;
   }, [campaignHeadline, campaignOfferCode, campaignDiscount]);
 
   return (

@@ -17,7 +17,7 @@ export function getApiBaseUrl(): string {
     // If hosted on Firebase Hosting static CDN, point to production backend or custom origin
     if (host.endsWith('.web.app') || host.endsWith('.firebaseapp.com')) {
       // Return primary production API origin
-      return 'https://cgssbtest.com';
+      return 'https://cgtest.in';
     }
   }
 

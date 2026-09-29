@@ -400,7 +400,7 @@ export const AdminCMSTestSeriesManager: React.FC<AdminCMSTestSeriesManagerProps>
                         className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-black text-sm flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/25 hover:opacity-95 transition"
                       >
                         <Crown className="w-4 h-4" />
-                        <span>Unlock Test Series Pass (₹{draftPack.price})</span>
+                        <span>Unlock with All-Access Pass</span>
                       </button>
                     </div>
                   </div>
