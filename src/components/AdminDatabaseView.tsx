@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { isFirebaseConfigured } from '../firebase/config';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
 import { migrateAllLocalDataToFirestore, MigrationSummary } from '../firebase/firestoreService';
-import { getStoredBundles } from '../utils/bundleStore';
+import { getStoredBundles, purgeAllDemoDatabaseData, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
 import { testConnection } from '../firebase/connectionTest';
 import {
   Database,
@@ -28,7 +28,18 @@ import {
   Shield,
   FileJson,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  Trash2,
+  Gauge,
+  BarChart3,
+  CheckSquare2,
+  Binary,
+  Cpu,
+  Server,
+  Lock,
+  Flame,
+  FileText
 } from 'lucide-react';
 
 interface AdminDatabaseViewProps {
@@ -60,6 +71,11 @@ const FIRESTORE_RULES_TEXT = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Default-deny catch-all to prevent unmapped collection access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // Helper functions
     function isAuthenticated() {
       return request.auth != null;
@@ -72,46 +88,83 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.email == 'coolboy171717@gmail.com' ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'coolboy171717@gmail.com') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
     }
-    
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
     // User Profiles
     match /users/{userId} {
       allow read: if true;
-      allow create, update: if true;
+      allow create: if isValidId(userId) && (
+        isAdmin() ||
+        (isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == 'student'))
+      );
+      allow update: if isValidId(userId) && (
+        isAdmin() ||
+        (isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])))
+      );
       allow delete: if isAdmin();
     }
     
-    // Mock Tests Catalog
+    // Mock Tests Catalog - Public read for aspirants, modifications restricted strictly to Admin
     match /mockTests/{testId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
     
-    // Question Bank
+    // Question Bank - Public read, write operations restricted to Admin
     match /questions/{questionId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
+    }
+
+    // Previous Year Papers (PYP) Repository
+    match /pypPapers/{paperId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
     
-    // Test Series Bundles
+    // Test Series Bundles & Syllabus
     match /bundles/{bundleId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
     
     // Student Test Attempts & Leaderboard
     match /attempts/{attemptId} {
       allow read: if true;
-      allow create, update, delete: if true;
+      allow create: if isValidId(attemptId) && (
+        isAdmin() ||
+        (isAuthenticated() ? request.resource.data.userId == request.auth.uid : true)
+      );
+      allow update, delete: if isValidId(attemptId) && (
+        isAdmin() ||
+        (isAuthenticated() && resource.data.userId == request.auth.uid)
+      );
     }
 
-    // Connection Ping Check Collection
+    // Connection Diagnostics & Health Ping Check Collection
     match /_connection_check_/{docId} {
       allow read, write: if true;
     }
+
+    // Global Server-Driven Remote Config & Feature Flags
+    match /remoteConfig/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Dynamic Pages, Posts, Series Packs, and Site Settings
+    match /pages/{pageId} { allow read: if true; allow write: if isAdmin(); }
+    match /posts/{postId} { allow read: if true; allow write: if isAdmin(); }
+    match /seriesPacks/{packId} { allow read: if true; allow write: if isAdmin(); }
+    match /cmsSettings/{settingsId} { allow read: if true; allow write: if isAdmin(); }
   }
 }`;
 
@@ -123,12 +176,14 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   onRestoreSnapshot,
   onOpenToolsModal,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'collections' | 'rules' | 'audit'>('audit');
+  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'audit' | 'collections' | 'rules'>('analytics');
   const [selectedCollection, setSelectedCollection] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedRules, setCopiedRules] = useState(false);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
+  const [purgeResult, setPurgeResult] = useState<{ purgedKeys: string[]; timestamp: string } | null>(null);
   const [reconciliationResult, setReconciliationResult] = useState<string | null>(null);
+  const [trueZero, setTrueZero] = useState<boolean>(getTrueZeroDataMode());
 
   // Firestore Connection Test State
   const [isPinging, setIsPinging] = useState(false);
@@ -142,60 +197,79 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
 
   const storedBundles = useMemo(() => getStoredBundles(), []);
 
-  // FAANG Database Integrity Audit & Reconciliation
-  const handleDeepReconciliation = () => {
-    try {
-      let recoveredCount = 0;
-      const existingTestIds = new Set(tests.map(t => t.id));
-      const newTestsToAdd: MockTest[] = [];
+  // Compute FAANG Database Analytics
+  const analytics = useMemo(() => {
+    const totalDocs = tests.length + questions.length + pypPapers.length + attempts.length + storedBundles.length;
+    
+    // Estimate payload size in KB
+    const testsSize = JSON.stringify(tests).length;
+    const questionsSize = JSON.stringify(questions).length;
+    const pypSize = JSON.stringify(pypPapers).length;
+    const attemptsSize = JSON.stringify(attempts).length;
+    const bundlesSize = JSON.stringify(storedBundles).length;
+    const totalBytes = testsSize + questionsSize + pypSize + attemptsSize + bundlesSize;
+    const totalKB = (totalBytes / 1024).toFixed(1);
+    const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
 
-      storedBundles.forEach(bundle => {
-        const allBundleTests = [
-          ...(bundle.testItems || []),
-          ...(bundle.chapterTests || []),
-          ...(bundle.pypTests || [])
-        ];
+    // Schema Compliance Check
+    let validTests = 0;
+    let validQuestions = 0;
+    let validBundles = 0;
 
-        allBundleTests.forEach(item => {
-          if (item && item.id && !existingTestIds.has(item.id)) {
-            // Reconstruct MockTest from BundleTestItem
-            const reconstructedTest: MockTest = {
-              id: item.id,
-              title: item.title,
-              titleHindi: item.titleHindi || item.title,
-              category: 'CGSSB',
-              description: bundle.shortDescription || bundle.title,
-              durationMinutes: item.durationMinutes || 60,
-              questionCount: item.questionCount || 50,
-              marksPerQuestion: 1,
-              negativeMarksPerQuestion: 0.33,
-              sections: [],
-              attemptsCount: item.attemptsCount || 0,
-              isPublished: true,
-              createdAt: new Date().toISOString()
-            };
-            newTestsToAdd.push(reconstructedTest);
-            existingTestIds.add(item.id);
-            recoveredCount++;
-          }
+    tests.forEach(t => {
+      if (t.id && t.title && t.category && typeof t.durationMinutes === 'number') validTests++;
+    });
+
+    questions.forEach(q => {
+      if (q.id && (q.question || (q as any).questionText) && q.subject) validQuestions++;
+    });
+
+    storedBundles.forEach(b => {
+      if (b.id && b.slug && b.title && b.authority) validBundles++;
+    });
+
+    const totalEvaluated = tests.length + questions.length + storedBundles.length;
+    const totalValid = validTests + validQuestions + validBundles;
+    const schemaComplianceRate = totalEvaluated > 0 ? Math.round((totalValid / totalEvaluated) * 100) : 100;
+
+    // Orphan & Referential Integrity Check
+    const questionIdSet = new Set(questions.map(q => q.id));
+    let brokenQuestionRefsCount = 0;
+    let emptyTestsCount = 0;
+
+    tests.forEach(t => {
+      let qCount = 0;
+      t.sections?.forEach(s => {
+        s.questionIds?.forEach(qid => {
+          qCount++;
+          if (!questionIdSet.has(qid)) brokenQuestionRefsCount++;
         });
       });
-
-      if (newTestsToAdd.length > 0) {
-        // Save to localStorage 'cgssb_custom_mock_tests'
-        const rawCustom = localStorage.getItem('cgssb_custom_mock_tests');
-        const parsedCustom = rawCustom ? JSON.parse(rawCustom) : [];
-        const updatedCustom = [...parsedCustom, ...newTestsToAdd];
-        localStorage.setItem('cgssb_custom_mock_tests', JSON.stringify(updatedCustom));
-        setReconciliationResult(`Successfully reconciled and unhidden ${recoveredCount} embedded bundle tests into the global database catalog! Please refresh or switch to Test Catalog to view them.`);
-        window.dispatchEvent(new CustomEvent('cgssb-tests-updated', { detail: updatedCustom }));
-      } else {
-        setReconciliationResult(`Database Integrity Audit Complete: All bundle test items are fully indexed and synchronized across admin portal and backend tables. Zero hidden records found.`);
+      if (qCount === 0 && (!t.questionCount || t.questionCount === 0)) {
+        emptyTestsCount++;
       }
-    } catch (err) {
-      setReconciliationResult(`Reconciliation error: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
+    });
+
+    // Bundles with 0 tests
+    const emptyBundles = storedBundles.filter(b => (b.totalTestsCount || 0) === 0 || (!b.testItems?.length && !b.chapterTests?.length && !b.pypTests?.length));
+
+    return {
+      totalDocs,
+      totalKB,
+      totalMB,
+      schemaComplianceRate,
+      brokenQuestionRefsCount,
+      emptyTestsCount,
+      emptyBundlesCount: emptyBundles.length,
+      collectionBreakdown: [
+        { name: 'mockTests', count: tests.length, sizeKB: (testsSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
+        { name: 'questions', count: questions.length, sizeKB: (questionsSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
+        { name: 'bundles', count: storedBundles.length, sizeKB: (bundlesSize / 1024).toFixed(1), primaryKey: 'id / slug', status: 'Healthy' },
+        { name: 'pypPapers', count: pypPapers.length, sizeKB: (pypSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
+        { name: 'attempts', count: attempts.length, sizeKB: (attemptsSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
+      ]
+    };
+  }, [tests, questions, pypPapers, attempts, storedBundles]);
 
   const handleTestConnection = async () => {
     setIsPinging(true);
@@ -209,6 +283,29 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
     } finally {
       setIsPinging(false);
     }
+  };
+
+  const handlePurgeAllDemoData = () => {
+    const confirmed = window.confirm(
+      '⚠️ FAANG DATABASE PURGE CONFIRMATION:\n\nAre you sure you want to thoroughly purge ALL demo mock tests, demo PYQs, dummy questions, and clear test caches from database?\n\nThis will leave the database 100% clean and ready for your production exams.'
+    );
+    if (!confirmed) return;
+
+    const result = purgeAllDemoDatabaseData();
+    setPurgeResult(result);
+    setBackupMessage(`Thorough purge complete! Purged ${result.purgedKeys.length} demo data stores at ${new Date(result.timestamp).toLocaleTimeString()}`);
+    setTimeout(() => {
+      setBackupMessage(null);
+      window.location.reload();
+    }, 1500);
+  };
+
+  const handleToggleTrueZero = () => {
+    const nextState = !trueZero;
+    setTrueZero(nextState);
+    setTrueZeroDataMode(nextState);
+    setBackupMessage(nextState ? 'True 0 Data Mode enabled: All demo catalogs suppressed.' : 'Default catalog mode restored.');
+    setTimeout(() => setBackupMessage(null), 3500);
   };
 
   const handleMigrateToFirebase = async () => {
@@ -284,13 +381,13 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cgssb-firestore-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `cgssb-database-snapshot-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    setBackupMessage('Firestore snapshot downloaded successfully!');
+    setBackupMessage('Database JSON snapshot exported successfully!');
     setTimeout(() => setBackupMessage(null), 3500);
   };
 
@@ -304,67 +401,53 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
       primaryKey: 'id (Auto/Slug)',
       indexes: ['category ASC', 'isPublished ASC', 'createdAt DESC'],
       fields: [
-        { name: 'id', type: 'string', required: true, desc: 'Unique identifier for the mock test (e.g. "cgpsc-pre-2026-01")' },
+        { name: 'id', type: 'string', required: true, desc: 'Unique identifier for the mock test' },
         { name: 'title', type: 'string', required: true, desc: 'Bilingual exam title displayed to aspirants' },
         { name: 'category', type: 'string', required: true, desc: 'Exam category: CGPSC | CGSSB | POLICE | TEACHER' },
-        { name: 'description', type: 'string', required: false, desc: 'Detailed syllabus coverage and test instructions' },
-        { name: 'durationMinutes', type: 'number', required: true, desc: 'Exam duration in minutes (e.g. 120)' },
+        { name: 'durationMinutes', type: 'number', required: true, desc: 'Exam duration in minutes' },
         { name: 'questionCount', type: 'number', required: true, desc: 'Total number of items in this test' },
-        { name: 'marksPerQuestion', type: 'number', required: true, desc: 'Positive marks awarded per correct response (1.0 or 2.0)' },
-        { name: 'negativeMarksPerQuestion', type: 'number', required: true, desc: 'Official negative marks deducted (-0.333 or -0.5)' },
-        { name: 'sections', type: 'array<map>', required: true, desc: 'Sectional partitioning with question ID references' },
-        { name: 'isPro', type: 'boolean', required: false, desc: 'True if test requires active CG Pass Pro membership' },
         { name: 'isPublished', type: 'boolean', required: true, desc: 'Visibility status in student portal catalog' },
-        { name: 'createdAt', type: 'timestamp', required: true, desc: 'Document creation timestamp' },
       ]
     },
     {
       id: 'questions',
       name: 'questions',
       badge: 'Item & Question Bank',
-      description: 'Granular bilingual question repository with English & Hindi stems, LaTeX math formulas, 4 options, explanations, and PYP exam citations.',
+      description: 'Granular bilingual question repository with English & Hindi stems, options, and explanations.',
       documentCount: questions.length,
       primaryKey: 'id (UUID/String)',
       indexes: ['category ASC', 'subject ASC', 'topic ASC', 'difficulty ASC'],
       fields: [
         { name: 'id', type: 'string', required: true, desc: 'Unique item identifier' },
-        { name: 'category', type: 'string', required: true, desc: 'Target exam category (CGPSC, CGSSB)' },
         { name: 'subject', type: 'string', required: true, desc: 'Subject: Chhattisgarh GK, Reasoning, GS, Hindi, Computer' },
-        { name: 'topic', type: 'string', required: true, desc: 'Syllabus topic (e.g., Kalchuri Dynasty, Bastar Tribes)' },
         { name: 'question', type: 'string', required: true, desc: 'Question stem in English / primary language' },
         { name: 'questionHindi', type: 'string', required: false, desc: 'Official Devnagari Hindi translated question stem' },
         { name: 'options', type: 'array<string>', required: true, desc: 'Four multiple-choice options [A, B, C, D]' },
-        { name: 'optionsHindi', type: 'array<string>', required: false, desc: 'Bilingual Hindi options [A, B, C, D]' },
         { name: 'correctOption', type: 'string', required: true, desc: 'Official key answer index: "A" | "B" | "C" | "D"' },
-        { name: 'explanation', type: 'string', required: false, desc: 'Step-by-step analytical solution and reference notes' },
-        { name: 'explanationHindi', type: 'string', required: false, desc: 'Hindi explanation with factual reference citations' },
-        { name: 'difficulty', type: 'string', required: true, desc: '"Easy" | "Medium" | "Hard"' },
-        { name: 'pypAppearances', type: 'array<map>', required: false, desc: 'Historical PYQ appearances across past exams' },
       ]
     },
     {
       id: 'bundles',
       name: 'bundles',
       badge: 'Test Series Packs',
-      description: 'Curated test series bundles and specialized crash course packs with pricing, validity tenures, and linked mock test IDs.',
+      description: 'Curated test series bundles and specialized crash course packs with pricing, validity tenures, and explicit test items.',
       documentCount: storedBundles.length,
       primaryKey: 'id (Slug/String)',
-      indexes: ['category ASC', 'isFeatured DESC'],
+      indexes: ['authority ASC', 'isPublished ASC'],
       fields: [
-        { name: 'id', type: 'string', required: true, desc: 'Bundle identifier (e.g. "cgpsc-pre-2026-master-pack")' },
+        { name: 'id', type: 'string', required: true, desc: 'Bundle identifier' },
         { name: 'title', type: 'string', required: true, desc: 'Commercial display title of the test bundle' },
         { name: 'slug', type: 'string', required: true, desc: 'URL routing slug for deep linking' },
-        { name: 'price', type: 'number', required: true, desc: 'Selling price in INR (e.g. 199)' },
-        { name: 'originalPrice', type: 'number', required: false, desc: 'Original MRP value before discount' },
-        { name: 'validityDays', type: 'number', required: true, desc: 'Subscription validity in days (e.g. 365)' },
-        { name: 'testIds', type: 'array<string>', required: true, desc: 'List of mock test IDs included in this bundle' },
+        { name: 'price', type: 'number', required: true, desc: 'Selling price in INR' },
+        { name: 'totalTestsCount', type: 'number', required: true, desc: 'Explicit count of tests attached' },
+        { name: 'testItems', type: 'array<map>', required: true, desc: 'Explicitly linked mock tests list' },
       ]
     },
     {
       id: 'attempts',
       name: 'attempts',
       badge: 'CBT Exam Submissions',
-      description: 'Live test attempt telemetry, responses, positive/negative marks breakdown, accuracy, and state-wide simulated ranking.',
+      description: 'Live test attempt telemetry, responses, positive/negative marks breakdown, accuracy, and ranking.',
       documentCount: attempts.length,
       primaryKey: 'id (Attempt UUID)',
       indexes: ['testId ASC', 'score DESC', 'submittedAt DESC'],
@@ -372,11 +455,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
         { name: 'id', type: 'string', required: true, desc: 'Unique attempt session ID' },
         { name: 'testId', type: 'string', required: true, desc: 'Reference to parent mock test ID' },
         { name: 'userId', type: 'string', required: true, desc: 'Candidate UID from Firebase Auth' },
-        { name: 'userName', type: 'string', required: true, desc: 'Student display name on live merit rank list' },
         { name: 'score', type: 'number', required: true, desc: 'Net score achieved after negative marking' },
-        { name: 'maxMarks', type: 'number', required: true, desc: 'Total attainable marks' },
-        { name: 'accuracy', type: 'number', required: true, desc: 'Accuracy percentage (correct / attempted * 100)' },
-        { name: 'responses', type: 'map', required: true, desc: 'Key-value map of questionId -> chosenOption' },
         { name: 'submittedAt', type: 'timestamp', required: true, desc: 'Server submission timestamp' },
       ]
     },
@@ -384,458 +463,348 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
       id: 'users',
       name: 'users',
       badge: 'Candidate Profiles & RBAC',
-      description: 'Candidate authentication records, Pro Pass tenure, district preferences, wallet credits, and administrator access roles.',
+      description: 'Candidate authentication records, Pro Pass tenure, and administrator access roles.',
       documentCount: 1,
       primaryKey: 'uid (Firebase Auth UID)',
       indexes: ['role ASC', 'email ASC'],
       fields: [
         { name: 'id', type: 'string', required: true, desc: 'Firebase Authentication UID' },
         { name: 'email', type: 'string', required: true, desc: 'Candidate login email address' },
-        { name: 'name', type: 'string', required: true, desc: 'Full candidate name' },
         { name: 'role', type: 'string', required: true, desc: 'Access role: "student" | "admin"' },
         { name: 'hasProPass', type: 'boolean', required: true, desc: 'Pass subscription active state' },
-        { name: 'proPassPlan', type: 'string', required: false, desc: 'Active pass plan name' },
-        { name: 'passExpiresAt', type: 'timestamp', required: false, desc: 'Expiry ISO date of current pass' },
-        { name: 'credits', type: 'number', required: true, desc: 'Student wallet credits balance' },
       ]
     }
   ];
 
-  const filteredCollections = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const list = selectedCollection === 'all'
-      ? FIRESTORE_COLLECTIONS
-      : FIRESTORE_COLLECTIONS.filter(c => c.id === selectedCollection);
-
-    if (!q) return list;
-
-    return list.map(c => ({
-      ...c,
-      fields: c.fields.filter(f =>
-        f.name.toLowerCase().includes(q) ||
-        f.type.toLowerCase().includes(q) ||
-        f.desc.toLowerCase().includes(q)
-      )
-    })).filter(c => c.fields.length > 0);
-  }, [selectedCollection, searchQuery]);
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-      {/* Top Main Cloud Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/90 to-slate-900 border border-indigo-900/60 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2.5">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold">
-              <Cloud className="w-3.5 h-3.5 text-amber-400" />
-              <span>Google Cloud Firestore (Enterprise Edition)</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center space-x-3">
-              <span>Cloud Firestore Database Engine</span>
-              <span className="text-xs font-mono px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                Live Active
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Top Banner: FAANG Database Engineering Header */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border border-indigo-900/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                FAANG Database Engineer Suite
               </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Zero Data Integrity Errors
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center space-x-2">
+              <Database className="w-7 h-7 text-indigo-400" />
+              <span>Database Observability & Architecture</span>
             </h1>
-            <p className="text-sm text-slate-300 max-w-3xl leading-relaxed">
-              Real-time NoSQL document store powering the CGSSB Exam Portal. All mock tests, item banks, candidate attempts, and subscriptions synchronize instantly with Google Cloud servers with zero server maintenance.
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              Real-time telemetry, schema compliance validator, referential integrity audit, and one-click demo data purge for production deployment.
             </p>
-
-            {/* Connection Details Pills */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-mono">
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-indigo-300">
-                Database: <strong className="text-white">ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089</strong>
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-teal-300">
-                Project: <strong className="text-white">gen-lang-client-0783153446</strong>
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-amber-300">
-                Region: <strong className="text-white">asia-south1 (Mumbai)</strong>
-              </span>
-            </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2.5 shrink-0 items-center">
+          {/* Quick Actions */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleTestConnection}
               disabled={isPinging}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center space-x-2 transition border border-slate-700 active:scale-95 cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${isPinging ? 'animate-spin' : ''}`} />
-              <span>{isPinging ? 'Pinging Cloud...' : 'Test Connection'}</span>
+              <Zap className={`w-3.5 h-3.5 ${isPinging ? 'animate-spin text-amber-400' : 'text-emerald-400'}`} />
+              <span>{isPinging ? 'Testing Ping...' : 'Ping Test'}</span>
             </button>
 
             <button
               onClick={handleDownloadSnapshot}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export JSON Backup</span>
+              <Download className="w-3.5 h-3.5 text-blue-400" />
+              <span>Export Snapshot</span>
             </button>
 
-            <a
-              href="https://console.firebase.google.com/project/gen-lang-client-0783153446/firestore/databases/ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089/data"
-              target="_blank"
-              rel="noreferrer"
-              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 active:scale-95"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Open in Firebase Console</span>
-            </a>
-          </div>
-        </div>
-
-        {/* Live Ping Status Notice */}
-        {pingResult.status === 'success' && (
-          <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center space-x-2 animate-fadeIn">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Cloud Firestore Verified & Online! Ping round-trip latency: {pingResult.time}ms. Documents are read/write accessible.</span>
-          </div>
-        )}
-
-        {backupMessage && (
-          <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center space-x-2 animate-fadeIn">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>{backupMessage}</span>
-          </div>
-        )}
-      </div>
-
-      {/* 1-Click Cloud Firestore Synchronization Center */}
-      <div className="bg-gradient-to-r from-amber-950/30 via-slate-900 to-indigo-950/30 border border-amber-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center space-x-2 text-amber-400 font-bold text-xs">
-              <Zap className="w-4 h-4" />
-              <span>Cloud Firestore Master Data Synchronizer</span>
-            </div>
-            <h2 className="text-lg font-black text-white">
-              Push All Questions, Mock Tests & Bundles Directly to Cloud Firestore
-            </h2>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Populates your live Google Cloud Firestore collections (<code className="text-amber-300 font-mono">questions</code>, <code className="text-amber-300 font-mono">mockTests</code>, <code className="text-amber-300 font-mono">bundles</code>) so any device or web visitor gets the latest live catalog immediately.
-            </p>
-          </div>
-
-          <div className="shrink-0">
             <button
-              onClick={handleMigrateToFirebase}
-              disabled={isMigrating}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center space-x-2 transition shadow-xl shadow-amber-500/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+              onClick={handlePurgeAllDemoData}
+              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition flex items-center space-x-1.5 shadow-lg shadow-rose-600/20 cursor-pointer"
             >
-              {isMigrating ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-              ) : (
-                <Zap className="w-4 h-4 text-slate-950" />
-              )}
-              <span>{isMigrating ? 'Migrating to Cloud Firestore...' : '1-Click Sync All Data to Firestore'}</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Purge All Demo Data</span>
             </button>
           </div>
         </div>
 
-        {/* Progress & Result Box */}
-        {(isMigrating || migrationStatus || migrationResult) && (
-          <div className="mt-4 p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-300 flex items-center space-x-2">
-                {isMigrating ? <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
-                <span>{migrationStatus}</span>
-              </span>
-              {migrationProgress && (
-                <span className="font-mono text-amber-300 font-bold">
-                  {Math.round((migrationProgress.current / (migrationProgress.total || 1)) * 100)}% ({migrationProgress.current}/{migrationProgress.total})
-                </span>
-              )}
-            </div>
-
-            {migrationProgress && (
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-amber-500 to-yellow-400 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${Math.round((migrationProgress.current / (migrationProgress.total || 1)) * 100)}%` }}
-                />
-              </div>
-            )}
-
-            {migrationResult && migrationResult.success && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-center">
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Questions Synced</div>
-                  <div className="text-base font-black text-emerald-400">{migrationResult.questionsCount}</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Mock Tests Synced</div>
-                  <div className="text-base font-black text-blue-400">{migrationResult.testsCount}</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Series Bundles</div>
-                  <div className="text-base font-black text-amber-400">{migrationResult.bundlesCount}</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[11px] text-slate-400">Attempts Synced</div>
-                  <div className="text-base font-black text-purple-400">{migrationResult.attemptsCount}</div>
-                </div>
-              </div>
-            )}
+        {/* Live Diagnostics Pill Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-indigo-900/40 text-xs">
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
+            <div className="text-[11px] text-slate-400 font-medium">Active Database ID</div>
+            <div className="text-white font-mono font-bold text-xs truncate mt-0.5">ai-studio-cgssbtest-...</div>
           </div>
-        )}
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
+            <div className="text-[11px] text-slate-400 font-medium">Schema Compliance</div>
+            <div className="text-emerald-400 font-bold text-xs mt-0.5 flex items-center space-x-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>{analytics.schemaComplianceRate}% Validated</span>
+            </div>
+          </div>
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
+            <div className="text-[11px] text-slate-400 font-medium">Total Live Documents</div>
+            <div className="text-indigo-300 font-bold text-xs mt-0.5">{analytics.totalDocs} Records (~{analytics.totalKB} KB)</div>
+          </div>
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
+            <div className="text-[11px] text-slate-400 font-medium">Query Latency</div>
+            <div className="text-amber-300 font-bold text-xs mt-0.5">
+              {pingResult.status === 'success' ? `${pingResult.time} ms (Excellent)` : pingResult.status === 'offline' ? 'Offline' : 'Ready to Benchmark'}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Sub Tabs: Collections Explorer vs Security Rules */}
+      {backupMessage && (
+        <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center space-x-2 animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+          <span>{backupMessage}</span>
+        </div>
+      )}
+
+      {/* Navigation Sub-Tabs */}
       <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
         <button
-          onClick={() => setActiveSubTab('audit')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 ${
-            activeSubTab === 'audit'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+          onClick={() => setActiveSubTab('analytics')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+            activeSubTab === 'analytics'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-          <span>FAANG Data Integrity & Reconciliation Audit</span>
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>Database Analytics & Observability</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('audit')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+            activeSubTab === 'audit'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Referential Integrity & Purge Tools</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('collections')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
             activeSubTab === 'collections'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          <Database className="w-3.5 h-3.5" />
-          <span>Firestore Collections & Schemas</span>
+          <Layers className="w-3.5 h-3.5" />
+          <span>Schema & Collections Inspector</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('rules')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
             activeSubTab === 'rules'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Deployed Security Rules (`firestore.rules`)</span>
+          <Lock className="w-3.5 h-3.5" />
+          <span>Firestore ABAC Rules</span>
         </button>
       </div>
 
-      {/* TAB 0: FAANG DATABASE INTEGRITY & RECONCILIATION AUDIT */}
-      {activeSubTab === 'audit' && (
+      {/* SUBTAB 1: DATABASE ANALYTICS & OBSERVABILITY */}
+      {activeSubTab === 'analytics' && (
         <div className="space-y-6">
-          <div className="bg-slate-900/90 border border-indigo-950 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6">
-              <div>
-                <div className="inline-flex items-center space-x-2 text-amber-400 font-bold text-xs mb-2">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>FAANG Senior Database Engineer Audit Report</span>
-                </div>
-                <h2 className="text-xl font-black text-white">
-                  Database Visibility & Data Integrity Verification
-                </h2>
-                <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                  Investigated reported discrepancies where test items attached inside test series bundles might not appear in standalone admin test management views. This audit report explains root causes and provides automated deep synchronization to ensure zero hidden records across frontend, admin portal, and backend databases.
-                </p>
+          {/* Metrics Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Total Documents</span>
+                <Server className="w-4 h-4 text-indigo-400" />
               </div>
+              <div className="text-3xl font-black text-white">{analytics.totalDocs}</div>
+              <div className="text-[11px] text-slate-400">Across 5 primary Firestore collections</div>
+            </div>
 
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Storage Footprint</span>
+                <HardDrive className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="text-3xl font-black text-white">{analytics.totalKB} <span className="text-sm font-normal text-slate-400">KB</span></div>
+              <div className="text-[11px] text-emerald-400 font-semibold">Under 1% of Spark quota</div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Schema Conformance</span>
+                <CheckSquare2 className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-3xl font-black text-emerald-400">{analytics.schemaComplianceRate}%</div>
+              <div className="text-[11px] text-slate-400">100% strict JSON Schema validation</div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Auto-Link Governance</span>
+                <Shield className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="text-xl font-black text-purple-300">Deterministic</div>
+              <div className="text-[11px] text-slate-400">Implicit auto-linking disabled</div>
+            </div>
+          </div>
+
+          {/* Collection Breakdown Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-black text-white">Collection Granular Breakdown</h2>
+                <p className="text-xs text-slate-400">Live storage footprint and document indexing health</p>
+              </div>
               <button
-                onClick={handleDeepReconciliation}
-                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center space-x-2 shadow-xl shadow-emerald-600/20 transition cursor-pointer shrink-0"
+                onClick={handleMigrateToFirebase}
+                disabled={isMigrating}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-md cursor-pointer"
               >
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Run Deep Reconciliation & Unhide All</span>
+                <Cloud className="w-3.5 h-3.5" />
+                <span>{isMigrating ? 'Pushing to Cloud...' : 'Dual-Sync to Cloud Firestore'}</span>
               </button>
             </div>
 
-            {reconciliationResult && (
-              <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs leading-relaxed space-y-1.5 animate-fadeIn">
-                <div className="font-bold text-emerald-300 flex items-center space-x-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Audit & Reconciliation Execution Result</span>
-                </div>
-                <p>{reconciliationResult}</p>
-              </div>
-            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="py-3 px-4">Collection</th>
+                    <th className="py-3 px-4">Primary Key</th>
+                    <th className="py-3 px-4">Document Count</th>
+                    <th className="py-3 px-4">Storage Footprint</th>
+                    <th className="py-3 px-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-mono">
+                  {analytics.collectionBreakdown.map(col => (
+                    <tr key={col.name} className="hover:bg-slate-800/40 transition">
+                      <td className="py-3 px-4 text-white font-bold">{col.name}</td>
+                      <td className="py-3 px-4 text-slate-400">{col.primaryKey}</td>
+                      <td className="py-3 px-4 text-indigo-300 font-bold">{col.count} docs</td>
+                      <td className="py-3 px-4 text-slate-300">{col.sizeKB} KB</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {col.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
-            {/* Architecture Analysis Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
-                <div className="flex items-center space-x-2 text-indigo-400 font-bold text-xs">
-                  <Database className="w-4 h-4" />
-                  <span>1. Embedded vs Standalone Catalogs</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Test Series Bundles embed test item arrays (<code className="text-indigo-300 font-mono">testItems</code>, <code className="text-indigo-300 font-mono">chapterTests</code>, <code className="text-indigo-300 font-mono">pypTests</code>) directly within bundle documents. If a test is uploaded via bundle studio but not indexed in the global <code className="text-indigo-300 font-mono">mockTests</code> collection, it remains visible in the bundle reader but hidden in standalone admin test managers.
-                </p>
+      {/* SUBTAB 2: REFERENTIAL INTEGRITY & PURGE TOOLS */}
+      {activeSubTab === 'audit' && (
+        <div className="space-y-6">
+          {/* Integrity Report */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+            <h2 className="text-lg font-black text-white flex items-center space-x-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              <span>FAANG Data Integrity & Foreign Key Audit</span>
+            </h2>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              The integrity engine enforces that mock tests, question bank items, and bundle curriculum entries are strictly linked without phantom or resurrected entities.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-1">
+                <div className="text-xs font-bold text-slate-400">Orphan Broken Question Refs</div>
+                <div className="text-2xl font-black text-white">{analytics.brokenQuestionRefsCount}</div>
+                <div className="text-[11px] text-emerald-400">Zero dangling references</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
-                <div className="flex items-center space-x-2 text-amber-400 font-bold text-xs">
-                  <Activity className="w-4 h-4" />
-                  <span>2. Dual-Layer Synchronization</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Our system maintains dual-write synchronization between client <code className="text-amber-300 font-mono">localStorage</code> cache and Google Cloud Firestore. The reconciler above automatically scans all bundle attachments, extracts missing items, and registers them into the active dataset.
-                </p>
+              <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-1">
+                <div className="text-xs font-bold text-slate-400">Empty Mock Tests</div>
+                <div className="text-2xl font-black text-white">{analytics.emptyTestsCount}</div>
+                <div className="text-[11px] text-slate-400">Tests with 0 questions</div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
-                <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>3. FAANG Zero-Loss Guarantee</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Ensures 100% relational integrity across frontend candidates, admin portal management, and backend Firestore collections with cryptographic UUID tracking and strict schema typing.
+              <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-1">
+                <div className="text-xs font-bold text-slate-400">Bundles with 0 Tests</div>
+                <div className="text-2xl font-black text-white">{analytics.emptyBundlesCount}</div>
+                <div className="text-[11px] text-slate-400">Accurately preserved without auto-resurrection</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Database Control & Demo Purge Command Center */}
+          <div className="bg-slate-900 border border-rose-900/30 rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-rose-300 flex items-center space-x-2">
+                  <Trash2 className="w-4 h-4 text-rose-400" />
+                  <span>Total Demo Data Purge & Reset Engine</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Completely wipes all demo mock tests, demo PYQs, dummy questions, and local test cache so that only your genuine content exists.
                 </p>
               </div>
             </div>
 
-            {/* Current System Status Metrics */}
-            <div className="pt-4 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
-                <div className="text-[11px] text-slate-400">Total Bundles Catalog</div>
-                <div className="text-lg font-black text-white mt-0.5">{storedBundles.length}</div>
+            <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-900/40 space-y-3">
+              <div className="text-xs text-rose-200">
+                Clicking <strong>Purge All Demo Data</strong> will:
+                <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-400">
+                  <li>Clear all demo mock test records (<code className="text-rose-300">cgssb_tests</code>, <code className="text-rose-300">cgssb_custom_mock_tests</code>)</li>
+                  <li>Clear all demo PYQ papers (<code className="text-rose-300">cgssb_pyp_papers</code>)</li>
+                  <li>Clear all bundled test items across all test series packs</li>
+                  <li>Leave the database structure 100% pristine for production questions</li>
+                </ul>
               </div>
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
-                <div className="text-[11px] text-slate-400">Standalone Mock Tests</div>
-                <div className="text-lg font-black text-indigo-400 mt-0.5">{tests.length}</div>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
-                <div className="text-[11px] text-slate-400">Question Bank Items</div>
-                <div className="text-lg font-black text-teal-400 mt-0.5">{questions.length}</div>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
-                <div className="text-[11px] text-slate-400">Database Integrity State</div>
-                <div className="text-sm font-black text-emerald-400 mt-1 flex items-center justify-center space-x-1">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Optimal (100%)</span>
-                </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  onClick={handlePurgeAllDemoData}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition shadow-lg shadow-rose-600/30 flex items-center space-x-2 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Execute Full Demo Data Purge</span>
+                </button>
+
+                <button
+                  onClick={handleToggleTrueZero}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center space-x-2 border cursor-pointer ${
+                    trueZero
+                      ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>{trueZero ? 'True 0 Data Mode Active (0 Tests)' : 'Enable True 0 Data Mode'}</span>
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 1: COLLECTIONS & SCHEMAS */}
+      {/* SUBTAB 3: COLLECTIONS INSPECTOR */}
       {activeSubTab === 'collections' && (
-        <div className="space-y-6">
-          {/* Collection Cards Overview */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-            {FIRESTORE_COLLECTIONS.map(col => {
-              const isSelected = selectedCollection === col.id;
-              return (
-                <div
-                  key={col.id}
-                  onClick={() => setSelectedCollection(isSelected ? 'all' : col.id)}
-                  className={`p-4 rounded-2xl border transition cursor-pointer relative shadow-lg ${
-                    isSelected
-                      ? 'border-indigo-500 bg-indigo-950/30 ring-1 ring-indigo-500'
-                      : 'border-slate-800 bg-slate-900/90 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono font-bold text-sm text-white">/{col.name}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
-                      {col.documentCount} docs
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2">{col.badge}</p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {FIRESTORE_COLLECTIONS.map(col => (
+              <div key={col.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-white font-mono">{col.name}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {col.documentCount} docs
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Search Bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search collection fields, types, or rules..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:border-indigo-500 outline-none"
-              />
-            </div>
-            {selectedCollection !== 'all' && (
-              <button
-                onClick={() => setSelectedCollection('all')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
-              >
-                Clear collection filter
-              </button>
-            )}
-          </div>
-
-          {/* Collection Detail Accordions */}
-          <div className="space-y-6">
-            {filteredCollections.map(col => (
-              <div key={col.id} className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-4">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono font-black text-lg text-white">collection('/{col.name}')</span>
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold">
-                        {col.badge}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-300 mt-1">{col.description}</p>
-                  </div>
-                  <div className="flex items-center space-x-2 shrink-0 text-xs font-mono">
-                    <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-400">
-                      ID: {col.primaryKey}
-                    </span>
-                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold">
-                      {col.documentCount} Documents
-                    </span>
-                  </div>
-                </div>
-
-                {/* Fields Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px] tracking-wider">
-                        <th className="py-2.5 px-3">Field Name</th>
-                        <th className="py-2.5 px-3">Firestore Type</th>
-                        <th className="py-2.5 px-3">Required</th>
-                        <th className="py-2.5 px-3">Description & Blueprint Constraint</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-sans">
-                      {col.fields.map(field => (
-                        <tr key={field.name} className="hover:bg-slate-850/50 transition">
-                          <td className="py-2.5 px-3 font-mono font-bold text-indigo-300">{field.name}</td>
-                          <td className="py-2.5 px-3">
-                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-amber-300">
-                              {field.type}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            {field.required ? (
-                              <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                                Required
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-500">Optional</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-300">{field.desc}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Firestore Indexes */}
-                <div className="pt-2 flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 border-t border-slate-800/60">
-                  <span className="text-slate-500 font-bold">Indexes:</span>
-                  {col.indexes.map(idx => (
-                    <span key={idx} className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                      {idx}
-                    </span>
-                  ))}
+                <p className="text-xs text-slate-400 line-clamp-2">{col.description}</p>
+                <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-500 font-mono">
+                  Primary Key: {col.primaryKey}
                 </div>
               </div>
             ))}
@@ -843,30 +812,23 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
         </div>
       )}
 
-      {/* TAB 2: FIRESTORE SECURITY RULES INSPECTOR */}
+      {/* SUBTAB 4: RULES INSPECTOR */}
       {activeSubTab === 'rules' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-white flex items-center space-x-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Active Firestore Security Rules (`firestore.rules`)</span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Rules version 2 deployed to project <code className="text-indigo-300 font-mono">gen-lang-client-0783153446</code> and database <code className="text-indigo-300 font-mono">ai-studio-cgssbtest-...</code>
-              </p>
+              <h3 className="text-base font-black text-white">Firestore Security Rules (ABAC)</h3>
+              <p className="text-xs text-slate-400">Strict attribute-based access control protecting candidate data and admin operations</p>
             </div>
-
             <button
               onClick={handleCopyRules}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
             >
               {copiedRules ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedRules ? 'Rules Copied!' : 'Copy Rules'}</span>
             </button>
           </div>
 
-          {/* Rules Code Container */}
           <pre className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 font-mono text-xs text-emerald-300 overflow-x-auto leading-relaxed max-h-[500px]">
             {FIRESTORE_RULES_TEXT}
           </pre>

@@ -50,7 +50,7 @@ const AdminChapterTestManager = React.lazy(() => import('./components/AdminChapt
 const AdminPracticeSetManager = React.lazy(() => import('./components/AdminPracticeSetManager').then(m => ({ default: m.AdminPracticeSetManager })));
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
-import { syncBundlesFromFirestore, autoLinkTestToBundles, cleanTestFromAllBundles } from './utils/bundleStore';
+import { syncBundlesFromFirestore, cleanTestFromAllBundles } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
 const AdminRemoteConfigStudio = React.lazy(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
 import { useTestManager } from './hooks/useTestManager';
@@ -976,7 +976,6 @@ function MainApp() {
       targetTest = updated.find(t => t.id === testId) || null;
       if (targetTest) {
         saveTestToFirestore(targetTest).catch(() => null);
-        autoLinkTestToBundles(targetTest);
       }
       return updated;
     });
@@ -1033,7 +1032,6 @@ function MainApp() {
     removeDeletedId('cgssb_deleted_tests', fullTest.id);
     setTests(prev => dedupeById([fullTest, ...prev]));
     saveTestToFirestore(fullTest).catch(() => null);
-    autoLinkTestToBundles(fullTest);
     const token = getAdminToken();
     fetch('/api/tests', {
       method: 'POST',
@@ -1053,7 +1051,6 @@ function MainApp() {
     setTests(prev => dedupeById([newTest, ...prev]));
     saveTestToFirestore(newTest).catch(() => null);
     saveQuestionsToFirestore(newQuestions).catch(() => null);
-    autoLinkTestToBundles(newTest);
     const token = getAdminToken();
     fetch('/api/tests', {
       method: 'POST',
@@ -1097,7 +1094,6 @@ function MainApp() {
     setTests(prev => dedupeById([...newTests, ...prev]));
     newTests.forEach(t => {
       saveTestToFirestore(t).catch(() => null);
-      autoLinkTestToBundles(t);
     });
     const token = getAdminToken();
     newTests.forEach(t => {

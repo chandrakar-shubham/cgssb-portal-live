@@ -62,15 +62,15 @@ export const getAdminHeaders = (): Record<string, string> => {
  * Intelligent bundle entity merger that never wipes official curriculum items with empty arrays
  */
 export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<TestSeriesBundle>): TestSeriesBundle => {
-  const mergedTestItems = (incoming.testItems && incoming.testItems.length > 0)
+  const mergedTestItems = incoming.testItems !== undefined
     ? incoming.testItems
-    : (base.testItems && base.testItems.length > 0 ? base.testItems : (incoming.testItems || []));
-  const mergedChapterTests = (incoming.chapterTests && incoming.chapterTests.length > 0)
+    : (base.testItems || []);
+  const mergedChapterTests = incoming.chapterTests !== undefined
     ? incoming.chapterTests
-    : (base.chapterTests && base.chapterTests.length > 0 ? base.chapterTests : (incoming.chapterTests || []));
-  const mergedPypTests = (incoming.pypTests && incoming.pypTests.length > 0)
+    : (base.chapterTests || []);
+  const mergedPypTests = incoming.pypTests !== undefined
     ? incoming.pypTests
-    : (base.pypTests && base.pypTests.length > 0 ? base.pypTests : (incoming.pypTests || []));
+    : (base.pypTests || []);
 
   const totalCount = mergedTestItems.length + mergedChapterTests.length + mergedPypTests.length;
   const allTests = [...mergedTestItems, ...mergedChapterTests, ...mergedPypTests];
@@ -96,8 +96,8 @@ export const mergeBundleEntities = (base: TestSeriesBundle, incoming: Partial<Te
     testItems: mergedTestItems,
     chapterTests: mergedChapterTests,
     pypTests: mergedPypTests,
-    totalTestsCount: totalCount > 0 ? totalCount : (incoming.totalTestsCount || base.totalTestsCount || 1),
-    freeTestsCount: freeCount > 0 ? freeCount : (incoming.freeTestsCount || base.freeTestsCount || 1),
+    totalTestsCount: totalCount,
+    freeTestsCount: freeCount,
     syllabusBreakdown: incoming.syllabusBreakdown?.length ? incoming.syllabusBreakdown : base.syllabusBreakdown,
     examPattern: incoming.examPattern?.keyRules?.length ? incoming.examPattern : base.examPattern,
     features: incoming.features?.length ? incoming.features : base.features,
@@ -130,16 +130,6 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
   try {
     const deletedSet = getDeletedBundleIds();
     const trueZeroMode = getTrueZeroDataMode();
-    const raw = localStorage.getItem(BUNDLE_STORAGE_KEY);
-    // Clear stale empty cache if any official bundle has 0 test items
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.some(b => b.id === 'bundle-cgssb-lecturer-english-2026' && (!b.testItems || b.testItems.length === 0))) {
-          localStorage.removeItem(BUNDLE_STORAGE_KEY);
-        }
-      } catch {}
-    }
     const freshRaw = localStorage.getItem(BUNDLE_STORAGE_KEY);
     const bundleMap = new Map<string, TestSeriesBundle>();
 
@@ -190,8 +180,8 @@ export const getStoredBundles = (): TestSeriesBundle[] => {
         testItems: newTestItems,
         chapterTests: newChapterTests,
         pypTests: newPypTests,
-        totalTestsCount: totalCount > 0 ? totalCount : 1,
-        freeTestsCount: freeCount > 0 ? freeCount : 1,
+        totalTestsCount: totalCount,
+        freeTestsCount: freeCount,
       };
     });
 
@@ -859,98 +849,71 @@ export const convertMockTestToBundleItem = (test: MockTest, isFirstFree = false)
 };
 
 /**
- * Auto-links a newly created or edited test to all matching bundles
+ * Auto-linking has been disabled to ensure 100% deterministic, explicit admin control.
+ * Tests are only attached to bundles when explicitly added by an administrator.
  */
-export const autoLinkTestToBundles = (test: MockTest): void => {
-  if (!test || !test.id) return;
-  const bundles = getStoredBundles();
-  let modified = false;
-
-  const updatedBundles = bundles.map(bundle => {
-    if (doesTestMatchBundle(test, bundle)) {
-      const testItems = bundle.testItems || [];
-      const exists = testItems.some(item => item.id === test.id || item.mockTestRef?.id === test.id);
-      if (!exists) {
-        modified = true;
-        const newItem = convertMockTestToBundleItem(test, testItems.length === 0);
-        const newTestItems = [...testItems, newItem];
-        const totalCount = newTestItems.length + (bundle.chapterTests?.length || 0) + (bundle.pypTests?.length || 0);
-        const freeCount = [...newTestItems, ...(bundle.chapterTests || []), ...(bundle.pypTests || [])].filter(t => t.isFreePreview).length;
-
-        return {
-          ...bundle,
-          testItems: newTestItems,
-          totalTestsCount: totalCount,
-          freeTestsCount: freeCount || 1,
-        };
-      }
-    }
-    return bundle;
-  });
-
-  if (modified) {
-    saveStoredBundles(updatedBundles);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updatedBundles }));
-    }
-    updatedBundles.forEach(b => {
-      saveBundleToFirestore(b).catch(() => null);
-      fetch('/api/bundles', {
-        method: 'POST',
-        headers: getAdminHeaders(),
-        body: JSON.stringify(b)
-      }).catch(() => null);
-    });
-  }
+export const autoLinkTestToBundles = (_test: MockTest): void => {
+  // Disabled as per FAANG database governance rules: No implicit heuristic associations
+  return;
 };
 
 /**
- * Reconciles all mock tests in the catalog with stored bundles, auto-attaching missing matching tests
+ * Reconciles bundle items strictly based on valid foreign keys and explicit associations.
  */
-export const reconcileAllTestsWithBundles = (allTests: MockTest[]): TestSeriesBundle[] => {
-  if (!allTests || allTests.length === 0) return getStoredBundles();
-  const bundles = getStoredBundles();
-  let modified = false;
+export const reconcileAllTestsWithBundles = (_allTests: MockTest[]): TestSeriesBundle[] => {
+  return getStoredBundles();
+};
 
-  const updatedBundles = bundles.map(bundle => {
-    const matchingTests = allTests.filter(t => doesTestMatchBundle(t, bundle));
-    if (matchingTests.length === 0) return bundle;
+/**
+ * FAANG Comprehensive Demo Data Purge Engine
+ * Thoroughly wipes all demo/dummy mock tests, PYQ fixtures, dummy questions, and local test cache
+ */
+export const purgeAllDemoDatabaseData = (): { purgedKeys: string[]; timestamp: string } => {
+  if (typeof window === 'undefined') return { purgedKeys: [], timestamp: new Date().toISOString() };
+  
+  const keysToPurge = [
+    'cgssb_tests',
+    'cgssb_questions',
+    'cgssb_custom_mock_tests',
+    'cgssb_pyp_papers',
+    'cgssb_practice_questions',
+    'cgssb_chapter_tests',
+    'cgssb_deleted_tests',
+    'cgssb_deleted_questions',
+    'cgssb_deleted_pyp',
+    'cgssb_deleted_bundles',
+    'cgssb_trash_bin_v1',
+  ];
 
-    const currentItems = [...(bundle.testItems || [])];
-    let bundleModified = false;
-
-    matchingTests.forEach(test => {
-      const exists = currentItems.some(item => item.id === test.id || item.mockTestRef?.id === test.id);
-      if (!exists) {
-        bundleModified = true;
-        const newItem = convertMockTestToBundleItem(test, currentItems.length === 0);
-        currentItems.push(newItem);
-      }
-    });
-
-    if (bundleModified) {
-      modified = true;
-      const totalCount = currentItems.length + (bundle.chapterTests?.length || 0) + (bundle.pypTests?.length || 0);
-      const allAttached = [...currentItems, ...(bundle.chapterTests || []), ...(bundle.pypTests || [])];
-      const freeCount = allAttached.filter(t => t.isFreePreview).length;
-
-      return {
-        ...bundle,
-        testItems: currentItems,
-        totalTestsCount: totalCount,
-        freeTestsCount: freeCount || 1,
-      };
+  const purged: string[] = [];
+  keysToPurge.forEach(k => {
+    if (localStorage.getItem(k) !== null) {
+      localStorage.removeItem(k);
+      purged.push(k);
     }
-
-    return bundle;
   });
 
-  if (modified) {
-    saveStoredBundles(updatedBundles);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updatedBundles }));
-    }
-  }
+  // Clean all bundles by emptying demo embedded tests
+  const bundles = getStoredBundles();
+  const cleanBundles = bundles.map(b => ({
+    ...b,
+    testItems: [],
+    chapterTests: [],
+    pypTests: [],
+    totalTestsCount: 0,
+    freeTestsCount: 0,
+  }));
+  localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(cleanBundles));
+  localStorage.setItem('cgssb_custom_mock_tests', JSON.stringify([]));
+  localStorage.setItem('cgssb_tests', JSON.stringify([]));
+  localStorage.setItem('cgssb_questions', JSON.stringify([]));
 
-  return updatedBundles;
+  window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: cleanBundles }));
+  window.dispatchEvent(new CustomEvent('cgssb-tests-updated', { detail: [] }));
+  window.dispatchEvent(new CustomEvent('cgssb-questions-updated', { detail: [] }));
+
+  return {
+    purgedKeys: purged,
+    timestamp: new Date().toISOString()
+  };
 };
