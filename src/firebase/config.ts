@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, Firestore } from 'firebase/firestore';
 import firebaseConfigData from '../../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -19,9 +19,24 @@ export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getA
 export const auth = getAuth(app);
 export const googleAuthProvider = new GoogleAuthProvider();
 
-// Initialize Cloud Firestore (with named database ID if specified)
-export const db = firebaseConfigData.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfigData.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Cloud Firestore with resilient offline persistence
+let firestoreDb: Firestore;
+try {
+  firestoreDb = initializeFirestore(
+    app,
+    {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    },
+    firebaseConfigData.firestoreDatabaseId || undefined
+  );
+} catch {
+  firestoreDb = firebaseConfigData.firestoreDatabaseId
+    ? getFirestore(app, firebaseConfigData.firestoreDatabaseId)
+    : getFirestore(app);
+}
+
+export const db = firestoreDb;
 
 export const isFirebaseConfigured = Boolean(firebaseConfigData.apiKey && firebaseConfigData.projectId);

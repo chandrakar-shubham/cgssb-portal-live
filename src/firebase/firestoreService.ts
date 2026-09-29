@@ -71,6 +71,24 @@ const BUNDLES_COLLECTION = 'bundles';
 const ATTEMPTS_COLLECTION = 'attempts';
 const PYP_PAPERS_COLLECTION = 'pypPapers';
 
+/**
+ * Executes a promise with an upper-bound timeout to avoid stalling on poor connections
+ */
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = 3500, fallbackValue: T): Promise<T> {
+  let timer: any;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallbackValue), timeoutMs);
+  });
+  try {
+    const result = await Promise.race([promise, timeout]);
+    clearTimeout(timer);
+    return result;
+  } catch {
+    clearTimeout(timer);
+    return fallbackValue;
+  }
+}
+
 // ==========================================
 // USER SERVICES
 // ==========================================
@@ -89,11 +107,11 @@ export async function syncUserProfileToFirestore(user: User): Promise<void> {
 export async function fetchUserProfileFromFirestore(userId: string): Promise<User | null> {
   try {
     const userDocRef = doc(db, USERS_COLLECTION, userId);
-    const snap = await getDoc(userDocRef);
-    if (snap.exists()) {
-      return snap.data() as User;
-    }
-    return null;
+    return await withTimeout(
+      getDoc(userDocRef).then(snap => snap.exists() ? (snap.data() as User) : null),
+      3500,
+      null
+    );
   } catch (err) {
     console.warn('Error fetching user profile from Firestore:', err);
     return null;
@@ -105,12 +123,17 @@ export async function fetchUserProfileFromFirestore(userId: string): Promise<Use
 // ==========================================
 export async function fetchTestsFromFirestore(): Promise<MockTest[]> {
   try {
-    const snap = await getDocs(collection(db, TESTS_COLLECTION));
-    const items: MockTest[] = [];
-    snap.forEach(d => {
-      items.push(d.data() as MockTest);
-    });
-    return items;
+    return await withTimeout(
+      getDocs(collection(db, TESTS_COLLECTION)).then(snap => {
+        const items: MockTest[] = [];
+        snap.forEach(d => {
+          items.push(d.data() as MockTest);
+        });
+        return items;
+      }),
+      3500,
+      []
+    );
   } catch (err) {
     console.warn('Error fetching tests from Firestore:', err);
     return [];
@@ -131,12 +154,17 @@ export async function saveTestToFirestore(test: MockTest): Promise<void> {
 // ==========================================
 export async function fetchQuestionsFromFirestore(): Promise<Question[]> {
   try {
-    const snap = await getDocs(collection(db, QUESTIONS_COLLECTION));
-    const items: Question[] = [];
-    snap.forEach(d => {
-      items.push(d.data() as Question);
-    });
-    return items;
+    return await withTimeout(
+      getDocs(collection(db, QUESTIONS_COLLECTION)).then(snap => {
+        const items: Question[] = [];
+        snap.forEach(d => {
+          items.push(d.data() as Question);
+        });
+        return items;
+      }),
+      3500,
+      []
+    );
   } catch (err) {
     console.warn('Error fetching questions from Firestore:', err);
     return [];
@@ -159,12 +187,17 @@ export async function saveQuestionsToFirestore(questions: Question[]): Promise<v
 // ==========================================
 export async function fetchBundlesFromFirestore(): Promise<TestSeriesBundle[]> {
   try {
-    const snap = await getDocs(collection(db, BUNDLES_COLLECTION));
-    const items: TestSeriesBundle[] = [];
-    snap.forEach(d => {
-      items.push(d.data() as TestSeriesBundle);
-    });
-    return items;
+    return await withTimeout(
+      getDocs(collection(db, BUNDLES_COLLECTION)).then(snap => {
+        const items: TestSeriesBundle[] = [];
+        snap.forEach(d => {
+          items.push(d.data() as TestSeriesBundle);
+        });
+        return items;
+      }),
+      3500,
+      []
+    );
   } catch (err) {
     console.warn('Error fetching bundles from Firestore:', err);
     return [];
@@ -212,12 +245,17 @@ export async function deleteQuestionFromFirestore(questionId: string): Promise<v
 // ==========================================
 export async function fetchPypPapersFromFirestore(): Promise<PreviousYearPaper[]> {
   try {
-    const snap = await getDocs(collection(db, PYP_PAPERS_COLLECTION));
-    const items: PreviousYearPaper[] = [];
-    snap.forEach(d => {
-      items.push(d.data() as PreviousYearPaper);
-    });
-    return items;
+    return await withTimeout(
+      getDocs(collection(db, PYP_PAPERS_COLLECTION)).then(snap => {
+        const items: PreviousYearPaper[] = [];
+        snap.forEach(d => {
+          items.push(d.data() as PreviousYearPaper);
+        });
+        return items;
+      }),
+      3500,
+      []
+    );
   } catch (err) {
     console.warn('Error fetching PYP papers from Firestore:', err);
     return [];
