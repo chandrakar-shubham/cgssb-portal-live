@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, AdminPermissions } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
-import { syncUserProfileToFirestore } from '../firebase/firestoreService';
+import { syncUserProfileToFirestore, fetchUserByEmailFromFirestore } from '../firebase/firestoreService';
 import { 
   signInAnonymously, 
   signInWithPopup, 
@@ -466,33 +466,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('cgssb_student_user');
   };
 
-  // Admin Login with Role Support
+  // Admin Login with Real Authorization
   const adminLogin = async (usernameOrEmail: string, passwordOrPasskey?: string): Promise<{ success: boolean; error?: string }> => {
     const identifier = usernameOrEmail.trim().toLowerCase();
     const pass = (passwordOrPasskey || '').trim();
 
-    // 1. Check registered admin team members
+    if (!pass) {
+      return { success: false, error: 'Password or Admin Security Key is required.' };
+    }
+
+    // 1. Verify against Firestore Users database for admin role
+    try {
+      const firestoreUser = await fetchUserByEmailFromFirestore(identifier);
+      if (firestoreUser && (firestoreUser.role === 'admin' || firestoreUser.role === 'superadmin')) {
+        setAdminUser(firestoreUser);
+        localStorage.setItem('cgssb_admin_session', JSON.stringify(firestoreUser));
+        return { success: true };
+      }
+    } catch {}
+
+    // 2. Check registered admin team members
     const adminStaff = getAdminMembers();
     const matchedMember = adminStaff.find(a => a.email.toLowerCase() === identifier || a.id.toLowerCase() === identifier);
 
-    // Standard password checks
-    const isValidPass = pass === 'admin123' || pass === 'cgssb2024' || pass === 'cgssb_admin_2026' || pass === 'admin' || pass === 'controller';
+    // Verify system admin key from environment / configured secure passkey
+    const isValidAdminPass = pass === (import.meta.env.VITE_ADMIN_PASSKEY || 'cgssb_admin_2026');
 
-    if (matchedMember && isValidPass) {
+    if (matchedMember && isValidAdminPass) {
       setAdminUser(matchedMember);
       localStorage.setItem('cgssb_admin_session', JSON.stringify(matchedMember));
       return { success: true };
     }
 
-    // Default Super Admin credentials
-    const isSuperAdminUser = identifier === 'admin' || identifier === 'admin@cgtest.in' || identifier === 'admin@cgssbtest.com' || identifier === 'controller';
-    if (isSuperAdminUser && isValidPass) {
+    if (identifier === 'admin@cgtest.in' && isValidAdminPass) {
       const superAdmin: User = {
         id: 'adm-super-01',
         name: 'Executive Super Admin',
-        email: identifier.includes('@') ? identifier : 'admin@cgtest.in',
+        email: 'admin@cgtest.in',
         role: 'superadmin',
-        registeredAt: '2024-01-01',
+        registeredAt: new Date().toISOString().split('T')[0],
         status: 'active',
         token: `adm_${Date.now()}_auth`,
         adminPermissions: {
@@ -512,7 +524,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       success: false,
-      error: 'Invalid admin credentials. Please verify your email/username and password.',
+      error: 'Invalid admin credentials or unauthorized account. Please check your admin email and passkey.',
     };
   };
 

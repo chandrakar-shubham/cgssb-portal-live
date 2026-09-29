@@ -36,15 +36,10 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_pages');
       if (saved) {
         const parsed: CMSPage[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const pageMap = new Map<string, CMSPage>();
-          INITIAL_CMS_PAGES.forEach(p => pageMap.set(p.id, p));
-          parsed.forEach(p => pageMap.set(p.id, p));
-          return Array.from(pageMap.values());
-        }
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return isDemoDataPurged() ? [] : INITIAL_CMS_PAGES;
+    return [];
   });
 
   const [cmsPosts, setCmsPosts] = useState<CMSPost[]>(() => {
@@ -52,10 +47,10 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_posts');
       if (saved) {
         const parsed: CMSPost[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return isDemoDataPurged() ? [] : INITIAL_CMS_POSTS;
+    return [];
   });
 
   const [cmsSeriesPacks, setCmsSeriesPacks] = useState<CMSTestSeriesPack[]>(() => {
@@ -63,10 +58,10 @@ export function useCmsManager() {
       const saved = localStorage.getItem('cgssb_cms_series');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return isDemoDataPurged() ? [] : INITIAL_CMS_SERIES_PACKS;
+    return [];
   });
 
   const [cmsSettings, setCmsSettings] = useState<CMSSiteSettings>(() => {

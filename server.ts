@@ -33,7 +33,6 @@ import {
   getTestAttemptById,
   saveTestAttempt,
   getDatabaseCounts,
-  saveLocalJsonDb,
   syncWithFirestore,
   getAllCmsPages,
   getCmsPageBySlug,
@@ -79,7 +78,7 @@ import {
   saveSource
 } from './server/db/currentAffairsRepository.ts';
 import { bootstrapAndMigrate } from './server/db/migrator.ts';
-import { dbConfig, isFirestoreActive } from './server/db/connection.ts';
+import { dbConfig, isFirestoreActive, testConnection } from './server/db/connection.ts';
 
 dotenv.config();
 
@@ -571,6 +570,23 @@ function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Questi
 }
 
 async function startServer() {
+  // Strict Production Environment Validation
+  const requiredEnvVars = ['DATABASE_MODE', 'FIRESTORE_DATABASE_ID'];
+  const missingEnvVars = requiredEnvVars.filter(k => !process.env[k]);
+  if (missingEnvVars.length > 0) {
+    const errorMsg = `FATAL CONFIGURATION ERROR: Missing required environment variable(s): ${missingEnvVars.join(', ')}. Server initialization blocked.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  // Live Cloud Firestore Connectivity Enforcement (Fails loud if disconnected)
+  const connectionCheck = await testConnection();
+  if (!connectionCheck.ok) {
+    const errorMsg = `FATAL DATABASE ERROR: Could not connect to Google Cloud Firestore database ID (${dbConfig.databaseId}). Local fallback engine has been completely deleted. Server initialization blocked.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
@@ -2530,11 +2546,10 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
   app.post('/api/admin/backup/snapshot', requireAdmin, async (req, res) => {
     try {
-      saveLocalJsonDb(true);
       const counts = await getDatabaseCounts();
       res.json({
         success: true,
-        message: 'Database snapshot safely written to persistent disk storage and synced.',
+        message: 'Live Cloud Firestore catalog synchronized.',
         timestamp: new Date().toISOString(),
         counts
       });

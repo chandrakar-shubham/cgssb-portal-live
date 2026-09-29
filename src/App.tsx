@@ -542,67 +542,32 @@ function MainApp() {
           fetchPypPapersFromFirestore().catch(() => [])
         ]);
 
-        const isPurged = isDemoDataPurged();
-        const demoTestIds = new Set([
-          ...INITIAL_MOCK_TESTS.map(t => t.id),
-          'mock-cgssb-2026-1790415452437',
-          'test-1790431929334',
-          'test-1790433244323',
-          'test-ai-1790425189331'
-        ]);
-        const demoQIds = new Set(INITIAL_QUESTIONS.map(q => q.id));
-        const demoPypIds = new Set(INITIAL_PYP_PAPERS.map(p => p.id));
-
-        const deletedTests = getDeletedIds('cgssb_deleted_tests');
-        const deletedQs = getDeletedIds('cgssb_deleted_questions');
-        const deletedPyps = getDeletedIds('cgssb_deleted_pyp');
-
-        if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
+        if (Array.isArray(firestoreTests)) {
+          setTests(firestoreTests);
+        } else if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
           const t = await testsRes.json();
           const list = Array.isArray(t) ? t : (t?.tests || []);
-          const filtered = list.filter((test: MockTest) => !deletedTests.has(test.id) && (!isPurged || !demoTestIds.has(test.id)));
-          setTests(filtered);
-        } else if (Array.isArray(firestoreTests)) {
-          const filtered = firestoreTests.filter(t => !deletedTests.has(t.id) && (!isPurged || !demoTestIds.has(t.id)));
-          if (filtered.length > 0 || isPurged) {
-            setTests(filtered);
-          }
-        } else if (isPurged) {
-          setTests([]);
+          setTests(list);
         }
 
-        if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
+        if (Array.isArray(firestoreQuestions)) {
+          setQuestions(firestoreQuestions);
+        } else if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
           const q = await qRes.json();
           const list = Array.isArray(q) ? q : (q?.questions || []);
-          const filtered = list.filter((question: Question) => !deletedQs.has(question.id) && (!isPurged || !demoQIds.has(question.id)));
-          setQuestions(filtered);
-        } else if (Array.isArray(firestoreQuestions)) {
-          const filtered = firestoreQuestions.filter(q => !deletedQs.has(q.id) && (!isPurged || !demoQIds.has(q.id)));
-          if (filtered.length > 0 || isPurged) {
-            setQuestions(filtered);
-          }
-        } else if (isPurged) {
-          setQuestions([]);
+          setQuestions(list);
         }
 
-        if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
+        if (Array.isArray(firestorePyp)) {
+          setPypPapers(firestorePyp);
+        } else if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
           const p = await pypRes.json();
           const list = Array.isArray(p) ? p : (p?.papers || []);
-          const filtered = list.filter((paper: PreviousYearPaper) => !deletedPyps.has(paper.id) && (!isPurged || !demoPypIds.has(paper.id)));
-          setPypPapers(filtered);
-        } else if (Array.isArray(firestorePyp)) {
-          const filtered = firestorePyp.filter(p => !deletedPyps.has(p.id) && (!isPurged || !demoPypIds.has(p.id)));
-          if (filtered.length > 0 || isPurged) {
-            setPypPapers(filtered);
-          }
-        } else if (isPurged) {
-          setPypPapers([]);
+          setPypPapers(list);
         }
 
-        // Sync and refresh Test Series bundles from Cloud Firestore & server (only if not in purged state)
-        if (!isPurged) {
-          await syncBundlesFromFirestore().catch(() => null);
-        }
+        // Sync and refresh Test Series bundles from Cloud Firestore
+        await syncBundlesFromFirestore().catch(() => null);
       } catch (err) {
         console.warn('Backend API unavailable or non-JSON response received. Falling back to local state:', err);
       }

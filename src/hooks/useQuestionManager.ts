@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Question } from '../types';
 import { INITIAL_QUESTIONS } from '../mockData';
 import { migrateLegacyQuestion } from '../utils/taxonomyMigration';
-import { isDemoDataPurged } from '../utils/bundleStore';
 import {
   fetchQuestionsFromFirestore,
   saveQuestionsToFirestore,
@@ -11,67 +10,37 @@ import {
   subscribeToQuestions
 } from '../firebase/firestoreService';
 
-function getDeletedIds(key: string): Set<string> {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return new Set(parsed);
-    }
-  } catch {}
-  return new Set<string>();
-}
-
 export function useQuestionManager() {
   const [questions, setQuestions] = useState<Question[]>(() => {
     try {
-      const deletedSet = getDeletedIds('cgssb_deleted_questions');
-      if (isDemoDataPurged()) {
-        const saved = localStorage.getItem('cgssb_questions');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
-          }
-        }
-        return [];
-      }
       const saved = localStorage.getItem('cgssb_questions');
-      if (saved !== null) {
+      if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
+        if (Array.isArray(parsed)) {
+          return parsed.map(migrateLegacyQuestion);
         }
       }
-      return INITIAL_QUESTIONS.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
     } catch {}
-    return isDemoDataPurged() ? [] : INITIAL_QUESTIONS.map(migrateLegacyQuestion);
+    return [];
   });
 
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
     const unsubscribe = subscribeToQuestions((firestoreQuestions) => {
-      const deletedSet = getDeletedIds('cgssb_deleted_questions');
-      const filtered = firestoreQuestions.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
-      if (filtered.length > 0) {
-        setQuestions(filtered);
+      if (Array.isArray(firestoreQuestions)) {
+        setQuestions(firestoreQuestions.map(migrateLegacyQuestion));
         try {
-          localStorage.setItem('cgssb_questions', JSON.stringify(filtered));
+          localStorage.setItem('cgssb_questions', JSON.stringify(firestoreQuestions));
         } catch {}
       }
     });
 
-    // Initial fetch fallback
     fetchQuestionsFromFirestore().then((remoteQs) => {
-      if (Array.isArray(remoteQs) && remoteQs.length > 0) {
-        const deletedSet = getDeletedIds('cgssb_deleted_questions');
-        const filtered = remoteQs.map(migrateLegacyQuestion).filter(q => !deletedSet.has(q.id));
-        if (filtered.length > 0) {
-          setQuestions(filtered);
-          try {
-            localStorage.setItem('cgssb_questions', JSON.stringify(filtered));
-          } catch {}
-        }
+      if (Array.isArray(remoteQs)) {
+        setQuestions(remoteQs.map(migrateLegacyQuestion));
+        try {
+          localStorage.setItem('cgssb_questions', JSON.stringify(remoteQs));
+        } catch {}
       }
     }).catch(() => {});
 
@@ -113,18 +82,11 @@ export function useQuestionManager() {
   }, []);
 
   const deleteQuestion = useCallback((questionId: string) => {
-    try {
-      const raw = localStorage.getItem('cgssb_deleted_questions');
-      const arr = raw ? JSON.parse(raw) : [];
-      if (!arr.includes(questionId)) arr.push(questionId);
-      localStorage.setItem('cgssb_deleted_questions', JSON.stringify(arr));
-    } catch {}
     setQuestions(prev => prev.filter(q => q.id !== questionId));
     deleteQuestionFromFirestore(questionId).catch(err => console.warn('Cloud delete question warning:', err));
   }, []);
 
   const syncQuestions = useCallback(() => {
-    if (isDemoDataPurged()) return;
     const items = INITIAL_QUESTIONS.map(migrateLegacyQuestion);
     setQuestions(items);
     try {

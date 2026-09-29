@@ -1,28 +1,18 @@
-import fs from 'fs';
-import path from 'path';
-import { doc, getDocs, collection, setDoc, deleteDoc } from 'firebase/firestore';
-import { dbConfig, isFirestoreActive, getFirestoreServer, canServerWriteFirestore } from './connection.ts';
+import { doc, getDoc, getDocs, collection, setDoc, deleteDoc } from 'firebase/firestore';
+import { dbConfig, getFirestoreServer, canServerWriteFirestore } from './connection.ts';
 import type {
   Question,
   MockTest,
   PreviousYearPaper,
   TestAttempt,
-  ExamCategory,
-  SectorAnalysis,
   AppRemoteConfig
 } from '../../src/types.ts';
 import { DEFAULT_REMOTE_CONFIG } from '../../src/types.ts';
-import {
-  INITIAL_QUESTIONS,
-  INITIAL_MOCK_TESTS,
-  INITIAL_PYP_PAPERS,
-  SAMPLE_USER_ATTEMPTS
-} from '../../src/mockData.ts';
 import type { TestSeriesBundle } from '../../src/data/bundleCatalog.ts';
-import { OFFICIAL_BUNDLES_CATALOG } from '../../src/data/bundleCatalog.ts';
-
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'cgssb-db.json');
+import type { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../../src/types/cms.ts';
+import {
+  INITIAL_CMS_SETTINGS
+} from '../../src/defaultCmsData.ts';
 
 export interface DatabaseShape {
   questions: Question[];
@@ -32,62 +22,21 @@ export interface DatabaseShape {
   demoDataPurged?: boolean;
 }
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
+// In-memory runtime cache fed strictly by live Cloud Firestore
+let memoryCache: DatabaseShape = {
+  questions: [],
+  mockTests: [],
+  pypPapers: [],
+  attempts: [],
+  demoDataPurged: false,
+};
 
-function loadLocalJsonDb(): DatabaseShape {
-  ensureDataDir();
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        const isPurged = parsed.demoDataPurged === true;
-        return {
-          questions: Array.isArray(parsed.questions) ? parsed.questions : (isPurged ? [] : [...INITIAL_QUESTIONS]),
-          mockTests: Array.isArray(parsed.mockTests) ? parsed.mockTests : (isPurged ? [] : [...INITIAL_MOCK_TESTS]),
-          pypPapers: Array.isArray(parsed.pypPapers) ? parsed.pypPapers : (isPurged ? [] : [...INITIAL_PYP_PAPERS]),
-          attempts: Array.isArray(parsed.attempts) ? parsed.attempts : (isPurged ? [] : [...SAMPLE_USER_ATTEMPTS]),
-          demoDataPurged: isPurged,
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('⚠️ Failed to load local JSON DB, creating initial snapshot:', err);
-  }
-
-  // Initial bootstrap when DB_FILE does not exist
-  const initialDb: DatabaseShape = {
-    questions: [...INITIAL_QUESTIONS],
-    mockTests: [...INITIAL_MOCK_TESTS],
-    pypPapers: [...INITIAL_PYP_PAPERS],
-    attempts: [...SAMPLE_USER_ATTEMPTS],
-    demoDataPurged: false,
-  };
-
-  try {
-    ensureDataDir();
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Failed to write initial DB_FILE:', err);
-  }
-
-  return initialDb;
-}
-
-let localDb: DatabaseShape = loadLocalJsonDb();
-
-export function saveLocalJsonDb(immediate = false) {
-  try {
-    ensureDataDir();
-    fs.writeFileSync(DB_FILE, JSON.stringify(localDb, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('❌ Failed to save persistent database snapshot:', err);
-  }
-}
+let memoryBundles: TestSeriesBundle[] = [];
+let memoryCmsPages: CMSPage[] = [];
+let memoryCmsPosts: CMSPost[] = [];
+let memoryCmsSeries: CMSTestSeriesPack[] = [];
+let memoryCmsSettings: CMSSiteSettings = { ...INITIAL_CMS_SETTINGS };
+let memoryRemoteConfig: AppRemoteConfig = { ...DEFAULT_REMOTE_CONFIG };
 
 /**
  * Sync in-memory catalog with live Cloud Firestore collections
@@ -99,11 +48,7 @@ export async function syncWithFirestore(): Promise<{
 }> {
   const db = getFirestoreServer();
   if (!db) {
-    return {
-      syncedQuestions: localDb.questions.length,
-      syncedTests: localDb.mockTests.length,
-      syncedAttempts: localDb.attempts.length,
-    };
+    throw new Error(`LIVE DATABASE ERROR: Could not get Firestore server instance for database ID ${dbConfig.databaseId}`);
   }
 
   const timeoutPromise = <T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
@@ -114,61 +59,83 @@ export async function syncWithFirestore(): Promise<{
   };
 
   try {
-    // 1. Fetch live questions from Cloud Firestore with timeout protection
-    const qSnap = await timeoutPromise(getDocs(collection(db, 'questions')), 4000, null as any);
+    // 1. Fetch questions from Cloud Firestore
+    const qSnap = await timeoutPromise(getDocs(collection(db, 'questions')), 5000, null as any);
     if (qSnap && !qSnap.empty) {
-      const firestoreQuestions: Question[] = [];
-      qSnap.forEach((d: any) => {
-        firestoreQuestions.push(d.data() as Question);
-      });
-      localDb.questions = firestoreQuestions;
-    } else if (qSnap && qSnap.empty && localDb.demoDataPurged) {
-      localDb.questions = [];
-    } else if (canServerWriteFirestore() && !localDb.demoDataPurged) {
-      // Auto-seed initial questions to Firestore only on first startup if not purged
-      for (const q of localDb.questions.slice(0, 50)) {
-        await setDoc(doc(db, 'questions', q.id), q, { merge: true }).catch(() => null);
-      }
+      const list: Question[] = [];
+      qSnap.forEach((d: any) => list.push(d.data() as Question));
+      memoryCache.questions = list;
+    } else {
+      memoryCache.questions = [];
     }
 
-    // 2. Fetch live mock tests from Cloud Firestore with timeout protection
-    const tSnap = await timeoutPromise(getDocs(collection(db, 'mockTests')), 4000, null as any);
+    // 2. Fetch mock tests from Cloud Firestore
+    const tSnap = await timeoutPromise(getDocs(collection(db, 'mockTests')), 5000, null as any);
     if (tSnap && !tSnap.empty) {
-      const firestoreTests: MockTest[] = [];
-      tSnap.forEach((d: any) => {
-        firestoreTests.push(d.data() as MockTest);
-      });
-      localDb.mockTests = firestoreTests;
-    } else if (tSnap && tSnap.empty && localDb.demoDataPurged) {
-      localDb.mockTests = [];
-    } else if (canServerWriteFirestore() && !localDb.demoDataPurged) {
-      for (const t of localDb.mockTests) {
-        await setDoc(doc(db, 'mockTests', t.id), t, { merge: true }).catch(() => null);
-      }
+      const list: MockTest[] = [];
+      tSnap.forEach((d: any) => list.push(d.data() as MockTest));
+      memoryCache.mockTests = list;
+    } else {
+      memoryCache.mockTests = [];
     }
 
-    // 3. Fetch live attempts with timeout protection
-    const aSnap = await timeoutPromise(getDocs(collection(db, 'attempts')), 4000, null as any);
+    // 3. Fetch PYP papers from Cloud Firestore
+    const pSnap = await timeoutPromise(getDocs(collection(db, 'pypPapers')), 5000, null as any);
+    if (pSnap && !pSnap.empty) {
+      const list: PreviousYearPaper[] = [];
+      pSnap.forEach((d: any) => list.push(d.data() as PreviousYearPaper));
+      memoryCache.pypPapers = list;
+    } else {
+      memoryCache.pypPapers = [];
+    }
+
+    // 4. Fetch attempts from Cloud Firestore
+    const aSnap = await timeoutPromise(getDocs(collection(db, 'attempts')), 5000, null as any);
     if (aSnap && !aSnap.empty) {
-      const firestoreAttempts: TestAttempt[] = [];
-      aSnap.forEach((d: any) => {
-        firestoreAttempts.push(d.data() as TestAttempt);
-      });
-      const aMap = new Map<string, TestAttempt>();
-      localDb.attempts.forEach(a => aMap.set(a.id, a));
-      firestoreAttempts.forEach(a => aMap.set(a.id, a));
-      localDb.attempts = Array.from(aMap.values());
+      const list: TestAttempt[] = [];
+      aSnap.forEach((d: any) => list.push(d.data() as TestAttempt));
+      memoryCache.attempts = list;
+    } else {
+      memoryCache.attempts = [];
     }
 
-    saveLocalJsonDb();
+    // 5. Fetch bundles from Cloud Firestore
+    const bSnap = await timeoutPromise(getDocs(collection(db, 'bundles')), 5000, null as any);
+    if (bSnap && !bSnap.empty) {
+      const list: TestSeriesBundle[] = [];
+      bSnap.forEach((d: any) => list.push(d.data() as TestSeriesBundle));
+      memoryBundles = list;
+    } else {
+      memoryBundles = [];
+    }
+
+    // 6. Fetch CMS Pages from Cloud Firestore
+    const pageSnap = await timeoutPromise(getDocs(collection(db, 'pages')), 5000, null as any);
+    if (pageSnap && !pageSnap.empty) {
+      const list: CMSPage[] = [];
+      pageSnap.forEach((d: any) => list.push(d.data() as CMSPage));
+      memoryCmsPages = list;
+    } else {
+      memoryCmsPages = [];
+    }
+
+    // 7. Fetch CMS Posts from Cloud Firestore
+    const postSnap = await timeoutPromise(getDocs(collection(db, 'posts')), 5000, null as any);
+    if (postSnap && !postSnap.empty) {
+      const list: CMSPost[] = [];
+      postSnap.forEach((d: any) => list.push(d.data() as CMSPost));
+      memoryCmsPosts = list;
+    } else {
+      memoryCmsPosts = [];
+    }
   } catch (err) {
-    console.warn('⚠️ Cloud Firestore sync warning on startup:', err);
+    console.warn('⚠️ Cloud Firestore initial sync note:', err);
   }
 
   return {
-    syncedQuestions: localDb.questions.length,
-    syncedTests: localDb.mockTests.length,
-    syncedAttempts: localDb.attempts.length,
+    syncedQuestions: memoryCache.questions.length,
+    syncedTests: memoryCache.mockTests.length,
+    syncedAttempts: memoryCache.attempts.length,
   };
 }
 
@@ -182,7 +149,17 @@ export async function getAllQuestions(filters?: {
   category?: string;
   search?: string;
 }): Promise<Question[]> {
-  let filtered = [...localDb.questions];
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDocs(collection(db, 'questions'));
+    const items: Question[] = [];
+    snap.forEach(d => items.push(d.data() as Question));
+    memoryCache.questions = items;
+  } catch (err) {
+    console.warn('Firestore getAllQuestions note:', err);
+  }
+
+  let filtered = [...memoryCache.questions];
   if (filters?.subject) filtered = filtered.filter(q => q.subject === filters.subject);
   if (filters?.topic) filtered = filtered.filter(q => q.topic === filters.topic);
   if (filters?.subtopic) filtered = filtered.filter(q => q.subtopic === filters.subtopic);
@@ -201,48 +178,33 @@ export async function getAllQuestions(filters?: {
 }
 
 export async function getQuestionById(id: string): Promise<Question | null> {
-  return localDb.questions.find(q => q.id === id) || null;
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDoc(doc(db, 'questions', id));
+    if (snap.exists()) return snap.data() as Question;
+  } catch (err) {
+    console.warn('Firestore getQuestionById note:', err);
+  }
+  return memoryCache.questions.find(q => q.id === id) || null;
 }
 
 export async function saveQuestion(q: Question): Promise<Question> {
-  const idx = localDb.questions.findIndex(x => x.id === q.id);
-  if (idx !== -1) {
-    localDb.questions[idx] = q;
-  } else {
-    localDb.questions.unshift(q);
-  }
-  saveLocalJsonDb();
+  const db = getFirestoreServer();
+  const qRef = doc(db, 'questions', q.id);
+  await setDoc(qRef, q, { merge: true });
 
-  // Dual-write to Cloud Firestore only if server possesses authenticated write credentials
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db && q.id) {
-      try {
-        await setDoc(doc(db, 'questions', q.id), q, { merge: true });
-      } catch (err) {
-        console.warn(`Firestore sync note for question [${q.id}]:`, err);
-      }
-    }
-  }
+  const idx = memoryCache.questions.findIndex(x => x.id === q.id);
+  if (idx !== -1) memoryCache.questions[idx] = q;
+  else memoryCache.questions.unshift(q);
+
   return q;
 }
 
 export async function deleteQuestion(id: string): Promise<boolean> {
-  const before = localDb.questions.length;
-  localDb.questions = localDb.questions.filter(q => q.id !== id);
-  saveLocalJsonDb();
-
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db) {
-      try {
-        await deleteDoc(doc(db, 'questions', id));
-      } catch (err) {
-        console.warn(`Firestore delete note for question [${id}]:`, err);
-      }
-    }
-  }
-  return before !== localDb.questions.length;
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'questions', id));
+  memoryCache.questions = memoryCache.questions.filter(q => q.id !== id);
+  return true;
 }
 
 export async function bulkUpsertQuestions(questionsList: Question[]): Promise<{ inserted: number; updated: number }> {
@@ -250,7 +212,7 @@ export async function bulkUpsertQuestions(questionsList: Question[]): Promise<{ 
   let updated = 0;
 
   for (const q of questionsList) {
-    const exists = localDb.questions.some(x => x.id === q.id || (q.uniqueQuestionId && x.uniqueQuestionId === q.uniqueQuestionId));
+    const exists = memoryCache.questions.some(x => x.id === q.id || (q.uniqueQuestionId && x.uniqueQuestionId === q.uniqueQuestionId));
     if (exists) updated++;
     else inserted++;
     await saveQuestion(q);
@@ -261,7 +223,17 @@ export async function bulkUpsertQuestions(questionsList: Question[]): Promise<{ 
 // ----------------- MOCK TESTS COLLECTION REPOSITORY (/mockTests) -----------------
 
 export async function getAllMockTests(filters?: { category?: string; publishedOnly?: boolean }): Promise<MockTest[]> {
-  let list = [...localDb.mockTests];
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDocs(collection(db, 'mockTests'));
+    const items: MockTest[] = [];
+    snap.forEach(d => items.push(d.data() as MockTest));
+    memoryCache.mockTests = items;
+  } catch (err) {
+    console.warn('Firestore getAllMockTests note:', err);
+  }
+
+  let list = [...memoryCache.mockTests];
   if (filters?.publishedOnly) {
     list = list.filter(t => t.isPublished !== false);
   }
@@ -272,51 +244,48 @@ export async function getAllMockTests(filters?: { category?: string; publishedOn
 }
 
 export async function getMockTestById(id: string): Promise<MockTest | null> {
-  return localDb.mockTests.find(t => t.id === id) || null;
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDoc(doc(db, 'mockTests', id));
+    if (snap.exists()) return snap.data() as MockTest;
+  } catch (err) {
+    console.warn('Firestore getMockTestById note:', err);
+  }
+  return memoryCache.mockTests.find(t => t.id === id) || null;
 }
 
 export async function saveMockTest(t: MockTest): Promise<MockTest> {
-  const idx = localDb.mockTests.findIndex(x => x.id === t.id);
-  if (idx !== -1) {
-    localDb.mockTests[idx] = t;
-  } else {
-    localDb.mockTests.unshift(t);
-  }
-  saveLocalJsonDb();
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'mockTests', t.id), t, { merge: true });
 
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db && t.id) {
-      try {
-        await setDoc(doc(db, 'mockTests', t.id), t, { merge: true });
-      } catch (err) {
-        console.warn(`Firestore sync note for mock test [${t.id}]:`, err);
-      }
-    }
-  }
+  const idx = memoryCache.mockTests.findIndex(x => x.id === t.id);
+  if (idx !== -1) memoryCache.mockTests[idx] = t;
+  else memoryCache.mockTests.unshift(t);
+
   return t;
 }
 
 export async function deleteMockTest(id: string): Promise<boolean> {
-  const before = localDb.mockTests.length;
-  localDb.mockTests = localDb.mockTests.filter(t => t.id !== id);
-  saveLocalJsonDb();
-
   const db = getFirestoreServer();
-  if (db) {
-    try {
-      await deleteDoc(doc(db, 'mockTests', id));
-    } catch (err) {
-      console.warn(`Firestore delete note for test [${id}]:`, err);
-    }
-  }
-  return before !== localDb.mockTests.length;
+  await deleteDoc(doc(db, 'mockTests', id));
+  memoryCache.mockTests = memoryCache.mockTests.filter(t => t.id !== id);
+  return true;
 }
 
 // ----------------- PREVIOUS YEAR PAPERS COLLECTION REPOSITORY -----------------
 
 export async function getAllPypPapers(category?: string): Promise<PreviousYearPaper[]> {
-  let list = [...localDb.pypPapers];
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDocs(collection(db, 'pypPapers'));
+    const items: PreviousYearPaper[] = [];
+    snap.forEach(d => items.push(d.data() as PreviousYearPaper));
+    memoryCache.pypPapers = items;
+  } catch (err) {
+    console.warn('Firestore getAllPypPapers note:', err);
+  }
+
+  let list = [...memoryCache.pypPapers];
   if (category) {
     list = list.filter(p => p.examCategory === category);
   }
@@ -324,31 +293,30 @@ export async function getAllPypPapers(category?: string): Promise<PreviousYearPa
 }
 
 export async function savePypPaper(p: PreviousYearPaper): Promise<PreviousYearPaper> {
-  const idx = localDb.pypPapers.findIndex(x => x.id === p.id);
-  if (idx !== -1) {
-    localDb.pypPapers[idx] = p;
-  } else {
-    localDb.pypPapers.unshift(p);
-  }
-  saveLocalJsonDb();
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'pypPapers', p.id), p, { merge: true });
 
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db && p.id) {
-      try {
-        await setDoc(doc(db, 'pypPapers', p.id), p, { merge: true });
-      } catch (err) {
-        console.warn(`Firestore sync note for PYP [${p.id}]:`, err);
-      }
-    }
-  }
+  const idx = memoryCache.pypPapers.findIndex(x => x.id === p.id);
+  if (idx !== -1) memoryCache.pypPapers[idx] = p;
+  else memoryCache.pypPapers.unshift(p);
+
   return p;
 }
 
 // ----------------- ATTEMPTS COLLECTION REPOSITORY (/attempts) -----------------
 
 export async function getAllTestAttempts(userId?: string): Promise<TestAttempt[]> {
-  let list = [...localDb.attempts];
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDocs(collection(db, 'attempts'));
+    const items: TestAttempt[] = [];
+    snap.forEach(d => items.push(d.data() as TestAttempt));
+    memoryCache.attempts = items;
+  } catch (err) {
+    console.warn('Firestore getAllTestAttempts note:', err);
+  }
+
+  let list = [...memoryCache.attempts];
   if (userId) {
     list = list.filter(a => a.userId === userId);
   }
@@ -356,23 +324,20 @@ export async function getAllTestAttempts(userId?: string): Promise<TestAttempt[]
 }
 
 export async function getTestAttemptById(id: string): Promise<TestAttempt | null> {
-  return localDb.attempts.find(a => a.id === id) || null;
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDoc(doc(db, 'attempts', id));
+    if (snap.exists()) return snap.data() as TestAttempt;
+  } catch (err) {
+    console.warn('Firestore getTestAttemptById note:', err);
+  }
+  return memoryCache.attempts.find(a => a.id === id) || null;
 }
 
 export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
-  localDb.attempts.unshift(a);
-  saveLocalJsonDb();
-
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db && a.id) {
-      try {
-        await setDoc(doc(db, 'attempts', a.id), a, { merge: true });
-      } catch (err) {
-        console.warn(`Firestore sync note for attempt [${a.id}]:`, err);
-      }
-    }
-  }
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'attempts', a.id), a, { merge: true });
+  memoryCache.attempts.unshift(a);
   return a;
 }
 
@@ -380,142 +345,159 @@ export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
 
 export async function getDatabaseCounts(): Promise<{ questions: number; mockTests: number; pypPapers: number; attempts: number }> {
   return {
-    questions: localDb.questions.length,
-    mockTests: localDb.mockTests.length,
-    pypPapers: localDb.pypPapers.length,
-    attempts: localDb.attempts.length,
+    questions: memoryCache.questions.length,
+    mockTests: memoryCache.mockTests.length,
+    pypPapers: memoryCache.pypPapers.length,
+    attempts: memoryCache.attempts.length,
   };
 }
 
 export function getLocalSnapshot(): DatabaseShape {
-  return localDb;
+  return memoryCache;
 }
 
 // ----------------- NO-CODE CMS REPOSITORY -----------------
 
-import type { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../../src/types/cms.ts';
-import {
-  INITIAL_CMS_SETTINGS,
-  INITIAL_CMS_PAGES,
-  INITIAL_CMS_POSTS,
-  INITIAL_CMS_SERIES_PACKS
-} from '../../src/defaultCmsData.ts';
-
-let cmsPagesDb: CMSPage[] = [...INITIAL_CMS_PAGES];
-let cmsPostsDb: CMSPost[] = [...INITIAL_CMS_POSTS];
-let cmsSeriesDb: CMSTestSeriesPack[] = [...INITIAL_CMS_SERIES_PACKS];
-let cmsSettingsDb: CMSSiteSettings = { ...INITIAL_CMS_SETTINGS };
-
 export async function getAllCmsPages(): Promise<CMSPage[]> {
-  return cmsPagesDb;
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDocs(collection(db, 'pages'));
+    const items: CMSPage[] = [];
+    snap.forEach(d => items.push(d.data() as CMSPage));
+    memoryCmsPages = items;
+  } catch (err) {
+    console.warn('Firestore getAllCmsPages note:', err);
+  }
+  return memoryCmsPages;
 }
 
 export async function getCmsPageBySlug(slug: string): Promise<CMSPage | null> {
-  return cmsPagesDb.find(p => p.slug === slug) || null;
+  const list = await getAllCmsPages();
+  return list.find(p => p.slug === slug) || null;
 }
 
 export async function saveCmsPage(page: CMSPage): Promise<CMSPage> {
-  const idx = cmsPagesDb.findIndex(p => p.id === page.id);
-  if (idx !== -1) cmsPagesDb[idx] = page;
-  else cmsPagesDb.unshift(page);
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'pages', page.id), page, { merge: true });
+
+  const idx = memoryCmsPages.findIndex(p => p.id === page.id);
+  if (idx !== -1) memoryCmsPages[idx] = page;
+  else memoryCmsPages.unshift(page);
+
   return page;
 }
 
 export async function deleteCmsPage(id: string): Promise<boolean> {
-  const before = cmsPagesDb.length;
-  cmsPagesDb = cmsPagesDb.filter(p => p.id !== id);
-  return before !== cmsPagesDb.length;
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'pages', id));
+  memoryCmsPages = memoryCmsPages.filter(p => p.id !== id);
+  return true;
 }
 
 export async function getAllCmsPosts(): Promise<CMSPost[]> {
-  return cmsPostsDb;
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDocs(collection(db, 'posts'));
+    const items: CMSPost[] = [];
+    snap.forEach(d => items.push(d.data() as CMSPost));
+    memoryCmsPosts = items;
+  } catch (err) {
+    console.warn('Firestore getAllCmsPosts note:', err);
+  }
+  return memoryCmsPosts;
 }
 
 export async function getCmsPostBySlug(slug: string): Promise<CMSPost | null> {
-  return cmsPostsDb.find(p => p.slug === slug) || null;
+  const list = await getAllCmsPosts();
+  return list.find(p => p.slug === slug) || null;
 }
 
 export async function saveCmsPost(post: CMSPost): Promise<CMSPost> {
-  const idx = cmsPostsDb.findIndex(p => p.id === post.id);
-  if (idx !== -1) cmsPostsDb[idx] = post;
-  else cmsPostsDb.unshift(post);
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'posts', post.id), post, { merge: true });
+
+  const idx = memoryCmsPosts.findIndex(p => p.id === post.id);
+  if (idx !== -1) memoryCmsPosts[idx] = post;
+  else memoryCmsPosts.unshift(post);
+
   return post;
 }
 
 export async function deleteCmsPost(id: string): Promise<boolean> {
-  const before = cmsPostsDb.length;
-  cmsPostsDb = cmsPostsDb.filter(p => p.id !== id);
-  return before !== cmsPostsDb.length;
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'posts', id));
+  memoryCmsPosts = memoryCmsPosts.filter(p => p.id !== id);
+  return true;
 }
 
 export async function getAllCmsSeriesPacks(): Promise<CMSTestSeriesPack[]> {
-  return cmsSeriesDb;
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDocs(collection(db, 'seriesPacks'));
+    const items: CMSTestSeriesPack[] = [];
+    snap.forEach(d => items.push(d.data() as CMSTestSeriesPack));
+    memoryCmsSeries = items;
+  } catch (err) {
+    console.warn('Firestore getAllCmsSeriesPacks note:', err);
+  }
+  return memoryCmsSeries;
 }
 
 export async function saveCmsSeriesPack(pack: CMSTestSeriesPack): Promise<CMSTestSeriesPack> {
-  const idx = cmsSeriesDb.findIndex(p => p.id === pack.id);
-  if (idx !== -1) cmsSeriesDb[idx] = pack;
-  else cmsSeriesDb.unshift(pack);
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'seriesPacks', pack.id), pack, { merge: true });
+
+  const idx = memoryCmsSeries.findIndex(p => p.id === pack.id);
+  if (idx !== -1) memoryCmsSeries[idx] = pack;
+  else memoryCmsSeries.unshift(pack);
+
   return pack;
 }
 
 export async function deleteCmsSeriesPack(id: string): Promise<boolean> {
-  const before = cmsSeriesDb.length;
-  cmsSeriesDb = cmsSeriesDb.filter(p => p.id !== id);
-  return before !== cmsSeriesDb.length;
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'seriesPacks', id));
+  memoryCmsSeries = memoryCmsSeries.filter(p => p.id !== id);
+  return true;
 }
 
 export async function getCmsSettings(): Promise<CMSSiteSettings> {
-  return cmsSettingsDb;
+  const db = getFirestoreServer();
+  try {
+    const snap = await getDoc(doc(db, 'cmsSettings', 'global'));
+    if (snap.exists()) memoryCmsSettings = snap.data() as CMSSiteSettings;
+  } catch (err) {
+    console.warn('Firestore getCmsSettings note:', err);
+  }
+  return memoryCmsSettings;
 }
 
 export async function saveCmsSettings(settings: CMSSiteSettings): Promise<CMSSiteSettings> {
-  cmsSettingsDb = settings;
-  return cmsSettingsDb;
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'cmsSettings', 'global'), settings, { merge: true });
+  memoryCmsSettings = settings;
+  return memoryCmsSettings;
 }
 
 // ==========================================
 // TEST SERIES BUNDLES REPOSITORY
 // ==========================================
-let localBundles: TestSeriesBundle[] = [...OFFICIAL_BUNDLES_CATALOG];
 
 export async function getAllBundles(options?: { publishedOnly?: boolean }): Promise<TestSeriesBundle[]> {
   const db = getFirestoreServer();
-  if (db) {
-    try {
-      const snap = await getDocs(collection(db, 'bundles'));
-      if (!snap.empty) {
-        const firestoreMap = new Map<string, TestSeriesBundle>();
-        OFFICIAL_BUNDLES_CATALOG.forEach(b => { if (b && b.id) firestoreMap.set(b.id, { ...b }); });
-        
-        snap.forEach(d => {
-          const incoming = d.data() as TestSeriesBundle;
-          if (incoming && incoming.id) {
-            const base = firestoreMap.get(incoming.id) || incoming;
-            const testItemMap = new Map<string, any>();
-            (base.testItems || []).forEach(t => testItemMap.set(t.id, t));
-            (incoming.testItems || []).forEach(t => testItemMap.set(t.id, t));
-
-            firestoreMap.set(incoming.id, {
-              ...base,
-              ...incoming,
-              testItems: Array.from(testItemMap.values()),
-              chapterTests: incoming.chapterTests?.length ? incoming.chapterTests : base.chapterTests,
-              pypTests: incoming.pypTests?.length ? incoming.pypTests : base.pypTests,
-            });
-          }
-        });
-        localBundles = Array.from(firestoreMap.values());
-      }
-    } catch (err) {
-      console.warn('⚠️ Server failed to fetch bundles from Firestore:', err);
-    }
+  try {
+    const snap = await getDocs(collection(db, 'bundles'));
+    const items: TestSeriesBundle[] = [];
+    snap.forEach(d => items.push(d.data() as TestSeriesBundle));
+    memoryBundles = items;
+  } catch (err) {
+    console.warn('Firestore getAllBundles note:', err);
   }
 
   if (options?.publishedOnly) {
-    return localBundles.filter(b => b.isPublished !== false && !b.isDraft);
+    return memoryBundles.filter(b => b.isPublished !== false && !b.isDraft);
   }
-  return localBundles;
+  return memoryBundles;
 }
 
 export async function getBundleById(id: string): Promise<TestSeriesBundle | undefined> {
@@ -525,41 +507,21 @@ export async function getBundleById(id: string): Promise<TestSeriesBundle | unde
 }
 
 export async function saveBundle(bundle: TestSeriesBundle): Promise<TestSeriesBundle> {
-  const idx = localBundles.findIndex(b => b.id === bundle.id || b.slug === bundle.slug);
-  if (idx !== -1) {
-    localBundles[idx] = bundle;
-  } else {
-    localBundles.unshift(bundle);
-  }
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'bundles', bundle.id), bundle, { merge: true });
 
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db) {
-      try {
-        await setDoc(doc(db, 'bundles', bundle.id), bundle, { merge: true });
-      } catch (err) {
-        console.warn('⚠️ Server failed to save bundle to Firestore:', err);
-      }
-    }
-  }
+  const idx = memoryBundles.findIndex(b => b.id === bundle.id || b.slug === bundle.slug);
+  if (idx !== -1) memoryBundles[idx] = bundle;
+  else memoryBundles.unshift(bundle);
+
   return bundle;
 }
 
 export async function deleteBundle(id: string): Promise<boolean> {
-  const before = localBundles.length;
-  localBundles = localBundles.filter(b => b.id !== id && b.slug !== id);
-
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db) {
-      try {
-        await deleteDoc(doc(db, 'bundles', id));
-      } catch (err) {
-        console.warn('⚠️ Server failed to delete bundle from Firestore:', err);
-      }
-    }
-  }
-  return before !== localBundles.length;
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'bundles', id));
+  memoryBundles = memoryBundles.filter(b => b.id !== id && b.slug !== id);
+  return true;
 }
 
 // ==========================================
@@ -649,10 +611,9 @@ export async function redeemPassForUser(userId: string, couponCode: string, plan
 // REAL-TIME LEADERBOARD AGGREGATOR
 // ==========================================
 export async function getTestLeaderboardData(testId: string) {
-  const attempts = localDb.attempts.filter(a => a.testId === testId);
-  const test = localDb.mockTests.find(t => t.id === testId);
+  const attempts = memoryCache.attempts.filter(a => a.testId === testId);
+  const test = memoryCache.mockTests.find(t => t.id === testId);
 
-  // Group by user and take highest score per candidate
   const userBestMap = new Map<string, TestAttempt>();
   attempts.forEach(att => {
     const existing = userBestMap.get(att.userId);
@@ -702,73 +663,43 @@ export async function getTestLeaderboardData(testId: string) {
 // SERVER-DRIVEN REMOTE CONFIG REPOSITORY
 // ==========================================
 
-let appRemoteConfigDb: AppRemoteConfig = { ...DEFAULT_REMOTE_CONFIG };
-
 export async function getAppRemoteConfig(): Promise<AppRemoteConfig> {
   const db = getFirestoreServer();
-  if (db) {
-    try {
-      const snap = await getDocs(collection(db, 'remoteConfig'));
-      if (!snap.empty) {
-        const first = snap.docs[0].data() as AppRemoteConfig;
-        if (first && first.featureFlags) {
-          appRemoteConfigDb = {
-            ...DEFAULT_REMOTE_CONFIG,
-            ...first,
-            featureFlags: { ...DEFAULT_REMOTE_CONFIG.featureFlags, ...(first.featureFlags || {}) },
-            maintenanceMode: { ...DEFAULT_REMOTE_CONFIG.maintenanceMode, ...(first.maintenanceMode || {}) },
-            globalAlertBanner: { ...DEFAULT_REMOTE_CONFIG.globalAlertBanner, ...(first.globalAlertBanner || {}) },
-            examEngineRules: { ...DEFAULT_REMOTE_CONFIG.examEngineRules, ...(first.examEngineRules || {}) },
-            pricingConfig: { ...DEFAULT_REMOTE_CONFIG.pricingConfig, ...(first.pricingConfig || {}) },
-            brandingConfig: { ...DEFAULT_REMOTE_CONFIG.brandingConfig, ...(first.brandingConfig || {}) },
-          };
-        }
-      }
-    } catch (err: any) {
-      // Graceful fallback to cached/default configuration
-      if (!err.message?.includes('Missing or insufficient permissions')) {
-        console.warn('RemoteConfig Firestore fetch note:', err.message);
-      }
+  try {
+    const snap = await getDoc(doc(db, 'remoteConfig', 'global'));
+    if (snap.exists()) {
+      const data = snap.data() as AppRemoteConfig;
+      memoryRemoteConfig = {
+        ...DEFAULT_REMOTE_CONFIG,
+        ...data,
+      };
     }
+  } catch (err: any) {
+    console.warn('RemoteConfig Firestore fetch note:', err?.message || err);
   }
-  return appRemoteConfigDb;
+  return memoryRemoteConfig;
 }
 
 export async function saveAppRemoteConfig(config: Partial<AppRemoteConfig>, updatedBy = 'Admin'): Promise<AppRemoteConfig> {
-  appRemoteConfigDb = {
-    ...appRemoteConfigDb,
+  const db = getFirestoreServer();
+  memoryRemoteConfig = {
+    ...memoryRemoteConfig,
     ...config,
-    featureFlags: { ...appRemoteConfigDb.featureFlags, ...(config.featureFlags || {}) },
-    maintenanceMode: { ...appRemoteConfigDb.maintenanceMode, ...(config.maintenanceMode || {}) },
-    globalAlertBanner: { ...appRemoteConfigDb.globalAlertBanner, ...(config.globalAlertBanner || {}) },
-    examEngineRules: { ...appRemoteConfigDb.examEngineRules, ...(config.examEngineRules || {}) },
-    pricingConfig: { ...appRemoteConfigDb.pricingConfig, ...(config.pricingConfig || {}) },
-    brandingConfig: { ...appRemoteConfigDb.brandingConfig, ...(config.brandingConfig || {}) },
     updatedAt: new Date().toISOString(),
     updatedBy,
   };
 
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db) {
-      try {
-        await setDoc(doc(db, 'remoteConfig', 'global_app_config'), appRemoteConfigDb, { merge: true });
-      } catch (err: any) {
-        console.warn('RemoteConfig Firestore save note:', err.message);
-      }
-    }
-  }
-
-  return appRemoteConfigDb;
+  await setDoc(doc(db, 'remoteConfig', 'global'), memoryRemoteConfig, { merge: true });
+  return memoryRemoteConfig;
 }
 
 export async function resetAppRemoteConfig(): Promise<AppRemoteConfig> {
-  appRemoteConfigDb = {
+  memoryRemoteConfig = {
     ...DEFAULT_REMOTE_CONFIG,
     updatedAt: new Date().toISOString(),
     updatedBy: 'Admin Reset to Defaults',
   };
-  return saveAppRemoteConfig(appRemoteConfigDb);
+  return saveAppRemoteConfig(memoryRemoteConfig);
 }
 
 // ==========================================
@@ -776,22 +707,22 @@ export async function resetAppRemoteConfig(): Promise<AppRemoteConfig> {
 // ==========================================
 export function exportCompleteDatabaseSnapshot() {
   return {
-    version: '1.4.0',
+    version: '2.0.0',
     exportTimestamp: new Date().toISOString(),
     databaseId: dbConfig.databaseId,
     counts: {
-      questions: localDb.questions.length,
-      mockTests: localDb.mockTests.length,
-      pypPapers: localDb.pypPapers.length,
-      attempts: localDb.attempts.length,
-      bundles: localBundles.length,
+      questions: memoryCache.questions.length,
+      mockTests: memoryCache.mockTests.length,
+      pypPapers: memoryCache.pypPapers.length,
+      attempts: memoryCache.attempts.length,
+      bundles: memoryBundles.length,
     },
     catalog: {
-      questions: localDb.questions,
-      mockTests: localDb.mockTests,
-      pypPapers: localDb.pypPapers,
-      attempts: localDb.attempts,
-      bundles: localBundles,
+      questions: memoryCache.questions,
+      mockTests: memoryCache.mockTests,
+      pypPapers: memoryCache.pypPapers,
+      attempts: memoryCache.attempts,
+      bundles: memoryBundles,
     }
   };
 }
@@ -800,7 +731,7 @@ export function exportCompleteDatabaseSnapshot() {
 // DEMO DATA PURGE & RESTORE ENGINES
 // ==========================================
 export function isServerDemoDataPurged(): boolean {
-  return localDb.demoDataPurged === true;
+  return memoryCache.demoDataPurged === true;
 }
 
 export async function purgeServerDemoData(purgeAll = true): Promise<{
@@ -810,69 +741,42 @@ export async function purgeServerDemoData(purgeAll = true): Promise<{
   purgedBundles: number;
   timestamp: string;
 }> {
-  const initialTestIds = new Set(INITIAL_MOCK_TESTS.map(t => t.id));
-  const initialQuestionIds = new Set(INITIAL_QUESTIONS.map(q => q.id));
-  const initialPypIds = new Set(INITIAL_PYP_PAPERS.map(p => p.id));
-  const initialBundleIds = new Set(OFFICIAL_BUNDLES_CATALOG.map(b => b.id));
+  const questionsCountBefore = memoryCache.questions.length;
+  const testsCountBefore = memoryCache.mockTests.length;
+  const pypCountBefore = memoryCache.pypPapers.length;
+  const bundlesCountBefore = memoryBundles.length;
 
-  const questionsCountBefore = localDb.questions.length;
-  const testsCountBefore = localDb.mockTests.length;
-  const pypCountBefore = localDb.pypPapers.length;
-  const bundlesCountBefore = localBundles.length;
-
-  if (purgeAll) {
-    localDb.questions = [];
-    localDb.mockTests = [];
-    localDb.pypPapers = [];
-    localBundles = [];
-  } else {
-    localDb.questions = localDb.questions.filter(q => !initialQuestionIds.has(q.id));
-    localDb.mockTests = localDb.mockTests.filter(t => !initialTestIds.has(t.id));
-    localDb.pypPapers = localDb.pypPapers.filter(p => !initialPypIds.has(p.id));
-    localBundles = localBundles.filter(b => !initialBundleIds.has(b.id));
-  }
-  localDb.attempts = [];
-  localDb.demoDataPurged = true;
-
-  saveLocalJsonDb(true);
+  memoryCache.questions = [];
+  memoryCache.mockTests = [];
+  memoryCache.pypPapers = [];
+  memoryCache.attempts = [];
+  memoryBundles = [];
+  memoryCache.demoDataPurged = true;
 
   const db = getFirestoreServer();
   if (db) {
     try {
       const testSnap = await getDocs(collection(db, 'mockTests')).catch(() => null);
-      if (testSnap) {
-        for (const d of testSnap.docs) {
-          await deleteDoc(d.ref).catch(() => null);
-        }
-      }
+      if (testSnap) for (const d of testSnap.docs) await deleteDoc(d.ref).catch(() => null);
+
       const qSnap = await getDocs(collection(db, 'questions')).catch(() => null);
-      if (qSnap) {
-        for (const d of qSnap.docs) {
-          await deleteDoc(d.ref).catch(() => null);
-        }
-      }
+      if (qSnap) for (const d of qSnap.docs) await deleteDoc(d.ref).catch(() => null);
+
       const pSnap = await getDocs(collection(db, 'pypPapers')).catch(() => null);
-      if (pSnap) {
-        for (const d of pSnap.docs) {
-          await deleteDoc(d.ref).catch(() => null);
-        }
-      }
+      if (pSnap) for (const d of pSnap.docs) await deleteDoc(d.ref).catch(() => null);
+
       const bSnap = await getDocs(collection(db, 'bundles')).catch(() => null);
-      if (bSnap) {
-        for (const d of bSnap.docs) {
-          await deleteDoc(d.ref).catch(() => null);
-        }
-      }
+      if (bSnap) for (const d of bSnap.docs) await deleteDoc(d.ref).catch(() => null);
     } catch (err) {
       console.warn('Firestore purge warning in server:', err);
     }
   }
 
   return {
-    purgedQuestions: questionsCountBefore - localDb.questions.length,
-    purgedTests: testsCountBefore - localDb.mockTests.length,
-    purgedPyp: pypCountBefore - localDb.pypPapers.length,
-    purgedBundles: bundlesCountBefore - localBundles.length,
+    purgedQuestions: questionsCountBefore,
+    purgedTests: testsCountBefore,
+    purgedPyp: pypCountBefore,
+    purgedBundles: bundlesCountBefore,
     timestamp: new Date().toISOString(),
   };
 }
@@ -883,22 +787,11 @@ export async function restoreServerDemoData(): Promise<{
   pypPapers: number;
   bundles: number;
 }> {
-  localDb.questions = [...INITIAL_QUESTIONS];
-  localDb.mockTests = [...INITIAL_MOCK_TESTS];
-  localDb.pypPapers = [...INITIAL_PYP_PAPERS];
-  localDb.attempts = [...SAMPLE_USER_ATTEMPTS];
-  localDb.demoDataPurged = false;
-  localBundles = [...OFFICIAL_BUNDLES_CATALOG];
-
-  saveLocalJsonDb(true);
-
+  await syncWithFirestore();
   return {
-    questions: localDb.questions.length,
-    mockTests: localDb.mockTests.length,
-    pypPapers: localDb.pypPapers.length,
-    bundles: localBundles.length,
+    questions: memoryCache.questions.length,
+    mockTests: memoryCache.mockTests.length,
+    pypPapers: memoryCache.pypPapers.length,
+    bundles: memoryBundles.length,
   };
 }
-
-
-

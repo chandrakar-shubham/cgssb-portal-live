@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MockTest } from '../types';
 import { INITIAL_MOCK_TESTS } from '../mockData';
-import { cleanTestFromAllBundles, isDemoDataPurged } from '../utils/bundleStore';
+import { cleanTestFromAllBundles } from '../utils/bundleStore';
 import {
   fetchTestsFromFirestore,
   saveTestToFirestore,
@@ -9,65 +9,33 @@ import {
   subscribeToTests
 } from '../firebase/firestoreService';
 
-function getDeletedIds(key: string): Set<string> {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return new Set(parsed);
-    }
-  } catch {}
-  return new Set<string>();
-}
-
 export function useTestManager() {
   const [tests, setTests] = useState<MockTest[]>(() => {
     try {
-      const deletedSet = getDeletedIds('cgssb_deleted_tests');
-      if (isDemoDataPurged()) {
-        const saved = localStorage.getItem('cgssb_tests');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) return parsed.filter((t: MockTest) => !deletedSet.has(t.id));
-        }
-        return [];
-      }
       const saved = localStorage.getItem('cgssb_tests');
-      if (saved !== null) {
+      if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.filter((t: MockTest) => !deletedSet.has(t.id));
-        }
+        if (Array.isArray(parsed)) return parsed;
       }
-      return INITIAL_MOCK_TESTS.filter(t => !deletedSet.has(t.id));
     } catch {}
-    return isDemoDataPurged() ? [] : INITIAL_MOCK_TESTS;
+    return [];
   });
 
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
     const unsubscribe = subscribeToTests((firestoreTests) => {
-      const deletedSet = getDeletedIds('cgssb_deleted_tests');
-      const filtered = firestoreTests.filter(t => !deletedSet.has(t.id));
-      if (filtered.length > 0) {
-        setTests(filtered);
-        try {
-          localStorage.setItem('cgssb_tests', JSON.stringify(filtered));
-        } catch {}
-      }
+      setTests(firestoreTests);
+      try {
+        localStorage.setItem('cgssb_tests', JSON.stringify(firestoreTests));
+      } catch {}
     });
 
-    // Initial fetch fallback
     fetchTestsFromFirestore().then((remoteTests) => {
-      if (Array.isArray(remoteTests) && remoteTests.length > 0) {
-        const deletedSet = getDeletedIds('cgssb_deleted_tests');
-        const filtered = remoteTests.filter(t => !deletedSet.has(t.id));
-        if (filtered.length > 0) {
-          setTests(filtered);
-          try {
-            localStorage.setItem('cgssb_tests', JSON.stringify(filtered));
-          } catch {}
-        }
+      if (Array.isArray(remoteTests)) {
+        setTests(remoteTests);
+        try {
+          localStorage.setItem('cgssb_tests', JSON.stringify(remoteTests));
+        } catch {}
       }
     }).catch(() => {});
 
@@ -131,12 +99,6 @@ export function useTestManager() {
   }, []);
 
   const deleteTest = useCallback((testId: string) => {
-    try {
-      const raw = localStorage.getItem('cgssb_deleted_tests');
-      const arr = raw ? JSON.parse(raw) : [];
-      if (!arr.includes(testId)) arr.push(testId);
-      localStorage.setItem('cgssb_deleted_tests', JSON.stringify(arr));
-    } catch {}
     cleanTestFromAllBundles(testId);
     setTests(prev => prev.filter(t => t.id !== testId));
     deleteTestFromFirestore(testId).catch(err => console.warn('Cloud delete test warning:', err));
@@ -154,7 +116,6 @@ export function useTestManager() {
   }, []);
 
   const syncDefaultCatalog = useCallback(() => {
-    if (isDemoDataPurged()) return;
     setTests(INITIAL_MOCK_TESTS);
     try {
       localStorage.setItem('cgssb_tests', JSON.stringify(INITIAL_MOCK_TESTS));

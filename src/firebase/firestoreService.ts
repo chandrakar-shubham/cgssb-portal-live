@@ -130,6 +130,24 @@ export async function fetchUserProfileFromFirestore(userId: string): Promise<Use
   }
 }
 
+export async function fetchUserByEmailFromFirestore(email: string): Promise<User | null> {
+  if (!db || !email) return null;
+  try {
+    const snap = await getDocs(collection(db, COLLECTIONS.USERS));
+    const cleanEmail = email.trim().toLowerCase();
+    for (const d of snap.docs) {
+      const data = d.data() as User;
+      if (data.email && data.email.toLowerCase() === cleanEmail) {
+        return data;
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn('Error fetching user by email from Firestore:', err);
+    return null;
+  }
+}
+
 // ==========================================
 // MOCK TESTS SERVICES & REALTIME SYNC
 // ==========================================
@@ -161,9 +179,7 @@ export function subscribeToTests(callback: (tests: MockTest[]) => void): Unsubsc
       (snap) => {
         const items: MockTest[] = [];
         snap.forEach(d => items.push(d.data() as MockTest));
-        if (items.length > 0) {
-          callback(items);
-        }
+        callback(items);
       },
       (err) => {
         console.warn('Tests snapshot listener note:', err);
@@ -225,9 +241,7 @@ export function subscribeToQuestions(callback: (questions: Question[]) => void):
       (snap) => {
         const items: Question[] = [];
         snap.forEach(d => items.push(d.data() as Question));
-        if (items.length > 0) {
-          callback(items);
-        }
+        callback(items);
       },
       (err) => {
         console.warn('Questions snapshot listener note:', err);
@@ -303,9 +317,7 @@ export function subscribeToPypPapers(callback: (papers: PreviousYearPaper[]) => 
       (snap) => {
         const items: PreviousYearPaper[] = [];
         snap.forEach(d => items.push(d.data() as PreviousYearPaper));
-        if (items.length > 0) {
-          callback(items);
-        }
+        callback(items);
       },
       (err) => {
         console.warn('PYP snapshot listener note:', err);
@@ -367,9 +379,7 @@ export function subscribeToBundles(callback: (bundles: TestSeriesBundle[]) => vo
       (snap) => {
         const items: TestSeriesBundle[] = [];
         snap.forEach(d => items.push(d.data() as TestSeriesBundle));
-        if (items.length > 0) {
-          callback(items);
-        }
+        callback(items);
       },
       (err) => {
         console.warn('Bundles snapshot listener note:', err);
@@ -429,7 +439,7 @@ export function subscribeToCmsPages(callback: (pages: CMSPage[]) => void): Unsub
       (snap) => {
         const items: CMSPage[] = [];
         snap.forEach(d => items.push(d.data() as CMSPage));
-        if (items.length > 0) callback(items);
+        callback(items);
       },
       (err) => console.warn('CMS pages listener note:', err)
     );
@@ -484,7 +494,7 @@ export function subscribeToCmsPosts(callback: (posts: CMSPost[]) => void): Unsub
       (snap) => {
         const items: CMSPost[] = [];
         snap.forEach(d => items.push(d.data() as CMSPost));
-        if (items.length > 0) callback(items);
+        callback(items);
       },
       (err) => console.warn('CMS posts listener note:', err)
     );
@@ -539,7 +549,7 @@ export function subscribeToCmsSeriesPacks(callback: (packs: CMSTestSeriesPack[])
       (snap) => {
         const items: CMSTestSeriesPack[] = [];
         snap.forEach(d => items.push(d.data() as CMSTestSeriesPack));
-        if (items.length > 0) callback(items);
+        callback(items);
       },
       (err) => console.warn('CMS series packs listener note:', err)
     );
@@ -639,9 +649,7 @@ export function subscribeToSliderBanners(callback: (banners: SliderBanner[]) => 
       (snap) => {
         const items: SliderBanner[] = [];
         snap.forEach(d => items.push(d.data() as SliderBanner));
-        if (items.length > 0) {
-          callback(items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)));
-        }
+        callback(items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)));
       },
       (err) => console.warn('Slider banners listener note:', err)
     );
