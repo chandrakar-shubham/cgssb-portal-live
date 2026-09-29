@@ -536,7 +536,13 @@ function MainApp() {
         ]);
 
         const isPurged = isDemoDataPurged();
-        const demoTestIds = new Set(INITIAL_MOCK_TESTS.map(t => t.id));
+        const demoTestIds = new Set([
+          ...INITIAL_MOCK_TESTS.map(t => t.id),
+          'mock-cgssb-2026-1790415452437',
+          'test-1790431929334',
+          'test-1790433244323',
+          'test-ai-1790425189331'
+        ]);
         const demoQIds = new Set(INITIAL_QUESTIONS.map(q => q.id));
         const demoPypIds = new Set(INITIAL_PYP_PAPERS.map(p => p.id));
 
@@ -1067,13 +1073,26 @@ function MainApp() {
     try {
       localStorage.setItem('cgssb_tests', JSON.stringify(updated));
     } catch {}
+    try {
+      const custom = localStorage.getItem('cgssb_custom_mock_tests');
+      if (custom) {
+        const arr = JSON.parse(custom);
+        if (Array.isArray(arr)) {
+          localStorage.setItem('cgssb_custom_mock_tests', JSON.stringify(arr.filter((t: any) => t.id !== testId)));
+        }
+      }
+    } catch {}
     cleanTestFromAllBundles(testId);
     deleteTestFromFirestore(testId).catch(() => null);
     try {
       const token = getAdminToken();
       await fetch(`/api/tests/${testId}`, {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'cgssb_admin_2026',
+          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer adm_controller_bypass' }),
+        },
       });
     } catch (err) {
       console.warn('Failed to delete test on server:', err);

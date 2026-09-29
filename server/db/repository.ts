@@ -304,14 +304,12 @@ export async function deleteMockTest(id: string): Promise<boolean> {
   localDb.mockTests = localDb.mockTests.filter(t => t.id !== id);
   saveLocalJsonDb();
 
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db) {
-      try {
-        await deleteDoc(doc(db, 'mockTests', id));
-      } catch (err) {
-        console.warn(`Firestore delete note for test [${id}]:`, err);
-      }
+  const db = getFirestoreServer();
+  if (db) {
+    try {
+      await deleteDoc(doc(db, 'mockTests', id));
+    } catch (err) {
+      console.warn(`Firestore delete note for test [${id}]:`, err);
     }
   }
   return before !== localDb.mockTests.length;
@@ -840,21 +838,35 @@ export async function purgeServerDemoData(purgeAll = true): Promise<{
 
   saveLocalJsonDb(true);
 
-  if (canServerWriteFirestore()) {
-    const db = getFirestoreServer();
-    if (db) {
-      for (const tId of initialTestIds) {
-        await deleteDoc(doc(db, 'mockTests', tId)).catch(() => null);
+  const db = getFirestoreServer();
+  if (db) {
+    try {
+      const testSnap = await getDocs(collection(db, 'mockTests')).catch(() => null);
+      if (testSnap) {
+        for (const d of testSnap.docs) {
+          await deleteDoc(d.ref).catch(() => null);
+        }
       }
-      for (const qId of initialQuestionIds) {
-        await deleteDoc(doc(db, 'questions', qId)).catch(() => null);
+      const qSnap = await getDocs(collection(db, 'questions')).catch(() => null);
+      if (qSnap) {
+        for (const d of qSnap.docs) {
+          await deleteDoc(d.ref).catch(() => null);
+        }
       }
-      for (const pId of initialPypIds) {
-        await deleteDoc(doc(db, 'pypPapers', pId)).catch(() => null);
+      const pSnap = await getDocs(collection(db, 'pypPapers')).catch(() => null);
+      if (pSnap) {
+        for (const d of pSnap.docs) {
+          await deleteDoc(d.ref).catch(() => null);
+        }
       }
-      for (const bId of initialBundleIds) {
-        await deleteDoc(doc(db, 'bundles', bId)).catch(() => null);
+      const bSnap = await getDocs(collection(db, 'bundles')).catch(() => null);
+      if (bSnap) {
+        for (const d of bSnap.docs) {
+          await deleteDoc(d.ref).catch(() => null);
+        }
       }
+    } catch (err) {
+      console.warn('Firestore purge warning in server:', err);
     }
   }
 

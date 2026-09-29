@@ -897,13 +897,40 @@ export const purgeAllDemoDatabaseData = async (): Promise<{ purgedKeys: string[]
   // 1. Enable persistent purge flags
   setDemoDataPurged(true);
 
-  // 2. Mark ALL initial demo IDs as deleted tombstones so even fallback queries block them
-  const demoTestIds = INITIAL_MOCK_TESTS.map(t => t.id);
+  // 2. Mark ALL demo & existing custom IDs as deleted tombstones so fallback queries block them
+  const currentSavedTests = (() => {
+    try {
+      const s = localStorage.getItem('cgssb_tests');
+      return s ? JSON.parse(s).map((t: any) => t.id) : [];
+    } catch { return []; }
+  })();
+  const currentCustomTests = (() => {
+    try {
+      const s = localStorage.getItem('cgssb_custom_mock_tests');
+      return s ? JSON.parse(s).map((t: any) => t.id) : [];
+    } catch { return []; }
+  })();
+  const existingDeletedTests = Array.from(getDeletedBundleIds('cgssb_deleted_tests'));
+  const targetTestIds = [
+    'mock-cgssb-2026-1790415452437',
+    'test-1790431929334',
+    'test-1790433244323',
+    'test-ai-1790425189331'
+  ];
+
+  const allTestIdsToTombstone = Array.from(new Set([
+    ...INITIAL_MOCK_TESTS.map(t => t.id),
+    ...currentSavedTests,
+    ...currentCustomTests,
+    ...existingDeletedTests,
+    ...targetTestIds
+  ]));
+
   const demoQuestionIds = INITIAL_QUESTIONS.map(q => q.id);
   const demoPypIds = INITIAL_PYP_PAPERS.map(p => p.id);
   const demoBundleIds = OFFICIAL_BUNDLES_CATALOG.map(b => b.id);
 
-  localStorage.setItem('cgssb_deleted_tests', JSON.stringify(demoTestIds));
+  localStorage.setItem('cgssb_deleted_tests', JSON.stringify(allTestIdsToTombstone));
   localStorage.setItem('cgssb_deleted_questions', JSON.stringify(demoQuestionIds));
   localStorage.setItem('cgssb_deleted_pyp', JSON.stringify(demoPypIds));
   localStorage.setItem('cgssb_deleted_bundles', JSON.stringify(demoBundleIds));

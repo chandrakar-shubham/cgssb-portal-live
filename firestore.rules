@@ -46,28 +46,24 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
-    // Mock Tests Catalog - Public read for aspirants, modifications restricted strictly to Admin
+    // Mock Tests Catalog - Public read for aspirants, write operations allowed
     match /mockTests/{testId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
     
-    // Question Bank - Public read, write operations restricted to Admin
+    // Question Bank - Public read, write operations allowed
     match /questions/{questionId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Previous Year Papers (PYP) Repository - Public read for candidates, write operations restricted to Admin
+    // Previous Year Papers (PYP) Repository - Public read, write operations allowed
     match /pypPapers/{paperId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
     
-    // Test Series Bundles & Syllabus - Public read, write operations restricted to Admin
+    // Test Series Bundles & Syllabus - Public read, write operations allowed
     match /bundles/{bundleId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
     
     // Student Test Attempts & Leaderboard

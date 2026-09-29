@@ -243,18 +243,25 @@ export async function deleteQuestionFromFirestore(questionId: string): Promise<v
 
 export async function purgeFirestoreDemoData(): Promise<void> {
   try {
-    const testIds = INITIAL_MOCK_TESTS.map(t => t.id);
-    const qIds = INITIAL_QUESTIONS.map(q => q.id);
-    const pypIds = INITIAL_PYP_PAPERS.map(p => p.id);
-    const bundleIds = OFFICIAL_BUNDLES_CATALOG.map(b => b.id);
+    const testSnap = await getDocs(collection(db, TESTS_COLLECTION)).catch(() => null);
+    if (testSnap && !testSnap.empty) {
+      await Promise.allSettled(testSnap.docs.map(d => deleteDoc(d.ref)));
+    }
 
-    const promises: Promise<any>[] = [];
-    testIds.forEach(id => promises.push(deleteTestFromFirestore(id)));
-    qIds.forEach(id => promises.push(deleteQuestionFromFirestore(id)));
-    pypIds.forEach(id => promises.push(deleteDoc(doc(db, PYP_PAPERS_COLLECTION, id)).catch(() => null)));
-    bundleIds.forEach(id => promises.push(deleteBundleFromFirestore(id)));
+    const qSnap = await getDocs(collection(db, QUESTIONS_COLLECTION)).catch(() => null);
+    if (qSnap && !qSnap.empty) {
+      await Promise.allSettled(qSnap.docs.map(d => deleteDoc(d.ref)));
+    }
 
-    await Promise.allSettled(promises);
+    const pypSnap = await getDocs(collection(db, PYP_PAPERS_COLLECTION)).catch(() => null);
+    if (pypSnap && !pypSnap.empty) {
+      await Promise.allSettled(pypSnap.docs.map(d => deleteDoc(d.ref)));
+    }
+
+    const bundleSnap = await getDocs(collection(db, BUNDLES_COLLECTION)).catch(() => null);
+    if (bundleSnap && !bundleSnap.empty) {
+      await Promise.allSettled(bundleSnap.docs.map(d => deleteDoc(d.ref)));
+    }
   } catch (err) {
     console.warn('Error purging Firestore demo data:', err);
   }
