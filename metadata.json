@@ -1,6 +1,6 @@
 {
   "name": "CGSSB Test",
-  "description": "Online competitive exam, mock test, and PYP practice platform for CGSSB, CGPSC, Swami Atmanand, and competitive exams with Android API connectivity.",
+  "description": "Official CBT mock tests and previous year papers for CGSSB Vyapam, CGPSC, CG Teacher, Lecturer, and CG Police SI recruitment exams with bilingual explanations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
