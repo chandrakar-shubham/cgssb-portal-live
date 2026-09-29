@@ -570,11 +570,24 @@ function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Questi
 }
 
 async function startServer() {
-  // Strict Production Environment Validation
-  const requiredEnvVars = ['DATABASE_MODE', 'FIRESTORE_DATABASE_ID'];
-  const missingEnvVars = requiredEnvVars.filter(k => !process.env[k]);
-  if (missingEnvVars.length > 0) {
-    const errorMsg = `FATAL CONFIGURATION ERROR: Missing required environment variable(s): ${missingEnvVars.join(', ')}. Server initialization blocked.`;
+  // Strict Production Environment & Secret Guardrails Validation
+  const databaseMode = (process.env.DATABASE_MODE || '').trim().toLowerCase();
+  if (databaseMode !== 'firestore') {
+    const errorMsg = `FATAL CONFIGURATION ERROR: DATABASE_MODE must be strictly set to 'firestore'. Current value: '${process.env.DATABASE_MODE || 'undefined'}'. Server initialization blocked.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  const firestoreDbId = (process.env.FIRESTORE_DATABASE_ID || '').trim();
+  if (!firestoreDbId) {
+    const errorMsg = 'FATAL CONFIGURATION ERROR: FIRESTORE_DATABASE_ID is missing from environment. Server initialization blocked.';
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+  if (!geminiKey) {
+    const errorMsg = 'FATAL CONFIGURATION ERROR: GEMINI_API_KEY is missing from environment. Server initialization blocked.';
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
@@ -582,7 +595,7 @@ async function startServer() {
   // Live Cloud Firestore Connectivity Enforcement (Fails loud if disconnected)
   const connectionCheck = await testConnection();
   if (!connectionCheck.ok) {
-    const errorMsg = `FATAL DATABASE ERROR: Could not connect to Google Cloud Firestore database ID (${dbConfig.databaseId}). Local fallback engine has been completely deleted. Server initialization blocked.`;
+    const errorMsg = `FATAL DATABASE ERROR: Could not connect to Google Cloud Firestore database ID (${dbConfig.databaseId}). MySQL and local JSON engines are completely deleted. Server initialization blocked.`;
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
