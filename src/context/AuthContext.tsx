@@ -27,6 +27,7 @@ interface AuthContextType {
   }) => void;
   loginWithGoogle: (googleData: { email: string; name: string; avatar?: string }) => Promise<void>;
   loginWithPhoneOtp: (phone: string, otp: string, name?: string) => void;
+  loginWithWhatsApp: (phone: string, tokenOrOtp?: string, name?: string) => void;
   updateUserProfile: (updates: Partial<User>) => void;
   logout: () => void;
   deductCredits: (amount: number) => boolean;
@@ -250,6 +251,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(newUser);
   };
 
+  const loginWithWhatsApp = (phone: string, _tokenOrOtp?: string, name?: string) => {
+    const cleanPhone = phone.trim();
+    const cleanEmail = `${cleanPhone}@whatsapp.cgssbtest.com`;
+    const existing = getRegisteredStudents().find(s => s.phone === cleanPhone || s.email === cleanEmail);
+
+    if (existing) {
+      setUser({ ...existing, lastLoginAt: new Date().toISOString().split('T')[0] });
+      return;
+    }
+
+    const newUser: User = {
+      id: `std-wa-${Date.now()}`,
+      name: name || `WhatsApp Candidate (${cleanPhone.slice(-4)})`,
+      email: cleanEmail,
+      phone: cleanPhone,
+      role: 'student',
+      status: 'active',
+      isBlocked: false,
+      hasProPass: false,
+      registeredAt: new Date().toISOString().split('T')[0],
+      lastLoginAt: new Date().toISOString().split('T')[0],
+      targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
+      district: 'Raipur',
+      medium: 'Hindi',
+      token: `jwt-whatsapp-${Date.now()}`,
+    };
+    setUser(newUser);
+  };
+
   const activateProPass = (planTypeOrName: 'monthly' | 'yearly' | string, customName?: string) => {
     const isMonthly = planTypeOrName.toLowerCase().includes('monthly') || planTypeOrName === 'monthly';
     const planKey = isMonthly ? 'monthly' : 'yearly';
@@ -391,6 +421,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registerStudent,
         loginWithGoogle,
         loginWithPhoneOtp,
+        loginWithWhatsApp,
         updateUserProfile,
         activateProPass,
         transferPassDevice,
