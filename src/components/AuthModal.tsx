@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getPendingReferralCode } from '../utils/referralStore';
 import {
   Mail,
   Lock,
@@ -19,7 +20,8 @@ import {
   ShieldCheck,
   Check,
   Zap,
-  ArrowRight
+  ArrowRight,
+  Gift
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -76,6 +78,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   const [district, setDistrict] = useState('Raipur');
   const [medium, setMedium] = useState<'Hindi' | 'English'>('Hindi');
   const [category, setCategory] = useState<'UR' | 'OBC' | 'SC' | 'ST' | 'EWS'>('UR');
+  const [signUpReferralCode, setSignUpReferralCode] = useState(() => getPendingReferralCode() || '');
 
   // Phone OTP States
   const [phone, setPhone] = useState('');
@@ -283,6 +286,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
     setTimeout(() => {
       setLoadingStepText('Allocating syllabus tracks & free CBT mock passes...');
+      const cleanRefCode = signUpReferralCode.trim();
       registerStudent({
         name: fullName,
         email: signUpEmail,
@@ -291,12 +295,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
         district,
         medium,
         categoryReservation: category,
+        referralCode: cleanRefCode,
       });
 
       setTimeout(() => {
         setIsLoading(false);
-        setSuccessMsg('Account created successfully! Welcome to cgtest.in. Your 1-Month Free Pro Pass is activated!');
-        setTimeout(() => onClose(), 800);
+        const welcomeText = cleanRefCode
+          ? '🎉 Account created! Referral code applied: You & your friend both received +1 Month (Total 2 Months Free Pro Pass)!'
+          : 'Account created successfully! Welcome to cgtest.in. Your 1-Month Free Pro Pass is activated!';
+        setSuccessMsg(welcomeText);
+        setTimeout(() => onClose(), 1200);
       }, 500);
     }, 600);
   };
@@ -705,6 +713,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
                       </button>
                     </div>
                   </div>
+                </div>
+
+                {/* Optional Referral Code Input */}
+                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-300 flex items-center space-x-1">
+                      <Gift className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Referral Code (Optional)</span>
+                    </label>
+                    <span className="text-[10px] text-emerald-400 font-semibold">
+                      +1 Extra Month Free Pass
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={signUpReferralCode}
+                    onChange={e => setSignUpReferralCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. CG-POOJ-1122"
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:outline-none text-white text-xs font-mono font-bold tracking-wider uppercase"
+                  />
+                  {signUpReferralCode && (
+                    <span className="text-[10px] text-emerald-400/90 font-medium block mt-1">
+                      ✓ Friend's code applied: You both get +1 month extra Pro Pass!
+                    </span>
+                  )}
                 </div>
 
                 <button

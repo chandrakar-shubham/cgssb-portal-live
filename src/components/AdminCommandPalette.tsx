@@ -173,6 +173,16 @@ export const AdminCommandPalette: React.FC<AdminCommandPaletteProps> = ({
     },
     // Navigation: CMS & Theming
     {
+      id: 'nav-slider',
+      title: 'Open Hero Slider & Promo Banners Studio (Edit, Publish & Reorder)',
+      category: '📰 Content & CMS',
+      icon: Sliders,
+      action: () => {
+        onNavigateTab('admin-slider');
+        onClose();
+      },
+    },
+    {
       id: 'nav-cms-pages',
       title: 'Open Page Builder (Block-Based Landing Pages)',
       category: '📰 Content & CMS',

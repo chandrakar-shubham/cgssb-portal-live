@@ -58,6 +58,7 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
       groupName: 'CMS & Customizer',
       icon: Globe,
       items: [
+        { id: 'admin-slider', label: 'Hero Slider & Banners', icon: Sliders, badge: 'Live', desc: 'Control top slides, edit & publish' },
         { id: 'admin-overview', label: 'CMS Dashboard', icon: LayoutDashboard, desc: 'Overview, analytics & sync' },
         { id: 'admin-cms-pages', label: 'No-Code Pages', icon: Globe, desc: 'Static & landing pages' },
         { id: 'admin-cms-posts', label: 'News & Articles', icon: FileText, desc: 'Blog posts & exam updates' },

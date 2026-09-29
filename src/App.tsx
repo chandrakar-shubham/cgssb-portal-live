@@ -34,6 +34,7 @@ import { MistakeNotebook } from './components/MistakeNotebook';
 import { BookmarksManager } from './components/BookmarksManager';
 import { ChhattisgarhiRevisionModule } from './components/ChhattisgarhiRevisionModule';
 import { StudentProfileModal } from './components/StudentProfileModal';
+import { StudentReferral } from './components/StudentReferral';
 const AdminToolsAndBackupsModal = React.lazy(() => import('./components/AdminToolsAndBackupsModal').then(m => ({ default: m.AdminToolsAndBackupsModal })));
 const AdminCMSPageBuilder = React.lazy(() => import('./components/AdminCMSPageBuilder').then(m => ({ default: m.AdminCMSPageBuilder })));
 import { DynamicPageRenderer } from './components/DynamicPageRenderer';
@@ -56,11 +57,12 @@ import { LegalModal, LegalTab } from './components/LegalModal';
 import { syncBundlesFromFirestore, cleanTestFromAllBundles } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
 const AdminRemoteConfigStudio = React.lazy(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
+const AdminSliderStudio = React.lazy(() => import('./components/AdminSliderStudio').then(m => ({ default: m.AdminSliderStudio })));
 import { useTestManager } from './hooks/useTestManager';
 import { useQuestionManager } from './hooks/useQuestionManager';
 import { usePypManager } from './hooks/usePypManager';
 import { useCmsManager } from './hooks/useCmsManager';
-import { ArrowLeft, Trophy, Bell, AlertTriangle, Radio, X } from 'lucide-react';
+import { ArrowLeft, Trophy, Bell, AlertTriangle, Radio, X, Gift } from 'lucide-react';
 import {
   CMSPage,
   CMSPost,
@@ -179,6 +181,9 @@ function MainApp() {
     if (path.includes('chhattisgarh') || hash.includes('chhattisgarh') || path.includes('flashcards')) {
       return { route: 'student', tab: 'chhattisgarh-deck' };
     }
+    if (path.includes('referral') || hash.includes('referral') || path.includes('invite') || hash.includes('invite')) {
+      return { route: 'student', tab: 'referral' };
+    }
     return { route: 'student', tab: 'tests' };
   };
 
@@ -201,6 +206,7 @@ function MainApp() {
       case 'mistakes': return '/mistakes';
       case 'bookmarks': return '/bookmarks';
       case 'chhattisgarh-deck': return '/chhattisgarhi-revision';
+      case 'referral': return '/invite-earn';
       case 'posts': return '/posts';
       default: return '/';
     }
@@ -219,6 +225,7 @@ function MainApp() {
       case 'mistakes': return 'Mistake Notebook & Error Log (कमज़ोर विषय री-टेस्ट) | cgtest.in';
       case 'bookmarks': return 'Starred Questions & Personal Notes (बुकमार्क) | cgtest.in';
       case 'chhattisgarh-deck': return 'Chhattisgarhi Language & GK Flashcards Revision | cgtest.in';
+      case 'referral': return 'Invite & Earn (+1 Mo Free) | Student Referral Program | cgtest.in';
       default: return 'cgtest.in | CGPSC, CG Vyapam & Teacher Recruitment Mock Tests';
     }
   };
@@ -1458,6 +1465,10 @@ function MainApp() {
               <AdminRemoteConfigStudio />
             )}
 
+            {adminActiveTab === 'admin-slider' && (
+              <AdminSliderStudio />
+            )}
+
             {(adminActiveTab === 'admin-students' || adminActiveTab === 'admin-marketing') && (
               <AdminStudentManagement attempts={attempts} />
             )}
@@ -1598,6 +1609,7 @@ function MainApp() {
             onSelectCategory={cat => setSelectedCategory(cat)}
             selectedCategory={selectedCategory}
             onExplorePass={() => setStudentActiveTab('pass')}
+            onOpenReferral={() => setStudentActiveTab('referral')}
             onOpenLeaderboardPage={() => setStudentActiveTab('leaderboard')}
             onOpenAuthModal={() => {
               setAuthModalInitialMode('signup');
@@ -1631,6 +1643,33 @@ function MainApp() {
               tests={tests}
               onStartTest={handleStartTest}
               onExplorePass={() => setStudentActiveTab('pass')}
+            />
+          </div>
+        )}
+
+        {/* Dedicated Student Referral & Invite & Earn Page */}
+        {!selectedSEOQuestion && studentActiveTab === 'referral' && (
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            <div className="flex items-center justify-between gap-4">
+              <button
+                onClick={() => setStudentActiveTab('tests')}
+                className="inline-flex items-center space-x-2 text-xs sm:text-sm font-bold text-slate-400 hover:text-white transition px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-emerald-400" />
+                <span>Back to Dashboard</span>
+              </button>
+
+              <div className="flex items-center space-x-2 text-xs font-black text-amber-300 bg-amber-950/40 border border-amber-800/40 px-3.5 py-1.5 rounded-xl">
+                <Gift className="w-4 h-4 text-amber-400" />
+                <span>Invite & Earn (+1 Mo Free)</span>
+              </div>
+            </div>
+
+            <StudentReferral
+              onOpenAuthModal={() => {
+                setAuthModalInitialMode('signup');
+                setIsAuthModalOpen(true);
+              }}
             />
           </div>
         )}

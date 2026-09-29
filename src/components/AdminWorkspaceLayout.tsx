@@ -124,6 +124,7 @@ export const AdminWorkspaceLayout: React.FC<AdminWorkspaceLayoutProps> = ({
       domainId: 'cms',
       domainTitle: 'Content & Portal CMS',
       items: [
+        { id: 'admin-slider', label: 'Hero Slider & Banners', icon: Sliders, badge: 'Offers' },
         { id: 'admin-cms-pages', label: 'Dynamic Page Builder', icon: Globe, highlight: true },
         { id: 'admin-cms-posts', label: 'News, Alerts & Articles', icon: FileText },
         { id: 'admin-cms-series', label: 'Test Series Bundles', icon: Crown },

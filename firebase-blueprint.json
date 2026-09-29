@@ -147,9 +147,31 @@
         "brandName": { "type": "string", "description": "Brand name" }
       },
       "required": ["id"]
+    },
+    "StudentReferral": {
+      "title": "StudentReferral",
+      "description": "Student peer referral invite record and Pro Pass bonus allocation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique referral record identifier" },
+        "referrerId": { "type": "string", "description": "Candidate user ID who shared the referral code" },
+        "referrerName": { "type": "string", "description": "Candidate name of the referrer" },
+        "referrerCode": { "type": "string", "description": "The referral code shared" },
+        "refereeId": { "type": "string", "description": "New candidate user ID who accepted the referral" },
+        "refereeName": { "type": "string", "description": "Candidate name of the referee" },
+        "refereeEmail": { "type": "string", "description": "Candidate email of the referee" },
+        "status": { "type": "string", "enum": ["completed", "pending"], "description": "Status of the referral reward" },
+        "rewardMonths": { "type": "number", "description": "Months of Pro Pass awarded to both parties" },
+        "createdAt": { "type": "string", "description": "Creation ISO date" }
+      },
+      "required": ["id", "referrerId", "referrerCode", "refereeId", "status", "rewardMonths", "createdAt"]
     }
   },
   "firestore": {
+    "/referrals/{referralId}": {
+      "schema": { "$ref": "#/entities/StudentReferral" },
+      "description": "Student referral invite logs and rewarded pass allocations"
+    },
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "User profile records and authorization state"
@@ -197,6 +219,10 @@
     "/cmsSettings/{settingsId}": {
       "schema": { "$ref": "#/entities/CMSSiteSettings" },
       "description": "Site navigation, dynamic themes, and ad configurations"
+    },
+    "/slider_banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/SliderBanner" },
+      "description": "Dynamic promotional hero carousel slide banners with publish state and click actions"
     }
   }
 }

@@ -90,6 +90,13 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Student Referrals - Activity records and bonus tracking
+    match /referrals/{referralId} {
+      allow read: if true;
+      allow create: if isValidId(referralId);
+      allow update, delete: if isAdmin();
+    }
+
     // Global Server-Driven Remote Config & Feature Flags - Public read, write operations restricted to Admin
     match /remoteConfig/{configId} {
       allow read: if true;
@@ -158,6 +165,12 @@ service cloud.firestore {
     }
 
     match /cmsSettings/{settingsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Hero Slider and Promotional Banners
+    match /slider_banners/{bannerId} {
       allow read: if true;
       allow write: if isAdmin();
     }

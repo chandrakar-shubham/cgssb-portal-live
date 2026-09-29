@@ -34,6 +34,11 @@ export interface User {
   completedTestsCount?: number;
   freePassStage?: 'not_started' | '1_month_active' | '3_months_unlocked';
   unlockedMilestoneBonus?: boolean;
+  // Student Referral Program (+1 Month for Referrer and +1 Month for Referee)
+  referralCode?: string;
+  referredBy?: string;             // Referral code used when registering or claiming
+  referralCount?: number;          // Total friends joined
+  referralBonusMonths?: number;    // Total bonus months earned via referrals
   // Extended Student Profile Fields
   targetExam?: string;             // e.g. "CG Teacher 2026", "CGPSC State Service", "CG Police SI"
   targetYear?: number;             // e.g. 2026
@@ -471,4 +476,63 @@ export const DEFAULT_REMOTE_CONFIG: AppRemoteConfig = {
     supportContactEmail: 'support@cgtest.in',
   },
 };
+
+export interface StudentReferralRecord {
+  id: string;
+  referrerId: string;
+  referrerName: string;
+  referrerCode: string;
+  refereeId: string;
+  refereeName: string;
+  refereeEmail?: string;
+  status: 'completed' | 'pending';
+  rewardMonths: number;
+  createdAt: string;
+}
+
+export type SliderActionType =
+  | 'open_referral'
+  | 'explore_pass'
+  | 'open_bundle'
+  | 'start_test'
+  | 'open_leaderboard'
+  | 'custom_url';
+
+export type SliderIconName =
+  | 'Gift'
+  | 'Flame'
+  | 'Crown'
+  | 'Award'
+  | 'Zap'
+  | 'Trophy'
+  | 'Sparkles'
+  | 'Star';
+
+export interface SliderBanner {
+  id: string;
+  category: string;
+  categoryIcon: SliderIconName;
+  categoryColor: string;
+  badge: string;
+  badgeColor: string;
+  title: string;
+  subtitle: string;
+  highlights: string[];
+  couponCode?: string;
+  primaryActionLabel: string;
+  primaryActionType: SliderActionType;
+  primaryActionTarget?: string;
+  secondaryActionLabel?: string;
+  secondaryActionType?: SliderActionType;
+  secondaryActionTarget?: string;
+  bgGradient: string;
+  borderAccent: string;
+  accentGlow: string;
+  isPublished: boolean;
+  displayOrder: number;
+  startDate?: string;
+  endDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 

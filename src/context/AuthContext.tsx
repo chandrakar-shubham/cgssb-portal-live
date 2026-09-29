@@ -10,6 +10,13 @@ import {
 } from 'firebase/auth';
 import { auth, googleAuthProvider } from '../firebase/config';
 import { upsertStudentInRegistry, getRegisteredStudents, saveRegisteredStudents, getAdminMembers } from '../utils/studentStore';
+import { 
+  generateReferralCode, 
+  getPendingReferralCode, 
+  setPendingReferralCode, 
+  applyReferralBonus, 
+  processSignupReferral 
+} from '../utils/referralStore';
 
 interface AuthContextType {
   // Student Auth
@@ -24,6 +31,7 @@ interface AuthContextType {
     district?: string;
     medium?: 'Hindi' | 'English';
     categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
+    referralCode?: string;
   }) => void;
   loginWithGoogle: (googleData: { email: string; name: string; avatar?: string }) => Promise<void>;
   loginWithPhoneOtp: (phone: string, otp: string, name?: string) => void;
@@ -35,6 +43,8 @@ interface AuthContextType {
   activateProPass: (planType: 'monthly' | 'yearly' | string, customName?: string) => void;
   transferPassDevice: () => void;
   recordTestCompletion: () => { unlockedBonus: boolean; newCount: number };
+  applyReferralCode: (code: string) => { success: boolean; message: string; referrerName?: string };
+  userReferralCode: string;
 
   // Admin Auth & RBAC
   adminUser: User | null;
@@ -77,6 +87,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return null;
   });
+
+  // Capture referral code from URL if candidate visits via an invite link ?ref=CG-XXXX
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const refParam = urlParams.get('ref') || urlParams.get('referral');
+        if (refParam) {
+          setPendingReferralCode(refParam);
+        }
+      } catch {
+        // ignore url parsing errors
+      }
+    }
+  }, []);
 
   // Auto-connect with Firebase Auth for Firestore rules authorization
   useEffect(() => {
@@ -133,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // Student Registration with Onboarding Data & Automatic 1-Month Free Pro Pass
+  // Student Registration with Onboarding Data & Automatic 1-Month Free Pro Pass (+1 Month extra if referred)
   const registerStudent = (details: {
     name: string;
     email: string;
@@ -142,10 +167,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     district?: string;
     medium?: 'Hindi' | 'English';
     categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
+    referralCode?: string;
   }) => {
     const passDetails = createInitialProPassDetails();
-    const newUser: User = {
-      id: `std-${Date.now()}`,
+    const studentId = `std-${Date.now()}`;
+    const initialUser: User = {
+      id: studentId,
       name: details.name.trim(),
       email: details.email.trim().toLowerCase(),
       phone: details.phone?.trim() || '',
@@ -160,9 +187,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       medium: details.medium || 'Hindi',
       categoryReservation: details.categoryReservation || 'UR',
       token: `jwt-std-${Date.now()}`,
+      referralCode: generateReferralCode({ id: studentId, name: details.name.trim(), email: details.email }),
+      referralCount: 0,
+      referralBonusMonths: 0,
       ...passDetails,
     };
-    setUser(newUser);
+
+    // Auto-process referral bonus if user signed up with a friend's code (+1 Month for both)
+    const finalUser = processSignupReferral(initialUser, details.referralCode);
+    setUser(finalUser);
   };
 
   // Student Login
@@ -501,6 +534,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser({ ...user, credits: (user.credits ?? 0) + amount });
   };
 
+  const applyReferralCode = (code: string): { success: boolean; message: string; referrerName?: string } => {
+    if (!user) {
+      return { success: false, message: 'Please create an account or sign in to claim your referral bonus!' };
+    }
+    const result = applyReferralBonus(user, code);
+    if (result.success && result.updatedUser) {
+      setUser(result.updatedUser);
+    }
+    return {
+      success: result.success,
+      message: result.message,
+      referrerName: result.referrerName,
+    };
+  };
+
+  const userReferralCode = user?.referralCode || (user ? generateReferralCode(user) : '');
+
   return (
     <AuthContext.Provider
       value={{
@@ -515,6 +565,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activateProPass,
         transferPassDevice,
         recordTestCompletion,
+        applyReferralCode,
+        userReferralCode,
         logout,
         deductCredits,
         addCredits,

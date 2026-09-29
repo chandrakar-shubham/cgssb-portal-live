@@ -33,14 +33,14 @@ import {
   Crown,
   Lock,
   History,
-  Trophy
+  Trophy,
+  Gift
 } from 'lucide-react';
 import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
 import { getStoredBundles, findBundleBySlugOrId, syncBundlesFromFirestore, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
-import { ProPassMilestoneCard } from './ProPassMilestoneCard';
 import { ChangeTargetModal, TARGET_EXAM_OPTIONS, TargetExamOption } from './ChangeTargetModal';
 import { LiveTestLeaderboard } from './LiveTestLeaderboard';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
@@ -55,6 +55,7 @@ interface StudentDashboardProps {
   onExplorePass?: () => void;
   onOpenLeaderboardPage?: () => void;
   onOpenAuthModal?: () => void;
+  onOpenReferral?: () => void;
   onUpdateTest?: (testId: string, updates: Partial<MockTest>) => void;
   onDeleteTest?: (testId: string) => void;
   onTogglePublishTest?: (testId: string) => void;
@@ -70,6 +71,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onExplorePass,
   onOpenLeaderboardPage,
   onOpenAuthModal,
+  onOpenReferral,
   onUpdateTest,
   onDeleteTest,
   onTogglePublishTest,
@@ -868,6 +870,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <span>Target: {userTarget}</span>
                     <span className="text-[9px] text-emerald-400 font-mono underline decoration-dotted ml-0.5">Change</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenReferral) {
+                        onOpenReferral();
+                      }
+                    }}
+                    className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition group cursor-pointer shadow-sm"
+                    title="Invite friends to get +1 Month Free Pro Pass each"
+                  >
+                    <Gift className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                    <span>Invite & Earn (+1 Mo Free)</span>
+                    <span className="text-[9px] bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-mono font-black ml-0.5">FREE</span>
+                  </button>
                 </div>
                 <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate hidden sm:block">
                   {targetSubtitle}
@@ -909,16 +925,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       )}
 
-      {/* 3 Months Free Pro Pass Milestone Progress Banner */}
-      {!isAdmin && (
-        <ProPassMilestoneCard
-          onStartPractice={() => {
-            if (filteredTests.length > 0) onStartTest(filteredTests[0]);
-          }}
-          onOpenAuthModal={onOpenAuthModal}
-        />
-      )}
-
       {/* Animated Slider for Hot Test Series & Advertisement of Offers */}
       {!isAdmin && (
         <HotSliderAndOffers
@@ -926,6 +932,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           onOpenBundle={setSelectedBundle}
           onStartTest={onStartTest}
           tests={tests}
+          onOpenReferral={onOpenReferral}
           onOpenLeaderboard={testId => {
             if (testId) setLeaderboardSelectedTestId(testId);
             if (onOpenLeaderboardPage) {

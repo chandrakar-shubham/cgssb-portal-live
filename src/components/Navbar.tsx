@@ -20,7 +20,8 @@ import {
   Layers,
   ShieldCheck,
   CheckCircle2,
-  Trophy
+  Trophy,
+  Gift
 } from 'lucide-react';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
@@ -69,6 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const studyItems = useMemo(() => {
     const items = [
       { id: 'leaderboard', label: 'State Leaderboard', icon: Trophy, desc: 'Live statewide merit & percentile rankings', color: 'text-amber-400', enabled: config.featureFlags.enableLiveLeaderboard !== false },
+      { id: 'referral', label: 'Invite & Earn (+1 Mo Free)', icon: Gift, desc: 'Give 1 Month, Get 1 Month Free Pass', badge: 'FREE', color: 'text-amber-400', enabled: true },
       { id: 'mistakes', label: 'Mistake Notebook', icon: AlertTriangle, desc: 'Review & re-test incorrect questions', badge: mistakesCount > 0 ? mistakesCount : undefined, color: 'text-rose-400', enabled: config.featureFlags.enableMistakeNotebook !== false },
       { id: 'bookmarks', label: 'Starred Bookmarks', icon: Bookmark, desc: 'Saved questions and custom notes', color: 'text-amber-400', enabled: config.featureFlags.enableBookmarks !== false },
       { id: 'chhattisgarh-deck', label: 'CG Flashcards', icon: Sparkles, desc: 'Chhattisgarhi language & GK quick cards', color: 'text-teal-300', enabled: config.featureFlags.enableChhattisgarhiRevision !== false },
