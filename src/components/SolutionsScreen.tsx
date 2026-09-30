@@ -236,27 +236,23 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
             </p>
           </div>
 
-          {/* Simulated Rank & Percentile Trophy Block */}
           <div className="flex items-center space-x-3 bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 shadow-inner">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-slate-950 shadow-md shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center text-slate-200 shrink-0">
               <Award className="w-6 h-6" />
             </div>
             <div className="min-w-0">
               <span className="text-[10px] text-slate-400 font-semibold block uppercase tracking-wider">
-                Simulated All-India Rank
+                Personal Performance
               </span>
-              <div className="flex items-baseline space-x-1.5">
-                <span className="text-2xl font-black text-white">#{attempt.simulatedRank}</span>
-                <span className="text-xs text-slate-400">/ {attempt.totalParticipants.toLocaleString()} candidates</span>
+              <div className="text-sm font-bold text-white mt-1">
+                Scorecard generated from this mock-test attempt
               </div>
-              <div className="flex items-center space-x-2 mt-0.5">
-                <span className="text-[11px] text-emerald-400 font-bold">
-                  {attempt.percentile} Percentile
-                </span>
+              <div className="flex items-center space-x-2 mt-1">
+                <span className="text-[11px] text-slate-400">State-wide rank & percentile are not verified on Firebase Spark.</span>
                 <button
                   type="button"
                   onClick={() => setIsShareModalOpen(true)}
-                  className="text-[10px] font-bold text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 px-2 py-0.5 rounded border border-amber-500/30 transition flex items-center space-x-1 cursor-pointer"
+                  className="text-[10px] font-bold text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 px-2 py-0.5 rounded border border-amber-500/30 transition flex items-center space-x-1 cursor-pointer shrink-0"
                 >
                   <Share2 className="w-3 h-3 text-amber-400" />
                   <span>Share</span>
