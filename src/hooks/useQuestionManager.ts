@@ -37,9 +37,6 @@ export function useQuestionManager() {
     fetchQuestionsFromFirestore().then((remoteQs) => {
       if (Array.isArray(remoteQs)) {
         setQuestions(remoteQs.map(migrateLegacyQuestion));
-        try {
-          localStorage.setItem('cgssb_questions', JSON.stringify(remoteQs));
-        } catch {}
       }
     }).catch(() => {});
 
@@ -57,13 +54,6 @@ export function useQuestionManager() {
     return () => window.removeEventListener('cgssb-questions-updated', handleUpdate);
   }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('cgssb_questions', JSON.stringify(questions));
-    } catch (e) {
-      console.warn('LocalStorage quota warning for questions:', e);
-    }
-  }, [questions]);
 
   const addQuestions = useCallback((newQuestions: Question[]) => {
     setQuestions(prev => {
