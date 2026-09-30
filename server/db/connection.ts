@@ -1,5 +1,6 @@
 import { App, cert, getApps, initializeApp, applicationDefault } from 'firebase-admin/app';
 import { Firestore, getFirestore } from 'firebase-admin/firestore';
+import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -55,28 +56,32 @@ function loadServiceAccount(): Record<string, any> | null {
   return null;
 }
 
+export function getFirebaseAdminApp(): App {
+  const existingApp = getApps().find(a => a.name === 'cgssb-server-admin');
+  if (existingApp) return existingApp;
+
+  const serviceAccount = loadServiceAccount();
+  return serviceAccount
+    ? initializeApp({
+        credential: cert(serviceAccount as any),
+        projectId: serviceAccount.project_id || dbConfig.projectId,
+      }, 'cgssb-server-admin')
+    : initializeApp({
+        credential: applicationDefault(),
+        projectId: dbConfig.projectId,
+      }, 'cgssb-server-admin');
+}
+
+export async function verifyFirebaseIdToken(token: string): Promise<DecodedIdToken> {
+  if (!token) throw new Error('Firebase ID token is required');
+  return getAuth(getFirebaseAdminApp()).verifyIdToken(token, true);
+}
+
 export function getFirestoreServer(): Firestore {
   if (serverFirestore) return serverFirestore;
 
   try {
-    const existingApp = getApps().find(a => a.name === 'cgssb-server-admin');
-    let app: App;
-
-    if (existingApp) {
-      app = existingApp;
-    } else {
-      const serviceAccount = loadServiceAccount();
-      app = serviceAccount
-        ? initializeApp({
-            credential: cert(serviceAccount as any),
-            projectId: serviceAccount.project_id || dbConfig.projectId,
-          }, 'cgssb-server-admin')
-        : initializeApp({
-            credential: applicationDefault(),
-            projectId: dbConfig.projectId,
-          }, 'cgssb-server-admin');
-    }
-
+    const app = getFirebaseAdminApp();
     serverFirestore = getFirestore(app, dbConfig.databaseId);
     return serverFirestore;
   } catch (err: any) {
