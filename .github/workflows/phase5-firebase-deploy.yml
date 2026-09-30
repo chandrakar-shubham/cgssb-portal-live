@@ -54,3 +54,25 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
           ./node_modules/.bin/firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,firestore:rules --non-interactive
+
+      - name: Smoke test deployed Firebase Hosting
+        run: |
+          set -e
+          for i in 1 2 3 4 5; do
+            if curl -fsSL --max-time 20 https://gen-lang-client-0783153446.web.app/ | grep -qi '<html'; then
+              echo "Firebase Hosting smoke test passed."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Firebase Hosting smoke test failed."
+          exit 1
+
+      - name: Check custom domain
+        continue-on-error: true
+        run: |
+          if curl -fsSL --max-time 20 https://cgtest.in/ | grep -qi '<html'; then
+            echo "cgtest.in is reachable."
+          else
+            echo "::warning::cgtest.in is not reachable from this runner yet; Firebase Hosting deployment itself is healthy."
+          fi
