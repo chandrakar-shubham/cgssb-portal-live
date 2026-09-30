@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, AdminPermissions } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
-import { syncUserProfileToFirestore } from '../firebase/firestoreService';
+import { syncUserProfileToFirestore, fetchUserProfileFromFirestore } from '../firebase/firestoreService';
 import { 
   signInAnonymously, 
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword, 
   onAuthStateChanged,
   signOut as firebaseSignOut 
 } from 'firebase/auth';
@@ -238,6 +240,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error('WhatsApp authentication is not enabled yet. Please use email/password or Google sign-in.');
   };
 
+  const activateProPass = (planTypeOrName: 'monthly' | 'yearly' | string, customName?: string) => {
+    const isMonthly = planTypeOrName.toLowerCase().includes('monthly') || planTypeOrName === 'monthly';
+    const planKey = isMonthly ? 'monthly' : 'yearly';
+    const tenure = createPassTenure(planKey);
+    const device = getOrCreateDeviceId();
+    const finalPlanName = customName || (isMonthly ? 'Monthly All-Access Pass (30 Days)' : 'Yearly All-Access Pass (365 Days)');
+
+    if (user) {
+      setUser({
+        ...user,
+        hasProPass: true,
+        proPassPlan: finalPlanName,
+        passDurationDays: tenure.days,
+        passExpiresAt: tenure.expiresAt,
+        boundDeviceId: device.id,
+        boundDeviceName: device.name,
+      });
+    } else {
+      const newUser: User = {
+        id: `std-${Date.now()}`,
+        name: 'Enrolled Aspirant',
+        email: 'aspirant@cgtest.in',
+        role: 'student',
+        status: 'active',
+        isBlocked: false,
+        hasProPass: true,
+        proPassPlan: finalPlanName,
+        passDurationDays: tenure.days,
+        passExpiresAt: tenure.expiresAt,
+        boundDeviceId: device.id,
+        boundDeviceName: device.name,
+        completedTestsCount: 0,
+        freePassStage: '1_month_active',
+        unlockedMilestoneBonus: false,
+        registeredAt: new Date().toISOString().split('T')[0],
+        lastLoginAt: new Date().toISOString().split('T')[0],
+      };
+      setUser(newUser);
+    }
+  };
+
+  // Milestone Test Completion Hook (+2 Months Free on 5 Tests)
+  const recordTestCompletion = (): { unlockedBonus: boolean; newCount: number } => {
+    if (!user) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cgtest_guest_test_completed', 'true');
+      }
+      return { unlockedBonus: false, newCount: 1 };
+    }
+
+    const currentCount = user.completedTestsCount || 0;
+    const newCount = currentCount + 1;
+    const shouldUnlockBonus = newCount >= 5 && !user.unlockedMilestoneBonus;
+
+    let updatedExpiresAt = user.passExpiresAt;
+    let updatedDurationDays = user.passDurationDays || 30;
+    let updatedPlan = user.proPassPlan || '1-Month Free Welcome Pass (30 Days)';
+    let updatedStage = user.freePassStage || '1_month_active';
+
+    if (shouldUnlockBonus) {
+      const baseTime = user.passExpiresAt ? new Date(user.passExpiresAt).getTime() : Date.now();
+      const extendedTime = Math.max(Date.now(), baseTime) + 60 * 24 * 60 * 60 * 1000; // +60 days (2 months)
+      updatedExpiresAt = new Date(extendedTime).toISOString();
+      updatedDurationDays = updatedDurationDays + 60;
+      updatedPlan = '3-Month Milestone Pro Pass (90 Days Total)';
+      updatedStage = '3_months_unlocked';
+    }
+
+    const updatedUser: User = {
+      ...user,
+      hasProPass: true,
+      completedTestsCount: newCount,
+      unlockedMilestoneBonus: Boolean(user.unlockedMilestoneBonus || shouldUnlockBonus),
+      freePassStage: updatedStage,
+      proPassPlan: updatedPlan,
+      passDurationDays: updatedDurationDays,
+      passExpiresAt: updatedExpiresAt,
+    };
+
+    setUser(updatedUser);
+    return { unlockedBonus: shouldUnlockBonus, newCount };
+  };
+
+  const transferPassDevice = () => {
+    if (!user) return;
+    const currentDevice = getOrCreateDeviceId();
+    setUser({
+      ...user,
+      boundDeviceId: currentDevice.id,
+      boundDeviceName: currentDevice.name,
+    });
+  };
+
   const updateUserProfile = (updates: Partial<User>) => {
     if (!user) return;
     setUser(prev => {
@@ -253,6 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem('cgssb_student_user');
   };
+
 
   // Admin Login: credentials are verified only by the server. Never ship the admin secret to the browser.
   const adminLogin = async (usernameOrEmail: string, passwordOrPasskey?: string): Promise<{ success: boolean; error?: string }> => {
