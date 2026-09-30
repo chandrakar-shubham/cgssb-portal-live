@@ -264,7 +264,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   };
 
   // Email Sign Up / Registration Submit
-  const handleSignUpSubmit = (e: React.FormEvent) => {
+  const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
       setErrorMsg('Please enter your full candidate name.');
@@ -281,9 +281,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
     setErrorMsg('');
     setIsLoading(true);
-    setLoadingStepText('Registering student profile in CG State Candidate Registry...');
+    setLoadingStepText('Creating your secure Firebase account...');
 
-    setTimeout(() => {
+    try {
       setLoadingStepText('Allocating syllabus tracks & free CBT mock passes...');
       const cleanRefCode = signUpReferralCode.trim();
       registerStudent({
@@ -297,15 +297,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
         referralCode: cleanRefCode,
       }, signUpPassword);
 
+      setIsLoading(false);
       setTimeout(() => {
-        setIsLoading(false);
         const welcomeText = cleanRefCode
           ? '🎉 Account created! Referral code applied: You & your friend both received +1 Month (Total 2 Months Free Pro Pass)!'
           : 'Account created successfully! Welcome to cgtest.in. Your 1-Month Free Pro Pass is activated!';
         setSuccessMsg(welcomeText);
         setTimeout(() => onClose(), 1200);
-      }, 500);
-    }, 600);
+      }, 1200);
+    } catch (err) {
+      setIsLoading(false);
+      setErrorMsg(err instanceof Error ? err.message : 'Account creation failed. Please try again.');
+    }
   };
 
   return (
