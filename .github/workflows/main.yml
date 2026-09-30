@@ -16,10 +16,6 @@ on:
         required: false
         default: 'Pre-deployment verification'
 
-permissions:
-  contents: write
-  issues: write
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -60,19 +56,6 @@ jobs:
         run: |
           echo "Running TypeScript strict verification (tsc --noEmit)..."
           npm run lint
-
-      - name: 🧪 Capture TypeScript diagnostics (temporary)
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          npm run lint > /tmp/tsc-errors.txt 2>&1
-          status=$?
-          printf 'Temporary CI diagnostic for commit ${{ github.sha }}\n\n' > /tmp/issue-body.txt
-          cat /tmp/tsc-errors.txt >> /tmp/issue-body.txt
-          gh issue create --title "TEMP TSC DIAGNOSTICS ${{ github.run_id }}" --body-file /tmp/issue-body.txt
-          exit $status
 
       - name: 🏗️ Execute Production Bundle Build
         env:
