@@ -1,4 +1,4 @@
-import { doc, getDoc, getDocs, collection, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, deleteDoc } from './firestoreAdapter.ts';
 import { dbConfig, getFirestoreServer, canServerWriteFirestore } from './connection.ts';
 import type {
   Question,
