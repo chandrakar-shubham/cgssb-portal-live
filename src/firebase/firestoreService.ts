@@ -86,18 +86,15 @@ export const COLLECTIONS = {
 /**
  * Timeout wrapper to guarantee that network hiccups don't freeze the client
  */
-async function withTimeout<T>(promise: Promise<T>, timeoutMs = 4000, fallbackValue: T): Promise<T> {
-  let timer: any;
-  const timeout = new Promise<T>((resolve) => {
-    timer = setTimeout(() => resolve(fallbackValue), timeoutMs);
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = 4000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Firestore operation timed out')), timeoutMs);
   });
   try {
-    const result = await Promise.race([promise, timeout]);
-    clearTimeout(timer);
-    return result;
-  } catch {
-    clearTimeout(timer);
-    return fallbackValue;
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -142,8 +139,7 @@ export async function fetchUserProfileFromFirestore(_userId?: string): Promise<U
     const userDocRef = doc(db, COLLECTIONS.USERS, authUserId);
     return await withTimeout(
       getDoc(userDocRef).then(snap => snap.exists() ? (snap.data() as User) : null),
-      4000,
-      null
+      4000
     );
   } catch (err) {
     console.warn('Error fetching user profile from Firestore:', err);
@@ -166,8 +162,7 @@ export async function fetchTestsFromFirestore(): Promise<MockTest[]> {
         });
         return items;
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching tests from Firestore:', err);
