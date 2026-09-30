@@ -307,9 +307,6 @@ export async function getDatabaseCounts(): Promise<{ questions: number; mockTest
   };
 }
 
-export function getLocalSnapshot(): DatabaseShape {
-  return memoryCache;
-}
 
 // ----------------- NO-CODE CMS REPOSITORY -----------------
 
@@ -410,8 +407,7 @@ export async function getCmsSettings(): Promise<CMSSiteSettings> {
 export async function saveCmsSettings(settings: CMSSiteSettings): Promise<CMSSiteSettings> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'cmsSettings', 'global'), settings, { merge: true });
-  memoryCmsSettings = settings;
-  return memoryCmsSettings;
+  return settings;
 }
 
 // ==========================================
