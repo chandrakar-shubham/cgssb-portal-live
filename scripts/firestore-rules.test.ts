@@ -34,12 +34,15 @@ const publicCollections = [
 ];
 
 for (const collection of publicCollections) {
-  const start = rules.indexOf(`match /${collection}/`);
+  const marker = `match /${collection}/`;
+  const start = rules.indexOf(marker);
   if (start === -1) {
     throw new Error(`Firestore security regression: missing match block for ${collection}`);
   }
 
-  const block = rules.slice(start, rules.indexOf('\\n    }', start) + 6);
+  const nextMatch = rules.indexOf("\n    match /", start + marker.length);
+  const block = rules.slice(start, nextMatch === -1 ? rules.length : nextMatch);
+
   if (!block.includes('allow read: if true;') || !block.includes('allow write: if false;')) {
     throw new Error(`Firestore security regression: public-read/server-write policy missing for ${collection}`);
   }
