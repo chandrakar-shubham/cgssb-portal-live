@@ -30,13 +30,14 @@ export async function getAllUsersAdmin(): Promise<User[]> {
   const db = getFirestoreServer();
   const snap = await getDocs(collection(db, 'users'));
   const list: User[] = [];
-  snap.forEach(d => list.push({ id: d.id, ...(d.data() as User) }));
+  snap.forEach(d => list.push({ ...(d.data() as User), id: d.id }));
   return list;
 }
 
 export async function saveUserAdmin(user: User): Promise<User> {
   const db = getFirestoreServer();
-  await setDoc(doc(db, 'users', user.id), user, { merge: true });
+  const { id, ...userData } = user;
+  await setDoc(doc(db, 'users', id), userData, { merge: true });
   return user;
 }
 
@@ -50,7 +51,7 @@ export async function getAllCouponsAdmin(): Promise<DiscountCoupon[]> {
   const db = getFirestoreServer();
   const snap = await getDocs(collection(db, 'discountCoupons'));
   const list: DiscountCoupon[] = [];
-  snap.forEach(d => list.push({ id: d.id, ...(d.data() as DiscountCoupon) }));
+  snap.forEach(d => list.push({ ...(d.data() as DiscountCoupon), id: d.id }));
   return list;
 }
 
