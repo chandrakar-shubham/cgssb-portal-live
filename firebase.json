@@ -9,6 +9,14 @@
     ],
     "rewrites": [
       {
+        "source": "/api/**",
+        "function": {
+          "functionId": "cgssbApi",
+          "region": "asia-south1",
+          "pinTag": true
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -39,5 +47,9 @@
       "database": "ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089",
       "rules": "firestore.rules"
     }
-  ]
+  ],
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  }
 }
