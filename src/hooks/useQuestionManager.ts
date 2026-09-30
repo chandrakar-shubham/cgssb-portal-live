@@ -10,27 +10,13 @@ import {
 } from '../firebase/firestoreService';
 
 export function useQuestionManager() {
-  const [questions, setQuestions] = useState<Question[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_questions');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.map(migrateLegacyQuestion);
-        }
-      }
-    } catch {}
-    return [];
-  });
+  const [questions, setQuestions] = useState<Question[]>([]);
 
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
     const unsubscribe = subscribeToQuestions((firestoreQuestions) => {
       if (Array.isArray(firestoreQuestions)) {
         setQuestions(firestoreQuestions.map(migrateLegacyQuestion));
-        try {
-          localStorage.setItem('cgssb_questions', JSON.stringify(firestoreQuestions));
-        } catch {}
       }
     });
 
