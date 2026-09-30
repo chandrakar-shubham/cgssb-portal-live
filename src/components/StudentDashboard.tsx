@@ -82,6 +82,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const hasAttemptedTest = (testId: string) => attempts.some(attempt => attempt.testId === testId);
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [displayMode, setDisplayMode] = useState<'nested' | 'grid'>('nested');
@@ -703,7 +704,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-sm active:scale-95 cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5 fill-slate-950" />
-                  <span>{isAdmin ? 'Test Exam Simulation' : test.isPro ? 'Start Pro Test' : 'Start Diagnostic Mock'}</span>
+                  <span>{isAdmin ? 'Test Exam Simulation' : hasAttemptedTest(test.id) ? 'Re-attempt' : test.isPro ? 'Start Pro Test' : 'Start Diagnostic Mock'}</span>
                 </button>
               )}
 
