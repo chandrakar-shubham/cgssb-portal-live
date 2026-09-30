@@ -1,38 +1,12 @@
 import { User, StudentReferralRecord } from '../types';
 import { getRegisteredStudents, upsertStudentInRegistry } from './studentStore';
-import { db } from '../firebase/config';
-import { doc, setDoc } from 'firebase/firestore';
 
 const REFERRALS_STORAGE_KEY = 'cgtest_referral_records';
 const PENDING_REF_KEY = 'cgtest_pending_referral_code';
 
 // Default starter seed records to show realistic activity in dashboard
-const SEED_REFERRAL_RECORDS: StudentReferralRecord[] = [
-  {
-    id: 'ref-seed-1',
-    referrerId: 'u-std-101',
-    referrerName: 'Pooja Verma',
-    referrerCode: 'CG-POOJ-1122',
-    refereeId: 'u-std-103',
-    refereeName: 'Shreya Tiwari',
-    refereeEmail: 'shreya.tiwari@outlook.com',
-    status: 'completed',
-    rewardMonths: 1,
-    createdAt: '2026-03-10'
-  },
-  {
-    id: 'ref-seed-2',
-    referrerId: 'u-std-102',
-    referrerName: 'Anil Kumar Sahu',
-    referrerCode: 'CG-ANIL-4567',
-    refereeId: 'u-std-104',
-    refereeName: 'Mahesh Bhagat',
-    refereeEmail: 'mahesh.bhagat@gmail.com',
-    status: 'completed',
-    rewardMonths: 1,
-    createdAt: '2026-04-18'
-  }
-];
+const SEED_REFERRAL_RECORDS: StudentReferralRecord[] = [];
+
 
 /**
  * Generates an intuitive, readable referral code for a student
@@ -108,14 +82,6 @@ export function clearPendingReferralCode(): void {
 /**
  * Sync referral record to Firestore for persistent cloud record
  */
-async function syncReferralToFirestore(record: StudentReferralRecord): Promise<void> {
-  try {
-    if (!db) return;
-    await setDoc(doc(db, 'referrals', record.id), record, { merge: true });
-  } catch (err) {
-    console.warn('Firestore referral sync note:', err);
-  }
-}
 
 /**
  * Finds a student by their referral code
@@ -222,7 +188,6 @@ export function applyReferralBonus(
   const existingRecords = getReferralRecords();
   const updatedRecords = [record, ...existingRecords];
   saveReferralRecords(updatedRecords);
-  syncReferralToFirestore(record).catch(() => null);
 
   clearPendingReferralCode();
 
