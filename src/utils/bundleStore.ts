@@ -10,25 +10,6 @@ import {
 
 let bundleCache: TestSeriesBundle[] = [];
 
-export const getAdminHeaders = (): Record<string, string> => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'x-admin-key': 'cgssb_admin_2026',
-  };
-  try {
-    if (typeof window !== 'undefined') {
-      const raw = localStorage.getItem('cgssb_admin_session');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.token) {
-          headers['Authorization'] = `Bearer ${parsed.token}`;
-        }
-      }
-    }
-  } catch {}
-  return headers;
-};
-
 // Automatic real-time cross-browser Firestore subscription for bundles.
 // This is an in-memory UI cache only; Firestore/API remains authoritative.
 if (typeof window !== 'undefined') {
