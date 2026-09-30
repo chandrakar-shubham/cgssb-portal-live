@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FIREBASE_PROJECT_ID: gen-lang-client-0783153446
+
 jobs:
   validate-and-deploy:
     runs-on: ubuntu-latest
@@ -38,31 +41,25 @@ jobs:
           test -f dist/server.js
           node -e "const p=require('./dist/version.json'); if(!p.commitSha||!p.buildTime) process.exit(1); console.log(p)"
 
-      - name: Write Firebase project configuration
+      - name: Configure Firebase authentication
         env:
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          test -n "$FIREBASE_PROJECT_ID"
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
           printf '{"projects":{"default":"%s"}}\n' "$FIREBASE_PROJECT_ID" > .firebaserc
 
       - name: Configure Firebase Functions secret
         env:
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
-          test -n "$FIREBASE_PROJECT_ID"
-          test -n "$FIREBASE_TOKEN"
           test -n "$ADMIN_SECRET"
-          printf '%s' "$ADMIN_SECRET" | firebase functions:secrets:set ADMIN_SECRET --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --force
+          firebase functions:secrets:set ADMIN_SECRET --project "$FIREBASE_PROJECT_ID" --force <<< "$ADMIN_SECRET"
 
       - name: Deploy Firebase Hosting, Functions and Firestore rules
         env:
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
-          test -n "$FIREBASE_PROJECT_ID"
-          test -n "$FIREBASE_TOKEN"
-          firebase deploy --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --only hosting,functions,firestore:rules --non-interactive
+          firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,functions,firestore:rules --non-interactive
