@@ -1,4 +1,4 @@
-name: Phase 5 Firebase Production Deploy
+name: Phase 5 Firebase Spark Production Deploy
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ env:
 jobs:
   validate-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,12 +34,11 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Verify production artifacts
+      - name: Verify Spark artifacts
         run: |
           test -f dist/index.html
-          test -f dist/firebase-functions.cjs
-          test -f dist/server.js
-          node -e "const p=require('./dist/version.json'); if(!p.commitSha||!p.buildTime) process.exit(1); console.log(p)"
+          test -f dist/version.json
+          node -e "const p=require('./dist/version.json'); if(!p.commitSha||!p.buildTime) process.exit(1); if(!String(p.platform).includes('Spark')) process.exit(1); console.log(p)"
 
       - name: Configure Firebase authentication
         env:
@@ -50,16 +49,8 @@ jobs:
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
           printf '{"projects":{"default":"%s"}}\n' "$FIREBASE_PROJECT_ID" > .firebaserc
 
-      - name: Configure Firebase Functions secret
-        env:
-          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: |
-          test -n "$ADMIN_SECRET"
-          ./node_modules/.bin/firebase functions:secrets:set ADMIN_SECRET --project "$FIREBASE_PROJECT_ID" --force <<< "$ADMIN_SECRET"
-
-      - name: Deploy Firebase Hosting, Functions and Firestore rules
+      - name: Deploy Firebase Hosting and Firestore rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
-          ./node_modules/.bin/firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,functions,firestore:rules --non-interactive
+          ./node_modules/.bin/firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,firestore:rules --non-interactive
