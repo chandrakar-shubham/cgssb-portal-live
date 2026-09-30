@@ -985,14 +985,6 @@ function MainApp() {
     saveTestToFirestore(newTest).catch(() => null);
     saveQuestionsToFirestore(newQuestions).catch(() => null);
     const token = getAdminToken();
-    fetch('/api/questions/bulk', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ questions: newQuestions }),
-    }).catch(() => {});
   };
 
   // UNIFIED BULK QUESTIONS ADDED (Syncs directly to Cloud Firestore & backend)
@@ -1002,14 +994,6 @@ function MainApp() {
     setQuestions(prev => dedupeById([...newQs, ...prev]));
     saveQuestionsToFirestore(newQs).catch(() => null);
     const token = getAdminToken();
-    fetch('/api/questions/bulk', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ questions: newQs }),
-    }).catch(() => {});
   };
 
   // UNIFIED BULK TESTS ADDED (Syncs directly to Cloud Firestore & backend)
