@@ -2,6 +2,8 @@ import {
   collection,
   doc,
   getDocs,
+  query,
+  where,
   getDoc,
   setDoc,
   deleteDoc,
@@ -12,7 +14,7 @@ import {
 import { db, auth } from './config';
 import { signInAnonymously } from 'firebase/auth';
 import { api } from '../utils/apiClient';
-import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG } from '../types';
+import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG, LeaderboardEntryRecord } from '../types';
 import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../types/cms';
@@ -80,7 +82,9 @@ export const COLLECTIONS = {
   CMS_SETTINGS: 'cmsSettings',
   SLIDER_BANNERS: 'slider_banners',
   REMOTE_CONFIG: 'remoteConfig',
-  REFERRALS: 'referrals'
+  REFERRALS: 'referrals',
+  USER_ENTITLEMENTS: 'userEntitlements',
+  LEADERBOARD_ENTRIES: 'leaderboardEntries'
 } as const;
 
 /**
@@ -818,30 +822,91 @@ export async function migrateAllLocalDataToFirestore(params: {
   }
 }
 
-export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void> {
-  if (!attempt?.id) return;
+export interface UserEntitlement {
+  userId: string;
+  planType: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'PENDING' | 'CANCELLED';
+  issuedAt?: string;
+  expiresAt?: string;
+  durationDays: number;
+  source?: 'WELCOME_FREE' | 'CLIENT_CHECKOUT' | 'ADMIN' | 'PAYMENT';
+  planName?: string;
+  boundDeviceId?: string;
+  boundDeviceName?: string;
+  updatedAt?: string;
+}
+
+export async function fetchUserEntitlementFromFirestore(userId?: string): Promise<UserEntitlement | null> {
+  const uid = userId || auth.currentUser?.uid;
+  if (!db || !uid) return null;
   try {
-    await api.post('/api/tests/' + encodeURIComponent(attempt.testId) + '/submit', {
-      userName: attempt.userName,
-      timeTakenSeconds: attempt.timeTakenSeconds,
-      responses: attempt.responses,
-      questionStatuses: attempt.questionStatuses,
-      idempotencyKey: attempt.id,
-    }, { requireAuth: true });
+    const snap = await withTimeout(getDoc(doc(db, COLLECTIONS.USER_ENTITLEMENTS, uid)), 4000);
+    return snap.exists() ? (snap.data() as UserEntitlement) : null;
   } catch (err) {
-    console.warn('Error submitting test attempt through API:', err);
+    console.warn('Error fetching user entitlement from Firestore:', err);
+    return null;
+  }
+}
+
+export async function saveUserEntitlementToFirestore(entitlement: UserEntitlement): Promise<void> {
+  if (!db || !entitlement?.userId) return;
+  await setDoc(doc(db, COLLECTIONS.USER_ENTITLEMENTS, entitlement.userId), entitlement, { merge: true });
+}
+
+export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void> {
+  if (!db || !attempt?.id || !auth.currentUser || auth.currentUser.uid !== attempt.userId) return;
+  try {
+    await setDoc(doc(db, COLLECTIONS.ATTEMPTS, attempt.id), attempt, { merge: false });
+  } catch (err) {
+    console.warn('Error saving test attempt to Firestore:', err);
+    throw err;
+  }
+}
+
+export async function fetchMyAttemptsFromFirestore(userId?: string): Promise<TestAttempt[]> {
+  const uid = userId || auth.currentUser?.uid;
+  if (!db || !uid) return [];
+  try {
+    const snap = await withTimeout(
+      getDocs(query(collection(db, COLLECTIONS.ATTEMPTS), where('userId', '==', uid))),
+      5000
+    );
+    return snap.docs.map(d => d.data() as TestAttempt).sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+  } catch (err) {
+    console.warn('Error fetching student attempts from Firestore:', err);
+    return [];
+  }
+}
+
+export async function saveLeaderboardEntryToFirestore(entry: LeaderboardEntryRecord): Promise<void> {
+  if (!db || !entry?.id || !auth.currentUser || auth.currentUser.uid !== entry.userId) return;
+  await setDoc(doc(db, COLLECTIONS.LEADERBOARD_ENTRIES, entry.id), entry, { merge: true });
+}
+
+export async function fetchLeaderboardEntriesFromFirestore(): Promise<LeaderboardEntryRecord[]> {
+  if (!db) return [];
+  try {
+    const snap = await withTimeout(getDocs(collection(db, COLLECTIONS.LEADERBOARD_ENTRIES)), 5000);
+    return snap.docs.map(d => d.data() as LeaderboardEntryRecord);
+  } catch (err) {
+    console.warn('Error fetching practice leaderboard entries from Firestore:', err);
+    return [];
   }
 }
 
 export async function fetchLeaderboardFromFirestore(testId?: string): Promise<TestAttempt[]> {
-  if (!testId) return [];
-  try {
-    const data = await api.get<{ success: boolean; leaderboard: TestAttempt[] }>('/api/tests/' + encodeURIComponent(testId) + '/leaderboard');
-    return Array.isArray(data.leaderboard) ? data.leaderboard : [];
-  } catch (err) {
-    console.warn('Error fetching leaderboard through API:', err);
-    return [];
-  }
+  const entries = await fetchLeaderboardEntriesFromFirestore();
+  return entries.filter(e => !testId || e.testId === testId).map(e => ({
+    id: e.id, userId: e.userId, userName: e.candidateName, testId: e.testId,
+    testTitle: '', category: e.targetKey.startsWith('CGPSC') ? 'CGPSC' : 'CGSSB',
+    submittedAt: e.submittedAt, timeTakenSeconds: e.timeTakenSeconds,
+    totalDurationSeconds: 0, responses: {}, questionStatuses: {}, score: e.score,
+    maxScore: e.maxScore, percentage: e.percentage, accuracy: e.accuracy,
+    correctCount: e.correctCount, incorrectCount: e.incorrectCount,
+    unattemptedCount: e.unattemptedCount, markedForReviewCount: 0,
+    negativeMarksDeducted: 0, sectorAnalysis: [], attemptedCount: e.correctCount + e.incorrectCount,
+    seriesId: e.seriesId, targetKey: e.targetKey, targetExam: e.targetExam
+  } as TestAttempt));
 }
 
 export async function purgeFirestoreDemoData(): Promise<void> {
