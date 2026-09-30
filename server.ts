@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -778,34 +779,77 @@ async function startServer() {
   }, 30 * 60 * 1000);
 
   // --- Admin Authentication Security & Token Verification ---
-  const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
+  // Phase 2: production admin credentials remain server-side only.
+  // Admin sessions use short-lived HMAC-signed bearer tokens so authorization
+  // survives process restarts and works correctly across multiple instances.
+  const ADMIN_SECRET = process.env.ADMIN_SECRET;
+  const ADMIN_TOKEN_TTL_SECONDS = 8 * 60 * 60;
+
   if (!ADMIN_SECRET && process.env.NODE_ENV === 'production') {
     throw new Error('FATAL CONFIG ERROR: ADMIN_SECRET must be configured in production.');
   }
   if (!ADMIN_SECRET) {
     console.warn('[Security] ADMIN_SECRET is not configured; admin login is disabled.');
   }
-  const activeAdminTokens = new Set<string>();
+
+  function base64UrlEncode(value: string): string {
+    return Buffer.from(value, 'utf8').toString('base64url');
+  }
+
+  function base64UrlDecode(value: string): string {
+    return Buffer.from(value, 'base64url').toString('utf8');
+  }
+
+  function signAdminToken(payload: string): string {
+    return createHmac('sha256', ADMIN_SECRET || 'development-only-secret')
+      .update(payload)
+      .digest('base64url');
+  }
 
   function generateAdminToken(): string {
-    const token = `adm_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
-    activeAdminTokens.add(token);
-    return token;
+    const payload = base64UrlEncode(JSON.stringify({
+      sub: 'u-admin-controller',
+      role: 'admin',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + ADMIN_TOKEN_TTL_SECONDS,
+    }));
+    return `adm_${payload}.${signAdminToken(payload)}`;
   }
 
   function isAdminAuthorized(req: express.Request): boolean {
     const authHeader = req.headers.authorization;
-    const adminKeyHeader = req.headers['x-admin-key'] as string;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
 
-    if (adminKeyHeader && ADMIN_SECRET && adminKeyHeader === ADMIN_SECRET) {
+    const token = authHeader.slice(7).trim();
+    if (!token.startsWith('adm_')) return false;
+
+    const raw = token.slice(4);
+    const separator = raw.lastIndexOf('.');
+    if (separator <= 0) return false;
+
+    const payload = raw.slice(0, separator);
+    const signature = raw.slice(separator + 1);
+
+    try {
+      const expected = signAdminToken(payload);
+      const providedBuffer = Buffer.from(signature, 'base64url');
+      const expectedBuffer = Buffer.from(expected, 'base64url');
+      if (
+        providedBuffer.length !== expectedBuffer.length ||
+        !timingSafeEqual(providedBuffer, expectedBuffer)
+      ) {
+        return false;
+      }
+
+      const claims = JSON.parse(base64UrlDecode(payload));
+      if (claims?.role !== 'admin') return false;
+      if (!Number.isFinite(claims?.exp) || claims.exp <= Math.floor(Date.now() / 1000)) {
+        return false;
+      }
       return true;
+    } catch {
+      return false;
     }
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7).trim();
-      if (activeAdminTokens.has(token)) return true;
-    }
-    return false;
   }
 
   function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
