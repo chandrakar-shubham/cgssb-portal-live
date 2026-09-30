@@ -383,7 +383,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const bootstrapAdminUid = 'VOynxZyDOJR4lg2x4va2U3qF5m72';
       let role: UserRole = 'admin';
-      let permissions: AdminPermissions = { all: true };
+      let permissions: AdminPermissions = {
+        manageStudents: true,
+        manageAdmins: true,
+        manageTests: true,
+        manageQuestions: true,
+        manageCMS: true,
+        managePayments: true,
+        manageSystem: true,
+      };
 
       if (fbUser.uid !== bootstrapAdminUid) {
         const memberSnap = await getDoc(doc(db, 'adminMembers', fbUser.uid));
@@ -407,6 +415,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         permissions,
         status: 'active',
         token: fbUser.uid,
+        registeredAt: new Date().toISOString(),
       } as User;
 
       setAdminUser(authenticatedUser);
