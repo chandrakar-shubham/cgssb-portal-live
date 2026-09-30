@@ -59,11 +59,11 @@ jobs:
             export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
 
             echo "📦 Deploying Firebase Hosting & Firestore Rules to [$TARGET_PROJECT]..."
-            npx firebase-tools deploy --only hosting,firestore:rules --project "$TARGET_PROJECT"
+            npx firebase-tools deploy --only functions,hosting,firestore:rules --project "$TARGET_PROJECT"
           elif [ -n "$FIREBASE_TOKEN" ]; then
             echo "🔑 Authenticating via Firebase CI Token..."
             echo "📦 Deploying Firebase Hosting & Firestore Rules to [$TARGET_PROJECT]..."
-            npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT"
+            npx firebase-tools deploy --only functions,hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT"
           else
             echo "::error title=Firebase Secret Missing::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets."
             exit 1
