@@ -534,138 +534,108 @@ export async function deleteBundle(id: string): Promise<boolean> {
 // ==========================================
 // USER PERSONALIZATION & ENTITLEMENTS REPOSITORY
 // ==========================================
-const userBookmarksDb = new Map<string, any[]>();
-const userMistakesDb = new Map<string, any[]>();
-const userEntitlementsDb = new Map<string, {
-  userId: string;
-  hasActivePass: boolean;
-  passType?: string;
-  passExpiry?: string;
-  credits: number;
-  unlockedBundleIds: string[];
-  redeemedCoupons: string[];
-}>();
+// ==========================================
+// USER PERSONALIZATION & ENTITLEMENTS REPOSITORY
+// ==========================================
+// Firestore is the sole persistent source of truth for user-specific state.
+// In-memory state is intentionally not used for bookmarks, mistakes, or entitlements.
 
 export async function getUserBookmarks(userId: string): Promise<any[]> {
-  return userBookmarksDb.get(userId) || [];
+  if (!userId) throw new Error('userId is required');
+  const db = getFirestoreServer();
+  const snap = await getDoc(doc(db, 'userBookmarks', userId));
+  if (!snap.exists) return [];
+  const data = snap.data() as { bookmarks?: any[] };
+  return Array.isArray(data.bookmarks) ? data.bookmarks : [];
 }
 
 export async function saveUserBookmarks(userId: string, bookmarks: any[]): Promise<any[]> {
-  userBookmarksDb.set(userId, bookmarks);
-  return bookmarks;
+  if (!userId) throw new Error('userId is required');
+  const db = getFirestoreServer();
+  const normalized = Array.isArray(bookmarks) ? bookmarks : [];
+  await setDoc(doc(db, 'userBookmarks', userId), { userId, bookmarks: normalized, updatedAt: new Date().toISOString() }, { merge: true });
+  return normalized;
 }
 
 export async function getUserMistakes(userId: string): Promise<any[]> {
-  return userMistakesDb.get(userId) || [];
+  if (!userId) throw new Error('userId is required');
+  const db = getFirestoreServer();
+  const snap = await getDoc(doc(db, 'userMistakes', userId));
+  if (!snap.exists) return [];
+  const data = snap.data() as { mistakes?: any[] };
+  return Array.isArray(data.mistakes) ? data.mistakes : [];
 }
 
 export async function saveUserMistakes(userId: string, mistakes: any[]): Promise<any[]> {
-  userMistakesDb.set(userId, mistakes);
-  return mistakes;
+  if (!userId) throw new Error('userId is required');
+  const db = getFirestoreServer();
+  const normalized = Array.isArray(mistakes) ? mistakes : [];
+  await setDoc(doc(db, 'userMistakes', userId), { userId, mistakes: normalized, updatedAt: new Date().toISOString() }, { merge: true });
+  return normalized;
 }
 
 export async function getUserEntitlements(userId: string) {
-  let ent = userEntitlementsDb.get(userId);
-  if (!ent) {
-    ent = {
-      userId,
-      hasActivePass: false,
-      credits: 50,
-      unlockedBundleIds: [],
-      redeemedCoupons: []
-    };
-    userEntitlementsDb.set(userId, ent);
-  }
+  if (!userId) throw new Error('userId is required');
+  const db = getFirestoreServer();
+  const snap = await getDoc(doc(db, 'userEntitlements', userId));
+  if (snap.exists) return snap.data();
+  const ent = { userId, hasActivePass: false, credits: 50, unlockedBundleIds: [], redeemedCoupons: [] };
+  await setDoc(doc(db, 'userEntitlements', userId), ent, { merge: false });
   return ent;
 }
 
 export async function redeemPassForUser(userId: string, couponCode: string, planId?: string) {
   const code = (couponCode || '').trim().toUpperCase();
-  const ent = await getUserEntitlements(userId);
-
-  if (ent.redeemedCoupons.includes(code)) {
-    throw new Error('This coupon or pass code has already been redeemed by this account.');
-  }
-
+  const ent = await getUserEntitlements(userId) as any;
+  if (ent.redeemedCoupons.includes(code)) throw new Error('This coupon or pass code has already been redeemed by this account.');
   const validPromoCodes: Record<string, { durationDays: number; creditsBonus: number; name: string }> = {
     'CGSSB100': { durationDays: 365, creditsBonus: 500, name: '1-Year State Exam Super Pass' },
     'TOPPER2026': { durationDays: 180, creditsBonus: 250, name: '6-Month Ranker Pass' },
     'FREETRIAL': { durationDays: 30, creditsBonus: 100, name: '30-Day Free Trial Pass' },
     'CGPSCPRO': { durationDays: 365, creditsBonus: 500, name: 'CGPSC + CGSSB Complete Pass' },
   };
-
   const promo = validPromoCodes[code] || (code.startsWith('PASS-') ? { durationDays: 365, creditsBonus: 300, name: 'Standard Pass Activation' } : null);
-
-  if (!promo && !planId) {
-    throw new Error('Invalid coupon or access code. Please verify and retry.');
-  }
-
+  if (!promo && !planId) throw new Error('Invalid coupon or access code. Please verify and retry.');
   const duration = promo ? promo.durationDays : 365;
   const expiryDate = new Date();
   expiryDate.setDate(expiryDate.getDate() + duration);
-
-  ent.hasActivePass = true;
-  ent.passType = promo ? promo.name : (planId || 'Annual Pass');
-  ent.passExpiry = expiryDate.toISOString();
-  ent.credits += (promo ? promo.creditsBonus : 100);
-  ent.redeemedCoupons.push(code || `PURCHASE-${Date.now()}`);
-
-  userEntitlementsDb.set(userId, ent);
-  return ent;
+  const updated = {
+    ...ent,
+    hasActivePass: true,
+    passType: promo ? promo.name : (planId || 'Annual Pass'),
+    passExpiry: expiryDate.toISOString(),
+    credits: ent.credits + (promo ? promo.creditsBonus : 100),
+    redeemedCoupons: [...ent.redeemedCoupons, code || ('PURCHASE-' + Date.now())],
+    updatedAt: new Date().toISOString(),
+  };
+  await setDoc(doc(db, 'userEntitlements', userId), updated, { merge: true });
+  return updated;
 }
 
 // ==========================================
 // REAL-TIME LEADERBOARD AGGREGATOR
 // ==========================================
 export async function getTestLeaderboardData(testId: string) {
-  const attempts = memoryCache.attempts.filter(a => a.testId === testId);
-  const test = memoryCache.mockTests.find(t => t.id === testId);
-
+  // Always build leaderboard from live Firestore data; never from a stale process cache.
+  const [attempts, test] = await Promise.all([getAllTestAttempts(), getMockTestById(testId)]);
+  const filteredAttempts = attempts.filter(a => a.testId === testId);
   const userBestMap = new Map<string, TestAttempt>();
-  attempts.forEach(att => {
+  filteredAttempts.forEach(att => {
     const existing = userBestMap.get(att.userId);
-    if (!existing || att.score > existing.score || (att.score === existing.score && att.timeTakenSeconds < existing.timeTakenSeconds)) {
-      userBestMap.set(att.userId, att);
-    }
+    if (!existing || att.score > existing.score || (att.score === existing.score && att.timeTakenSeconds < existing.timeTakenSeconds)) userBestMap.set(att.userId, att);
   });
-
-  const rankedCandidates = Array.from(userBestMap.values()).sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.timeTakenSeconds - b.timeTakenSeconds;
-  });
-
+  const rankedCandidates = Array.from(userBestMap.values()).sort((a, b) => b.score !== a.score ? b.score - a.score : a.timeTakenSeconds - b.timeTakenSeconds);
   const totalParticipants = Math.max(rankedCandidates.length, test?.attemptsCount || 1);
   const scores = rankedCandidates.map(c => c.score);
-  const avgScore = scores.length > 0 ? parseFloat((scores.reduce((s, x) => s + x, 0) / scores.length).toFixed(2)) : 0;
+  const avgScore = scores.length > 0 ? parseFloat((scores.reduce((sum, x) => sum + x, 0) / scores.length).toFixed(2)) : 0;
   const highestScore = scores.length > 0 ? Math.max(...scores) : (test ? test.questionCount * (test.marksPerQuestion || 1) : 100);
-
   const leaderboard = rankedCandidates.slice(0, 100).map((cand, idx) => {
     const rank = idx + 1;
     const percentile = parseFloat((((totalParticipants - rank + 1) / totalParticipants) * 100).toFixed(1));
-    return {
-      rank,
-      userId: cand.userId,
-      userName: cand.userName || `Aspirant #${rank}`,
-      score: cand.score,
-      maxScore: cand.maxScore,
-      percentage: cand.percentage,
-      accuracy: cand.accuracy,
-      timeTakenSeconds: cand.timeTakenSeconds,
-      submittedAt: cand.submittedAt,
-      percentile: Math.min(99.9, Math.max(15.0, percentile)),
-    };
+    return { rank, userId: cand.userId, userName: cand.userName || ('Aspirant #' + rank), score: cand.score, maxScore: cand.maxScore, percentage: cand.percentage, accuracy: cand.accuracy, timeTakenSeconds: cand.timeTakenSeconds, submittedAt: cand.submittedAt, percentile: Math.min(99.9, Math.max(15.0, percentile)) };
   });
-
-  return {
-    testId,
-    testTitle: test?.title || 'Mock Test',
-    totalParticipants,
-    avgScore,
-    highestScore,
-    leaderboard
-  };
+  return { testId, testTitle: test?.title || 'Mock Test', totalParticipants, avgScore, highestScore, leaderboard };
 }
-
 // ==========================================
 // SERVER-DRIVEN REMOTE CONFIG REPOSITORY
 // ==========================================
