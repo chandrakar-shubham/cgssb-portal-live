@@ -131,10 +131,11 @@ export async function syncUserProfileToFirestore(user: User): Promise<void> {
   }
 }
 
-export async function fetchUserProfileFromFirestore(userId: string): Promise<User | null> {
-  if (!db || !userId) return null;
+export async function fetchUserProfileFromFirestore(_userId?: string): Promise<User | null> {
+  const authUserId = auth.currentUser?.uid;
+  if (!db || !authUserId) return null;
   try {
-    const userDocRef = doc(db, COLLECTIONS.USERS, userId);
+    const userDocRef = doc(db, COLLECTIONS.USERS, authUserId);
     return await withTimeout(
       getDoc(userDocRef).then(snap => snap.exists() ? (snap.data() as User) : null),
       4000,
