@@ -25,7 +25,7 @@ export const AdminPortalLogin: React.FC<AdminPortalLoginProps> = ({
 }) => {
   const { adminLogin } = useAuth();
   const [identifier, setIdentifier] = useState('admin@cgtest.in');
-  const [password, setPassword] = useState('admin123');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export const AdminPortalLogin: React.FC<AdminPortalLoginProps> = ({
         setErrorMessage(res.error || 'Access denied. Please check your admin credentials.');
       }
     } catch {
-      setErrorMessage('Server connection error while verifying admin token.');
+      setErrorMessage('Firebase Authentication error while verifying administrator credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +80,7 @@ export const AdminPortalLogin: React.FC<AdminPortalLoginProps> = ({
             Admin & Controller Portal
           </h1>
           <p className="text-xs text-slate-400 mt-1.5 max-w-xs mx-auto">
-            Authorized administrative access for question management, PYP ingestion, AI synthesizer & Android REST APIs.
+            Authorized administrative access using Firebase Authentication and Firestore Security Rules.
           </p>
         </div>
 
@@ -158,7 +158,7 @@ export const AdminPortalLogin: React.FC<AdminPortalLoginProps> = ({
         <div className="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center space-x-1.5">
             <Server className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Hostinger & Live Server Ready</span>
+            <span>Firebase Spark Production</span>
           </div>
           <div className="flex items-center space-x-1 text-slate-400">
             <Smartphone className="w-3.5 h-3.5 text-blue-400" />
