@@ -56,10 +56,10 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
           test -n "$ADMIN_SECRET"
-          firebase functions:secrets:set ADMIN_SECRET --project "$FIREBASE_PROJECT_ID" --force <<< "$ADMIN_SECRET"
+          ./node_modules/.bin/firebase functions:secrets:set ADMIN_SECRET --project "$FIREBASE_PROJECT_ID" --force <<< "$ADMIN_SECRET"
 
       - name: Deploy Firebase Hosting, Functions and Firestore rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
-          firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,functions,firestore:rules --non-interactive
+          ./node_modules/.bin/firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,functions,firestore:rules --non-interactive
