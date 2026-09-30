@@ -170,7 +170,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
               <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
-              Real-time state merit list generated from full mock test attempts across all 33 districts of Chhattisgarh.
+              A verified state-wide merit list will appear when a trusted aggregation service is available.
             </p>
           </div>
 
@@ -471,7 +471,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
               <span>Full Merit Table — {currentTest?.title || 'Selected Test'}</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Showing official percentile rank and accuracy across candidates.
+              Verified candidate rankings and percentiles are currently unavailable on Firebase Spark.
             </p>
           </div>
 
@@ -623,7 +623,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
           <div className="flex items-center space-x-2">
             <Shield className="w-4 h-4 text-emerald-400" />
-            <span>Anti-cheating algorithm enforced · Normalized CG Vyapam & CGPSC formula</span>
+            <span>Verified ranking data requires trusted server-side aggregation.</span>
           </div>
 
           <div className="flex items-center space-x-3">
@@ -634,7 +634,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
                 onClick={onExplorePass}
                 className="text-amber-400 hover:text-amber-300 font-bold transition cursor-pointer"
               >
-                Unlock Detailed State Percentile Report →
+                State percentile report unavailable →
               </button>
             )}
           </div>
