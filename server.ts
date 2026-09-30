@@ -583,7 +583,7 @@ function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Questi
   return null;
 }
 
-export async function startServer({ listen = !process.env.FIREBASE_FUNCTIONS } : { listen?: boolean } = {}) {
+export export async function startServer({ listen = !process.env.FIREBASE_FUNCTIONS } : { listen?: boolean } = {}) {
   // Ensure default environment variables are set for Firestore mode
   if (!process.env.DATABASE_MODE) {
     process.env.DATABASE_MODE = 'firestore';
