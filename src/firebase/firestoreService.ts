@@ -119,7 +119,9 @@ export async function syncUserProfileToFirestore(user: User): Promise<void> {
       if (value !== undefined) out[field] = value;
       return out;
     }, {});
-    const userDocRef = doc(db, COLLECTIONS.USERS, user.id);
+    const authUserId = auth.currentUser?.uid;
+    if (!authUserId) return;
+    const userDocRef = doc(db, COLLECTIONS.USERS, authUserId);
     await setDoc(userDocRef, {
       ...profile,
       lastSyncedAt: serverTimestamp()
@@ -144,23 +146,6 @@ export async function fetchUserProfileFromFirestore(userId: string): Promise<Use
   }
 }
 
-export async function fetchUserByEmailFromFirestore(email: string): Promise<User | null> {
-  if (!db || !email) return null;
-  try {
-    const snap = await getDocs(collection(db, COLLECTIONS.USERS));
-    const cleanEmail = email.trim().toLowerCase();
-    for (const d of snap.docs) {
-      const data = d.data() as User;
-      if (data.email && data.email.toLowerCase() === cleanEmail) {
-        return data;
-      }
-    }
-    return null;
-  } catch (err) {
-    console.warn('Error fetching user by email from Firestore:', err);
-    return null;
-  }
-}
 
 // ==========================================
 // MOCK TESTS SERVICES & REALTIME SYNC
