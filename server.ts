@@ -14,6 +14,7 @@ import type {
   MockTest,
   PreviousYearPaper,
   TestAttempt,
+  User,
   SectorAnalysis,
   ExamCategory,
   PYQAppearance
