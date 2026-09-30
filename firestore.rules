@@ -158,7 +158,10 @@ service cloud.firestore {
 
     // Admin/member/coupon management.
     match /adminMembers/{memberId} {
-      allow read, write: if isAdmin();
+      // Only the bootstrap Super Admin may create, edit, or revoke delegated admin roles.
+      // Other admins can read their roster but cannot self-escalate privileges.
+      allow read: if isAdmin();
+      allow create, update, delete: if isBootstrapAdmin();
     }
     match /discountCoupons/{couponId} {
       allow read, write: if isAdmin();
