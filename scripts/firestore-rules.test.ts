@@ -54,6 +54,13 @@ if (!usersBlock.includes('allow create: if (isOwner(userId) || hasManageStudents
 if (!usersBlock.includes('affectedKeys().hasOnly')) {
   throw new Error('User profile update allowlist missing');
 }
+if (!usersBlock.includes("'role', 'status', 'isBlocked'") ||
+    !usersBlock.includes("'lastSyncedAt'")) {
+  throw new Error('User profile create field policies missing');
+}
+if (!usersBlock.includes("allow create: if (isOwner(userId)")) {
+  throw new Error('Student profile create must use an owner-only field allowlist');
+}
 for (const privilegedField of ['credits', 'adminPermissions']) {
   if (!usersBlock.includes(`'${privilegedField}'`)) {
     // These fields are intentionally not in the admin-managed create allowlist.
