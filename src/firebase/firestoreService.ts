@@ -710,7 +710,8 @@ export async function saveRemoteConfigToFirestore(config: Partial<AppRemoteConfi
 // SEEDING INITIAL DATA TO FIRESTORE
 // ==========================================
 export async function seedInitialDataIfEmpty(): Promise<void> {
-  if (!db) return;
+  // Demo/factory seeding is development-only. Production must never mutate an empty database by itself.
+  if (!db || !import.meta.env.DEV) return;
   try {
     // Check if tests exist
     const testSnap = await getDocs(collection(db, COLLECTIONS.TESTS)).catch(() => null);
