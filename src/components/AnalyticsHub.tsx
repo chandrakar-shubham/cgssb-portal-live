@@ -128,11 +128,7 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({
   const avgScore = totalAttempts > 0
     ? (attempts.reduce((sum, a) => sum + a.score, 0) / totalAttempts).toFixed(1)
     : '0';
-  const bestRank = totalAttempts > 0
-    ? Math.min(...attempts.map(a => a.simulatedRank))
-    : '-';
-
-  // Selected Target Exam & Category for Cutoff Predictor
+   // Selected Target Exam & Category for Cutoff Predictor
   const [selectedExamId, setSelectedExamId] = useState<string>('cgpsc-prelims-gs');
   const [selectedCategory, setSelectedCategory] = useState<'UR' | 'OBC' | 'SC' | 'ST' | 'EWS'>(
     (user?.categoryReservation as any) || 'OBC'
@@ -271,10 +267,9 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({
           </div>
 
           <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
-            <span className="text-[10px] text-slate-400 font-medium block">Simulated Rank</span>
+            <span className="text-[10px] text-slate-400 font-medium block">Verified Ranking</span>
             <div className="flex items-center space-x-2 mt-1">
-              <span className="text-2xl font-black text-amber-400">#{bestRank}</span>
-              <span className="text-[10px] text-amber-400 font-semibold">Top Percentile</span>
+              <span className="text-sm font-bold text-slate-300">Unavailable</span>
             </div>
           </div>
         </div>
@@ -511,14 +506,14 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({
                     </span>
                     <span className="text-[11px] text-slate-400 flex items-center space-x-1">
                       <Calendar className="w-3 h-3 text-slate-400" />
-                      <span>{new Date(att.submittedAt).toLocaleDateString()}</span>
+                      <span>{att.submittedAt ? new Date(att.submittedAt).toLocaleDateString() : 'Date unavailable'}</span>
                     </span>
                   </div>
                   <h3 className="font-bold text-sm text-white group-hover:text-emerald-300 transition-colors">
                     {att.testTitle}
                   </h3>
                   <div className="flex items-center space-x-3 text-xs text-slate-400 mt-1">
-                    <span>Rank: <strong className="text-amber-400">#{att.simulatedRank}</strong></span>
+                    <span>Verified rank: <strong className="text-slate-400">Unavailable</strong></span>
                     <span>•</span>
                     <span>Accuracy: <strong className="text-teal-300">{att.accuracy}%</strong></span>
                     <span>•</span>
