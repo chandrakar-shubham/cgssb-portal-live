@@ -205,32 +205,10 @@ async function submitAttempt(testId: string, body: any) {
   return { success: true, attempt, solutions: testQuestions };
 }
 
-async function leaderboard(testId: string) {
-  const [attempts, test] = await Promise.all([
-    readCollection<any>('attempts'),
-    readById<any>('mockTests', testId),
-  ]);
-  const filtered = attempts.filter(a => a.testId === testId);
-  const best = new Map<string, any>();
-  for (const a of filtered) {
-    const existing = best.get(a.userId);
-    if (!existing || a.score > existing.score || (a.score === existing.score && a.timeTakenSeconds < existing.timeTakenSeconds)) best.set(a.userId, a);
-  }
-  const ranked = [...best.values()].sort((a,b) => b.score !== a.score ? b.score - a.score : a.timeTakenSeconds - b.timeTakenSeconds);
-  const totalParticipants = Math.max(ranked.length, Number(test?.attemptsCount || 1));
-  const scores = ranked.map(a => Number(a.score || 0));
-  const result = ranked.slice(0,100).map((a,i) => ({
-    rank:i+1, userId:a.userId, userName:a.userName || `Aspirant #${i+1}`,
-    score:a.score, maxScore:a.maxScore, percentage:a.percentage, accuracy:a.accuracy,
-    timeTakenSeconds:a.timeTakenSeconds, submittedAt:a.submittedAt,
-    percentile:Number((((totalParticipants-i)/totalParticipants)*100).toFixed(1)),
-  }));
-  return {
-    success:true, testId, testTitle:test?.title || 'Mock Test',
-    totalParticipants, avgScore:scores.length ? Number((scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(2)) : 0,
-    highestScore:scores.length ? Math.max(...scores) : Number(test?.questionCount || 100),
-    leaderboard:result,
-  };
+async function leaderboard(_testId: string) {
+  throw new Error(
+    'Verified statewide leaderboard data requires a trusted aggregation service and is unavailable in Firebase Spark mode.'
+  );
 }
 
 export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<any> {
