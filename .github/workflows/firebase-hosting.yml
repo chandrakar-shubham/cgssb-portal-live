@@ -47,7 +47,8 @@ jobs:
 
           TARGET_PROJECT="${CUSTOM_PROJECT_ID:-$SA_PROJECT_ID}"
           if [ -z "$TARGET_PROJECT" ]; then
-            TARGET_PROJECT="gen-lang-client-0783153446"
+            echo "::error title=Firebase Project Missing::The Firebase project ID must be present in FIREBASE_PROJECT_ID or the service-account JSON."
+            exit 1
           fi
 
           echo "🎯 Target Firebase Project: $TARGET_PROJECT"
@@ -64,5 +65,6 @@ jobs:
             echo "📦 Deploying Firebase Hosting & Firestore Rules to [$TARGET_PROJECT]..."
             npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT"
           else
-            echo "::warning title=Firebase Secret Missing::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets. Skipping Firebase deploy."
+            echo "::error title=Firebase Secret Missing::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets."
+            exit 1
           fi
