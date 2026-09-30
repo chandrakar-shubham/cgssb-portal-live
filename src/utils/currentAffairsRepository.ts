@@ -18,7 +18,6 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { api } from './apiClient';
 import {
   CurrentAffairSource,
   CurrentAffairTopic,
@@ -61,7 +60,7 @@ export async function fetchAllCurrentAffairsSources(): Promise<CurrentAffairSour
 }
 
 export async function saveCurrentAffairsSource(source: CurrentAffairSource): Promise<void> {
-  await api.post(`/api/current-affairs/${SOURCES_COLLECTION}/${encodeURIComponent(source.id)}`, { ...source, updatedAt: new Date().toISOString() }, { requireAuth: true });
+  await setDoc(doc(db, SOURCES_COLLECTION, source.id), { ...source, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
 // ============================================================================
@@ -118,7 +117,7 @@ export async function fetchTopicsFiltered(filters?: {
 }
 
 export async function saveCurrentAffairsTopic(topic: CurrentAffairTopic): Promise<void> {
-  await api.post(`/api/current-affairs/${TOPICS_COLLECTION}/${encodeURIComponent(topic.id)}`, { ...topic, updatedAt: new Date().toISOString(), createdAt: topic.createdAt || new Date().toISOString() }, { requireAuth: true });
+  await setDoc(doc(db, TOPICS_COLLECTION, topic.id), { ...topic, updatedAt: new Date().toISOString(), createdAt: topic.createdAt || new Date().toISOString() }, { merge: true });
 }
 
 // ============================================================================
@@ -149,7 +148,7 @@ export async function fetchQuestionsForTopic(topicId: string): Promise<CurrentAf
 }
 
 export async function saveCurrentAffairsQuestion(question: CurrentAffairsQuestion): Promise<void> {
-  await api.post(`/api/current-affairs/${QUESTIONS_COLLECTION}/${encodeURIComponent(question.id)}`, { ...question, updatedAt: new Date().toISOString(), createdAt: question.createdAt || new Date().toISOString() }, { requireAuth: true });
+  await setDoc(doc(db, QUESTIONS_COLLECTION, question.id), { ...question, updatedAt: new Date().toISOString(), createdAt: question.createdAt || new Date().toISOString() }, { merge: true });
 }
 
 // ============================================================================
@@ -167,7 +166,7 @@ export async function fetchDailyEdition(date: string): Promise<DailyEdition | nu
 
 export async function saveDailyEdition(edition: DailyEdition): Promise<void> {
   const id = edition.date || edition.id || '2026-03-27';
-  await api.post(`/api/current-affairs/${DAILY_EDITIONS_COLLECTION}/${encodeURIComponent(id)}`, { ...edition, updatedAt: new Date().toISOString(), createdAt: edition.createdAt || new Date().toISOString() }, { requireAuth: true });
+  await setDoc(doc(db, DAILY_EDITIONS_COLLECTION, id), { ...edition, updatedAt: new Date().toISOString(), createdAt: edition.createdAt || new Date().toISOString() }, { merge: true });
 }
 
 // ============================================================================
@@ -185,7 +184,7 @@ export async function fetchMonthlyEditionManifest(yearMonth: string): Promise<Mo
 
 export async function saveMonthlyEditionManifest(edition: MonthlyEdition): Promise<void> {
   const id = edition.yearMonth || edition.id || '2026-03';
-  await api.post(`/api/current-affairs/${MONTHLY_EDITIONS_COLLECTION}/${encodeURIComponent(id)}`, { ...edition, updatedAt: new Date().toISOString(), createdAt: edition.createdAt || new Date().toISOString() }, { requireAuth: true });
+  await setDoc(doc(db, MONTHLY_EDITIONS_COLLECTION, id), { ...edition, updatedAt: new Date().toISOString(), createdAt: edition.createdAt || new Date().toISOString() }, { merge: true });
 }
 
 export async function fetchMonthlySectionContent(yearMonth: string, sectionId: string): Promise<MonthlyEditionSection | null> {
@@ -200,12 +199,12 @@ export async function fetchMonthlySectionContent(yearMonth: string, sectionId: s
 }
 
 export async function deleteMonthlySectionContent(yearMonth: string, sectionId: string): Promise<void> {
-  await api.delete(`/api/current-affairs/monthly/${encodeURIComponent(yearMonth)}/sections/${encodeURIComponent(sectionId)}`, { requireAuth: true });
+  await deleteDoc(doc(db, MONTHLY_EDITIONS_COLLECTION, yearMonth, 'sections', sectionId));
 }
 
 export async function deleteCurrentAffairsTopic(id: string): Promise<void> {
   try {
-    await api.delete(`/api/current-affairs/${TOPICS_COLLECTION}/${encodeURIComponent(id)}`, { requireAuth: true });
+    await deleteDoc(doc(db, TOPICS_COLLECTION, id));
   } catch (err) {
     console.warn('Error deleting topic:', err);
   }
@@ -213,7 +212,7 @@ export async function deleteCurrentAffairsTopic(id: string): Promise<void> {
 
 export async function deleteCurrentAffairsQuestion(id: string): Promise<void> {
   try {
-    await api.delete(`/api/current-affairs/${QUESTIONS_COLLECTION}/${encodeURIComponent(id)}`, { requireAuth: true });
+    await deleteDoc(doc(db, QUESTIONS_COLLECTION, id));
   } catch (err) {
     console.warn('Error deleting question:', err);
   }
