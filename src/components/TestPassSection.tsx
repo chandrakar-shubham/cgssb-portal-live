@@ -30,7 +30,7 @@ import {
   checkDeviceAuthorization,
   isUserPassActive
 } from '../utils/devicePassManager';
-import { validateCoupon } from '../utils/studentStore';
+import { api } from '../utils/apiClient';
 
 interface TestPassSectionProps {
   onExploreTests: () => void;
@@ -139,19 +139,28 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
     return Math.max(1, selectedTier.price - discount);
   }, [selectedTier, appliedCoupon]);
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
+  const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!couponCodeInput.trim() || !selectedTier) return;
-    const res = validateCoupon(couponCodeInput.trim(), selectedTier.id);
-    if (res.valid && res.coupon) {
-      setAppliedCoupon({
-        code: res.coupon.code,
-        discountPercentage: res.coupon.discountPercentage
-      });
-      setCouponError('');
-    } else {
+    setCouponError('');
+    try {
+      const res = await api.post<{ valid: boolean; coupon?: { code: string; discountPercentage: number }; error?: string }>(
+        '/api/user/validate-coupon',
+        { code: couponCodeInput.trim(), planType: selectedTier.id },
+        { requireAuth: true }
+      );
+      if (res.valid && res.coupon) {
+        setAppliedCoupon({
+          code: res.coupon.code,
+          discountPercentage: res.coupon.discountPercentage
+        });
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.error || 'Invalid promo code');
+      }
+    } catch (error: any) {
       setAppliedCoupon(null);
-      setCouponError(res.error || 'Invalid promo code');
+      setCouponError(error?.message || 'Could not validate promo code');
     }
   };
 
