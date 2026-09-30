@@ -38,11 +38,16 @@ jobs:
 
       - name: 📦 Install Dependencies
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci || npm install --legacy-peer-deps
-          else
-            npm install --legacy-peer-deps
-          fi
+          set -e
+          for attempt in 1 2 3; do
+            if npm install --legacy-peer-deps --package-lock=false --no-audit --no-fund; then
+              exit 0
+            fi
+            echo "npm install attempt $attempt failed; refreshing npm cache before retry..."
+            npm cache clean --force || true
+            sleep 5
+          done
+          exit 1
 
       - name: 🛡️ Firestore Security Rules Regression Tests
         run: npx tsx scripts/firestore-rules.test.ts
