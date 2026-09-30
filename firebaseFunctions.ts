@@ -1,6 +1,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { setGlobalOptions } from 'firebase-functions/v2';
+import { startServer } from './server.ts';
 
 const adminSecret = defineSecret('ADMIN_SECRET');
 
@@ -26,7 +27,6 @@ async function getApp() {
       'https://cgtest.in,https://www.cgtest.in';
     process.env.ADMIN_SECRET = adminSecret.value();
 
-    const { startServer } = await import('./server.ts');
     appPromise = startServer({ listen: false });
   }
   return appPromise;
