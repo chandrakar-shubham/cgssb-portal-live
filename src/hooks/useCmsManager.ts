@@ -5,12 +5,7 @@ import {
   CMSTestSeriesPack,
   CMSSiteSettings
 } from '../types/cms';
-import {
-  INITIAL_CMS_PAGES,
-  INITIAL_CMS_POSTS,
-  INITIAL_CMS_SERIES_PACKS,
-  INITIAL_CMS_SETTINGS
-} from '../defaultCmsData';
+import { INITIAL_CMS_SETTINGS } from '../defaultCmsData';
 import { isDemoDataPurged } from '../utils/bundleStore';
 import {
   fetchCmsPagesFromFirestore,
@@ -76,12 +71,8 @@ export function useCmsManager() {
   useEffect(() => {
     const unsubPages = subscribeToCmsPages((remotePages) => {
       if (remotePages.length > 0) {
-        const pageMap = new Map<string, CMSPage>();
-        INITIAL_CMS_PAGES.forEach(p => pageMap.set(p.id, p));
-        remotePages.forEach(p => pageMap.set(p.id, p));
-        const merged = Array.from(pageMap.values());
-        setCmsPages(merged);
-        try { localStorage.setItem('cgssb_cms_pages', JSON.stringify(merged)); } catch {}
+        setCmsPages(remotePages);
+        try { localStorage.setItem('cgssb_cms_pages', JSON.stringify(remotePages)); } catch {}
       }
     });
 
@@ -109,10 +100,7 @@ export function useCmsManager() {
     // Initial fetch fallbacks
     fetchCmsPagesFromFirestore().then(p => {
       if (p.length > 0) {
-        const pageMap = new Map<string, CMSPage>();
-        INITIAL_CMS_PAGES.forEach(x => pageMap.set(x.id, x));
-        p.forEach(x => pageMap.set(x.id, x));
-        setCmsPages(Array.from(pageMap.values()));
+        setCmsPages(p);
       }
     }).catch(() => {});
 
@@ -162,12 +150,12 @@ export function useCmsManager() {
       }
       return [page, ...prev];
     });
-    saveCmsPageToFirestore(page).catch(err => console.warn('Cloud save CMS page warning:', err));
+    saveCmsPageToFirestore(page).catch(err => { console.error('Cloud save CMS page failed:', err); fetchCmsPagesFromFirestore().then(setCmsPages).catch(() => {}); });
   }, []);
 
   const handleDeleteCmsPage = useCallback(async (id: string) => {
     setCmsPages(prev => prev.filter(p => p.id !== id));
-    deleteCmsPageFromFirestore(id).catch(err => console.warn('Cloud delete CMS page warning:', err));
+    deleteCmsPageFromFirestore(id).catch(err => { console.error('Cloud delete CMS page failed:', err); fetchCmsPagesFromFirestore().then(setCmsPages).catch(() => {}); });
   }, []);
 
   const handleSaveCmsPost = useCallback(async (post: CMSPost) => {
@@ -180,12 +168,12 @@ export function useCmsManager() {
       }
       return [post, ...prev];
     });
-    saveCmsPostToFirestore(post).catch(err => console.warn('Cloud save CMS post warning:', err));
+    saveCmsPostToFirestore(post).catch(err => { console.error('Cloud save CMS post failed:', err); fetchCmsPostsFromFirestore().then(setCmsPosts).catch(() => {}); });
   }, []);
 
   const handleDeleteCmsPost = useCallback(async (id: string) => {
     setCmsPosts(prev => prev.filter(p => p.id !== id));
-    deleteCmsPostFromFirestore(id).catch(err => console.warn('Cloud delete CMS post warning:', err));
+    deleteCmsPostFromFirestore(id).catch(err => { console.error('Cloud delete CMS post failed:', err); fetchCmsPostsFromFirestore().then(setCmsPosts).catch(() => {}); });
   }, []);
 
   const handleSaveCmsSeriesPack = useCallback(async (pack: CMSTestSeriesPack) => {
@@ -198,17 +186,17 @@ export function useCmsManager() {
       }
       return [pack, ...prev];
     });
-    saveCmsSeriesPackToFirestore(pack).catch(err => console.warn('Cloud save CMS series pack warning:', err));
+    saveCmsSeriesPackToFirestore(pack).catch(err => { console.error('Cloud save CMS series pack failed:', err); fetchCmsSeriesPacksFromFirestore().then(setCmsSeriesPacks).catch(() => {}); });
   }, []);
 
   const handleDeleteCmsSeriesPack = useCallback(async (id: string) => {
     setCmsSeriesPacks(prev => prev.filter(p => p.id !== id));
-    deleteCmsSeriesPackFromFirestore(id).catch(err => console.warn('Cloud delete CMS series pack warning:', err));
+    deleteCmsSeriesPackFromFirestore(id).catch(err => { console.error('Cloud delete CMS series pack failed:', err); fetchCmsSeriesPacksFromFirestore().then(setCmsSeriesPacks).catch(() => {}); });
   }, []);
 
   const handleSaveCmsSettings = useCallback(async (settings: CMSSiteSettings) => {
     setCmsSettings(settings);
-    saveCmsSettingsToFirestore(settings).catch(err => console.warn('Cloud save CMS settings warning:', err));
+    saveCmsSettingsToFirestore(settings).catch(err => { console.error('Cloud save CMS settings failed:', err); fetchCmsSettingsFromFirestore().then(remote => { if (remote) setCmsSettings(remote); }).catch(() => {}); });
   }, []);
 
   return {
