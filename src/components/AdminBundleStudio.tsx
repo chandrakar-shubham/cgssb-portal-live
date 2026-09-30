@@ -201,7 +201,6 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   // Cloud & Remote URL Sync State
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-  const [remoteSyncUrl, setRemoteSyncUrl] = useState('https://ais-dev-ct3wt467aiuf3l7jxdfime-879588382474.asia-southeast1.run.app');
 
   // Syllabus Breakdown Topics State
   const [bulkTopicsSectionIdx, setBulkTopicsSectionIdx] = useState<number | null>(null);
@@ -3142,7 +3141,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
             <button
               onClick={() => setIsSyncModalOpen(true)}
               className="px-4 py-2.5 rounded-2xl bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center space-x-2 transition cursor-pointer shadow-lg shadow-indigo-950/40"
-              title="Sync bundles with Cloud Firestore or Pull updates from deployed Cloud Run URL"
+              title="Sync bundles with Cloud Firestore"
             >
               <CloudDownload className={`w-4 h-4 text-indigo-400 ${isSyncingCloud ? 'animate-bounce' : ''}`} />
               <span>{isSyncingCloud ? 'Syncing...' : 'Sync Cloud / Pull Updates'}</span>
@@ -3717,7 +3716,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
               <div>
                 <h3 className="text-lg font-black text-white">Sync Content with Cloud</h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Synchronize test bundles, syllabi, questions, and test catalogs with Cloud Firestore & deployed instances.
+                  Synchronize test bundles, syllabi, questions, and test catalogs directly with Cloud Firestore.
                 </p>
               </div>
             </div>
@@ -3748,39 +3747,6 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                 </button>
               </div>
 
-              {/* Option 2: Pull from Remote Cloud Run URL */}
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-                <div>
-                  <span className="text-xs font-bold text-white flex items-center space-x-1.5">
-                    <Globe className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Pull from Deployed Cloud Run URL</span>
-                  </span>
-                  <p className="text-xs text-slate-400 mt-1">
-                    If you created or modified content in a separate deployed Cloud Run instance, enter the URL below to pull all series, tests, questions, and PYPs.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Deployed URL / Origin</label>
-                  <input
-                    type="url"
-                    value={remoteSyncUrl}
-                    onChange={e => setRemoteSyncUrl(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none"
-                    placeholder="https://ais-dev-...run.app"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  disabled={isSyncingCloud || !remoteSyncUrl.trim()}
-                  onClick={() => handleSyncFromCloud(remoteSyncUrl.trim())}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
-                >
-                  <CloudDownload className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-bounce' : ''}`} />
-                  <span>{isSyncingCloud ? 'Pulling Remote Content...' : 'Pull Content from URL'}</span>
-                </button>
-              </div>
             </div>
 
             <div className="pt-2 flex justify-end">
