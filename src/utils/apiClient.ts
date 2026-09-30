@@ -163,9 +163,8 @@ async function submitAttempt(testId: string, body: any) {
   const maxScore = testQuestions.reduce((sum, q) => sum + Number(q.marks || 1), 0);
   const score = Math.max(0, Number(rawScore.toFixed(2)));
   const percentage = maxScore ? (score / maxScore) * 100 : 0;
-  const participants = Number(test.attemptsCount || 0) + 1;
-  const percentile = Math.min(99.9, Math.max(15, Number((percentage * 0.95 + accuracy * 0.05).toFixed(1))));
-  const simulatedRank = Math.max(1, Math.round(participants * (1 - percentile / 100)));
+  // Spark-only clients cannot produce a verified statewide rank or percentile.
+  // Those values require trusted aggregation and are intentionally omitted.
 
   const sectorAnalysis = Object.entries(sectorMap).map(([subject, s]: any) => {
     const subAttempted = s.correct + s.incorrect;
@@ -196,7 +195,7 @@ async function submitAttempt(testId: string, body: any) {
     accuracy: Number(accuracy.toFixed(1)),
     correctCount, incorrectCount, unattemptedCount, markedForReviewCount,
     negativeMarksDeducted: Number(negativeMarksDeducted.toFixed(2)),
-    simulatedRank, totalParticipants: participants, percentile, sectorAnalysis,
+    sectorAnalysis,
   };
 
   // Student submissions may only write their own attempt document under Spark rules.
@@ -399,13 +398,10 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
   if (method==='POST' && parts[1]==='user' && parts[2]==='validate-coupon') {
     await requireStudentAuth();
     const code = String(body?.code || '').trim().toUpperCase();
-    const builtIn: Record<string, { discountPercentage: number }> = {
-      'CGSSB100': { discountPercentage: 100 },
-      'TOPPER2026': { discountPercentage: 50 },
-      'FREETRIAL': { discountPercentage: 100 },
-      'CGPSCPRO': { discountPercentage: 30 },
-    };
-    if (builtIn[code]) return { valid:true, coupon:{ code, ...builtIn[code] } } as T;
+    const coupon = await readById<any>('discountCoupons', code);
+    if (coupon && coupon.isActive !== false) {
+      return { valid:true, coupon } as T;
+    }
     return { valid:false, error:'Invalid or inactive promo code.' } as T;
   }
 
