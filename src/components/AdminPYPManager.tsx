@@ -28,7 +28,6 @@ import { AIPYPExtractorModal } from './AIPYPExtractorModal';
 import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
 import { JsonSchemaGuideModal, ADVANCED_JSON_TEMPLATE, LEGACY_PYP_JSON_TEMPLATE } from './JsonSchemaGuideModal';
 import { ExamHierarchySelector, ExamHierarchyValue } from './ExamHierarchySelector';
-import { getAdminToken } from '../utils/apiClient';
 import {
   HierarchyRecord,
   extractHierarchyFromApp,
@@ -468,27 +467,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
           createdAt: new Date().toISOString().split('T')[0],
         };
       }
+      // Firebase Spark mode: Firestore is the single persistence layer.
+      // The parent callbacks below write the imported paper/test/questions directly.
 
-      // 1. Attempt backend API sync if available
-      try {
-        const token = getAdminToken();
-        await fetch('/api/pyp/bulk-import', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            questions: taggedQuestions,
-            paperConfig,
-            createMockTest: true,
-          }),
-        });
-      } catch (networkErr) {
-        console.warn('Backend API unavailable. Saved client-side:', networkErr);
-      }
-
-      // 2. Register with Application State
+      // Register with Application State
       if (paperConfig.paperNature === 'pyp' && publishedPaper) {
         onAddPYP(publishedPaper);
       }
