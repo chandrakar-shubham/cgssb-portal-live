@@ -390,6 +390,19 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     await requireAdminAuth(); const value=await writeDoc('remoteConfig','global',body); return { success:true,config:value };
   }
 
+  if (method==='POST' && parts[1]==='user' && parts[2]==='validate-coupon') {
+    await requireStudentAuth();
+    const code = String(body?.code || '').trim().toUpperCase();
+    const builtIn: Record<string, { discountPercentage: number }> = {
+      'CGSSB100': { discountPercentage: 100 },
+      'TOPPER2026': { discountPercentage: 50 },
+      'FREETRIAL': { discountPercentage: 100 },
+      'CGPSCPRO': { discountPercentage: 30 },
+    };
+    if (builtIn[code]) return { valid:true, coupon:{ code, ...builtIn[code] } } as T;
+    return { valid:false, error:'Invalid or inactive promo code.' } as T;
+  }
+
   if (method==='POST' && parts[1]==='user') {
     const user=await requireStudentAuth();
     if(parts[2]==='bookmarks'){ await setDoc(doc(db,'userBookmarks',user.uid),{userId:user.uid,bookmarks:body?.bookmarks||[],updatedAt:new Date().toISOString()},{merge:true}); return {success:true,bookmarks:body?.bookmarks||[]}; }
@@ -411,6 +424,12 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     return {success:true,[parts[2]==='students'?'student':parts[2]==='members'?'member':'coupon']:value} as T;
   }
 
+  if (method==='DELETE' && parts[1]==='current-affairs' && parts[2]==='monthly' && parts[4]==='sections') {
+    await requireAdminAuth();
+    await deleteDoc(doc(db, 'monthlyEditions', decode(parts[3]), 'sections', decode(parts[5])));
+    return { success:true } as T;
+  }
+
   if (method==='DELETE') {
     const map:any={
       tests:'mockTests',questions:'questions',pyp:'pypPapers',bundles:'bundles',
@@ -424,9 +443,6 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
   }
 
   if (method==='POST' && parts[1]==='ai') {
-    throw new Error('AI generation requires a server-side secret and is disabled in Firebase Spark mode. Use the JSON/manual ingestion workflow.');
-  }
-  if (method==='POST' && parts[1]==='current-affairs' && parts[2]==='generate-ai') {
     throw new Error('AI generation requires a server-side secret and is disabled in Firebase Spark mode. Use the JSON/manual ingestion workflow.');
   }
 
