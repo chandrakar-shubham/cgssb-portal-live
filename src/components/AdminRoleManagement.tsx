@@ -101,7 +101,6 @@ export const AdminRoleManagement: React.FC = () => {
     const staffProfile = userSnap.docs[0].data() as User;
     const newAdminMember: User = {
       id: staffProfile.id,
-      uid: staffProfile.id,
       name: newName.trim() || 'Staff Administrator',
       email: normalizedEmail,
       role: newRole,
