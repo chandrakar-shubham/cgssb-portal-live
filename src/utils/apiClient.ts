@@ -47,6 +47,7 @@ export function getAdminHeaders(): Record<string, string> {
 
 export interface ApiFetchOptions extends RequestInit {
   requireAuth?: boolean;
+  requireAdmin?: boolean;
 }
 
 export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
@@ -55,6 +56,10 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
   const fullUrl = `${baseUrl}${cleanEndpoint}`;
 
   const headers = new Headers(options.headers || {});
+
+  if (options.requireAdmin && !getAdminToken()) {
+    throw new Error('Admin authentication is required.');
+  }
 
   if (options.requireAuth && !getAdminToken()) {
     try {
