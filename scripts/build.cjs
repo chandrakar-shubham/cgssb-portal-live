@@ -36,22 +36,18 @@ async function runBuild() {
     configFile: path.resolve(process.cwd(), 'vite.config.ts')
   });
 
-  // 2. Compile backend server.ts for Node full-stack SSR/API environment
-  console.log('⚙️ Compiling server.ts for Node runtime...');
+  // 2. Compile the standalone local Node entrypoint.
+  console.log('⚙️ Compiling serverEntry.ts for Node runtime...');
   const esbuild = require('esbuild');
   await esbuild.build({
-    entryPoints: ['server.ts'],
+    entryPoints: ['serverEntry.ts'],
     bundle: true,
     platform: 'node',
     format: 'cjs',
     packages: 'external',
     sourcemap: true,
-    outfile: 'dist/server.cjs'
+    outfile: 'dist/server.js'
   });
-  fs.copyFileSync('dist/server.cjs', 'dist/server.js');
-  // Firebase Functions receives the same production API bundle.
-  fs.mkdirSync('functions', { recursive: true });
-  fs.copyFileSync('dist/server.cjs', 'functions/server.cjs');
 
   // 3. Compile Firebase Functions API wrapper.
   console.log('☁️ Compiling Firebase Functions API wrapper...');
@@ -71,7 +67,7 @@ async function runBuild() {
     buildId: uniqueBuildTag,
     commitSha: commitSha,
     buildTime: istTime,
-    platform: 'Firebase Hosting & Cloud Run'
+    platform: 'Firebase Hosting & Cloud Functions'
   };
   fs.writeFileSync('dist/version.json', JSON.stringify(versionInfo, null, 2));
   fs.writeFileSync('version.json', JSON.stringify(versionInfo, null, 2));
