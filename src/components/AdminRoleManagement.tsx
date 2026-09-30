@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, AdminPermissions } from '../types';
 import { api } from '../utils/apiClient';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import {
   ShieldCheck,
   UserPlus,
@@ -90,10 +92,18 @@ export const AdminRoleManagement: React.FC = () => {
     e.preventDefault();
     if (!newEmail.trim()) return;
 
+    const normalizedEmail = newEmail.trim().toLowerCase();
+    const userSnap = await getDocs(query(collection(db, 'users'), where('email', '==', normalizedEmail)));
+    if (userSnap.empty) {
+      alert('This staff member must first create a CGSSBTest Firebase account with this email. Then add them here to grant admin access.');
+      return;
+    }
+    const staffProfile = userSnap.docs[0].data() as User;
     const newAdminMember: User = {
-      id: `adm-${Date.now()}`,
+      id: staffProfile.id,
+      uid: staffProfile.id,
       name: newName.trim() || 'Staff Administrator',
-      email: newEmail.trim().toLowerCase(),
+      email: normalizedEmail,
       role: newRole,
       status: 'active',
       registeredAt: new Date().toISOString().split('T')[0],
