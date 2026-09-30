@@ -738,6 +738,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           onStartTest={onStartTest}
           onExplorePass={onExplorePass || (() => {})}
           isEnrolled={enrolledBundleIds.includes(selectedBundle.id)}
+          attempts={attempts}
           onEnrollSuccess={(bId) => setEnrolledBundleIds(prev => [...new Set([...prev, bId])])}
         />
       </div>
