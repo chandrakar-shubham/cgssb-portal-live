@@ -61,7 +61,6 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   const [includeSolutionsKey, setIncludeSolutionsKey] = useState(true);
   const [coachingWatermark, setCoachingWatermark] = useState('CGSSB & CGPSC EXAM PREP PORTAL - CHHATTISGARH');
   const [backupSuccessMessage, setBackupSuccessMessage] = useState<string | null>(null);
-  const [remoteSyncUrl, setRemoteSyncUrl] = useState('https://ais-dev-ct3wt467aiuf3l7jxdfime-879588382474.asia-southeast1.run.app');
   const [isRemoteSyncing, setIsRemoteSyncing] = useState(false);
 
   const handlePullRemoteContent = async () => {
@@ -943,50 +942,6 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                 </div>
               </div>
 
-              {/* Cloud Run / Deployed URL Live Synchronization Card */}
-              <div className="bg-slate-950/60 border border-indigo-500/30 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
-                    <Network className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Remote Cloud Instance Live Sync</h3>
-                    <p className="text-xs text-slate-400">
-                      Pull bundles, tests, questions, and PYP papers directly from your deployed Cloud Run URL into this preview environment.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
-                  <div className="sm:col-span-3">
-                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Deployed URL / Origin</label>
-                    <input
-                      type="url"
-                      value={remoteSyncUrl}
-                      onChange={e => setRemoteSyncUrl(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none"
-                      placeholder="https://ais-dev-...run.app"
-                    />
-                  </div>
-                  <div className="sm:col-span-1 flex items-end">
-                    <button
-                      type="button"
-                      disabled={isRemoteSyncing || !remoteSyncUrl.trim()}
-                      onClick={handlePullRemoteContent}
-                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isRemoteSyncing ? 'animate-spin' : ''}`} />
-                      <span>{isRemoteSyncing ? 'Pulling...' : 'Pull Content Now'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: DATABASE SCHEMA & ARCHITECTURE */}
-          {activeTab === 'schema' && (
-            <div className="space-y-6">
               {/* Architecture & Specs Banner */}
               <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/60 border border-indigo-900/40 rounded-2xl p-5 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1458,7 +1413,7 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                   <button
                     type="button"
                     onClick={() => {
-                      const reportText = `FAANG ARCHITECTURE AUDIT & MIGRATION REPORT\nGenerated: ${new Date().toISOString()}\nPlatform: Firebase Hosting & Cloud Run (Production)\nStatus: 100% Operational\n- Hostinger: Completely Removed\n- Hosting: Firebase CDN with immutable caching\n- Database: Cloud Firestore NoSQL\n- Auth & RBAC: Firebase Auth UID & Security Rules active\n- Total Tests: ${tests.length}\n- Total Questions: ${questions.length}`;
+                      const reportText = `FAANG ARCHITECTURE AUDIT & MIGRATION REPORT\nGenerated: ${new Date().toISOString()}\nPlatform: Firebase Hosting + Cloud Firestore (Firebase Spark)\nStatus: 100% Operational\n- Hostinger: Completely Removed\n- Hosting: Firebase Hosting CDN with revalidated application assets\n- Database: Cloud Firestore NoSQL\n- Auth & RBAC: Firebase Auth UID & Security Rules active\n- Total Tests: ${tests.length}\n- Total Questions: ${questions.length}`;
                       navigator.clipboard.writeText(reportText);
                       setBackupSuccessMessage('FAANG Audit Report copied to clipboard!');
                       setTimeout(() => setBackupSuccessMessage(null), 3000);
@@ -1515,7 +1470,7 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                       <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                       <div>
                         <span className="font-bold text-white block">TypeScript & Build Pipeline</span>
-                        <span className="text-[11px] text-slate-400">Zero linter errors, Vite optimized chunking, and native TypeScript execution on Cloud Run (`node --import tsx`).</span>
+                        <span className="text-[11px] text-slate-400">Zero linter errors, Vite optimized chunking, and native TypeScript execution in the Firebase Hosting build pipeline.</span>
                       </div>
                     </div>
                     <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">Verified Pass</span>
