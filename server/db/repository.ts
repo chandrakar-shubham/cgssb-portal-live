@@ -563,19 +563,12 @@ export async function getTestLeaderboardData(testId: string) {
 
 export async function getAppRemoteConfig(): Promise<AppRemoteConfig> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDoc(doc(db, 'remoteConfig', 'global'));
-    if (snap.exists) {
-      const data = snap.data() as AppRemoteConfig;
-      memoryRemoteConfig = {
-        ...DEFAULT_REMOTE_CONFIG,
-        ...data,
-      };
-    }
-  } catch (err: any) {
-    console.warn('RemoteConfig Firestore fetch note:', err?.message || err);
-  }
-  return memoryRemoteConfig;
+  const snap = await getDoc(doc(db, 'remoteConfig', 'global'));
+  if (!snap.exists) return { ...DEFAULT_REMOTE_CONFIG };
+  return {
+    ...DEFAULT_REMOTE_CONFIG,
+    ...(snap.data() as AppRemoteConfig),
+  };
 }
 
 export async function saveAppRemoteConfig(config: Partial<AppRemoteConfig>, updatedBy = 'Admin'): Promise<AppRemoteConfig> {
