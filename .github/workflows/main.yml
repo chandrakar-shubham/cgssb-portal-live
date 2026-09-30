@@ -64,7 +64,7 @@ jobs:
           BUILD_TIME: ${{ github.event.head_commit.timestamp }}
           NODE_ENV: production
         run: |
-          echo "Compiling client frontend & server backend..."
+          echo "Compiling Firebase Spark client frontend..."
           npm run build
 
       - name: 🛡️ Verify Production Artifacts Integrity
