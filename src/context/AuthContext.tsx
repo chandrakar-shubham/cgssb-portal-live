@@ -187,48 +187,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
 
-  const loginWithGoogle = async (googleData: { email: string; name: string; avatar?: string }) => {
-    let fbUserUid = `g-${Date.now()}`;
-    let fbName = googleData.name;
-    let fbEmail = googleData.email;
-    let fbAvatar = googleData.avatar;
-
-    try {
-      const result = await signInWithPopup(auth, googleAuthProvider);
-      if (result && result.user) {
-        fbUserUid = result.user.uid;
-        fbName = result.user.displayName || fbName;
-        fbEmail = result.user.email || fbEmail;
-        fbAvatar = result.user.photoURL || fbAvatar;
-      }
-    } catch {
-      // Popup blocked or offline fallback
-    }
-
-    const cleanEmail = fbEmail.trim().toLowerCase();
+  const loginWithGoogle = async (_googleData: { email: string; name: string; avatar?: string }) => {
+    const result = await signInWithPopup(auth, googleAuthProvider);
+    const fbUser = result.user;
     const existing = await fetchUserProfileFromFirestore();
+    const today = new Date().toISOString().split('T')[0];
+
     if (existing) {
-      setUser({ ...existing, email: cleanEmail, avatar: fbAvatar || existing.avatar, lastLoginAt: new Date().toISOString().split('T')[0] });
+      const updated = {
+        ...existing,
+        id: fbUser.uid,
+        email: fbUser.email || existing.email,
+        name: fbUser.displayName || existing.name,
+        avatar: fbUser.photoURL || existing.avatar,
+        lastLoginAt: today,
+      };
+      await syncUserProfileToFirestore(updated);
+      setUser(updated);
       return;
     }
 
-    const passDetails = createInitialProPassDetails();
     const newUser: User = {
-      id: fbUserUid,
-      name: fbName || 'Google Aspirant',
-      email: cleanEmail,
+      id: fbUser.uid,
+      name: fbUser.displayName || 'Google Aspirant',
+      email: fbUser.email || '',
       role: 'student',
       status: 'active',
       isBlocked: false,
-      avatar: fbAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-      registeredAt: new Date().toISOString().split('T')[0],
-      lastLoginAt: new Date().toISOString().split('T')[0],
+      avatar: fbUser.photoURL || undefined,
+      registeredAt: today,
+      lastLoginAt: today,
       targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
       district: 'Raipur',
       medium: 'Hindi',
-      token: `jwt-google-${Date.now()}`,
-      ...passDetails,
+      ...createInitialProPassDetails(),
     };
+    await syncUserProfileToFirestore(newUser);
     setUser(newUser);
   };
 
@@ -258,26 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         boundDeviceName: device.name,
       });
     } else {
-      const newUser: User = {
-        id: `std-${Date.now()}`,
-        name: 'Enrolled Aspirant',
-        email: 'aspirant@cgtest.in',
-        role: 'student',
-        status: 'active',
-        isBlocked: false,
-        hasProPass: true,
-        proPassPlan: finalPlanName,
-        passDurationDays: tenure.days,
-        passExpiresAt: tenure.expiresAt,
-        boundDeviceId: device.id,
-        boundDeviceName: device.name,
-        completedTestsCount: 0,
-        freePassStage: '1_month_active',
-        unlockedMilestoneBonus: false,
-        registeredAt: new Date().toISOString().split('T')[0],
-        lastLoginAt: new Date().toISOString().split('T')[0],
-      };
-      setUser(newUser);
+      console.warn('Cannot activate a pass before student authentication.');
     }
   };
 
@@ -346,7 +321,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('cgssb_student_user');
+    void firebaseSignOut(auth).catch(() => null);
   };
 
 
