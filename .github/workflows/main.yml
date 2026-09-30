@@ -16,6 +16,9 @@ on:
         required: false
         default: 'Pre-deployment verification'
 
+permissions:
+  contents: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
