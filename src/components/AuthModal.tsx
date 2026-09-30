@@ -192,6 +192,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   // Phone OTP Send
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('SMS OTP sign-in is not enabled for production yet. Please use Email/Password or Google.');
+    return;
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length < 10) {
       setErrorMsg('Please enter a valid 10-digit mobile number (e.g. 9827012345).');
@@ -208,7 +210,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
       setIsLoading(false);
       setIsOtpSent(true);
       setResendTimer(30);
-      setSuccessMsg(`Simulated SMS sent! Your OTP is ${randomCode}`);
+      setSuccessMsg('');
     }, 600);
   };
 
@@ -404,7 +406,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
         )}
 
         {/* Method Selector Tabs */}
-        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950 rounded-2xl border border-slate-800 text-[11px] font-bold">
+        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-950 rounded-2xl border border-slate-800 text-[11px] font-bold">
           <button
             type="button"
             onClick={() => { setAuthMethod('email'); setErrorMsg(''); }}
@@ -416,32 +418,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
           >
             <Mail className="w-3.5 h-3.5" />
             <span>Email</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setAuthMethod('whatsapp'); setErrorMsg(''); }}
-            className={`py-1.5 rounded-xl transition cursor-pointer text-center flex items-center justify-center space-x-1 ${
-              authMethod === 'whatsapp'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-emerald-400'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-300" />
-            <span>WhatsApp</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setAuthMethod('phone_otp'); setErrorMsg(''); setIsOtpSent(false); }}
-            className={`py-1.5 rounded-xl transition cursor-pointer text-center flex items-center justify-center space-x-1 ${
-              authMethod === 'phone_otp'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>SMS OTP</span>
           </button>
 
           <button
