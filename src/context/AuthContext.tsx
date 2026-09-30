@@ -45,7 +45,7 @@ interface AuthContextType {
   activateProPass: (planType: 'monthly' | 'yearly' | string, customName?: string) => void;
   transferPassDevice: () => void;
   recordTestCompletion: () => { unlockedBonus: boolean; newCount: number };
-  applyReferralCode: (code: string) => { success: boolean; message: string; referrerName?: string };
+  applyReferralCode: (code: string) => Promise<{ success: boolean; message: string; referrerName?: string }>;
   userReferralCode: string;
 
   // Admin Auth & RBAC
@@ -164,8 +164,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       referralCode: generateReferralCode({ id: studentId, name: details.name.trim(), email: details.email }),
       referralCount: 0, referralBonusMonths: 0, ...passDetails,
     };
-    const finalUser = processSignupReferral(initialUser, details.referralCode);
-    await syncUserProfileToFirestore(finalUser);
+    await syncUserProfileToFirestore(initialUser);
+    const finalUser = await processSignupReferral(initialUser, details.referralCode);
+    if (finalUser !== initialUser) {
+      await syncUserProfileToFirestore(finalUser);
+    }
     setUser(finalUser);
   };
 
@@ -370,13 +373,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser({ ...user, credits: (user.credits ?? 0) + amount });
   };
 
-  const applyReferralCode = (code: string): { success: boolean; message: string; referrerName?: string } => {
+  const applyReferralCode = async (code: string): Promise<{ success: boolean; message: string; referrerName?: string }> => {
     if (!user) {
       return { success: false, message: 'Please create an account or sign in to claim your referral bonus!' };
     }
-    const result = applyReferralBonus(user, code);
+    const result = await applyReferralBonus(user, code);
     if (result.success && result.updatedUser) {
       setUser(result.updatedUser);
+      await syncUserProfileToFirestore(result.updatedUser);
     }
     return {
       success: result.success,
