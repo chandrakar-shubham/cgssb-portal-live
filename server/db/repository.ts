@@ -88,6 +88,136 @@ export async function deleteAdminMemberAdmin(id: string): Promise<boolean> {
   return true;
 }
 
+
+function buildReferralCode(user: Partial<User>): string {
+  const namePart = (user.name || 'STUDENT').replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase() || 'ASP';
+  const idPart = (user.id || '').replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
+  return `CG-${namePart}-${idPart}`;
+}
+
+export async function applyReferralBonusForUser(
+  refereeUserId: string,
+  rawCode: string
+): Promise<{ success: boolean; message: string; updatedUser?: User; referrerName?: string }> {
+  const cleanCode = (rawCode || '').trim().toUpperCase();
+  if (!refereeUserId) throw new Error('Authenticated user is required.');
+  if (!cleanCode) return { success: false, message: 'Please enter a valid referral code.' };
+
+  const db = getFirestoreServer();
+  const usersSnap = await getDocs(collection(db, 'users'));
+  let referrerId: string | null = null;
+  let referrerName = '';
+  usersSnap.forEach((snap: any) => {
+    if (referrerId) return;
+    const data = snap.data() as User;
+    const code = (data.referralCode || buildReferralCode({ ...data, id: snap.id })).toUpperCase();
+    if (code === cleanCode && snap.id !== refereeUserId) {
+      referrerId = snap.id;
+      referrerName = data.name || 'your friend';
+    }
+  });
+
+  if (!referrerId) return { success: false, message: 'Referral code not found. Please verify with your friend.' };
+
+  const refereeRef = db.collection('users').doc(refereeUserId);
+  const referrerRef = db.collection('users').doc(referrerId);
+  const referralId = `ref-${referrerId}-${refereeUserId}`;
+  const referralRef = db.collection('referrals').doc(referralId);
+
+  const result = await db.runTransaction(async (tx: any) => {
+    const [refereeSnap, referrerSnap, referralSnap] = await Promise.all([
+      tx.get(refereeRef),
+      tx.get(referrerRef),
+      tx.get(referralRef),
+    ]);
+
+    if (!refereeSnap.exists) throw new Error('Candidate profile was not found.');
+    if (!referrerSnap.exists) throw new Error('Referrer profile was not found.');
+    if (referralSnap.exists) return { alreadyProcessed: true, updatedUser: refereeSnap.data() as User };
+
+    const referee = { ...(refereeSnap.data() as User), id: refereeSnap.id };
+    const referrer = { ...(referrerSnap.data() as User), id: referrerSnap.id };
+    if (referee.referredBy) {
+      return { alreadyClaimed: true, updatedUser: referee };
+    }
+    if (referee.id === referrer.id) {
+      return { selfReferral: true, updatedUser: referee };
+    }
+
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const refereeExpiry = new Date(Math.max(now, referee.passExpiresAt ? new Date(referee.passExpiresAt).getTime() : now) + THIRTY_DAYS_MS).toISOString();
+    const referrerExpiry = new Date(Math.max(now, referrer.passExpiresAt ? new Date(referrer.passExpiresAt).getTime() : now) + THIRTY_DAYS_MS).toISOString();
+
+    const updatedReferee: User = {
+      ...referee,
+      hasProPass: true,
+      proPassPlan: referee.hasProPass ? `${referee.proPassPlan || 'Pro Pass'} (+1 Mo Referral Bonus)` : '1-Month Pro Pass (Referral Reward)',
+      passDurationDays: (referee.passDurationDays || 30) + 30,
+      passExpiresAt: refereeExpiry,
+      referredBy: cleanCode,
+      referralBonusMonths: (referee.referralBonusMonths || 0) + 1,
+      referralCode: referee.referralCode || buildReferralCode(referee),
+    };
+    const updatedReferrer: User = {
+      ...referrer,
+      hasProPass: true,
+      proPassPlan: referrer.hasProPass ? `${referrer.proPassPlan || 'Pro Pass'} (+1 Mo Referral Bonus)` : '1-Month Pro Pass (Referral Reward)',
+      passDurationDays: (referrer.passDurationDays || 30) + 30,
+      passExpiresAt: referrerExpiry,
+      referralCount: (referrer.referralCount || 0) + 1,
+      referralBonusMonths: (referrer.referralBonusMonths || 0) + 1,
+      referralCode: referrer.referralCode || cleanCode,
+    };
+
+    const { id: _refereeId, ...refereeData } = updatedReferee;
+    const { id: _referrerId, ...referrerData } = updatedReferrer;
+    tx.set(refereeRef, refereeData, { merge: true });
+    tx.set(referrerRef, referrerData, { merge: true });
+    tx.create(referralRef, {
+      id: referralId,
+      referrerId: referrer.id,
+      referrerName: referrer.name,
+      referrerCode: cleanCode,
+      refereeId: referee.id,
+      refereeName: referee.name,
+      refereeEmail: referee.email,
+      status: 'completed',
+      rewardMonths: 1,
+      createdAt: new Date().toISOString().split('T')[0],
+    });
+
+    return { updatedUser: updatedReferee };
+  });
+
+  if ('alreadyProcessed' in result && result.alreadyProcessed) {
+    return { success: false, message: 'This referral has already been processed.', updatedUser: result.updatedUser };
+  }
+  if ('alreadyClaimed' in result && result.alreadyClaimed) {
+    return { success: false, message: `You have already claimed a referral bonus with code ${result.updatedUser?.referredBy}.` };
+  }
+  if ('selfReferral' in result && result.selfReferral) {
+    return { success: false, message: 'You cannot use your own referral code!' };
+  }
+  return {
+    success: true,
+    message: `Success! You and ${referrerName} have both received +1 Month (30 Days) of All-Access Pro Pass!`,
+    updatedUser: result.updatedUser,
+    referrerName,
+  };
+}
+
+export async function getReferralRecordsForUser(userId: string): Promise<any[]> {
+  const db = getFirestoreServer();
+  const snap = await getDocs(collection(db, 'referrals'));
+  const records: any[] = [];
+  snap.forEach(d => {
+    const data = d.data() as any;
+    if (data.referrerId === userId || data.refereeId === userId) records.push(data);
+  });
+  return records;
+}
+
 // ----------------- QUESTIONS COLLECTION REPOSITORY (/questions) -----------------
 
 export async function getAllQuestions(filters?: { subject?: string; topic?: string; subtopic?: string; difficulty?: string; category?: string; search?: string; }): Promise<Question[]> {
