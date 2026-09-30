@@ -11,9 +11,8 @@
       {
         "source": "/api/**",
         "function": {
-          "functionId": "cgssbApi",
-          "region": "asia-south1",
-          "pinTag": true
+          "functionId": "api",
+          "region": "asia-south1"
         }
       },
       {
@@ -49,7 +48,10 @@
     }
   ],
   "functions": {
-    "source": "functions",
-    "runtime": "nodejs20"
+    "source": ".",
+    "runtime": "nodejs20",
+    "predeploy": [
+      "npm run build"
+    ]
   }
 }
