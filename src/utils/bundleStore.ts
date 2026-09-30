@@ -8,7 +8,7 @@ import {
   subscribeToBundles
 } from '../firebase/firestoreService';
 
-const BUNDLE_STORAGE_KEY = 'cgssb_custom_bundles_catalog_v2';
+let bundleCache: TestSeriesBundle[] = [];
 
 export const getAdminHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = {
@@ -29,14 +29,13 @@ export const getAdminHeaders = (): Record<string, string> => {
   return headers;
 };
 
-// Automatic real-time cross-browser Firestore subscription for bundles
+// Automatic real-time cross-browser Firestore subscription for bundles.
+// This is an in-memory UI cache only; Firestore/API remains authoritative.
 if (typeof window !== 'undefined') {
   try {
     subscribeToBundles((firestoreBundles) => {
-      if (Array.isArray(firestoreBundles)) {
-        saveStoredBundles(firestoreBundles);
-        window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: firestoreBundles }));
-      }
+      bundleCache = Array.isArray(firestoreBundles) ? firestoreBundles : [];
+      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
     });
   } catch {}
 }
@@ -162,40 +161,22 @@ export const findBundleBySlugOrId = (identifier: string, bundles?: TestSeriesBun
 export const saveSingleBundle = (bundle: TestSeriesBundle): TestSeriesBundle[] => {
   const list = getStoredBundles();
   const existingIndex = list.findIndex(b => b.id === bundle.id || b.slug === bundle.slug);
-  let updated: TestSeriesBundle[];
-  if (existingIndex >= 0) {
-    updated = [...list];
-    updated[existingIndex] = bundle;
-  } else {
-    updated = [bundle, ...list];
-  }
+  const updated = existingIndex >= 0
+    ? list.map((b, i) => i === existingIndex ? bundle : b)
+    : [bundle, ...list];
   saveStoredBundles(updated);
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updated }));
-  }
-
-  // Cloud Firestore Persistence
   saveBundleToFirestore(bundle).catch(err => {
-    console.warn('Firestore bundle save warning:', err);
+    console.warn('Bundle API save failed; authoritative state was not changed:', err);
   });
-
   return updated;
 };
 
 export const deleteStoredBundle = (bundleId: string): TestSeriesBundle[] => {
-  const list = getStoredBundles();
-  const updated = list.filter(b => b.id !== bundleId && b.slug !== bundleId);
+  const updated = getStoredBundles().filter(b => b.id !== bundleId && b.slug !== bundleId);
   saveStoredBundles(updated);
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updated }));
-  }
-
   deleteBundleFromFirestore(bundleId).catch(err => {
-    console.warn('Firestore bundle delete warning:', err);
+    console.warn('Bundle API delete failed; authoritative state was not changed:', err);
   });
-
   return updated;
 };
 
@@ -233,14 +214,13 @@ export const toggleBundlePublish = (bundleId: string): { updatedList: TestSeries
 };
 
 export const resetBundlesToDefault = (): TestSeriesBundle[] => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
-    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: OFFICIAL_BUNDLES_CATALOG }));
+  if (!import.meta.env.DEV) {
+    console.warn('Factory bundle catalog restoration is disabled in production.');
+    return getStoredBundles();
   }
-  for (const b of OFFICIAL_BUNDLES_CATALOG) {
-    saveBundleToFirestore(b).catch(() => {});
-  }
-  return OFFICIAL_BUNDLES_CATALOG;
+  saveStoredBundles(OFFICIAL_BUNDLES_CATALOG);
+  for (const b of OFFICIAL_BUNDLES_CATALOG) saveBundleToFirestore(b).catch(() => {});
+  return getStoredBundles();
 };
 
 export const cleanTestFromAllBundles = (testId: string): TestSeriesBundle[] => {
@@ -315,13 +295,12 @@ export const purgeAllDemoDatabaseData = async (): Promise<{ purgedKeys: string[]
  * Restores factory default demo catalog directly into Cloud Firestore globally
  */
 export const restoreFactoryDemoData = async (): Promise<void> => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(OFFICIAL_BUNDLES_CATALOG));
-    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: OFFICIAL_BUNDLES_CATALOG }));
+  if (!import.meta.env.DEV) {
+    console.warn('Factory demo bundle restoration is disabled in production.');
+    return;
   }
-  for (const b of OFFICIAL_BUNDLES_CATALOG) {
-    saveBundleToFirestore(b).catch(() => {});
-  }
+  saveStoredBundles(OFFICIAL_BUNDLES_CATALOG);
+  await Promise.all(OFFICIAL_BUNDLES_CATALOG.map(b => saveBundleToFirestore(b).catch(() => {})));
 };
 
 export interface TrashedItem {
