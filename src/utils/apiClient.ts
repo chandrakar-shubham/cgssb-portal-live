@@ -50,6 +50,22 @@ export interface ApiFetchOptions extends RequestInit {
 }
 
 export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
+  if (options.requireAuth) {
+    try {
+      const { auth } = await import('../firebase/config');
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        throw new Error('Student authentication is required.');
+      }
+      const idToken = await firebaseUser.getIdToken();
+      if (idToken) {
+        headers.set('Authorization', `Bearer ${idToken}`);
+      }
+    } catch (err: any) {
+      if (err?.message === 'Student authentication is required.') throw err;
+      throw new Error('Unable to establish student authentication.');
+    }
+  }
   const baseUrl = getApiBaseUrl();
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const fullUrl = `${baseUrl}${cleanEndpoint}`;
