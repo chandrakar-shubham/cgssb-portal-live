@@ -71,7 +71,7 @@ import {
   CMSTestSeriesPack,
   CMSSiteSettings
 } from './types/cms';
-import { getAdminToken } from './utils/apiClient';
+import { getAdminToken, api } from './utils/apiClient';
 import {
   cacheTestBundleForDevice,
   clearCachedTestBundle,
@@ -111,7 +111,6 @@ import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
 import { auth } from './firebase/config';
 import { testConnection } from './firebase/connectionTest';
 import {
-  saveAttemptToFirestore,
   fetchTestsFromFirestore,
   saveTestToFirestore,
   fetchQuestionsFromFirestore,
@@ -685,17 +684,15 @@ function MainApp() {
     const activeQuestionList = testQs;
 
     try {
-      const res = await fetch(`/api/tests/${currentTest.id}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timeTakenSeconds: submission.timeTakenSeconds,
-          responses: submission.responses,
-        }),
+      const data = await api.post(`/api/tests/${currentTest.id}/submit`, {
+        userId: user?.id || 'guest',
+        userName: user?.name || 'Aspirant Student',
+        timeTakenSeconds: submission.timeTakenSeconds,
+        responses: submission.responses,
+        questionStatuses: submission.questionStatuses,
       });
+      {
 
-      if (res.ok) {
-        const data = await res.json();
         const attempt = data.attempt || data;
         setAttempts(prev => [attempt, ...prev]);
         clearCachedTestBundle(currentTest.id);
@@ -815,7 +812,6 @@ function MainApp() {
     };
 
     setAttempts(prev => [newAttempt, ...prev]);
-    saveAttemptToFirestore(newAttempt).catch(() => null);
     setActiveExamTest(null);
     setActiveAttemptReview(newAttempt);
 
