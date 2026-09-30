@@ -230,7 +230,6 @@ export const purgeAllDemoDatabaseData = async (): Promise<{ purgedKeys: string[]
     localStorage.removeItem('cgssb_tests');
     localStorage.removeItem('cgssb_questions');
     localStorage.removeItem('cgssb_pyp');
-    localStorage.removeItem(BUNDLE_STORAGE_KEY);
   }
 
   await purgeFirestoreDemoData();
