@@ -218,13 +218,15 @@ export function getStoredSliderBanners(): SliderBanner[] {
 /**
  * Update the local UI cache and persist through Firestore Security Rules.
  */
-export function saveSliderBanners(banners: SliderBanner[]): void {
+export async function saveSliderBanners(banners: SliderBanner[]): Promise<void> {
   const sorted = [...banners].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  // Update the UI immediately, but make persistence awaitable so callers can
+  // confirm the Firestore write before showing a success state.
   sliderCache = sorted;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
   }
-  void syncBannersToFirestore(sorted);
+  await syncBannersToFirestore(sorted);
 }
 
 /**
