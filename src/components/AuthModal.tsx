@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { auth } from '../firebase/config';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { getPendingReferralCode } from '../utils/referralStore';
 import {
   Mail,
@@ -240,7 +242,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   };
 
   // Email Sign In Submit
-  const handleSignInSubmit = async (e: React.FormEvent) => {
+  const handleForgotPassword = async () => {
+    const email = signInEmail.trim().toLowerCase();
+    if (!email || isEmailValid === false) {
+      setErrorMsg('Enter your registered email address first.');
+      return;
+    }
+    setErrorMsg('');
+    setIsLoading(true);
+    setLoadingStepText('Sending a secure password-reset email...');
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setIsLoading(false);
+      setSuccessMsg('Password reset email sent. Check your inbox and spam folder.');
+    } catch (err: any) {
+      setIsLoading(false);
+      const code = err?.code || '';
+      setErrorMsg(code === 'auth/user-not-found'
+        ? 'No account was found for this email address.'
+        : 'Could not send the password reset email. Please try again.');
+    }
+  };
+
+  // Email Sign In Submit
+  const handleSignInSubmit = async (e: React.FormEvent) =>
     e.preventDefault();
     if (!signInEmail || isEmailValid === false) {
       setErrorMsg('Please enter a valid email address (e.g. name@domain.com).');
@@ -288,7 +313,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
     try {
       setLoadingStepText('Allocating syllabus tracks & free CBT mock passes...');
       const cleanRefCode = signUpReferralCode.trim();
-      registerStudent({
+      await registerStudent({
         name: fullName,
         email: signUpEmail,
         phone: signUpPhone.trim(),
@@ -473,7 +498,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
                     <label className="text-xs font-bold text-slate-300">Password *</label>
                     <button
                       type="button"
-                      onClick={() => setSuccessMsg('Password reset hint: If you forgot your password, you can register or sign in with SMS/WhatsApp.')}
+                      onClick={handleForgotPassword}
                       className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
                     >
                       Forgot password?
