@@ -238,7 +238,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   };
 
   // Email Sign In Submit
-  const handleSignInSubmit = (e: React.FormEvent) => {
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signInEmail || isEmailValid === false) {
       setErrorMsg('Please enter a valid email address (e.g. name@domain.com).');
@@ -248,24 +248,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
       setErrorMsg('Please enter your password.');
       return;
     }
-
     setErrorMsg('');
     setIsLoading(true);
     setLoadingStepText('Authenticating credentials & loading your enrolled test series...');
-
-    setTimeout(() => {
+    try {
       await login(signInEmail, 'student', undefined, signInPassword);
-        setLoadingStepText('Synchronizing state ranks & analytics...');
-      setTimeout(() => {
-        setIsLoading(false);
-        setSuccessMsg('Welcome back, Candidate! Loading dashboard...');
-        setTimeout(() => onClose(), 600);
-        }, 400);
-      } catch (err) {
-        setIsLoading(false);
-        setErrorMsg(err instanceof Error ? err.message : 'Sign-in failed. Please check your credentials.');
-      }
-    }, 500);
+      setLoadingStepText('Synchronizing state ranks & analytics...');
+      setIsLoading(false);
+      setSuccessMsg('Welcome back, Candidate! Loading dashboard...');
+      setTimeout(() => onClose(), 600);
+    } catch (err) {
+      setIsLoading(false);
+      setErrorMsg(err instanceof Error ? err.message : 'Sign-in failed. Please check your credentials.');
+    }
   };
 
   // Email Sign Up / Registration Submit
