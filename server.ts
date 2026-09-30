@@ -2580,7 +2580,8 @@ Respond strictly with a JSON object having key "questions" containing an array o
   // ==========================================
   app.get('/api/user/bookmarks', async (req, res) => {
     try {
-      const userId = (req.query.userId || req.headers['x-user-id'] || 'u-student-01') as string;
+      const userId = String(req.query.userId || req.headers['x-user-id'] || '').trim();
+      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
       const bookmarks = await getUserBookmarks(userId);
       res.json({ success: true, userId, bookmarks });
     } catch (err: any) {
@@ -2590,7 +2591,8 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
   app.post('/api/user/bookmarks', async (req, res) => {
     try {
-      const userId = (req.body.userId || req.headers['x-user-id'] || 'u-student-01') as string;
+      const userId = String(req.body.userId || req.headers['x-user-id'] || '').trim();
+      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
       const { bookmarks = [] } = req.body;
       const saved = await saveUserBookmarks(userId, bookmarks);
       res.json({ success: true, userId, count: saved.length, bookmarks: saved });
@@ -2601,7 +2603,8 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
   app.get('/api/user/mistakes', async (req, res) => {
     try {
-      const userId = (req.query.userId || req.headers['x-user-id'] || 'u-student-01') as string;
+      const userId = String(req.query.userId || req.headers['x-user-id'] || '').trim();
+      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
       const mistakes = await getUserMistakes(userId);
       res.json({ success: true, userId, mistakes });
     } catch (err: any) {
@@ -2611,7 +2614,8 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
   app.post('/api/user/mistakes', async (req, res) => {
     try {
-      const userId = (req.body.userId || req.headers['x-user-id'] || 'u-student-01') as string;
+      const userId = String(req.body.userId || req.headers['x-user-id'] || '').trim();
+      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
       const { mistakes = [] } = req.body;
       const saved = await saveUserMistakes(userId, mistakes);
       res.json({ success: true, userId, count: saved.length, mistakes: saved });
@@ -2622,7 +2626,8 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
   app.get('/api/user/entitlements', async (req, res) => {
     try {
-      const userId = (req.query.userId || req.headers['x-user-id'] || 'u-student-01') as string;
+      const userId = String(req.query.userId || req.headers['x-user-id'] || '').trim();
+      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
       const entitlements = await getUserEntitlements(userId);
       res.json({ success: true, entitlements });
     } catch (err: any) {
@@ -2632,7 +2637,8 @@ Respond strictly with a JSON object having key "questions" containing an array o
 
   app.post('/api/user/redeem-pass', async (req, res) => {
     try {
-      const { userId = 'u-student-01', couponCode, planId } = req.body;
+      const { userId, couponCode, planId } = req.body;
+      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
       const updated = await redeemPassForUser(userId, couponCode, planId);
       res.json({
         success: true,
