@@ -68,23 +68,7 @@ const CHHATTISGARH_DISTRICTS = [
   'Raigarh (रायगढ़)'
 ];
 
-const SEED_CANDIDATES = [
-  { name: 'Pooja Dewangan', district: 'Raipur (रायपुर)', category: 'OBC', avatar: 'P' },
-  { name: 'Bhupendra Patel', district: 'Durg (दुर्ग)', category: 'OBC', avatar: 'B' },
-  { name: 'Yogesh Sahu', district: 'Bilaspur (बिलासपुर)', category: 'OBC', avatar: 'Y' },
-  { name: 'Anamika Kashyap', district: 'Bastar (बस्तर)', category: 'ST', avatar: 'A' },
-  { name: 'Deepak Chandrakar', district: 'Rajnandgaon (राजनांदगांव)', category: 'UR', avatar: 'D' },
-  { name: 'Rameshwar Verma', district: 'Balod (बालोद)', category: 'OBC', avatar: 'R' },
-  { name: 'Kavita Netam', district: 'Kanker (कांकेर)', category: 'ST', avatar: 'K' },
-  { name: 'Praveen Tiwari', district: 'Surguja (सरगुजा)', category: 'EWS', avatar: 'P' },
-  { name: 'Manisha Banjare', district: 'Janjgir-Champa (जांजगीर-चांपा)', category: 'SC', avatar: 'M' },
-  { name: 'Alok Singh Thakur', district: 'Korba (कोरबा)', category: 'UR', avatar: 'A' },
-  { name: 'Geetanjali Sahu', district: 'Raipur (रायपुर)', category: 'OBC', avatar: 'G' },
-  { name: 'Dharmendra Markam', district: 'Dantewada (दंतेवाड़ा)', category: 'ST', avatar: 'D' },
-  { name: 'Neha Agrawal', district: 'Raigarh (रायगढ़)', category: 'UR', avatar: 'N' },
-  { name: 'Santosh Kumar Kurre', district: 'Bilaspur (बिलासपुर)', category: 'SC', avatar: 'S' },
-  { name: 'Virendra Sonwani', district: 'Durg (दुर्ग)', category: 'SC', avatar: 'V' },
-];
+const SEED_CANDIDATES: Array<{ name: string; district: string; category: string; avatar: string }> = [];
 
 export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
   tests,
@@ -115,11 +99,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
 
   // Live simulation ticker messages
   const liveTickerUpdates = useMemo(() => [
-    'Pooja Dewangan (Raipur) secured Rank #1 with 97.4% accuracy!',
-    'Amit Sahu (Bilaspur) just submitted: 124.5 marks (Rank #14)',
-    '1,482 aspirants attempted this test statewide today',
-    'Rameshwar Verma (Balod) improved +8.2 marks in Re-test attempt',
-    'State Percentile Cut-off benchmark currently standing at 116.5 marks',
+    'Verified leaderboard data will appear after real student attempts are recorded.',
   ], []);
 
   useEffect(() => {
@@ -139,83 +119,10 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
 
   // Generate realistic leaderboard entries for the active test
   const leaderboardData: LeaderboardEntry[] = useMemo(() => {
-    if (!currentTest) return [];
-
-    const totalMarks = currentTest.totalMarks || (currentTest.durationMinutes ? currentTest.durationMinutes * 1.25 : 150);
-    const totalQ = currentTest.questionCount || (currentTest.durationMinutes === 120 ? 100 : 150);
-    const duration = currentTest.durationMinutes || 120;
-
-    // Deterministic seed based on test id string
-    let seed = 0;
-    for (let i = 0; i < currentTest.id.length; i++) {
-      seed = (seed * 31 + currentTest.id.charCodeAt(i)) % 1000;
-    }
-
-    const entries: LeaderboardEntry[] = [];
-    const baseTopperRatio = 0.915 + (seed % 5) * 0.008; // 91.5% - 95%
-    const topperScore = Math.round(totalMarks * baseTopperRatio * 4) / 4;
-
-    SEED_CANDIDATES.forEach((cand, idx) => {
-      const drop = idx === 0 ? 0 : idx * (totalMarks * 0.016 + ((seed + idx) % 3) * 0.5);
-      const score = Math.max(Math.round((topperScore - drop) * 4) / 4, Math.round(totalMarks * 0.55));
-      const accuracy = Math.min(98.8, Math.max(76.5, Math.round((97.5 - idx * 1.3 + ((seed + idx) % 4) * 0.4) * 10) / 10));
-      const timeSpent = Math.max(Math.round(duration * 0.65), Math.round(duration - 15 - idx * 2 + ((seed + idx) % 5)));
-      const correctAnswers = Math.round((score / totalMarks) * totalQ);
-      const wrongAnswers = Math.max(0, Math.round((totalQ - correctAnswers) * 0.3));
-      const percentile = Math.round((99.9 - idx * 1.15) * 10) / 10;
-
-      let badge: string | undefined = undefined;
-      if (idx === 0) badge = 'State Topper 👑';
-      else if (idx === 1) badge = 'Top 0.5%ile';
-      else if (idx === 2) badge = 'District 1st';
-      else if (accuracy >= 94) badge = 'High Accuracy';
-      else if (timeSpent <= duration * 0.75) badge = 'Speed Master';
-
-      entries.push({
-        rank: idx + 1,
-        candidateName: cand.name,
-        avatarSeed: cand.avatar,
-        district: cand.district,
-        category: cand.category as any,
-        score,
-        totalMarks,
-        accuracy,
-        timeSpentMinutes: timeSpent,
-        totalQuestions: totalQ,
-        correctAnswers,
-        wrongAnswers,
-        percentile,
-        attemptDate: idx <= 2 ? 'Today, 10:45 AM' : `${idx + 1}h ago`,
-        badge,
-      });
-    });
-
-    // Check if the current user has taken any test
-    if (user?.name) {
-      // User standing row
-      const userAttempt = {
-        rank: 42,
-        candidateName: `${user.name} (You)`,
-        avatarSeed: user.name[0].toUpperCase(),
-        district: 'Raipur (रायपुर)',
-        category: 'OBC' as const,
-        score: Math.round(totalMarks * 0.68 * 4) / 4,
-        totalMarks,
-        accuracy: 88.5,
-        timeSpentMinutes: Math.round(duration * 0.82),
-        totalQuestions: totalQ,
-        correctAnswers: Math.round(totalQ * 0.7),
-        wrongAnswers: Math.round(totalQ * 0.12),
-        percentile: 86.4,
-        isCurrentUser: true,
-        attemptDate: 'Yesterday',
-        badge: 'Top 15%',
-      };
-      entries.push(userAttempt);
-    }
-
-    return entries;
-  }, [currentTest, user?.name]);
+    // Spark-only launch: do not fabricate candidate scores, ranks, or percentiles.
+    // A verified public leaderboard snapshot will be added once a secure aggregation path is available.
+    return [];
+  }, []);
 
   // Filtered leaderboard entries based on district
   const filteredEntries = useMemo(() => {
@@ -322,7 +229,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Attempted</span>
-              <span className="text-sm font-black text-white">1,482 Aspirants</span>
+              <span className="text-sm font-black text-white">Verified data pending</span>
             </div>
           </div>
 
