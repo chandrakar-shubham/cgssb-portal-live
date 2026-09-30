@@ -28,6 +28,51 @@ service cloud.firestore {
          exists(/databases/$(database)/documents/adminMembers/$(request.auth.uid)));
     }
 
+    function isDelegatedAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/adminMembers/$(request.auth.uid));
+    }
+
+    function hasManageStudents() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageStudents == true);
+    }
+
+    function hasManageAdmins() {
+      return isBootstrapAdmin();
+    }
+
+    function hasManageTests() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageTests == true);
+    }
+
+    function hasManageQuestions() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageQuestions == true);
+    }
+
+    function hasManageCMS() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageCMS == true);
+    }
+
+    function hasManagePayments() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.managePayments == true);
+    }
+
+    function hasManageSystem() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageSystem == true);
+    }
+
     function isOwner(userId) {
       return isPermanentUser() && request.auth.uid == userId;
     }
@@ -36,7 +81,7 @@ service cloud.firestore {
     // Admins can manage profiles from the admin portal.
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if (isOwner(userId) || isAdmin()) &&
+      allow create: if (isOwner(userId) || hasManageStudents()) &&
         request.resource.data.keys().hasOnly([
           'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
           'lastLoginAt', 'targetExam', 'targetYear', 'district',
@@ -47,7 +92,7 @@ service cloud.firestore {
           'boundDeviceId', 'boundDeviceName', 'freePassStage',
           'unlockedMilestoneBonus', 'referralCount', 'referralBonusMonths'
         ]);
-      allow update: if isAdmin() ||
+      allow update: if hasManageStudents() ||
         (isOwner(userId) &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'email', 'phone', 'avatar', 'lastLoginAt',
@@ -55,85 +100,85 @@ service cloud.firestore {
           'gender', 'education', 'medium', 'bio', 'dailyGoalQuestions',
           'lastSyncedAt'
          ]));
-      allow delete: if isAdmin();
+      allow delete: if hasManageStudents();
     }
 
     // Public exam/catalog content. Admin-only mutations.
     match /mockTests/{testId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageTests();
     }
     match /questions/{questionId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
     match /pypPapers/{paperId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageTests();
     }
     match /bundles/{bundleId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageCMS() || hasManageTests();
     }
     match /pages/{pageId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageCMS();
     }
     match /posts/{postId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageCMS();
     }
     match /seriesPacks/{packId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageCMS() || hasManageTests();
     }
     match /cmsSettings/{settingsId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageCMS();
     }
     match /slider_banners/{bannerId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageCMS() || hasManageSystem();
     }
 
     // Current-affairs public content. Admin-only mutations.
     match /currentAffairsSources/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
     match /currentAffairsTopics/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
     match /currentAffairsQuestions/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
     match /dailyEditions/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
     match /monthlyEditions/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
     match /monthlyEditions/{docId}/sections/{sectionId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
 
     // Attempts: authenticated students may create/read only their own attempts.
     // Admins can read/write for support and analytics.
     match /attempts/{attemptId} {
-      allow read: if isAdmin() ||
+      allow read: if hasManageStudents() ||
         (isOwner(resource.data.userId));
-      allow create: if isAdmin() ||
+      allow create: if hasManageStudents() ||
         (isOwner(request.resource.data.userId) &&
          request.resource.data.testId is string);
-      allow update: if isAdmin() ||
+      allow update: if hasManageStudents() ||
         (isOwner(resource.data.userId) &&
          request.resource.data.userId == resource.data.userId);
-      allow delete: if isAdmin();
+      allow delete: if hasManageStudents();
     }
 
     // User-specific application state.
@@ -147,13 +192,13 @@ service cloud.firestore {
     }
     match /userEntitlements/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isAdmin();
+      allow write: if hasManagePayments();
     }
 
     // Referral records may be read only by an admin in Spark mode.
     // This avoids exposing cross-user referral relationships to clients.
     match /referrals/{referralId} {
-      allow read, write: if isAdmin();
+      allow read, write: if hasManageStudents();
     }
 
     // Admin/member/coupon management.
@@ -161,16 +206,16 @@ service cloud.firestore {
       // Only the bootstrap Super Admin may create, edit, or revoke delegated admin roles.
       // Other admins can read their roster but cannot self-escalate privileges.
       allow read: if isAdmin();
-      allow create, update, delete: if isBootstrapAdmin();
+      allow create, update, delete: if hasManageAdmins();
     }
     match /discountCoupons/{couponId} {
-      allow read, write: if isAdmin();
+      allow read, write: if hasManagePayments();
     }
 
     // Public configuration.
     match /remoteConfig/{configId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageSystem();
     }
 
     match /{document=**} {
