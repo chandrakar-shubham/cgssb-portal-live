@@ -441,7 +441,11 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
       'slider-banners':'slider_banners',
     };
     if (parts[1]==='cms') map[parts[2]]={pages:'pages',posts:'posts',series:'seriesPacks'}[parts[2]];
-    if (parts[1]==='current-affairs') map[parts[2]]=parts[2]==='sources'?'currentAffairsSources':parts[2]==='topics'?'currentAffairsTopics':parts[2]==='questions'?'currentAffairsQuestions':parts[2];
+    if (parts[1]==='current-affairs') map[parts[2]]={
+      sources:'currentAffairsSources', topics:'currentAffairsTopics', questions:'currentAffairsQuestions',
+      currentAffairsSources:'currentAffairsSources', currentAffairsTopics:'currentAffairsTopics', currentAffairsQuestions:'currentAffairsQuestions',
+      daily:'dailyEditions', monthly:'monthlyEditions', dailyEditions:'dailyEditions', monthlyEditions:'monthlyEditions'
+    }[parts[2]] || parts[2];
     if (parts[1]==='admin') map[parts[2]]={students:'users',members:'adminMembers',coupons:'discountCoupons'}[parts[2]];
     const collectionName=parts[1]==='cms'?map[parts[2]]:map[parts[1]];
     if(collectionName){ await requireAdminAuth(); return await removeDoc(collectionName,decode(parts[3]||parts[2])) as T; }
