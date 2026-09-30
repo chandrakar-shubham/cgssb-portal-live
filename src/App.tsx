@@ -493,6 +493,14 @@ function MainApp() {
           fetchPypPapersFromFirestore().catch(() => [])
         ]);
 
+        // Load only this authenticated student's real attempts. Never seed demo attempts.
+        if (user && !user.isAnonymous) {
+          const attemptData = await api.get('/api/user/attempts', { requireAuth: true }).catch(() => null);
+          if (attemptData && Array.isArray(attemptData.attempts)) {
+            setAttempts(attemptData.attempts);
+          }
+        }
+
         if (Array.isArray(firestoreTests)) {
           setTests(firestoreTests);
         }
@@ -740,9 +748,6 @@ function MainApp() {
       maxScore: maxScore,
       percentage: percentage,
       accuracy: accuracy,
-      simulatedRank: Math.floor(Math.random() * 45) + 12,
-      totalParticipants: 3850,
-      percentile: Number((96.0 + Math.random() * 3.8).toFixed(1)),
       correctCount: correctCount,
       incorrectCount: incorrectCount,
       unattemptedCount: unattemptedCount,
@@ -1454,6 +1459,7 @@ function MainApp() {
           <StudentDashboard
             tests={tests}
             onStartTest={handleStartTest}
+            attempts={attempts}
             onSelectCategory={cat => setSelectedCategory(cat)}
             selectedCategory={selectedCategory}
             onExplorePass={() => setStudentActiveTab('pass')}
