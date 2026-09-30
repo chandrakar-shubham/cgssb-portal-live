@@ -233,7 +233,7 @@ async function leaderboard(testId: string) {
   };
 }
 
-export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
+export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<any> {
   const clean = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const parts = clean.split('/').filter(Boolean);
   const method = (options.method || 'GET').toUpperCase();
