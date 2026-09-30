@@ -218,6 +218,20 @@ export async function getReferralRecordsForUser(userId: string): Promise<any[]> 
   return records;
 }
 
+
+export async function validateCouponForUser(code: string, planType: string): Promise<{ valid: boolean; coupon?: DiscountCoupon; error?: string }> {
+  const clean = (code || '').trim().toUpperCase();
+  const coupons = await getAllCouponsAdmin();
+  const found = coupons.find(c => c.code.trim().toUpperCase() === clean && c.isActive);
+  if (!found) return { valid: false, error: 'Invalid or inactive promo code.' };
+  if (new Date(found.validUntil).getTime() < Date.now()) return { valid: false, error: 'Promo code has expired.' };
+  if (found.usageCount >= found.maxUses) return { valid: false, error: 'Promo code usage limit exceeded.' };
+  if (found.applicablePlan !== 'all' && found.applicablePlan !== planType) {
+    return { valid: false, error: `This code is only applicable on ${found.applicablePlan} passes.` };
+  }
+  return { valid: true, coupon: found };
+}
+
 // ----------------- QUESTIONS COLLECTION REPOSITORY (/questions) -----------------
 
 export async function getAllQuestions(filters?: { subject?: string; topic?: string; subtopic?: string; difficulty?: string; category?: string; search?: string; }): Promise<Question[]> {
