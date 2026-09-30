@@ -2645,6 +2645,81 @@ Respond strictly with a JSON object having key "questions" containing an array o
   });
 
   // --- Current Affairs & AI Professor Production Engine APIs ---
+  // Privileged Current Affairs Firestore mutations. Public reads remain available separately.
+  const CA_ADMIN_COLLECTIONS = new Set([
+    'currentAffairsSources',
+    'currentAffairsTopics',
+    'currentAffairsQuestions',
+    'dailyEditions',
+    'monthlyEditions',
+  ]);
+
+  app.post('/api/current-affairs/:collection/:id', requireAdmin, async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      if (!CA_ADMIN_COLLECTIONS.has(collection) || !id || id.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid current affairs collection or document id' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection(collection).doc(id).set({
+        ...req.body,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/current-affairs/:collection/:id', requireAdmin, async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      if (!CA_ADMIN_COLLECTIONS.has(collection) || !id || id.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid current affairs collection or document id' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection(collection).doc(id).delete();
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/current-affairs/monthly/:yearMonth/sections/:sectionId', requireAdmin, async (req, res) => {
+    try {
+      const { yearMonth, sectionId } = req.params;
+      if (!/^\\d{4}-\\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid monthly section identifier' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('monthlyEditions').doc(yearMonth).collection('sections').doc(sectionId).set({
+        ...req.body,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      res.json({ success: true, id: sectionId });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/current-affairs/monthly/:yearMonth/sections/:sectionId', requireAdmin, async (req, res) => {
+    try {
+      const { yearMonth, sectionId } = req.params;
+      if (!/^\\d{4}-\\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid monthly section identifier' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('monthlyEditions').doc(yearMonth).collection('sections').doc(sectionId).delete();
+      res.json({ success: true, id: sectionId });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.get('/api/current-affairs/topics', async (req, res) => {
     try {
       const topics = getAllCaTopics();
