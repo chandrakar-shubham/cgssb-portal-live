@@ -71,11 +71,11 @@ export async function testConnection(): Promise<{ ok: boolean; message: string; 
       database: dbConfig.databaseId,
     };
   } catch (err: any) {
-    console.warn(`[Firestore Connection Check Note]`, err?.message || err);
+    console.warn(`[Firestore Connection Check Failed]`, err?.message || err);
     return {
-      ok: true,
+      ok: false,
       engine: 'Google Cloud Firestore (Enterprise Edition)',
-      message: `Google Cloud Firestore Enterprise active (database: ${dbConfig.databaseId})`,
+      message: `Google Cloud Firestore connection failed (database: ${dbConfig.databaseId}): ${err?.message || err}`,
       database: dbConfig.databaseId,
     };
   }
