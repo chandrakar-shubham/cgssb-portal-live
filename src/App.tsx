@@ -480,7 +480,7 @@ function MainApp() {
   }, []);
 
 
-  // Fetch initial data from server or Firebase Firestore
+  // Fetch initial production data from Firebase Firestore only
   useEffect(() => {
     async function loadData() {
       // Production invariant: an empty database is valid production state. Never seed demo/factory data from the client.
@@ -503,15 +503,12 @@ function MainApp() {
 
         if (Array.isArray(firestorePyp)) {
           setPypPapers(firestorePyp);
-          const p = await pypRes.json();
-          const list = Array.isArray(p) ? p : (p?.papers || []);
-          setPypPapers(list);
         }
 
         // Sync and refresh Test Series bundles from Cloud Firestore
         await syncBundlesFromFirestore().catch(() => null);
       } catch (err) {
-        console.warn('Backend API unavailable or non-JSON response received. Falling back to local state:', err);
+        console.error('Failed to load production data from Firestore:', err);
       }
     }
     loadData();
