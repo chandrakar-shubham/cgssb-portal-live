@@ -108,48 +108,26 @@ export const setTrueZeroDataMode = (_enabled: boolean): void => {
   // Deprecated: State is now 100% managed in Cloud Firestore
 };
 
-export const getStoredBundles = (): TestSeriesBundle[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(BUNDLE_STORAGE_KEY);
-    if (raw === null) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
-    console.error('Error loading bundles from cache:', err);
-    return [];
-  }
-};
+export const getStoredBundles = (): TestSeriesBundle[] => [...bundleCache];
 
 export const saveStoredBundles = (bundles: TestSeriesBundle[]): void => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(BUNDLE_STORAGE_KEY, JSON.stringify(bundles));
-  } catch (err) {
-    console.error('Error saving bundles to cache:', err);
+  bundleCache = Array.isArray(bundles) ? [...bundles] : [];
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
   }
 };
 
 /**
- * Fetch bundles from Cloud Firestore and sync across open tabs & browsers
+ * Fetch the authoritative bundle catalog from the server API.
+ * An empty response is a legitimate production state; never fall back to localStorage or the factory catalog.
  */
 export const syncBundlesFromFirestore = async (_customUrl?: string): Promise<{ list: TestSeriesBundle[]; count: number; source: string }> => {
-  try {
-    const firestoreBundles = await fetchBundlesFromFirestore();
-    if (Array.isArray(firestoreBundles)) {
-      // Empty is a legitimate production state; persist it instead of resurrecting the factory catalog.
-      saveStoredBundles(firestoreBundles);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: firestoreBundles }));
-      }
-      return { list: firestoreBundles, count: firestoreBundles.length, source: 'firestore' };
-    }
-  } catch (err) {
-    console.warn('Firestore bundle fetch note:', err);
+  const response = await fetchBundlesFromFirestore();
+  bundleCache = Array.isArray(response) ? response : [];
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
   }
-
-  const current = getStoredBundles();
-  return { list: current, count: current.length, source: 'cache' };
+  return { list: [...bundleCache], count: bundleCache.length, source: 'api' };
 };
 
 export const findBundleBySlugOrId = (identifier: string, bundles?: TestSeriesBundle[]): TestSeriesBundle | undefined => {
