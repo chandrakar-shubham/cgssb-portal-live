@@ -10,7 +10,8 @@ import {
   onAuthStateChanged,
   signOut as firebaseSignOut 
 } from 'firebase/auth';
-import { auth, googleAuthProvider } from '../firebase/config';
+import { auth, db, googleAuthProvider } from '../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
 import { api } from '../utils/apiClient';
 import { initializeBookmarks, clearBookmarkCache } from '../utils/bookmarkStorage';
 import { 
@@ -361,31 +362,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
 
-  // Admin Login: credentials are verified only by the server. Never ship the admin secret to the browser.
+  // Admin Login: Firebase Authentication + Firestore authorization only.
+  // No Express/Cloud Functions endpoint is used in Firebase Spark mode.
   const adminLogin = async (usernameOrEmail: string, passwordOrPasskey?: string): Promise<{ success: boolean; error?: string }> => {
-    const identifier = usernameOrEmail.trim();
+    const identifier = usernameOrEmail.trim().toLowerCase();
     const pass = (passwordOrPasskey || '').trim();
 
     if (!identifier || !pass) {
-      return { success: false, error: 'Admin username and password are required.' };
+      return { success: false, error: 'Admin email and password are required.' };
     }
 
     try {
-      const result = await api.post<{ success: boolean; token?: string; user?: User; error?: string }>(
-        '/api/auth/admin-login',
-        { username: identifier, password: pass }
-      );
+      const credential = await signInWithEmailAndPassword(auth, identifier, pass);
+      const fbUser = credential.user;
 
-      if (!result.success || !result.token || !result.user) {
-        return { success: false, error: result.error || 'Invalid admin credentials.' };
+      if (!fbUser.emailVerified) {
+        await firebaseSignOut(auth);
+        return { success: false, error: 'Please verify your Firebase Authentication email before entering the admin portal.' };
       }
 
-      const authenticatedUser = { ...result.user, token: result.token } as User;
+      const bootstrapAdminUid = 'VOynxZyDOJR4lg2x4va2U3qF5m72';
+      let role: UserRole = 'admin';
+      let permissions: AdminPermissions = { all: true };
+
+      if (fbUser.uid !== bootstrapAdminUid) {
+        const memberSnap = await getDoc(doc(db, 'adminMembers', fbUser.uid));
+        if (!memberSnap.exists()) {
+          await firebaseSignOut(auth);
+          return { success: false, error: 'This Firebase account is not authorized as an administrator.' };
+        }
+        const member = memberSnap.data() as any;
+        role = member.role || 'admin';
+        permissions = member.permissions || { all: true };
+      } else {
+        role = 'superadmin' as UserRole;
+      }
+
+      const authenticatedUser = {
+        id: fbUser.uid,
+        uid: fbUser.uid,
+        email: fbUser.email || identifier,
+        name: fbUser.displayName || 'Administrator',
+        role,
+        permissions,
+        status: 'active',
+        token: fbUser.uid,
+      } as User;
+
       setAdminUser(authenticatedUser);
       sessionStorage.setItem('cgssb_admin_session', JSON.stringify(authenticatedUser));
       return { success: true };
     } catch (error: any) {
-      return { success: false, error: error?.message || 'Admin authentication failed.' };
+      let message = 'Admin authentication failed.';
+      if (error?.code === 'auth/invalid-credential') message = 'Invalid Firebase email or password.';
+      else if (error?.code === 'auth/too-many-requests') message = 'Too many login attempts. Please wait and try again.';
+      else if (error?.code === 'auth/user-disabled') message = 'This Firebase account has been disabled.';
+      else if (error?.code === 'auth/invalid-email') message = 'Please enter a valid Firebase email address.';
+      return { success: false, error: message };
     }
   };
 
