@@ -3,7 +3,9 @@ import { User, UserRole, AdminPermissions } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
 import { syncUserProfileToFirestore, fetchUserProfileFromFirestore } from '../firebase/firestoreService';
 import { 
-  signInAnonymously, 
+  signInAnonymously,
+  setPersistence,
+  browserLocalPersistence,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword, 
@@ -96,20 +98,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Auto-connect with Firebase Auth for Firestore rules authorization
+  // Restore the Firebase session into the app-level student profile.
+  // Firebase Auth persists web sessions locally, but the React user state must
+  // still be hydrated from the Auth observer after every page reload.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        console.log('Firebase Auth session verified:', fbUser.uid);
-      } else {
-        try {
-          await signInAnonymously(auth);
-        } catch {
-          // Offline fallback
-        }
+    let cancelled = false;
+
+    const restoreAuthSession = async () => {
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch {
+        // Continue with the SDK's existing persistence if storage is unavailable.
       }
+
+      const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+        if (cancelled) return;
+
+        // Anonymous Firebase sessions are only for Firestore public/guest access.
+        // They must never be promoted to a student application session.
+        if (!fbUser || fbUser.isAnonymous) {
+          if (!fbUser) {
+            try {
+              await signInAnonymously(auth);
+            } catch {
+              // Offline/blocked anonymous auth: remain in guest mode.
+            }
+          }
+          if (!cancelled) setUser(null);
+          return;
+        }
+
+        try {
+          const existing = await fetchUserProfileFromFirestore();
+          if (!existing) {
+            if (!cancelled) setUser(null);
+            return;
+          }
+
+          const today = new Date().toISOString().split('T')[0];
+          const profile: User = {
+            ...existing,
+            id: fbUser.uid,
+            email: fbUser.email || existing.email,
+            name: fbUser.displayName || existing.name,
+            avatar: fbUser.photoURL || existing.avatar,
+            lastLoginAt: existing.lastLoginAt || today,
+          };
+
+          const hydrated = await hydrateAuthoritativeEntitlements(profile);
+          if (!cancelled) setUser(hydrated);
+        } catch (error) {
+          console.warn('Failed to restore Firebase student session:', error);
+          if (!cancelled) setUser(null);
+        }
+      });
+
+      return unsubscribe;
+    };
+
+    let unsubscribe: (() => void) | undefined;
+    restoreAuthSession().then(fn => {
+      unsubscribe = fn;
     });
-    return () => unsubscribe();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
