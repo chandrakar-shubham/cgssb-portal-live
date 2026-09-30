@@ -208,7 +208,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
     } catch {
-      // Fall through to legacy profile/API compatibility below.
+      // Fall through to the legacy profile/API compatibility below.
+    }
+
+    // Migration path for students who registered before the entitlement document
+    // was introduced. Their original 30-day welcome window is anchored to the
+    // stored registration date and is granted only while that window remains active.
+    if (baseUser.registeredAt) {
+      const registeredAtMs = new Date(baseUser.registeredAt).getTime();
+      if (Number.isFinite(registeredAtMs)) {
+        const welcomeExpiry = new Date(registeredAtMs + 30 * 24 * 60 * 60 * 1000).toISOString();
+        if (Date.now() < new Date(welcomeExpiry).getTime()) {
+          await saveUserEntitlementToFirestore({
+            userId: baseUser.id,
+            planType: 'WELCOME_FREE',
+            status: 'ACTIVE',
+            issuedAt: new Date(registeredAtMs).toISOString(),
+            expiresAt: welcomeExpiry,
+            durationDays: 30,
+            source: 'WELCOME_FREE',
+            planName: '1-Month Free Welcome Pass (30 Days)',
+            updatedAt: new Date().toISOString(),
+          }).catch(() => null);
+          return { ...baseUser, hasProPass: true, proPassPlan: '1-Month Free Welcome Pass (30 Days)', passDurationDays: 30, passExpiresAt: welcomeExpiry };
+        }
+      }
     }
 
     // Legacy compatibility only: do not resurrect an expired pass.
