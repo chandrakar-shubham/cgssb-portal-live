@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, AdminPermissions } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
-import { syncUserProfileToFirestore, fetchUserByEmailFromFirestore } from '../firebase/firestoreService';
+import { syncUserProfileToFirestore } from '../firebase/firestoreService';
 import { 
   signInAnonymously, 
   signInWithPopup, 
