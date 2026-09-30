@@ -141,51 +141,31 @@ export async function syncWithFirestore(): Promise<{
 
 // ----------------- QUESTIONS COLLECTION REPOSITORY (/questions) -----------------
 
-export async function getAllQuestions(filters?: {
-  subject?: string;
-  topic?: string;
-  subtopic?: string;
-  difficulty?: string;
-  category?: string;
-  search?: string;
-}): Promise<Question[]> {
+export async function getAllQuestions(filters?: { subject?: string; topic?: string; subtopic?: string; difficulty?: string; category?: string; search?: string; }): Promise<Question[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'questions'));
-    const items: Question[] = [];
-    snap.forEach(d => items.push(d.data() as Question));
-    memoryCache.questions = items;
-  } catch (err) {
-    console.warn('Firestore getAllQuestions note:', err);
-  }
-
-  let filtered = [...memoryCache.questions];
-  if (filters?.subject) filtered = filtered.filter(q => q.subject === filters.subject);
-  if (filters?.topic) filtered = filtered.filter(q => q.topic === filters.topic);
-  if (filters?.subtopic) filtered = filtered.filter(q => q.subtopic === filters.subtopic);
-  if (filters?.difficulty) filtered = filtered.filter(q => q.difficulty === filters.difficulty);
-  if (filters?.category) filtered = filtered.filter(q => q.category === filters.category);
+  const snap = await getDocs(collection(db, 'questions'));
+  let list: Question[] = [];
+  snap.forEach(d => list.push(d.data() as Question));
+  if (filters?.subject) list = list.filter(q => q.subject === filters.subject);
+  if (filters?.topic) list = list.filter(q => q.topic === filters.topic);
+  if (filters?.subtopic) list = list.filter(q => q.subtopic === filters.subtopic);
+  if (filters?.difficulty) list = list.filter(q => q.difficulty === filters.difficulty);
+  if (filters?.category && filters.category !== 'ALL') list = list.filter(q => q.category === filters.category);
   if (filters?.search) {
-    const s = filters.search.toLowerCase();
-    filtered = filtered.filter(
-      q =>
-        (q.questionText || q.question || '').toLowerCase().includes(s) ||
-        (q.questionHindi && q.questionHindi.toLowerCase().includes(s)) ||
-        (q.topic || '').toLowerCase().includes(s)
+    const search = filters.search.toLowerCase();
+    list = list.filter(q =>
+      (q.questionText || q.question || '').toLowerCase().includes(search) ||
+      (q.questionHindi && q.questionHindi.toLowerCase().includes(search)) ||
+      (q.topic || '').toLowerCase().includes(search)
     );
   }
-  return filtered;
+  return list;
 }
 
 export async function getQuestionById(id: string): Promise<Question | null> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDoc(doc(db, 'questions', id));
-    if (snap.exists) return snap.data() as Question;
-  } catch (err) {
-    console.warn('Firestore getQuestionById note:', err);
-  }
-  return memoryCache.questions.find(q => q.id === id) || null;
+  const snap = await getDoc(doc(db, 'questions', id));
+  return snap.exists ? (snap.data() as Question) : null;
 }
 
 export async function saveQuestion(q: Question): Promise<Question> {
@@ -224,34 +204,18 @@ export async function bulkUpsertQuestions(questionsList: Question[]): Promise<{ 
 
 export async function getAllMockTests(filters?: { category?: string; publishedOnly?: boolean }): Promise<MockTest[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'mockTests'));
-    const items: MockTest[] = [];
-    snap.forEach(d => items.push(d.data() as MockTest));
-    memoryCache.mockTests = items;
-  } catch (err) {
-    console.warn('Firestore getAllMockTests note:', err);
-  }
-
-  let list = [...memoryCache.mockTests];
-  if (filters?.publishedOnly) {
-    list = list.filter(t => t.isPublished !== false);
-  }
-  if (filters?.category && filters.category !== 'ALL') {
-    list = list.filter(t => t.category === filters.category);
-  }
+  const snap = await getDocs(collection(db, 'mockTests'));
+  let list: MockTest[] = [];
+  snap.forEach(d => list.push(d.data() as MockTest));
+  if (filters?.publishedOnly) list = list.filter(t => t.isPublished !== false);
+  if (filters?.category && filters.category !== 'ALL') list = list.filter(t => t.category === filters.category);
   return list;
 }
 
 export async function getMockTestById(id: string): Promise<MockTest | null> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDoc(doc(db, 'mockTests', id));
-    if (snap.exists) return snap.data() as MockTest;
-  } catch (err) {
-    console.warn('Firestore getMockTestById note:', err);
-  }
-  return memoryCache.mockTests.find(t => t.id === id) || null;
+  const snap = await getDoc(doc(db, 'mockTests', id));
+  return snap.exists ? (snap.data() as MockTest) : null;
 }
 
 export async function saveMockTest(t: MockTest): Promise<MockTest> {
@@ -276,19 +240,10 @@ export async function deleteMockTest(id: string): Promise<boolean> {
 
 export async function getAllPypPapers(category?: string): Promise<PreviousYearPaper[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'pypPapers'));
-    const items: PreviousYearPaper[] = [];
-    snap.forEach(d => items.push(d.data() as PreviousYearPaper));
-    memoryCache.pypPapers = items;
-  } catch (err) {
-    console.warn('Firestore getAllPypPapers note:', err);
-  }
-
-  let list = [...memoryCache.pypPapers];
-  if (category) {
-    list = list.filter(p => p.examCategory === category);
-  }
+  const snap = await getDocs(collection(db, 'pypPapers'));
+  let list: PreviousYearPaper[] = [];
+  snap.forEach(d => list.push(d.data() as PreviousYearPaper));
+  if (category) list = list.filter(p => p.examCategory === category);
   return list;
 }
 
@@ -314,31 +269,17 @@ export async function deletePypPaper(id: string): Promise<boolean> {
 
 export async function getAllTestAttempts(userId?: string): Promise<TestAttempt[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'attempts'));
-    const items: TestAttempt[] = [];
-    snap.forEach(d => items.push(d.data() as TestAttempt));
-    memoryCache.attempts = items;
-  } catch (err) {
-    console.warn('Firestore getAllTestAttempts note:', err);
-  }
-
-  let list = [...memoryCache.attempts];
-  if (userId) {
-    list = list.filter(a => a.userId === userId);
-  }
+  const snap = await getDocs(collection(db, 'attempts'));
+  let list: TestAttempt[] = [];
+  snap.forEach(d => list.push(d.data() as TestAttempt));
+  if (userId) list = list.filter(a => a.userId === userId);
   return list;
 }
 
 export async function getTestAttemptById(id: string): Promise<TestAttempt | null> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDoc(doc(db, 'attempts', id));
-    if (snap.exists) return snap.data() as TestAttempt;
-  } catch (err) {
-    console.warn('Firestore getTestAttemptById note:', err);
-  }
-  return memoryCache.attempts.find(a => a.id === id) || null;
+  const snap = await getDoc(doc(db, 'attempts', id));
+  return snap.exists ? (snap.data() as TestAttempt) : null;
 }
 
 export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
@@ -367,15 +308,10 @@ export function getLocalSnapshot(): DatabaseShape {
 
 export async function getAllCmsPages(): Promise<CMSPage[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'pages'));
-    const items: CMSPage[] = [];
-    snap.forEach(d => items.push(d.data() as CMSPage));
-    memoryCmsPages = items;
-  } catch (err) {
-    console.warn('Firestore getAllCmsPages note:', err);
-  }
-  return memoryCmsPages;
+  const snap = await getDocs(collection(db, 'pages'));
+  const items: CMSPage[] = [];
+  snap.forEach(d => items.push(d.data() as CMSPage));
+  return items;
 }
 
 export async function getCmsPageBySlug(slug: string): Promise<CMSPage | null> {
@@ -403,15 +339,10 @@ export async function deleteCmsPage(id: string): Promise<boolean> {
 
 export async function getAllCmsPosts(): Promise<CMSPost[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'posts'));
-    const items: CMSPost[] = [];
-    snap.forEach(d => items.push(d.data() as CMSPost));
-    memoryCmsPosts = items;
-  } catch (err) {
-    console.warn('Firestore getAllCmsPosts note:', err);
-  }
-  return memoryCmsPosts;
+  const snap = await getDocs(collection(db, 'posts'));
+  const items: CMSPost[] = [];
+  snap.forEach(d => items.push(d.data() as CMSPost));
+  return items;
 }
 
 export async function getCmsPostBySlug(slug: string): Promise<CMSPost | null> {
@@ -439,15 +370,10 @@ export async function deleteCmsPost(id: string): Promise<boolean> {
 
 export async function getAllCmsSeriesPacks(): Promise<CMSTestSeriesPack[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'seriesPacks'));
-    const items: CMSTestSeriesPack[] = [];
-    snap.forEach(d => items.push(d.data() as CMSTestSeriesPack));
-    memoryCmsSeries = items;
-  } catch (err) {
-    console.warn('Firestore getAllCmsSeriesPacks note:', err);
-  }
-  return memoryCmsSeries;
+  const snap = await getDocs(collection(db, 'seriesPacks'));
+  const items: CMSTestSeriesPack[] = [];
+  snap.forEach(d => items.push(d.data() as CMSTestSeriesPack));
+  return items;
 }
 
 export async function saveCmsSeriesPack(pack: CMSTestSeriesPack): Promise<CMSTestSeriesPack> {
@@ -470,13 +396,8 @@ export async function deleteCmsSeriesPack(id: string): Promise<boolean> {
 
 export async function getCmsSettings(): Promise<CMSSiteSettings> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDoc(doc(db, 'cmsSettings', 'global'));
-    if (snap.exists) memoryCmsSettings = snap.data() as CMSSiteSettings;
-  } catch (err) {
-    console.warn('Firestore getCmsSettings note:', err);
-  }
-  return memoryCmsSettings;
+  const snap = await getDoc(doc(db, 'cmsSettings', 'global'));
+  return snap.exists ? (snap.data() as CMSSiteSettings) : { ...INITIAL_CMS_SETTINGS };
 }
 
 export async function saveCmsSettings(settings: CMSSiteSettings): Promise<CMSSiteSettings> {
@@ -492,19 +413,11 @@ export async function saveCmsSettings(settings: CMSSiteSettings): Promise<CMSSit
 
 export async function getAllBundles(options?: { publishedOnly?: boolean }): Promise<TestSeriesBundle[]> {
   const db = getFirestoreServer();
-  try {
-    const snap = await getDocs(collection(db, 'bundles'));
-    const items: TestSeriesBundle[] = [];
-    snap.forEach(d => items.push(d.data() as TestSeriesBundle));
-    memoryBundles = items;
-  } catch (err) {
-    console.warn('Firestore getAllBundles note:', err);
-  }
-
-  if (options?.publishedOnly) {
-    return memoryBundles.filter(b => b.isPublished !== false && !b.isDraft);
-  }
-  return memoryBundles;
+  const snap = await getDocs(collection(db, 'bundles'));
+  let list: TestSeriesBundle[] = [];
+  snap.forEach(d => list.push(d.data() as TestSeriesBundle));
+  if (options?.publishedOnly) list = list.filter(b => b.isPublished !== false && !b.isDraft);
+  return list;
 }
 
 export async function getBundleById(id: string): Promise<TestSeriesBundle | undefined> {
