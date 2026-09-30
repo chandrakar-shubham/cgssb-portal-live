@@ -802,20 +802,37 @@ function MainApp() {
       attemptsCount: 0,
       isPublished: newTest.isPublished !== false,
       createdAt: new Date().toISOString(),
+      ...newTest,
     };
     removeDeletedId('cgssb_deleted_tests', fullTest.id);
     setTests(prev => dedupeById([fullTest, ...prev]));
-    saveTestToFirestore(fullTest).catch(() => null);    const token = getAdminToken();
-    newTests.forEach(t => {
-      fetch('/api/tests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(t),
-      }).catch(() => {});
-    });
+    saveTestToFirestore(fullTest).catch(err => console.error('Cloud add test failed:', err));
+  };
+
+  // UNIFIED AI TEST PUBLISH
+  const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
+    removeDeletedId('cgssb_deleted_tests', newTest.id);
+    newQuestions.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
+    setQuestions(prev => dedupeById([...newQuestions, ...prev]));
+    setTests(prev => dedupeById([newTest, ...prev]));
+    saveTestToFirestore(newTest).catch(err => console.error('Cloud AI test publish failed:', err));
+    saveQuestionsToFirestore(newQuestions).catch(err => console.error('Cloud AI question publish failed:', err));
+  };
+
+  // UNIFIED BULK QUESTIONS ADDED
+  const handleBulkQuestionsAdded = (newQs: Question[]) => {
+    if (!newQs || newQs.length === 0) return;
+    newQs.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
+    setQuestions(prev => dedupeById([...newQs, ...prev]));
+    saveQuestionsToFirestore(newQs).catch(err => console.error('Cloud bulk question save failed:', err));
+  };
+
+  // UNIFIED BULK TESTS ADDED
+  const handleBulkTestsAdded = (newTests: MockTest[]) => {
+    if (!newTests || newTests.length === 0) return;
+    newTests.forEach(t => removeDeletedId('cgssb_deleted_tests', t.id));
+    setTests(prev => dedupeById([...newTests, ...prev]));
+    newTests.forEach(t => saveTestToFirestore(t).catch(err => console.error('Cloud bulk test save failed:', err)));
   };
 
   // UNIFIED COMPLETE TEST & QUESTIONS SAVE (Syncs directly to Cloud Firestore & backend)
