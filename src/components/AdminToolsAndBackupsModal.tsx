@@ -61,16 +61,6 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   const [includeSolutionsKey, setIncludeSolutionsKey] = useState(true);
   const [coachingWatermark, setCoachingWatermark] = useState('CGSSB & CGPSC EXAM PREP PORTAL - CHHATTISGARH');
   const [backupSuccessMessage, setBackupSuccessMessage] = useState<string | null>(null);
-  const [isRemoteSyncing, setIsRemoteSyncing] = useState(false);
-
-  const handlePullRemoteContent = async () => {
-    setIsRemoteSyncing(true);
-    try {
-      alert('Remote server sync is disabled in Firebase Spark mode. Import content through the Firebase/JSON ingestion workflow instead.');
-    } finally {
-      setIsRemoteSyncing(false);
-    }
-  };
 
   const storedBundles = useMemo(() => getStoredBundles(), []);
 
