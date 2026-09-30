@@ -303,6 +303,13 @@ export async function savePypPaper(p: PreviousYearPaper): Promise<PreviousYearPa
   return p;
 }
 
+export async function deletePypPaper(id: string): Promise<boolean> {
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'pypPapers', id));
+  memoryCache.pypPapers = memoryCache.pypPapers.filter(p => p.id !== id);
+  return true;
+}
+
 // ----------------- ATTEMPTS COLLECTION REPOSITORY (/attempts) -----------------
 
 export async function getAllTestAttempts(userId?: string): Promise<TestAttempt[]> {
