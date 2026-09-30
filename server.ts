@@ -617,7 +617,12 @@ async function startServer() {
 
   // CORS support for Android clients connecting over network
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:4173').split(',').map(origin => origin.trim()).filter(Boolean);
+    const requestOrigin = req.headers.origin;
+    if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+      res.header('Access-Control-Allow-Origin', requestOrigin);
+      res.header('Vary', 'Origin');
+    }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-admin-key');
     if (req.method === 'OPTIONS') {
@@ -772,7 +777,13 @@ async function startServer() {
   }, 30 * 60 * 1000);
 
   // --- Admin Authentication Security & Token Verification ---
-  const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD || 'cgssb_admin_2026';
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
+  if (!ADMIN_SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL CONFIG ERROR: ADMIN_SECRET must be configured in production.');
+  }
+  if (!ADMIN_SECRET) {
+    console.warn('[Security] ADMIN_SECRET is not configured; admin login is disabled.');
+  }
   const activeAdminTokens = new Set<string>();
 
   function generateAdminToken(): string {
@@ -785,14 +796,13 @@ async function startServer() {
     const authHeader = req.headers.authorization;
     const adminKeyHeader = req.headers['x-admin-key'] as string;
 
-    if (adminKeyHeader && (adminKeyHeader === ADMIN_SECRET || adminKeyHeader === 'admin123' || adminKeyHeader === 'cgssb2024')) {
+    if (adminKeyHeader && ADMIN_SECRET && adminKeyHeader === ADMIN_SECRET) {
       return true;
     }
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.slice(7).trim();
       if (activeAdminTokens.has(token)) return true;
-      if (token === ADMIN_SECRET || token.startsWith('adm_')) return true;
     }
     return false;
   }
@@ -814,8 +824,9 @@ async function startServer() {
     const userStr = String(username || '').trim().toLowerCase();
     const passStr = String(password || '').trim();
 
-    const validUser = userStr === 'admin' || userStr === 'admin@cgssbtest.com' || userStr === 'controller' || userStr === 'coolboy171717@gmail.com';
-    const validPass = passStr === ADMIN_SECRET || passStr === 'admin123' || passStr === 'cgssb2024' || passStr === 'cgssb_admin_2026';
+    const configuredUser = String(process.env.ADMIN_USERNAME || '').trim().toLowerCase();
+    const validUser = Boolean(configuredUser && userStr === configuredUser);
+    const validPass = Boolean(ADMIN_SECRET && passStr === ADMIN_SECRET);
 
     if (validUser && validPass) {
       const token = generateAdminToken();
