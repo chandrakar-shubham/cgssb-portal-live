@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, UserRole, AdminPermissions } from '../types';
-import { getAdminMembers, saveAdminMembers } from '../utils/studentStore';
+import { api } from '../utils/apiClient';
 import {
   ShieldCheck,
   UserPlus,
@@ -22,7 +22,18 @@ import {
 } from 'lucide-react';
 
 export const AdminRoleManagement: React.FC = () => {
-  const [admins, setAdmins] = useState<User[]>(() => getAdminMembers());
+  const [admins, setAdmins] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<User[]>('/api/admin/members', { requireAdmin: true }).then(data => {
+      if (!cancelled) setAdmins(Array.isArray(data) ? data : []);
+    }).catch(error => console.error('Failed to load admin members:', error)).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<User | null>(null);
 
@@ -75,7 +86,7 @@ export const AdminRoleManagement: React.FC = () => {
     }
   };
 
-  const handleCreateAdmin = (e: React.FormEvent) => {
+  const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail.trim()) return;
 
@@ -89,32 +100,30 @@ export const AdminRoleManagement: React.FC = () => {
       adminPermissions: newPermissions,
     };
 
-    const updated = [newAdminMember, ...admins];
-    setAdmins(updated);
-    saveAdminMembers(updated);
+    try {
+      const saved = await api.put<User>(`/api/admin/members/${encodeURIComponent(newAdminMember.id)}`, newAdminMember, { requireAdmin: true });
+      setAdmins(current => [saved, ...current]);
+    } catch (error) { console.error('Failed to create admin:', error); alert('Could not create admin member.'); return; }
     setIsAddModalOpen(false);
     setNewName('');
     setNewEmail('');
   };
 
-  const handleSaveAdminEdit = (e: React.FormEvent) => {
+  const handleSaveAdminEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAdmin) return;
-    const updated = admins.map(a => a.id === editingAdmin.id ? editingAdmin : a);
-    setAdmins(updated);
-    saveAdminMembers(updated);
-    setEditingAdmin(null);
+    try {
+      const saved = await api.put<User>(`/api/admin/members/${encodeURIComponent(editingAdmin.id)}`, editingAdmin, { requireAdmin: true });
+      setAdmins(current => current.map(a => a.id === saved.id ? saved : a));
+      setEditingAdmin(null);
+    } catch (error) { console.error('Failed to save admin:', error); alert('Could not save admin member.'); }
   };
 
-  const handleDeleteAdmin = (adminId: string) => {
-    if (admins.length <= 1) {
-      alert('Cannot delete the last remaining Super Admin.');
-      return;
-    }
+  const handleDeleteAdmin = async (adminId: string) => {
+    if (admins.length <= 1) { alert('Cannot delete the last remaining Super Admin.'); return; }
     if (!confirm('Are you sure you want to revoke admin access for this staff member?')) return;
-    const updated = admins.filter(a => a.id !== adminId);
-    setAdmins(updated);
-    saveAdminMembers(updated);
+    try { await api.delete(`/api/admin/members/${encodeURIComponent(adminId)}`, { requireAdmin: true }); setAdmins(current => current.filter(a => a.id !== adminId)); }
+    catch (error) { console.error('Failed to delete admin:', error); alert('Could not revoke admin access.'); }
   };
 
   return (
@@ -179,6 +188,8 @@ export const AdminRoleManagement: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {loading && <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-xs text-slate-400">Loading live admin roster…</div>}
 
       {/* Admin Roster Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
