@@ -376,11 +376,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const credential = await signInWithEmailAndPassword(auth, identifier, pass);
       const fbUser = credential.user;
 
-      if (!fbUser.emailVerified) {
-        await firebaseSignOut(auth);
-        return { success: false, error: 'Please verify your Firebase Authentication email before entering the admin portal.' };
-      }
-
       const bootstrapAdminUid = 'VOynxZyDOJR4lg2x4va2U3qF5m72';
       let role: UserRole = 'admin';
       let permissions: AdminPermissions = {
