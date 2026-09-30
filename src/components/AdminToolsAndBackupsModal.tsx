@@ -67,34 +67,7 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   const handlePullRemoteContent = async () => {
     setIsRemoteSyncing(true);
     try {
-      const res = await fetch('/api/remote-sync/pull', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'cgssb_admin_2026',
-        },
-        body: JSON.stringify({ remoteUrl: remoteSyncUrl.trim() }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBackupSuccessMessage(data.message || 'Remote sync completed successfully!');
-        const tRes = await fetch('/api/tests').catch(() => null);
-        if (tRes && tRes.ok) {
-          const tData = await tRes.json().catch(() => null);
-          if (tData?.tests && onRestoreSnapshot) {
-            onRestoreSnapshot({
-              tests: tData.tests,
-              questions,
-              pypPapers,
-            });
-          }
-        }
-        setTimeout(() => setBackupSuccessMessage(null), 4000);
-      } else {
-        alert('Sync note: ' + (data.error || 'Failed to pull from remote URL'));
-      }
-    } catch (err: any) {
-      alert('Network or server error during sync: ' + err.message);
+      alert('Remote server sync is disabled in Firebase Spark mode. Import content through the Firebase/JSON ingestion workflow instead.');
     } finally {
       setIsRemoteSyncing(false);
     }
