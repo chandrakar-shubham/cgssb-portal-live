@@ -1410,15 +1410,13 @@ async function startServer() {
         console.warn('Remote pull pyp note:', err.message);
       }
 
-      // 5. Dual-sync from Cloud Firestore Enterprise
+      // 5. Verify live Cloud Firestore counts (no local/remote dual-sync)
       try {
         const fsCounts = await getRepositoryStats();
-        if (fsCounts) {
-          stats.tests = Math.max(stats.tests, fsCounts.syncedTests);
-          stats.questions = Math.max(stats.questions, fsCounts.syncedQuestions);
-        }
+        stats.tests = Math.max(stats.tests, fsCounts.mockTests);
+        stats.questions = Math.max(stats.questions, fsCounts.questions);
       } catch (err: any) {
-        console.warn('Remote Firestore pull note:', err.message);
+        console.warn('Live Firestore verification note:', err.message);
       }
 
       const allBundlesList = await getAllBundles();
