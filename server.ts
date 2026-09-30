@@ -40,8 +40,10 @@ import {
   getAllUsersAdmin,
   saveUserAdmin,
   deleteUserAdmin,
-  getAllCouponsAdmin,,
-  getAllAdminMembers, saveAdminMemberAdmin, deleteAdminMemberAdmin
+  getAllCouponsAdmin,
+  getAllAdminMembers,
+  saveAdminMemberAdmin,
+  deleteAdminMemberAdmin,
   saveCouponAdmin,
   deleteCouponAdmin,
   getAllCmsPages,
