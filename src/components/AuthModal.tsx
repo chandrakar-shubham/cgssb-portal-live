@@ -265,7 +265,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   };
 
   // Email Sign In Submit
-  const handleSignInSubmit = async (e: React.FormEvent) =>
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signInEmail || isEmailValid === false) {
       setErrorMsg('Please enter a valid email address (e.g. name@domain.com).');
