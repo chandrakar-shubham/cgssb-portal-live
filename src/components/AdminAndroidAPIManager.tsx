@@ -57,7 +57,7 @@ export const AdminAndroidAPIManager: React.FC = () => {
     }
   };
 
-  const testEndpoint = async (path: string, method: string = 'GET', body?: any) => {
+  const testEndpoint = async (path: string, method: string = 'GET') => {
     setIsTestingEndpoint(true);
     setActiveEndpointTest(path);
     try {
@@ -333,7 +333,7 @@ class CGSSBFirebaseRepository {
                     </div>
 
                     <button
-                      onClick={() => testEndpoint(ep.path, ep.method, ep.body)}
+                      onClick={() => testEndpoint(ep.path, ep.method)}
                       disabled={isTestingEndpoint}
                       className="px-3 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-xs font-semibold flex items-center space-x-1.5 transition self-start sm:self-auto cursor-pointer"
                     >
