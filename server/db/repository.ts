@@ -608,6 +608,7 @@ export async function redeemPassForUser(userId: string, couponCode: string, plan
     redeemedCoupons: [...ent.redeemedCoupons, code || ('PURCHASE-' + Date.now())],
     updatedAt: new Date().toISOString(),
   };
+  const db = getFirestoreServer();
   await setDoc(doc(db, 'userEntitlements', userId), updated, { merge: true });
   return updated;
 }
