@@ -27,7 +27,7 @@ export function getApiBaseUrl(): string {
 
 export function getAdminToken(): string | null {
   try {
-    const saved = localStorage.getItem('cgssb_admin_session');
+    const saved = sessionStorage.getItem('cgssb_admin_session');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && parsed.token) {
