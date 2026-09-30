@@ -261,6 +261,7 @@ class CGSSBFirebaseRepository {
             </div>
           )}
         </div>
+      </div>
 
       {/* Navigation Sub-Tabs */}
       <div className="flex items-center space-x-2 border-b border-slate-800 pb-2">
