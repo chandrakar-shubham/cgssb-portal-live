@@ -483,7 +483,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <div className="text-[10px] text-slate-400 flex items-center space-x-1 truncate">
               <span>+{test.marksPerQuestion} / -{test.negativeMarksPerQuestion.toFixed(2)}</span>
               <span aria-hidden="true">·</span>
-              <span className="text-slate-300 font-semibold">{test.attemptsCount.toLocaleString()} attempts</span>
+              <span className="text-slate-300 font-semibold">{Number(test.attemptsCount || 0).toLocaleString()} attempts</span>
             </div>
           </div>
 
@@ -636,7 +636,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-col gap-2.5">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span>
-                <span className="text-slate-300 font-semibold">{test.attemptsCount.toLocaleString()}</span> attempted
+                <span className="text-slate-300 font-semibold">{Number(test.attemptsCount || 0).toLocaleString()}</span> attempted
               </span>
 
               {/* ADMIN QUICK ACTIONS ROW */}
