@@ -41,15 +41,28 @@ jobs:
       - name: Write Firebase project configuration
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
         run: |
           test -n "$FIREBASE_PROJECT_ID"
           printf '{"projects":{"default":"%s"}}\n' "$FIREBASE_PROJECT_ID" > .firebaserc
 
-      - name: Deploy Firebase Hosting, Functions and Firestore rules
+      - name: Configure Firebase Functions secret
         env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
         run: |
+          test -n "$FIREBASE_PROJECT_ID"
           test -n "$FIREBASE_TOKEN"
           test -n "$ADMIN_SECRET"
-          firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,functions,firestore:rules --non-interactive
+          printf '%s' "$ADMIN_SECRET" | firebase functions:secrets:set ADMIN_SECRET --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --force
+
+      - name: Deploy Firebase Hosting, Functions and Firestore rules
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          test -n "$FIREBASE_PROJECT_ID"
+          test -n "$FIREBASE_TOKEN"
+          firebase deploy --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --only hosting,functions,firestore:rules --non-interactive
