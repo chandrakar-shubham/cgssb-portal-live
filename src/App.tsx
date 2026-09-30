@@ -335,6 +335,7 @@ function MainApp() {
 
   // Active Exam Session & Review
   const [activeExamTest, setActiveExamTest] = useState<MockTest | null>(null);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<Question[]>([]);
   const [activeAttemptReview, setActiveAttemptReview] = useState<TestAttempt | null>(null);
 
   // Helper to deduplicate objects with an 'id' attribute
@@ -348,6 +349,85 @@ function MainApp() {
       }
     }
     return result;
+  }
+
+  // Resolve the complete question set for a test.
+  // Some legacy test documents contain stale/incomplete section.questionIds even
+  // though questionCount and the actual question bank contain the full paper.
+  function resolveQuestionsForTest(test: MockTest, source: Question[]): Question[] {
+    const expected = Math.max(0, Number(test.questionCount || 0));
+    const ids = Array.isArray(test.sections)
+      ? test.sections.flatMap(section => Array.isArray(section.questionIds) ? section.questionIds : [])
+      : [];
+
+    const selectedIds = new Set<string>();
+    const selected: Question[] = [];
+    const add = (q: Question) => {
+      if (q?.id && !selectedIds.has(q.id)) {
+        selectedIds.add(q.id);
+        selected.push(q);
+      }
+    };
+
+    ids.forEach(id => {
+      const q = source.find(item => item.id === id);
+      if (q) add(q);
+    });
+
+    if (expected > selected.length) {
+      const examName = String(test.examName || '').trim().toLowerCase();
+      const authority = String(test.authority || '').trim().toLowerCase();
+      const category = String(test.category || '').trim().toLowerCase();
+
+      const exactExam = examName
+        ? source.filter(q => String(q.examName || '').trim().toLowerCase() === examName)
+        : [];
+      exactExam.forEach(add);
+
+      if (expected > selected.length) {
+        source
+          .filter(q => {
+            if (selectedIds.has(q.id)) return false;
+            const qAuthority = String(q.authority || '').trim().toLowerCase();
+            const qCategory = String(q.category || '').trim().toLowerCase();
+            return (authority && qAuthority === authority) || (category && qCategory === category);
+          })
+          .forEach(add);
+      }
+    }
+
+    if (expected > selected.length) {
+      source.forEach(add);
+    }
+
+    return expected > 0 ? selected.slice(0, expected) : selected;
+  }
+
+  function buildExamTest(test: MockTest, examQuestions: Question[]): MockTest {
+    const expected = Math.max(0, Number(test.questionCount || examQuestions.length));
+    const existingIds = new Set(
+      (test.sections || []).flatMap(section => section.questionIds || [])
+    );
+    const missingIds = examQuestions
+      .map(q => q.id)
+      .filter(id => !existingIds.has(id));
+
+    if (missingIds.length === 0) {
+      return { ...test, questionCount: expected || examQuestions.length };
+    }
+
+    return {
+      ...test,
+      questionCount: expected || examQuestions.length,
+      sections: [
+        ...(test.sections || []),
+        {
+          id: 'sec-' + test.id + '-additional',
+          name: 'Additional Questions',
+          questionIds: missingIds,
+        },
+      ],
+    };
   }
 
   // Helper to get deleted IDs set from localStorage
@@ -578,12 +658,21 @@ function MainApp() {
 
   const handleConfirmStartExam = (chosenLanguage: 'hi' | 'en') => {
     if (!preFlightTest) return;
+
+    const examQuestions = resolveQuestionsForTest(preFlightTest, questions);
+    if (examQuestions.length === 0) {
+      alert('This test has no available questions yet. Please try again after the question bank finishes loading.');
+      return;
+    }
+
     if (user?.role === 'student') {
       deductCredits(10);
     }
-    // Pre-load and cache test bundle onto student device storage for 100% offline execution
-    cacheTestBundleForDevice(preFlightTest, questions);
-    setActiveExamTest(preFlightTest);
+
+    const examTest = buildExamTest(preFlightTest, examQuestions);
+    cacheTestBundleForDevice(examTest, examQuestions);
+    setActiveExamQuestions(examQuestions);
+    setActiveExamTest(examTest);
     setPreFlightTest(null);
   };
 
@@ -1096,16 +1185,18 @@ function MainApp() {
   // VIEW 1: ACTIVE FULLSCREEN EXAM SESSION
   // =========================================================================
   if (activeExamTest) {
-    const examQuestions = questions.filter(q =>
-      activeExamTest.sections.some(s => s.questionIds.includes(q.id))
-    );
-    const resolvedQuestions = examQuestions.length > 0 ? examQuestions : questions;
+    const resolvedQuestions = activeExamQuestions.length > 0
+      ? activeExamQuestions
+      : resolveQuestionsForTest(activeExamTest, questions);
 
     return (
       <ExamEngine
         test={activeExamTest}
         questions={resolvedQuestions}
-        onExit={() => setActiveExamTest(null)}
+        onExit={() => {
+          setActiveExamTest(null);
+          setActiveExamQuestions([]);
+        }}
         onSubmit={handleSubmitTest}
       />
     );
@@ -1142,6 +1233,7 @@ function MainApp() {
             onReattempt={() => {
               const test = tests.find(t => t.id === activeAttemptReview.testId);
               if (test) {
+                setActiveAttemptReview(null);
                 handleStartTest(test);
               }
             }}
