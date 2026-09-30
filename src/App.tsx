@@ -71,7 +71,7 @@ import {
   CMSTestSeriesPack,
   CMSSiteSettings
 } from './types/cms';
-import { api } from './utils/apiClient';
+import { getAdminToken, api } from './utils/apiClient';
 import {
   cacheTestBundleForDevice,
   clearCachedTestBundle,
@@ -503,7 +503,6 @@ function MainApp() {
 
         if (Array.isArray(firestorePyp)) {
           setPypPapers(firestorePyp);
-        } else if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
           const p = await pypRes.json();
           const list = Array.isArray(p) ? p : (p?.papers || []);
           setPypPapers(list);
