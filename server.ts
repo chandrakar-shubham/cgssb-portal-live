@@ -2721,7 +2721,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
   app.post('/api/current-affairs/monthly/:yearMonth/sections/:sectionId', requireAdmin, async (req, res) => {
     try {
       const { yearMonth, sectionId } = req.params;
-      if (!/^\\d{4}-\\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
+      if (!/^\d{4}-\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
         return res.status(400).json({ success: false, error: 'Invalid monthly section identifier' });
       }
       const { getFirestoreServer } = await import('./server/db/connection.ts');
