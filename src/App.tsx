@@ -71,7 +71,7 @@ import {
   CMSTestSeriesPack,
   CMSSiteSettings
 } from './types/cms';
-import { getAdminToken, api } from './utils/apiClient';
+import { api } from './utils/apiClient';
 import {
   cacheTestBundleForDevice,
   clearCachedTestBundle,
