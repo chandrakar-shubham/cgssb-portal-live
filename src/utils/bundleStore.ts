@@ -258,9 +258,7 @@ export const cleanTestFromAllBundles = (testId: string): TestSeriesBundle[] => {
 
   if (modified) {
     saveStoredBundles(updated);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: updated }));
-    }
+    for (const bundle of updated) saveBundleToFirestore(bundle).catch(() => {});
   }
   return updated;
 };
@@ -426,7 +424,7 @@ export const convertMockTestToBundleItem = (test: MockTest, isFree?: boolean): B
 
 export const reconcileAllTestsWithBundles = (tests: MockTest[], bundles?: TestSeriesBundle[]): TestSeriesBundle[] => {
   const targetBundles = bundles || getStoredBundles();
-  if (!Array.isArray(targetBundles) || targetBundles.length === 0) return OFFICIAL_BUNDLES_CATALOG;
+  if (!Array.isArray(targetBundles) || targetBundles.length === 0) return [];
   if (!Array.isArray(tests) || tests.length === 0) return targetBundles;
 
   return targetBundles.map(bundle => {
@@ -485,5 +483,7 @@ export const cascadeBundlePublishStatus = (bundleId: string, isPublished: boolea
 
   const updated = bundles.map(b => (b.id === bundleId ? { ...b, isPublished, isDraft: !isPublished } : b));
   saveStoredBundles(updated);
+  const updatedBundle = updated.find(b => b.id === bundleId);
+  if (updatedBundle) saveBundleToFirestore(updatedBundle).catch(() => {});
   return { affectedTestIds };
 };
