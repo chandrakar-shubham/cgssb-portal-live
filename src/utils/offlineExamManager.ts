@@ -8,6 +8,7 @@
  */
 
 import { MockTest, Question, QuestionPaletteStatus, TestAttempt } from '../types';
+import { api } from './apiClient';
 
 export interface PendingSubmission {
   id: string;
@@ -137,20 +138,17 @@ export async function syncPendingSubmissions(
 
   for (const item of queue) {
     try {
-      const response = await fetch(`/api/tests/${item.testId}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: item.userId,
-          userName: item.userName,
+      const data = await api.post<any>(
+        `/api/tests/${item.testId}/submit`,
+        {
           timeTakenSeconds: item.timeTakenSeconds,
           responses: item.responses,
           questionStatuses: item.questionStatuses,
-        }),
-      });
+        },
+        { requireAuth: true }
+      );
 
-      if (response.ok) {
-        const data = await response.json();
+      if (data) {
         if (data.success && data.attempt) {
           removePendingSubmission(item.id);
           clearCachedTestBundle(item.testId);
