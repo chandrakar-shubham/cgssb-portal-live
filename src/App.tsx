@@ -721,7 +721,7 @@ function MainApp() {
 
     activeQuestionList.forEach(q => {
       const resp = submission.responses[q.id];
-      const cleanSubj = normalizeSubjectName(q.subject, \${q.questionHindi || ''} \${q.questionText || ''});
+      const cleanSubj = normalizeSubjectName(q.subject, `${q.questionHindi || ''} ${q.questionText || ''}`);
       if (!subjectMap[cleanSubj]) subjectMap[cleanSubj] = { total: 0, correct: 0, incorrect: 0, unattempted: 0 };
       subjectMap[cleanSubj].total += 1;
       if (resp == null) {
