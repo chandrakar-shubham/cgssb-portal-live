@@ -40,7 +40,8 @@ import {
   getAllUsersAdmin,
   saveUserAdmin,
   deleteUserAdmin,
-  getAllCouponsAdmin,
+  getAllCouponsAdmin,,
+  getAllAdminMembers, saveAdminMemberAdmin, deleteAdminMemberAdmin
   saveCouponAdmin,
   deleteCouponAdmin,
   getAllCmsPages,
@@ -2623,6 +2624,23 @@ Respond strictly with a JSON object having key "questions" containing an array o
     try { await deleteUserAdmin(req.params.id); res.json({ success: true }); }
     catch { res.status(500).json({ error: 'Failed to delete student' }); }
   });
+
+app.get('/api/admin/members', requireAdmin, async (_req, res) => {
+  try { res.json(await getAllAdminMembers()); }
+  catch (error) { console.error('Admin members fetch failed:', error); res.status(500).json({ error: 'Failed to fetch admin members' }); }
+});
+
+app.put('/api/admin/members/:id', requireAdmin, async (req, res) => {
+  try {
+    const saved = await saveAdminMemberAdmin({ ...(req.body as User), id: req.params.id });
+    res.json(saved);
+  } catch (error) { console.error('Admin member save failed:', error); res.status(500).json({ error: 'Failed to save admin member' }); }
+});
+
+app.delete('/api/admin/members/:id', requireAdmin, async (req, res) => {
+  try { await deleteAdminMemberAdmin(req.params.id); res.json({ success: true }); }
+  catch (error) { console.error('Admin member delete failed:', error); res.status(500).json({ error: 'Failed to delete admin member' }); }
+});
 
   app.get('/api/admin/coupons', requireAdmin, async (_req, res) => {
     try { res.json(await getAllCouponsAdmin()); }
