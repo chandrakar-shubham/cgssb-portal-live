@@ -4,7 +4,7 @@ import { api } from './apiClient';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { subscribeToSliderBanners } from '../firebase/firestoreService';
 
-const SLIDER_STORAGE_KEY = 'cgtest_slider_banners_v1';
+let sliderCache: SliderBanner[] = [];
 
 // Auto-subscribe to Firestore real-time banner updates across devices
 if (typeof window !== 'undefined') {
@@ -12,7 +12,7 @@ if (typeof window !== 'undefined') {
     subscribeToSliderBanners((remoteBanners) => {
       if (Array.isArray(remoteBanners) && remoteBanners.length > 0) {
         const sorted = remoteBanners.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-        localStorage.setItem(SLIDER_STORAGE_KEY, JSON.stringify(sorted));
+        sliderCache = [...sorted];
         window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
       }
     });
@@ -209,42 +209,22 @@ export const DEFAULT_SLIDER_BANNERS: SliderBanner[] = [
 ];
 
 /**
- * Retrieve current slider banners from local cache or defaults, sorted by displayOrder
+ * Retrieve the current slider banners from the in-memory Firestore snapshot.
+ * Firestore is authoritative; an empty collection is a valid production state.
  */
 export function getStoredSliderBanners(): SliderBanner[] {
-  if (typeof window === 'undefined') return DEFAULT_SLIDER_BANNERS;
-  try {
-    const raw = localStorage.getItem(SLIDER_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return [...parsed].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      }
-    }
-  } catch (err) {
-    console.warn('[SliderStore] Error reading local slider cache:', err);
-  }
-  return DEFAULT_SLIDER_BANNERS;
+  return [...sliderCache].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
 }
 
 /**
- * Persist slider banners to local cache, broadcast update event, and sync to Firestore
+ * Update the local UI cache only. Persistence is performed through the authenticated API.
  */
 export function saveSliderBanners(banners: SliderBanner[]): void {
   const sorted = [...banners].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  sliderCache = sorted;
   if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem(SLIDER_STORAGE_KEY, JSON.stringify(sorted));
-      window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
-    } catch (err) {
-      console.warn('[SliderStore] Error persisting slider cache:', err);
-    }
+    window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
   }
-
-  // Asynchronously sync to Firestore
-  syncBannersToFirestore(sorted).catch(err => {
-    console.warn('[SliderStore] Background Firestore sync failed:', err);
-  });
 }
 
 /**
@@ -261,34 +241,23 @@ async function syncBannersToFirestore(banners: SliderBanner[]): Promise<void> {
 }
 
 /**
- * Fetch remote slider banners from Firestore, merge with local cache
+ * Fetch the authoritative slider banner collection from Firestore.
  */
 export async function syncSliderFromFirestore(): Promise<SliderBanner[]> {
-  if (!db) return getStoredSliderBanners();
+  if (!db) return [];
   try {
-    const colRef = collection(db, 'slider_banners');
-    const snap = await getDocs(colRef);
-    if (!snap.empty) {
-      const remoteBanners: SliderBanner[] = [];
-      snap.forEach(d => {
-        remoteBanners.push(d.data() as SliderBanner);
-      });
-      if (remoteBanners.length > 0) {
-        const sorted = remoteBanners.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(SLIDER_STORAGE_KEY, JSON.stringify(sorted));
-          window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
-        }
-        return sorted;
-      }
-    } else {
-      // First-time seeding into Firestore
-      await syncBannersToFirestore(DEFAULT_SLIDER_BANNERS);
+    const snap = await getDocs(collection(db, 'slider_banners'));
+    const remoteBanners: SliderBanner[] = [];
+    snap.forEach(d => remoteBanners.push(d.data() as SliderBanner));
+    sliderCache = remoteBanners.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sliderCache }));
     }
+    return [...sliderCache];
   } catch (err) {
     console.warn('[SliderStore] Failed to read from Firestore:', err);
+    return [];
   }
-  return getStoredSliderBanners();
 }
 
 /**
