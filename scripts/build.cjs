@@ -53,7 +53,19 @@ async function runBuild() {
   fs.mkdirSync('functions', { recursive: true });
   fs.copyFileSync('dist/server.cjs', 'functions/server.cjs');
 
-  // 3. Generate version.json inside dist/
+  // 3. Compile Firebase Functions API wrapper.
+  console.log('☁️ Compiling Firebase Functions API wrapper...');
+  await esbuild.build({
+    entryPoints: ['firebaseFunctions.ts'],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    packages: 'external',
+    sourcemap: true,
+    outfile: 'dist/firebase-functions.cjs'
+  });
+
+  // 4. Generate version.json inside dist/
   const versionInfo = {
     version: '2.5.2',
     buildId: uniqueBuildTag,
