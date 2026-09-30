@@ -66,7 +66,6 @@ import {
   resetAppRemoteConfig,
   purgeServerDemoData,
   restoreServerDemoData,
-  isServerDemoDataPurged,
 } from './server/db/repository.ts';
 import {
   getAllCaTopics,
@@ -2722,9 +2721,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
       invalidateCacheTags('tests', 'bundles', 'questions', 'pyp', 'sync', 'leaderboard');
       res.json({
         success: true,
-        message: 'Master factory demo datasets restored.',
+        message: 'Database restore operation checked live Firestore; no demo data is recreated.',
         counts,
-        demoDataPurged: false,
+        demoDataPurged: counts.questions === 0 && counts.mockTests === 0 && counts.pypPapers === 0 && counts.bundles === 0,
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
@@ -2736,7 +2735,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
       const counts = await getDatabaseCounts();
       res.json({
         success: true,
-        demoDataPurged: isServerDemoDataPurged(),
+        demoDataPurged: counts.questions === 0 && counts.mockTests === 0 && counts.pypPapers === 0 && counts.bundles === 0,
         counts,
       });
     } catch (err: any) {
