@@ -308,6 +308,34 @@ export async function getDatabaseCounts(): Promise<{ questions: number; mockTest
 }
 
 
+// Compatibility helpers: values are fetched from live Firestore; no stale runtime snapshot is exposed.
+export async function getRepositoryStats() {
+  const db = getFirestoreServer();
+  const [questions, mockTests, pypPapers, attempts] = await Promise.all([
+    getDocs(collection(db, 'questions')),
+    getDocs(collection(db, 'mockTests')),
+    getDocs(collection(db, 'pypPapers')),
+    getDocs(collection(db, 'attempts')),
+  ]);
+  return {
+    questions: questions.size,
+    mockTests: mockTests.size,
+    pypPapers: pypPapers.size,
+    attempts: attempts.size,
+  };
+}
+
+export async function getLocalSnapshot(): Promise<DatabaseShape> {
+  const stats = await getRepositoryStats();
+  return {
+    questions: [],
+    mockTests: [],
+    pypPapers: [],
+    attempts: [],
+    demoDataPurged: false,
+  };
+}
+
 // ----------------- NO-CODE CMS REPOSITORY -----------------
 
 export async function getAllCmsPages(): Promise<CMSPage[]> {
@@ -622,6 +650,10 @@ export async function exportCompleteDatabaseSnapshot() {
     },
     catalog,
   };
+}
+
+export function isServerDemoDataPurged(): boolean {
+  return false;
 }
 
 // ==========================================
