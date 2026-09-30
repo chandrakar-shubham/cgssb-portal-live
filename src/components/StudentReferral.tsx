@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, 
   Gift, 
@@ -34,11 +34,28 @@ export const StudentReferral: React.FC<StudentReferralProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [inputCode, setInputCode] = useState('');
+  const [referralHistory, setReferralHistory] = useState<any[]>([]);
   const [claimStatus, setClaimStatus] = useState<{
     loading: boolean;
     success?: boolean;
     message?: string;
   }>({ loading: false });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) {
+      setReferralHistory([]);
+      return;
+    }
+    getReferralRecords()
+      .then(records => {
+        if (!cancelled) setReferralHistory(records);
+      })
+      .catch(() => {
+        if (!cancelled) setReferralHistory([]);
+      });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // Compute Referral Link
   const inviteUrl = useMemo(() => {
@@ -116,24 +133,35 @@ export const StudentReferral: React.FC<StudentReferralProps> = ({
     if (!inputCode.trim()) return;
 
     setClaimStatus({ loading: true });
-    setTimeout(() => {
-      const result = applyReferralCode(inputCode.trim());
-      setClaimStatus({
-        loading: false,
-        success: result.success,
-        message: result.message,
+    applyReferralCode(inputCode.trim())
+      .then(result => {
+        setClaimStatus({
+          loading: false,
+          success: result.success,
+          message: result.message,
+        });
+        if (result.success) {
+          setInputCode('');
+          return getReferralRecords();
+        }
+        return null;
+      })
+      .then(records => {
+        if (records) setReferralHistory(records);
+      })
+      .catch(error => {
+        setClaimStatus({
+          loading: false,
+          success: false,
+          message: error?.message || 'Could not process the referral code.',
+        });
       });
-      if (result.success) {
-        setInputCode('');
-      }
-    }, 400);
   };
 
   // Filter referral history for this user
   const userReferralHistory = useMemo(() => {
     if (!user) return [];
-    const allRecords = getReferralRecords();
-    return allRecords.filter(r => r.referrerId === user.id || r.referrerCode === userReferralCode || r.refereeId === user.id);
+    return referralHistory.filter(r => r.referrerId === user.id || r.referrerCode === userReferralCode || r.refereeId === user.id);
   }, [user, userReferralCode]);
 
   const daysLeft = user?.passExpiresAt ? calculateDaysRemaining(user.passExpiresAt) : 0;
