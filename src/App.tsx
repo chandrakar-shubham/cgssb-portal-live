@@ -722,20 +722,7 @@ function MainApp() {
     if (!activeExamTest) return;
 
     const currentTest = activeExamTest;
-    let testQs = questions.filter(q => {
-      return currentTest.sections && currentTest.sections.some(s => s.questionIds && s.questionIds.includes(q.id));
-    });
-
-    if (testQs.length === 0) {
-      testQs = questions.filter(q => 
-        q.category === currentTest.category || 
-        (currentTest.title && q.examName && q.examName.toLowerCase().includes('english') && currentTest.title.toLowerCase().includes('english')) ||
-        (currentTest.title && q.subject && q.subject.toLowerCase().includes('english') && currentTest.title.toLowerCase().includes('english'))
-      );
-    }
-    if (testQs.length === 0) {
-      testQs = questions.slice(0, currentTest.questionCount || 100);
-    }
+    const testQs = resolveQuestionsForTest(currentTest, questions);
 
     const activeQuestionList = testQs;
 
