@@ -10,6 +10,7 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db, auth } from './config';
+import { signInAnonymously } from 'firebase/auth';
 import { api } from '../utils/apiClient';
 import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG } from '../types';
 import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
@@ -119,6 +120,9 @@ export async function syncUserProfileToFirestore(user: User): Promise<void> {
       if (value !== undefined) out[field] = value;
       return out;
     }, {});
+    if (!auth.currentUser) {
+      try { await signInAnonymously(auth); } catch { return; }
+    }
     const authUserId = auth.currentUser?.uid;
     if (!authUserId) return;
     const userDocRef = doc(db, COLLECTIONS.USERS, authUserId);
