@@ -3245,10 +3245,3 @@ Ensure all URLs are real official URLs (e.g. jansampark.cg.gov.in, pib.gov.in, f
   }
   return app;
 }
-
-if (!process.env.FIREBASE_FUNCTIONS) {
-  startServer().catch(err => {
-    console.error('❌ CGSSB server startup failed:', err);
-    process.exit(1);
-  });
-}
