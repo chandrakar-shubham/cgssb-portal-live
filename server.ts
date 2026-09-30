@@ -29,6 +29,7 @@ import {
   deleteMockTest,
   getAllPypPapers,
   savePypPaper,
+  deletePypPaper,
   getAllTestAttempts,
   getTestAttemptById,
   saveTestAttempt,
