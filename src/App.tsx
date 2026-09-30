@@ -493,14 +493,6 @@ function MainApp() {
           fetchPypPapersFromFirestore().catch(() => [])
         ]);
 
-        // Load only this authenticated student's real attempts. Never seed demo attempts.
-        if (user && !user.isAnonymous) {
-          const attemptData = await api.get('/api/user/attempts', { requireAuth: true }).catch(() => null);
-          if (attemptData && Array.isArray(attemptData.attempts)) {
-            setAttempts(attemptData.attempts);
-          }
-        }
-
         if (Array.isArray(firestoreTests)) {
           setTests(firestoreTests);
         }
@@ -520,6 +512,31 @@ function MainApp() {
       }
     }
     loadData();
+
+    // Hydrate only the current authenticated student's real attempts.
+    // This reacts to auth changes because the initial app mount may be unauthenticated.
+    useEffect(() => {
+      let cancelled = false;
+
+      if (!user || user.isAnonymous) {
+        setAttempts([]);
+        return;
+      }
+
+      api.get('/api/user/attempts', { requireAuth: true })
+        .then(data => {
+          if (!cancelled && data && Array.isArray(data.attempts)) {
+            setAttempts(data.attempts);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setAttempts([]);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [user?.uid]);
 
     // Initialize Auto-Sync for queued on-device exam attempts when internet reconnects
     const unsubscribe = initOfflineAutoSync((syncedAttempt, solutions) => {
