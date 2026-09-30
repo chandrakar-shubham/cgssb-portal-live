@@ -20,6 +20,8 @@ import {
   Layers,
   FileText
 } from 'lucide-react';
+import { collection, getDoc, getDocs, doc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export const AdminAndroidAPIManager: React.FC = () => {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
@@ -30,9 +32,8 @@ export const AdminAndroidAPIManager: React.FC = () => {
   const [isTestingEndpoint, setIsTestingEndpoint] = useState(false);
   const [activeTab, setActiveTab] = useState<'endpoints' | 'kotlin' | 'offline-sync'>('endpoints');
 
-  const currentHost = window.location.origin;
-  const liveProductionUrl = 'https://darkorange-chimpanzee-661223.hostingersite.com';
-  const apiBaseUrl = `${currentHost}/api`;
+  const firebaseProject = 'ai-studio-cgssbtest';
+  const firebasePlatform = 'Firebase Authentication + Cloud Firestore';
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -44,32 +45,52 @@ export const AdminAndroidAPIManager: React.FC = () => {
     setPingStatus('testing');
     const start = performance.now();
     try {
-      const res = await fetch('/api/health');
-      const end = performance.now();
-      if (res.ok) {
-        setPingStatus('success');
-        setPingLatency(Math.round(end - start));
-      } else {
-        setPingStatus('failed');
-      }
+      await Promise.all([
+        getDocs(collection(db, 'mockTests')),
+        getDocs(collection(db, 'questions')),
+        getDocs(collection(db, 'pypPapers')),
+      ]);
+      setPingStatus('success');
+      setPingLatency(Math.round(performance.now() - start));
     } catch {
       setPingStatus('failed');
     }
   };
 
-  const testEndpoint = async (url: string, method: string = 'GET', body?: any) => {
+  const testEndpoint = async (path: string, method: string = 'GET', body?: any) => {
     setIsTestingEndpoint(true);
-    setActiveEndpointTest(url);
+    setActiveEndpointTest(path);
     try {
-      const res = await fetch(url, {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      const data = await res.json();
-      setTestResponseData({ status: res.status, ok: res.ok, data });
+      const started = performance.now();
+      if (method !== 'GET') {
+        setTestResponseData({
+          status: 'Firebase-native',
+          ok: true,
+          data: { message: 'Write operations are executed through Firebase Auth + Firestore SDKs. Android should use Firebase SDK authentication and Firestore writes rather than a REST server.' }
+        });
+      } else if (path === '/firebase/health') {
+        await Promise.all([getDocs(collection(db, 'mockTests')), getDocs(collection(db, 'questions'))]);
+        setTestResponseData({ status: 'OK', ok: true, data: { platform: 'Firebase Spark', latencyMs: Math.round(performance.now() - started) } });
+      } else if (path === '/firebase/tests') {
+        const snap = await getDocs(collection(db, 'mockTests'));
+        setTestResponseData({ status: 'OK', ok: true, data: { count: snap.size, collection: 'mockTests' } });
+      } else if (path.startsWith('/firebase/tests/')) {
+        const id = path.split('/').pop() || '';
+        const snap = await getDoc(doc(db, 'mockTests', id));
+        setTestResponseData({ status: snap.exists() ? 'OK' : 'NOT_FOUND', ok: snap.exists(), data: snap.exists() ? snap.data() : { error: 'Test not found' } });
+      } else if (path === '/firebase/pyp') {
+        const snap = await getDocs(collection(db, 'pypPapers'));
+        setTestResponseData({ status: 'OK', ok: true, data: { count: snap.size, collection: 'pypPapers' } });
+      } else if (path === '/firebase/android-sync') {
+        const [tests, questions, pyp] = await Promise.all([
+          getDocs(collection(db, 'mockTests')),
+          getDocs(collection(db, 'questions')),
+          getDocs(collection(db, 'pypPapers')),
+        ]);
+        setTestResponseData({ status: 'OK', ok: true, data: { platform: 'Firebase Spark', tests: tests.size, questions: questions.size, pypPapers: pyp.size } });
+      }
     } catch (err: any) {
-      setTestResponseData({ status: 'Error', ok: false, data: { error: err.message } });
+      setTestResponseData({ status: 'Error', ok: false, data: { error: err?.message || 'Firebase operation failed' } });
     } finally {
       setIsTestingEndpoint(false);
     }
@@ -77,44 +98,54 @@ export const AdminAndroidAPIManager: React.FC = () => {
 
   const downloadOfflineSyncJson = async () => {
     try {
-      const res = await fetch('/api/android/sync');
-      const data = await res.json();
+      const [tests, questions, pyp] = await Promise.all([
+        getDocs(collection(db, 'mockTests')),
+        getDocs(collection(db, 'questions')),
+        getDocs(collection(db, 'pypPapers')),
+      ]);
+      const data = {
+        platform: 'Firebase Spark',
+        generatedAt: new Date().toISOString(),
+        mockTests: tests.docs.map(d => d.data()),
+        questions: questions.docs.map(d => d.data()),
+        pypPapers: pyp.docs.map(d => d.data()),
+      };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `cgssb_android_offline_seed_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `cgssb_android_firebase_seed_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert('Failed to download sync payload: ' + err);
+      alert('Failed to download Firebase sync payload: ' + err);
     }
   };
 
   const endpointsList = [
     {
       method: 'GET',
-      path: '/api/health',
+      path: '/firebase/health',
       title: 'Server Health & Android Compatibility',
       desc: 'Checks backend runtime, API version, and supported Android SDK levels (Min 24, Target 34).',
     },
     {
       method: 'GET',
-      path: '/api/tests',
+      path: '/firebase/tests',
       title: 'Mock Tests Catalog',
       desc: 'Returns all published mock tests with sections, marks, negative marking, and question counts.',
     },
     {
       method: 'GET',
-      path: '/api/tests/test-cgssb-01',
+      path: '/firebase/tests/test-cgssb-01',
       title: 'Test Details & Question Paper',
       desc: 'Returns a complete test package with questions, options, and section mappings.',
     },
     {
       method: 'POST',
-      path: '/api/tests/test-cgssb-01/submit',
+      path: '/firebase/tests/test-cgssb-01/submit',
       title: 'Submit Candidate Exam Attempt',
       desc: 'Calculates instant score, negative marking deduction, candidate accuracy & percentile rank.',
       body: {
@@ -125,51 +156,31 @@ export const AdminAndroidAPIManager: React.FC = () => {
     },
     {
       method: 'GET',
-      path: '/api/pyp',
+      path: '/firebase/pyp',
       title: 'Previous Year Papers Archive',
       desc: 'Lists authentic solved papers with weightage trends and official PDF downloads.',
     },
     {
       method: 'GET',
-      path: '/api/android/sync',
+      path: '/firebase/android-sync',
       title: 'Full Offline Synchronization Payload',
       desc: 'Dumps all categories, questions, papers, and mock tests to seed Android Room / SQLite DB.',
     },
   ];
 
-  const retrofitCode = `package com.cgtest.app.network
+  const retrofitCode = `package com.cgtest.app.firebase
 
-import retrofit2.Response
-import retrofit2.http.*
+import com.google.firebase.firestore.FirebaseFirestore
 
-interface CGSSBApiService {
+class CGSSBFirebaseRepository {
+    private val db = FirebaseFirestore.getInstance()
 
-    // 1. Check Server Status
-    @GET("api/health")
-    suspend fun getHealth(): Response<HealthResponse>
-
-    // 2. Fetch Mock Test Catalog (Filtered by Category)
-    @GET("api/tests")
-    suspend fun getMockTests(@Query("category") category: String? = null): Response<TestsResponse>
-
-    // 3. Complete Test with Questions for Offline Practice
-    @GET("api/tests/{id}")
-    suspend fun getTestDetails(@Path("id") testId: String): Response<TestDetailResponse>
-
-    // 4. Submit Candidate Responses & Negative Marking Scoring
-    @POST("api/tests/{id}/submit")
-    suspend fun submitTest(
-        @Path("id") testId: String,
-        @Body submission: TestSubmissionDto
-    ): Response<TestAttemptResultDto>
-
-    // 5. Previous Year Papers (PYP) Repository
-    @GET("api/pyp")
-    suspend fun getPreviousYearPapers(@Query("category") category: String? = null): Response<PypResponse>
-
-    // 6. Full Offline Mobile DB Synchronization (Room DB / SQLite)
-    @GET("api/android/sync")
-    suspend fun syncAllMobileData(): Response<AndroidSyncPayload>
+    fun getMockTests() = db.collection("mockTests")
+    fun getQuestions() = db.collection("questions")
+    fun getPreviousYearPapers() = db.collection("pypPapers")
+    fun getTest(testId: String) = db.collection("mockTests").document(testId)
+    // Authenticate with Firebase Auth before student-specific writes.
+    // Store offline copies in Room for offline practice.
 }`;
 
   return (
