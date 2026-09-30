@@ -212,7 +212,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   // For students: deduplicate automatically and hide drafts
   // For admins: deduplicate or show all tests with draft/published controls
   const processedTests = useMemo(() => {
-    return deduplicateAndConsolidateTests(tests);
+    return deduplicateAndConsolidateTests(tests).map(test => {
+      const sectionCount = Array.isArray(test.sections)
+        ? test.sections.reduce((sum, section) => sum + (Array.isArray(section.questionIds) ? section.questionIds.length : 0), 0)
+        : 0;
+      return sectionCount > 0 && sectionCount !== test.questionCount
+        ? { ...test, questionCount: sectionCount }
+        : test;
+    });
   }, [tests]);
 
   // Statistics for Segment Tabs
@@ -510,7 +517,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
             )}
-            {test.isPro && !user?.hasProPass && !isAdmin ? (
+            {test.isPro && !isUserPassActive(user) && !isAdmin ? (
               <button
                 type="button"
                 onClick={() => onExplorePass ? onExplorePass() : onStartTest(test)}
