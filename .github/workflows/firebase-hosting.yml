@@ -24,6 +24,8 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Build Production Bundle
+        env:
+          VITE_API_URL: https://api.cgtest.in
         run: npm run build
 
       - name: Deploy to Firebase Hosting & Rules
