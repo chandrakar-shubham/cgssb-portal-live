@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleAuthProvider } from '../firebase/config';
 import { api } from '../utils/apiClient';
+import { initializeBookmarks, clearBookmarkCache } from '../utils/bookmarkStorage';
 import { 
   generateReferralCode, 
   getPendingReferralCode, 
@@ -113,6 +114,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (user) {
       syncUserProfileToFirestore(user).catch(() => null);
+      initializeBookmarks(user.id).catch(() => null);
+    } else {
+      clearBookmarkCache();
     }
   }, [user]);
 
