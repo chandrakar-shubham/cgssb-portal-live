@@ -4,7 +4,7 @@
 
 An enterprise-grade, high-concurrency Mock Test, Question Bank & Official Previous Year Paper (PYP) platform designed for **CGSSB (Chhattisgarh State Staff Selection Board / Vyapam)** and **CGPSC (Chhattisgarh Public Service Commission)** examinations.
 
-The platform is engineered to support **large-scale simultaneous candidate test submissions** (up to 10,000+ candidates) with local checkpoint auto-saving, real-time diagnostic sector analysis, bilingual Hindi/English rendering, and **Google Cloud Firestore Enterprise Edition** (`ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089`) with ABAC security rules (`rules_version = '2'`).
+The platform is engineered to support **large-scale simultaneous candidate test submissions** (up to 10,000+ candidates) with local checkpoint auto-saving, real-time diagnostic sector analysis, bilingual Hindi/English rendering, and **Cloud Firestore** (`ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089`) with ABAC security rules (`rules_version = '2'`).
 
 ---
 
@@ -88,7 +88,7 @@ The platform is engineered to support **large-scale simultaneous candidate test 
 
 ## 🗄️ 3. Cloud Firestore Enterprise Database Schema (`firebase-blueprint.json`)
 
-Google Cloud Firestore Enterprise Edition (`ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089`) with ABAC Zero-Trust security rules (`firestore.rules`). Full Devnagari Hindi and LaTeX formula support.
+Cloud Firestore (`ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089`) with ABAC Zero-Trust security rules (`firestore.rules`). Full Devnagari Hindi and LaTeX formula support.
 
 ```
  ┌──────────────────────┐         1:N         ┌──────────────────────┐
@@ -223,49 +223,17 @@ The platform includes a **100% No-Code Content Management System (CMS)** allowin
 
 ---
 
-## 🌐 5. REST API Documentation Endpoints
+## 🔐 5. Firebase Spark Architecture
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/tests` | Fetch active mock test catalog |
-| `GET` | `/api/tests/:id` | Download full mock paper with questions |
-| `POST` | `/api/tests/:id/submit` | Submit candidate answers & evaluate rank/accuracy |
-| `GET` | `/api/questions` | Filter question bank by subject/topic/difficulty |
-| `POST` | `/api/questions/bulk` | Bulk import questions array |
-| `GET` | `/api/pyp` | Fetch Previous Year Papers list |
-| `GET` | `/api/cms/pages` | Get all dynamic CMS pages |
-| `GET` | `/api/cms/pages/:slug` | Get single page by slug |
-| `POST` | `/api/cms/pages` | Save/publish dynamic CMS page |
-| `GET` | `/api/cms/posts` | Get all news/articles |
-| `GET` | `/api/cms/posts/:slug` | Get single post by slug |
-| `POST` | `/api/cms/posts` | Save/publish news post |
-| `GET` | `/api/cms/series` | Get Test Series Packs |
-| `POST` | `/api/cms/series` | Save Test Series Pack |
-| `GET` | `/api/cms/settings` | Get site customizer settings |
-| `POST` | `/api/cms/settings` | Save site customizer settings |
-| `GET` | `/api/android/sync` | Full offline sync payload for mobile app |
+The production application is a static React/Vite application hosted on Firebase Hosting. Authentication uses Firebase Authentication, application data uses Cloud Firestore, and Firestore Security Rules enforce admin/student permissions. No Express server or Cloud Functions backend is required for the Spark deployment.
 
----
+Admin mutations use Firebase-authenticated Firestore writes through the application's Firebase data-access layer. AI generation that requires a server-side secret is intentionally disabled in the Spark-only production build.
 
-| Role | Access URL | Default Email / Username | Default Password |
-| :--- | :--- | :--- | :--- |
-| **Exam Controller Admin** | Click **"Admin CMS"** on top navbar | `admin@cgssbtest.com` *(or `admin`)* | `admin123` *(or `cgssb2024`)* |
-
----
-
-## ⚙️ 5. Environment Variables (`.env`)
+## ⚙️ 6. Environment Variables (`.env`)
 
 ```env
-# Application Port
-PORT=3000
-
-# Google Gemini API Key for AI Test Generation & Solved Paper Explanations
-GEMINI_API_KEY=
-
-# Database Engine: Google Cloud Firestore (Enterprise Edition)
-DATABASE_MODE=firestore
-FIRESTORE_DATABASE_ID=ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089
 FIREBASE_PROJECT_ID=gen-lang-client-0783153446
+FIRESTORE_DATABASE_ID=ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089
 ```
 
 ---
@@ -276,7 +244,7 @@ FIREBASE_PROJECT_ID=gen-lang-client-0783153446
 # 1. Install dependencies
 npm install
 
-# 2. Start dev server (Vite + Express)
+# 2. Start the Vite development server
 npm run dev
 
 # 3. Check TypeScript types and ESLint rules
@@ -285,6 +253,4 @@ npm run lint
 # 4. Build for production (Generates /dist static files and root index.html)
 npm run build
 
-# 5. Start production server
-npm start
 ```
