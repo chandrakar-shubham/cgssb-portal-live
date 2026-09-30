@@ -44,6 +44,9 @@ jobs:
             npm install --legacy-peer-deps
           fi
 
+      - name: 🛡️ Firestore Security Rules Regression Tests
+        run: npx tsx scripts/firestore-rules.test.ts
+
       - name: 🔍 Static Type Check & Linting
         run: |
           echo "Running TypeScript strict verification (tsc --noEmit)..."
