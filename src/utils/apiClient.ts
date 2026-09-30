@@ -14,16 +14,15 @@ export function getApiBaseUrl(): string {
   // If running inside browser
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
-    // Firebase Hosting serves the SPA only. The Express API is a separate origin.
-    // Keep this fallback aligned with the production API DNS; override with VITE_API_URL
-    // for staging/local deployments.
+    // Firebase Hosting fronts both the SPA and the Firebase-hosted API function.
+    // Keep API requests same-origin so custom domains and Firebase subdomains work identically.
     if (
       host === 'cgtest.in' ||
       host === 'www.cgtest.in' ||
       host.endsWith('.web.app') ||
       host.endsWith('.firebaseapp.com')
     ) {
-      return 'https://api.cgtest.in';
+      return '';
     }
   }
 
