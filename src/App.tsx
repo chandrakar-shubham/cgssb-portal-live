@@ -1015,8 +1015,7 @@ function MainApp() {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': 'cgssb_admin_2026',
-          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer adm_controller_bypass' }),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
     } catch (err) {
