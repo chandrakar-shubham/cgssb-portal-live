@@ -246,7 +246,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     setBundles(initialList);
 
     syncBundlesFromFirestore().then(({ list }) => {
-      if (list && list.length > 0) {
+      if (Array.isArray(list)) {
         if (availableTests && availableTests.length > 0) {
           const reconciled = reconcileAllTestsWithBundles(availableTests);
           setBundles(reconciled);
