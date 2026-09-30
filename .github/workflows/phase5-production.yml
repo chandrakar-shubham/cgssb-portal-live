@@ -1,0 +1,32 @@
+name: Phase 5 Production Validation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Verify Firebase artifacts
+        run: |
+          test -f dist/index.html
+          test -f dist/firebase-functions.cjs
+          test -f dist/server.cjs
+          test -f firebaseFunctions.ts
+          node -e "const p=require('./dist/version.json'); if(!p.commitSha||!p.buildTime) process.exit(1); console.log(p)"
