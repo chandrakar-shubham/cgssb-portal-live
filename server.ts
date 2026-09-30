@@ -1494,9 +1494,9 @@ async function startServer() {
     startedAt: number;
   }>();
 
-  app.post('/api/tests/:id/start-session', (req, res) => {
+  app.post('/api/tests/:id/start-session', requireStudentAuth, (req, res) => {
     const { id } = req.params;
-    const { userId = 'u-student-01' } = req.body;
+    const userId = String((req as any).firebaseUid);
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     activeExamSessions.set(sessionId, {
@@ -1541,8 +1541,11 @@ async function startServer() {
       const authenticatedName = String((req as any).firebaseClaims?.name || userName || 'Aspirant Student');
 
       // Validate session if provided
-      if (sessionId && activeExamSessions.has(sessionId)) {
-        const sess = activeExamSessions.get(sessionId)!;
+      if (sessionId) {
+        const sess = activeExamSessions.get(sessionId);
+        if (!sess || sess.testId !== id || sess.userId !== userId) {
+          return res.status(400).json({ success: false, error: 'Invalid or expired exam session.' });
+        }
         activeExamSessions.delete(sessionId);
       }
 
