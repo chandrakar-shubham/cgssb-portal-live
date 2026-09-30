@@ -291,19 +291,21 @@ export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
 
 // ----------------- DATABASE COUNTS & METRICS -----------------
 
-export async function getDatabaseCounts(): Promise<{ questions: number; mockTests: number; pypPapers: number; attempts: number }> {
+export async function getDatabaseCounts(): Promise<{ questions: number; mockTests: number; pypPapers: number; attempts: number; bundles: number }> {
   const db = getFirestoreServer();
   const [questions, mockTests, pypPapers, attempts] = await Promise.all([
     getDocs(collection(db, 'questions')),
     getDocs(collection(db, 'mockTests')),
     getDocs(collection(db, 'pypPapers')),
     getDocs(collection(db, 'attempts')),
+    getDocs(collection(db, 'bundles')),
   ]);
   return {
     questions: questions.size,
     mockTests: mockTests.size,
     pypPapers: pypPapers.size,
     attempts: attempts.size,
+    bundles: bundles.size,
   };
 }
 
