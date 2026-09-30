@@ -339,13 +339,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = (updates: Partial<User>) => {
     if (!user) return;
-    setUser(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        ...updates,
-      };
-    });
+    const allowed: Partial<User> = {};
+    const profileFields: (keyof User)[] = [
+      'name', 'email', 'phone', 'avatar', 'lastLoginAt', 'targetExam',
+      'targetYear', 'district', 'categoryReservation', 'gender',
+      'education', 'medium', 'bio', 'dailyGoalQuestions'
+    ];
+    for (const field of profileFields) {
+      if (updates[field] !== undefined) {
+        (allowed as any)[field] = updates[field];
+      }
+    }
+    const updated = { ...user, ...allowed };
+    setUser(updated);
+    void syncUserProfileToFirestore(updated);
   };
 
   const logout = () => {
