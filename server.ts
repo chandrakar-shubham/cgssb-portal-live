@@ -1230,6 +1230,37 @@ async function startServer() {
     }
   });
 
+  // Hero slider banner mutations
+  app.post('/api/slider-banners', requireAdmin, async (req, res) => {
+    try {
+      const banner = req.body;
+      if (!banner?.id || typeof banner.id !== 'string' || banner.id.length > 128) {
+        return res.status(400).json({ success: false, error: 'Valid banner id is required' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('slider_banners').doc(banner.id).set({
+        ...banner,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      res.json({ success: true, banner });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/slider-banners/:id', requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('slider_banners').doc(id).delete();
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // =========================================================================
   // REMOTE CLOUD RUN / DEPLOYED INSTANCE & FIRESTORE SYNC API
   // =========================================================================
