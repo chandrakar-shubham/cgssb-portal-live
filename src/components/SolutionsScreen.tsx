@@ -225,7 +225,7 @@ export const SolutionsScreen: React.FC<SolutionsScreenProps> = ({
                 Official Result • {attempt.category}
               </span>
               <span className="text-xs text-slate-400 font-medium">
-                Submitted on {new Date(attempt.submittedAt).toLocaleDateString()}
+                Submitted on {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleDateString() : 'Date unavailable'}
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white mt-1.5 tracking-tight">
