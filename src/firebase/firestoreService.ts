@@ -899,12 +899,12 @@ export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void
   if (!attempt?.id) return;
   try {
     await api.post('/api/tests/' + encodeURIComponent(attempt.testId) + '/submit', {
-      userId: attempt.userId,
       userName: attempt.userName,
       timeTakenSeconds: attempt.timeTakenSeconds,
       responses: attempt.responses,
       questionStatuses: attempt.questionStatuses,
       idempotencyKey: attempt.id,
+    }, { requireAuth: true });
     });
   } catch (err) {
     console.warn('Error submitting test attempt through API:', err);
