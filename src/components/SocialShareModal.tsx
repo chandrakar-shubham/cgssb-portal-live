@@ -167,10 +167,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
             <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 text-center">
               <span className="text-[9px] text-slate-400 block font-medium">State Rank</span>
-              <span className="text-base font-black text-amber-300 block mt-0.5 flex items-center justify-center space-x-0.5">
-                <Trophy className="w-3 h-3 text-amber-400 shrink-0" />
-                <span>#{rank}</span>
-              </span>
+              <span className="text-xs font-bold text-slate-400 block mt-1">Unavailable</span>
             </div>
 
             <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 text-center">
