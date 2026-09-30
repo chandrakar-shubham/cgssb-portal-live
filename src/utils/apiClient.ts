@@ -6,27 +6,12 @@
  */
 
 export function getApiBaseUrl(): string {
-  // If explicitly configured in Vite env
+  // Firebase Hosting rewrites /api/** directly to the Firebase Function.
+  // Keeping API calls same-origin avoids a second public backend domain and
+  // lets Firebase Hosting enforce the single-domain security boundary.
   if (import.meta.env.VITE_API_URL) {
     return (import.meta.env.VITE_API_URL as string).replace(/\/$/, '');
   }
-
-  // If running inside browser
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    // Firebase Hosting fronts both the SPA and the Firebase-hosted API function.
-    // Keep API requests same-origin so custom domains and Firebase subdomains work identically.
-    if (
-      host === 'cgtest.in' ||
-      host === 'www.cgtest.in' ||
-      host.endsWith('.web.app') ||
-      host.endsWith('.firebaseapp.com')
-    ) {
-      return '';
-    }
-  }
-
-  // Same-origin is appropriate only when Express itself serves the frontend.
   return '';
 }
 
