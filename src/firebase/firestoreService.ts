@@ -898,32 +898,28 @@ export async function migrateAllLocalDataToFirestore(params: {
 }
 
 export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void> {
-  if (!db || !attempt?.id) return;
+  if (!attempt?.id) return;
   try {
-    const attemptDocRef = doc(db, COLLECTIONS.ATTEMPTS, attempt.id);
-    await setDoc(attemptDocRef, {
-      ...attempt,
-      submittedAtServer: serverTimestamp()
-    }, { merge: true });
+    await api.post('/api/tests/' + encodeURIComponent(attempt.testId) + '/submit', {
+      userId: attempt.userId,
+      userName: attempt.userName,
+      timeTakenSeconds: attempt.timeTakenSeconds,
+      responses: attempt.responses,
+      questionStatuses: attempt.questionStatuses,
+      idempotencyKey: attempt.id,
+    });
   } catch (err) {
-    console.warn('Error saving test attempt to Firestore:', err);
+    console.warn('Error submitting test attempt through API:', err);
   }
 }
 
 export async function fetchLeaderboardFromFirestore(testId?: string): Promise<TestAttempt[]> {
-  if (!db) return [];
+  if (!testId) return [];
   try {
-    const snap = await getDocs(collection(db, COLLECTIONS.ATTEMPTS));
-    const items: TestAttempt[] = [];
-    snap.forEach(d => {
-      const data = d.data() as TestAttempt;
-      if (!testId || data.testId === testId) {
-        items.push(data);
-      }
-    });
-    return items.sort((a, b) => (b.score || 0) - (a.score || 0));
+    const data = await api.get<{ success: boolean; leaderboard: TestAttempt[] }>('/api/tests/' + encodeURIComponent(testId) + '/leaderboard');
+    return Array.isArray(data.leaderboard) ? data.leaderboard : [];
   } catch (err) {
-    console.warn('Error fetching leaderboard from Firestore:', err);
+    console.warn('Error fetching leaderboard through API:', err);
     return [];
   }
 }
