@@ -15,10 +15,6 @@ import {
   query,
   where,
 } from 'firebase/firestore';
-import {
-  signInWithEmailAndPassword,
-  signOut,
-} from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 
 const ADMIN_BOOTSTRAP_EMAIL = 'admin@cgtest.in';
@@ -225,30 +221,6 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
 
   if (method === 'GET' && clean === '/api/health') return { success:true, status:'ok', platform:'Firebase Spark', api:'firestore-native' } as T;
   if (method === 'GET' && clean === '/api/version') return { success:true, version:'2.5.2', platform:'Firebase Spark' } as T;
-
-  if (parts[0] === 'api' && parts[1] === 'auth' && parts[2] === 'admin-login' && method === 'POST') {
-    const identifier = String(body?.username || '').trim().toLowerCase();
-    const password = String(body?.password || '');
-    if (!identifier || !password) return { success:false, error:'Admin email and password are required.' } as T;
-    try {
-      const cred = await signInWithEmailAndPassword(auth, identifier, password);
-      const member = cred.user.uid === BOOTSTRAP_ADMIN_UID || identifier === ADMIN_BOOTSTRAP_EMAIL
-        ? { role:'superadmin', permissions:{ all:true } }
-        : (await getDoc(doc(db,'adminMembers',cred.user.uid))).data();
-      if (!member) {
-        await signOut(auth);
-        return { success:false, error:'This Firebase account is not authorized as an administrator.' } as T;
-      }
-      return { success:true, uid:cred.user.uid, token:cred.user.uid, user:{
-        id:cred.user.uid, uid:cred.user.uid, email:cred.user.email || identifier,
-        name:cred.user.displayName || 'Administrator',
-        role:member.role || 'admin', permissions:member.permissions || { all:true },
-        status:'active'
-      } } as T;
-    } catch (e:any) {
-      return { success:false, error:e?.message || 'Invalid admin credentials.' } as T;
-    }
-  }
 
   // Public collections
   if (parts[1] === 'tests' && method === 'GET') {
