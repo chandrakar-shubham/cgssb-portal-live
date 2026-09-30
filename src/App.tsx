@@ -480,67 +480,25 @@ function MainApp() {
   }, []);
 
 
-  // Fetch initial data from server or Firebase Firestore
+  // Fetch initial production data from Firebase Firestore only.
   useEffect(() => {
     async function loadData() {
-      // Production invariant: an empty database is valid production state. Never seed demo/factory data from the client.
       testConnection().catch(() => null);
-
       try {
-        const [testsRes, pypRes, qRes, firestoreTests, firestoreQuestions, firestorePyp] = await Promise.all([
-          fetch('/api/tests').catch(() => null),
-          fetch('/api/pyp').catch(() => null),
-          fetch('/api/questions').catch(() => null),
+        const [firestoreTests, firestoreQuestions, firestorePyp] = await Promise.all([
           fetchTestsFromFirestore().catch(() => []),
           fetchQuestionsFromFirestore().catch(() => []),
           fetchPypPapersFromFirestore().catch(() => [])
         ]);
-
-        if (Array.isArray(firestoreTests)) {
-          setTests(firestoreTests);
-        } else if (testsRes && testsRes.ok && testsRes.headers.get('content-type')?.includes('application/json')) {
-          const t = await testsRes.json();
-          const list = Array.isArray(t) ? t : (t?.tests || []);
-          setTests(list);
-        }
-
-        if (Array.isArray(firestoreQuestions)) {
-          setQuestions(firestoreQuestions);
-        } else if (qRes && qRes.ok && qRes.headers.get('content-type')?.includes('application/json')) {
-          const q = await qRes.json();
-          const list = Array.isArray(q) ? q : (q?.questions || []);
-          setQuestions(list);
-        }
-
-        if (Array.isArray(firestorePyp)) {
-          setPypPapers(firestorePyp);
-        } else if (pypRes && pypRes.ok && pypRes.headers.get('content-type')?.includes('application/json')) {
-          const p = await pypRes.json();
-          const list = Array.isArray(p) ? p : (p?.papers || []);
-          setPypPapers(list);
-        }
-
-        // Sync and refresh Test Series bundles from Cloud Firestore
-        await syncBundlesFromFirestore().catch(() => null);
-      } catch (err) {
-        console.warn('Backend API unavailable or non-JSON response received. Falling back to local state:', err);
+        setTests(Array.isArray(firestoreTests) ? firestoreTests : []);
+        setQuestions(Array.isArray(firestoreQuestions) ? firestoreQuestions.map(migrateLegacyQuestion) : []);
+        setPypPapers(Array.isArray(firestorePyp) ? firestorePyp : []);
+      } catch (error) {
+        console.error('Failed to load production data from Firestore:', error);
       }
     }
     loadData();
-
-    // Initialize Auto-Sync for queued on-device exam attempts when internet reconnects
-    const unsubscribe = initOfflineAutoSync((syncedAttempt, solutions) => {
-      setAttempts(prev => dedupeById([syncedAttempt, ...prev]));
-      if (Array.isArray(solutions) && solutions.length > 0) {
-        setQuestions((prev: Question[]): Question[] => {
-          const solMap = new Map<string, Question>();
-          solutions.forEach((s: Question) => solMap.set(s.id, s));
-          return prev.map(q => solMap.get(q.id) || q);
-        });
-      }
-    });
-    return unsubscribe;
-  }, []);
+  }, []);;
 
   // START TEST HANDLER (Routes through TCS iON Pre-Flight Screen)
   const handleStartTest = (test: MockTest) => {
@@ -802,177 +760,9 @@ function MainApp() {
       pypAppearances: qData.pypAppearances || [],
       createdAt: new Date().toISOString().split('T')[0],
     };
-    const adminHeaders = () => {
-      const token = getAdminToken();
-      return {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      };
-    };
-
     removeDeletedId('cgssb_deleted_questions', newQ.id);
     setQuestions(prev => [newQ, ...prev]);
     saveQuestionsToFirestore([newQ]).catch(() => null);
-    fetch('/api/questions', {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify(newQ),
-    }).catch(() => {});
-  };
-
-  const handleUpdateQuestion = (id: string, qData: Partial<Question>) => {
-    const token = getAdminToken();
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-
-    setQuestions(prev => {
-      const updated = prev.map(q => (q.id === id ? { ...q, ...qData } : q));
-      const target = updated.find(q => q.id === id);
-      if (target) {
-        saveQuestionsToFirestore([target]).catch(() => null);
-      }
-      return updated;
-    });
-    fetch(`/api/questions/${id}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(qData),
-    }).catch(() => {});
-  };
-
-  const handleDeleteQuestion = (id: string) => {
-    addDeletedId('cgssb_deleted_questions', id);
-    const token = getAdminToken();
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const updated = questions.filter(q => q.id !== id);
-    setQuestions(updated);
-    try {
-      localStorage.setItem('cgssb_questions', JSON.stringify(updated));
-    } catch {}
-    deleteQuestionFromFirestore(id).catch(() => null);
-    fetch(`/api/questions/${id}`, {
-      method: 'DELETE',
-      headers,
-    }).catch(() => {});
-  };
-
-  // ADMIN PYP ACTIONS
-  const handleAddPYP = (pypData: Partial<PreviousYearPaper>) => {
-    const paperId = pypData.id || `pyp-${Date.now()}`;
-    const newPaper: PreviousYearPaper = {
-      id: paperId,
-      title: pypData.title || 'Official Exam Paper',
-      examCategory: pypData.examCategory || 'CGSSB',
-      year: pypData.year || 2024,
-      totalQuestions: pypData.totalQuestions || 100,
-      durationMinutes: pypData.durationMinutes || 120,
-      marks: pypData.marks || 100,
-      negativeMarkingRatio: pypData.negativeMarkingRatio || '1/3rd (0.333)',
-      paperSummary: pypData.paperSummary || '',
-      subjectsWeightage: pypData.subjectsWeightage || [],
-      isOfficialPaper: true,
-      downloadFileName: pypData.downloadFileName,
-      linkedMockTestId: pypData.linkedMockTestId,
-      linkedQuestionIds: pypData.linkedQuestionIds,
-    };
-    removeDeletedId('cgssb_deleted_pyp', newPaper.id);
-    setPypPapers(prev => dedupeById([newPaper, ...prev]));
-    savePypPaperToFirestore(newPaper).catch(() => null);
-    const token = getAdminToken();
-    fetch('/api/pyp', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(newPaper),
-    }).catch(() => {});
-  };
-
-  const handleDeletePYP = (id: string) => {
-    addDeletedId('cgssb_deleted_pyp', id);
-    const updated = pypPapers.filter(p => p.id !== id);
-    setPypPapers(updated);
-    try {
-      localStorage.setItem('cgssb_pyp', JSON.stringify(updated));
-    } catch {}
-    deletePypPaperFromFirestore(id).catch(() => null);
-    const token = getAdminToken();
-    fetch(`/api/pyp/${id}`, {
-      method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }).catch(() => {});
-  };
-
-  const handleConvertPYPToMockTest = (pyp: PreviousYearPaper) => {
-    const testId = pyp.linkedMockTestId || `test-from-${pyp.id}`;
-    const newTest: MockTest = {
-      id: testId,
-      title: `${pyp.title} (Official Mock Test)`,
-      category: pyp.examCategory,
-      description: `Official past paper simulation. Converted from archived examination ${pyp.year}.`,
-      durationMinutes: pyp.durationMinutes,
-      questionCount: pyp.totalQuestions,
-      marksPerQuestion: pyp.examCategory === 'CGPSC' ? 2.0 : 1.0,
-      negativeMarksPerQuestion: pyp.examCategory === 'CGPSC' ? 0.66 : 0.333,
-      sections: [
-        {
-          id: `sec-${pyp.id}`,
-          name: 'Official Exam Paper',
-          questionIds: questions.filter(q => q.category === pyp.examCategory).map(q => q.id),
-        },
-      ],
-      difficultyDistribution: { easy: 40, medium: 40, hard: 20 },
-      attemptsCount: 0,
-      createdAt: new Date().toISOString(),
-    };
-
-    removeDeletedId('cgssb_deleted_tests', newTest.id);
-    setTests(prev => dedupeById([newTest, ...prev]));
-    saveTestToFirestore(newTest).catch(() => null);
-    const updatedPaper = { ...pyp, linkedMockTestId: newTest.id };
-    setPypPapers(prev =>
-      prev.map(p => (p.id === pyp.id ? updatedPaper : p))
-    );
-    savePypPaperToFirestore(updatedPaper).catch(() => null);
-    const token = getAdminToken();
-    fetch('/api/tests', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(newTest),
-    }).catch(() => {});
-  };
-
-  // ADMIN TEST MANAGEMENT ACTIONS
-  const handleTogglePublishTest = async (testId: string) => {
-    const target = tests.find(t => t.id === testId);
-    const nextStatus = target ? target.isPublished === false : false;
-    setTests(prev => {
-      const updated = prev.map(t => (t.id === testId ? { ...t, isPublished: nextStatus } : t));
-      const updatedTarget = updated.find(t => t.id === testId);
-      if (updatedTarget) {
-        saveTestToFirestore(updatedTarget).catch(() => null);
-      }
-      return updated;
-    });
-    try {
-      const token = getAdminToken();
-      await fetch(`/api/tests/${testId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ isPublished: nextStatus }),
-      });
-    } catch (err) {
-      console.warn('Failed to sync publish status with server:', err);
-    }
   };
 
   const handleUpdateTest = async (testId: string, updates: Partial<MockTest>) => {
@@ -986,19 +776,6 @@ function MainApp() {
       }
       return updated;
     });
-    try {
-      const token = getAdminToken();
-      await fetch(`/api/tests/${testId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(updates),
-      });
-    } catch (err) {
-      console.warn('Failed to update test on server:', err);
-    }
   };
 
   const handleDeleteTest = async (testId: string) => {
@@ -1009,18 +786,6 @@ function MainApp() {
     } catch {}
     cleanTestFromAllBundles(testId);
     deleteTestFromFirestore(testId).catch(() => null);
-    try {
-      const token = getAdminToken();
-      await fetch(`/api/tests/${testId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-    } catch (err) {
-      console.warn('Failed to delete test on server:', err);
-    }
   };
 
   const handleAddTest = (newTest: Partial<MockTest>) => {
@@ -1040,71 +805,7 @@ function MainApp() {
     };
     removeDeletedId('cgssb_deleted_tests', fullTest.id);
     setTests(prev => dedupeById([fullTest, ...prev]));
-    saveTestToFirestore(fullTest).catch(() => null);
-    const token = getAdminToken();
-    fetch('/api/tests', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(fullTest),
-    }).catch(() => {});
-  };
-
-  // ADMIN AI TEST CREATOR PUBLISH ACTION
-  const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
-    removeDeletedId('cgssb_deleted_tests', newTest.id);
-    newQuestions.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
-    setQuestions(prev => dedupeById([...newQuestions, ...prev]));
-    setTests(prev => dedupeById([newTest, ...prev]));
-    saveTestToFirestore(newTest).catch(() => null);
-    saveQuestionsToFirestore(newQuestions).catch(() => null);
-    const token = getAdminToken();
-    fetch('/api/tests', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(newTest),
-    }).catch(() => {});
-    fetch('/api/questions/bulk', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ questions: newQuestions }),
-    }).catch(() => {});
-  };
-
-  // UNIFIED BULK QUESTIONS ADDED (Syncs directly to Cloud Firestore & backend)
-  const handleBulkQuestionsAdded = (newQs: Question[]) => {
-    if (!newQs || newQs.length === 0) return;
-    newQs.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
-    setQuestions(prev => dedupeById([...newQs, ...prev]));
-    saveQuestionsToFirestore(newQs).catch(() => null);
-    const token = getAdminToken();
-    fetch('/api/questions/bulk', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ questions: newQs }),
-    }).catch(() => {});
-  };
-
-  // UNIFIED BULK TESTS ADDED (Syncs directly to Cloud Firestore & backend)
-  const handleBulkTestsAdded = (newTests: MockTest[]) => {
-    if (!newTests || newTests.length === 0) return;
-    newTests.forEach(t => removeDeletedId('cgssb_deleted_tests', t.id));
-    setTests(prev => dedupeById([...newTests, ...prev]));
-    newTests.forEach(t => {
-      saveTestToFirestore(t).catch(() => null);
-    });
-    const token = getAdminToken();
+    saveTestToFirestore(fullTest).catch(() => null);    const token = getAdminToken();
     newTests.forEach(t => {
       fetch('/api/tests', {
         method: 'POST',
