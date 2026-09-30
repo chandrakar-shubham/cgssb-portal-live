@@ -1829,9 +1829,6 @@ export const SAMPLE_USER_ATTEMPTS: TestAttempt[] = [
     unattemptedCount: 0,
     markedForReviewCount: 1,
     negativeMarksDeducted: 0,
-    simulatedRank: 42,
-    totalParticipants: 3420,
-    percentile: 98.8,
     sectorAnalysis: [
       {
         subject: 'Chhattisgarh General Studies',
