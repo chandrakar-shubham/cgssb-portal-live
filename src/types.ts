@@ -319,9 +319,6 @@ export interface TestAttempt {
   unattemptedCount: number;
   markedForReviewCount: number;
   negativeMarksDeducted: number;
-  simulatedRank: number;
-  totalParticipants: number;
-  percentile: number;
   sectorAnalysis: SectorAnalysis[];
 }
 
