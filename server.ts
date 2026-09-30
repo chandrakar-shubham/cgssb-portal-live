@@ -1694,6 +1694,16 @@ async function startServer() {
     }
   });
 
+  app.delete('/api/pyp/:id', requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await deletePypPaper(id);
+      res.json({ success: true, deleted, message: 'PYP paper deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // 8b. PYP Bulk Ingestion (JSON & CSV Bulk Import)
   app.post('/api/pyp/bulk-import', requireAdmin, async (req, res) => {
     try {
