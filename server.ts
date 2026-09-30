@@ -92,7 +92,7 @@ import {
   saveSource
 } from './server/db/currentAffairsRepository.ts';
 import { bootstrapAndMigrate } from './server/db/migrator.ts';
-import { dbConfig, isFirestoreActive, testConnection, verifyFirebaseIdToken } from './server/db/connection.ts';
+import { dbConfig, getFirestoreServer, isFirestoreActive, testConnection, verifyFirebaseIdToken } from './server/db/connection.ts';
 
 dotenv.config();
 
@@ -583,7 +583,7 @@ function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Questi
   return null;
 }
 
-export export async function startServer({ listen = !process.env.FIREBASE_FUNCTIONS } : { listen?: boolean } = {}) {
+export async function startServer({ listen = !process.env.FIREBASE_FUNCTIONS } : { listen?: boolean } = {}) {
   // Ensure default environment variables are set for Firestore mode
   if (!process.env.DATABASE_MODE) {
     process.env.DATABASE_MODE = 'firestore';
@@ -1312,7 +1312,6 @@ export export async function startServer({ listen = !process.env.FIREBASE_FUNCTI
       if (!banner?.id || typeof banner.id !== 'string' || banner.id.length > 128) {
         return res.status(400).json({ success: false, error: 'Valid banner id is required' });
       }
-      const { getFirestoreServer } = await import('./server/db/connection.ts');
       const db = getFirestoreServer();
       await db.collection('slider_banners').doc(banner.id).set({
         ...banner,
@@ -1327,7 +1326,6 @@ export export async function startServer({ listen = !process.env.FIREBASE_FUNCTI
   app.delete('/api/slider-banners/:id', requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { getFirestoreServer } = await import('./server/db/connection.ts');
       const db = getFirestoreServer();
       await db.collection('slider_banners').doc(id).delete();
       res.json({ success: true, id });
@@ -2856,7 +2854,6 @@ app.delete('/api/admin/members/:id', requireAdmin, async (req, res) => {
       if (!CA_ADMIN_COLLECTIONS.has(collection) || !id || id.length > 128) {
         return res.status(400).json({ success: false, error: 'Invalid current affairs collection or document id' });
       }
-      const { getFirestoreServer } = await import('./server/db/connection.ts');
       const db = getFirestoreServer();
       await db.collection(collection).doc(id).set({
         ...req.body,
@@ -2874,7 +2871,6 @@ app.delete('/api/admin/members/:id', requireAdmin, async (req, res) => {
       if (!CA_ADMIN_COLLECTIONS.has(collection) || !id || id.length > 128) {
         return res.status(400).json({ success: false, error: 'Invalid current affairs collection or document id' });
       }
-      const { getFirestoreServer } = await import('./server/db/connection.ts');
       const db = getFirestoreServer();
       await db.collection(collection).doc(id).delete();
       res.json({ success: true, id });
@@ -2889,7 +2885,6 @@ app.delete('/api/admin/members/:id', requireAdmin, async (req, res) => {
       if (!/^\d{4}-\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
         return res.status(400).json({ success: false, error: 'Invalid monthly section identifier' });
       }
-      const { getFirestoreServer } = await import('./server/db/connection.ts');
       const db = getFirestoreServer();
       await db.collection('monthlyEditions').doc(yearMonth).collection('sections').doc(sectionId).set({
         ...req.body,
@@ -2907,7 +2902,6 @@ app.delete('/api/admin/members/:id', requireAdmin, async (req, res) => {
       if (!/^\\d{4}-\\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
         return res.status(400).json({ success: false, error: 'Invalid monthly section identifier' });
       }
-      const { getFirestoreServer } = await import('./server/db/connection.ts');
       const db = getFirestoreServer();
       await db.collection('monthlyEditions').doc(yearMonth).collection('sections').doc(sectionId).delete();
       res.json({ success: true, id: sectionId });
