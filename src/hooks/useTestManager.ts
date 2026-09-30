@@ -61,7 +61,7 @@ export function useTestManager() {
       ...newTest,
     };
     setTests(prev => [testObj, ...prev.filter(t => t.id !== testObj.id)]);
-    saveTestToFirestore(testObj).catch(err => console.warn('Cloud save test warning:', err));
+    saveTestToFirestore(testObj).catch(async err => { console.error('Cloud save test failed:', err); setTests(await fetchTestsFromFirestore()); });
   }, []);
 
   const updateTest = useCallback((testId: string, updates: Partial<MockTest>) => {
@@ -69,7 +69,7 @@ export function useTestManager() {
       const updated = prev.map(t => (t.id === testId ? { ...t, ...updates } : t));
       const target = updated.find(t => t.id === testId);
       if (target) {
-        saveTestToFirestore(target).catch(err => console.warn('Cloud update test warning:', err));
+        saveTestToFirestore(target).catch(async err => { console.error('Cloud update test failed:', err); setTests(await fetchTestsFromFirestore()); });
       }
       return updated;
     });
@@ -78,7 +78,7 @@ export function useTestManager() {
   const deleteTest = useCallback((testId: string) => {
     cleanTestFromAllBundles(testId);
     setTests(prev => prev.filter(t => t.id !== testId));
-    deleteTestFromFirestore(testId).catch(err => console.warn('Cloud delete test warning:', err));
+    deleteTestFromFirestore(testId).catch(async err => { console.error('Cloud delete test failed:', err); setTests(await fetchTestsFromFirestore()); });
   }, []);
 
   const togglePublishTest = useCallback((testId: string) => {
@@ -86,7 +86,7 @@ export function useTestManager() {
       const updated = prev.map(t => (t.id === testId ? { ...t, isPublished: !t.isPublished } : t));
       const target = updated.find(t => t.id === testId);
       if (target) {
-        saveTestToFirestore(target).catch(() => {});
+        saveTestToFirestore(target).catch(async err => { console.error('Cloud publish toggle failed:', err); setTests(await fetchTestsFromFirestore()); });
       }
       return updated;
     });
