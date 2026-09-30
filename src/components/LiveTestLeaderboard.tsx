@@ -1,48 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Trophy,
-  Crown,
-  Medal,
-  Flame,
-  Zap,
-  Target,
-  Clock,
-  CheckCircle2,
-  TrendingUp,
-  Search,
-  Filter,
-  Users,
-  Award,
-  ArrowRight,
-  Sparkles,
-  MapPin,
-  RefreshCw,
-  Play,
-  Shield,
-  Layers,
-  ChevronDown
-} from 'lucide-react';
-import { MockTest } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Trophy, Medal, Target, Users, MapPin, RefreshCw, Play, Shield, Layers } from 'lucide-react';
+import { MockTest, LeaderboardEntryRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
-
-export interface LeaderboardEntry {
-  rank: number;
-  candidateName: string;
-  avatarSeed: string;
-  district: string;
-  category: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
-  score: number;
-  totalMarks: number;
-  accuracy: number;
-  timeSpentMinutes: number;
-  totalQuestions: number;
-  correctAnswers: number;
-  wrongAnswers: number;
-  percentile: number;
-  isCurrentUser?: boolean;
-  attemptDate: string;
-  badge?: string;
-}
+import { fetchLeaderboardEntriesFromFirestore } from '../firebase/firestoreService';
 
 interface LiveTestLeaderboardProps {
   tests: MockTest[];
@@ -50,595 +10,161 @@ interface LiveTestLeaderboardProps {
   onStartTest: (test: MockTest) => void;
   onExplorePass?: () => void;
 }
+type Mode = 'target' | 'series' | 'test';
+interface Candidate {
+  userId: string; name: string; district: string; category: string;
+  percentage: number; accuracy: number; score: number; maxScore: number;
+  tests: number; percentile: number; rank: number; time: number;
+}
 
-const CHHATTISGARH_DISTRICTS = [
-  'All Districts',
-  'Raipur (रायपुर)',
-  'Bilaspur (बिलासपुर)',
-  'Durg (दुर्ग)',
-  'Bastar (बस्तर)',
-  'Rajnandgaon (राजनांदगांव)',
-  'Surguja (सरगुजा)',
-  'Korba (कोरबा)',
-  'Janjgir-Champa (जांजगीर-चांपा)',
-  'Balod (बालोद)',
-  'Dhamtari (धमतरी)',
-  'Kanker (कांकेर)',
-  'Mahasamund (महासमुंद)',
-  'Raigarh (रायगढ़)'
-];
+const labelForTarget = (target?: string) => {
+  const s = String(target || '').trim();
+  if (/cgpsc/i.test(s)) return 'CGPSC State Service 2026';
+  if (/teacher|shikshak|assistant/i.test(s)) return 'CGSSB Teacher / Recruitment 2026';
+  if (/cgssb|vyapam/i.test(s)) return 'CGSSB Recruitment 2026';
+  return s || 'Exam Target';
+};
 
-const SEED_CANDIDATES: Array<{ name: string; district: string; category: string; avatar: string }> = [];
-
-export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
-  tests,
-  initialTestId,
-  onStartTest,
-  onExplorePass,
-}) => {
-  const { user } = useAuth();
-
-  // Active Selected Test
-  const [selectedTestId, setSelectedTestId] = useState<string>(() => {
-    if (initialTestId) return initialTestId;
-    const flagship = tests.find(t => t.title.toLowerCase().includes('teacher') || t.title.toLowerCase().includes('assistant')) || tests[0];
-    return flagship ? flagship.id : '';
+const bestPerTest = (rows: LeaderboardEntryRecord[]) => {
+  const m = new Map<string, LeaderboardEntryRecord>();
+  rows.forEach(r => {
+    const k = r.userId + ':' + r.testId;
+    const old = m.get(k);
+    if (!old || r.percentage > old.percentage || (r.percentage === old.percentage && r.timeTakenSeconds < old.timeTakenSeconds)) m.set(k, r);
   });
+  return [...m.values()];
+};
 
-  const [testSearchQuery, setTestSearchQuery] = useState('');
-  const [districtFilter, setDistrictFilter] = useState('All Districts');
-  const [timeFilter, setTimeFilter] = useState<'all_time' | 'this_week' | 'today'>('all_time');
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
-  const [tickerIndex, setTickerIndex] = useState(0);
+const buildRanking = (rows: LeaderboardEntryRecord[], minimumTests: number): Candidate[] => {
+  const byUser = new Map<string, LeaderboardEntryRecord[]>();
+  bestPerTest(rows).forEach(r => {
+    const list = byUser.get(r.userId) || [];
+    list.push(r); byUser.set(r.userId, list);
+  });
+  const candidates: Candidate[] = [];
+  byUser.forEach((list, userId) => {
+    if (list.length < minimumTests) return;
+    const percentage = +(list.reduce((s, r) => s + r.percentage, 0) / list.length).toFixed(2);
+    const accuracy = +(list.reduce((s, r) => s + r.accuracy, 0) / list.length).toFixed(2);
+    const score = +(list.reduce((s, r) => s + r.score, 0) / list.length).toFixed(2);
+    const maxScore = +(list.reduce((s, r) => s + r.maxScore, 0) / list.length).toFixed(2);
+    const first = list[0];
+    candidates.push({
+      userId, name: first.candidateName || 'Aspirant', district: first.district || 'Chhattisgarh',
+      category: first.category || 'UR', percentage, accuracy, score, maxScore, tests: list.length,
+      percentile: 0, rank: 0,
+      time: Math.round(list.reduce((s, r) => s + r.timeTakenSeconds, 0) / list.length)
+    });
+  });
+  candidates.sort((a,b) => b.percentage-a.percentage || b.accuracy-a.accuracy || a.time-b.time || a.name.localeCompare(b.name));
+  const scores = candidates.map(c => c.percentage);
+  return candidates.map((c,i) => ({
+    ...c,
+    rank: i + 1,
+    percentile: +((((scores.filter(x => x < c.percentage).length + scores.filter(x => x === c.percentage).length * 0.5) / Math.max(scores.length,1)) * 100).toFixed(2))
+  }));
+};
 
-  // Selected Mock Test Object
-  const currentTest = useMemo(() => {
-    return tests.find(t => t.id === selectedTestId) || tests[0] || null;
-  }, [tests, selectedTestId]);
+const Podium: React.FC<{candidate?: Candidate; place: 1|2|3}> = ({candidate, place}) => {
+  const medal = place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉';
+  if (!candidate) return <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-6 min-h-[185px] flex flex-col items-center justify-center text-center"><Trophy className="w-9 h-9 text-slate-700"/><p className="text-xs text-slate-500 mt-2">Awaiting qualifying attempts</p></div>;
+  return <div className={'bg-slate-900 border rounded-3xl p-5 text-center shadow-xl ' + (place===1 ? 'border-amber-400/60 md:-translate-y-3' : place===2 ? 'border-slate-300/40' : 'border-orange-400/40')}>
+    <div className="text-2xl">{medal}</div>
+    <div className="w-14 h-14 mx-auto mt-2 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl font-black text-white">{candidate.name.charAt(0).toUpperCase()}</div>
+    <h3 className="text-sm font-black text-white mt-3 truncate">{candidate.name}</h3>
+    <p className="text-[10px] text-slate-500 flex justify-center items-center gap-1"><MapPin className="w-3 h-3"/>{candidate.district}</p>
+    <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]"><div><span className="block text-slate-500">Rank</span><b className="text-white">#{candidate.rank}</b></div><div><span className="block text-slate-500">Score</span><b className="text-emerald-300">{candidate.percentage}%</b></div><div><span className="block text-slate-500">Percentile</span><b className="text-amber-300">{candidate.percentile}</b></div></div>
+  </div>;
+};
 
-  // Live simulation ticker messages
-  const liveTickerUpdates = useMemo(() => [
-    'Verified leaderboard data will appear after real student attempts are recorded.',
-  ], []);
+export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({tests, initialTestId, onStartTest, onExplorePass}) => {
+  const {user} = useAuth();
+  const [rows,setRows]=useState<LeaderboardEntryRecord[]>([]);
+  const [mode,setMode]=useState<Mode>('target');
+  const [target,setTarget]=useState('');
+  const [series,setSeries]=useState('');
+  const [testId,setTestId]=useState(initialTestId || '');
+  const [district,setDistrict]=useState('All Districts');
+  const [loading,setLoading]=useState(false);
 
-  useEffect(() => {
-    const tickerInterval = setInterval(() => {
-      setTickerIndex(prev => (prev + 1) % liveTickerUpdates.length);
-    }, 4500);
-    return () => clearInterval(tickerInterval);
-  }, [liveTickerUpdates.length]);
+  const refresh=async()=>{setLoading(true);try{setRows(await fetchLeaderboardEntriesFromFirestore())}finally{setLoading(false)}};
+  useEffect(()=>{void refresh()},[]);
 
-  const handleManualRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      setLastRefreshed(new Date());
-    }, 600);
-  };
-
-  // Generate realistic leaderboard entries for the active test
-  const leaderboardData: LeaderboardEntry[] = useMemo(() => {
-    // Spark-only launch: do not fabricate candidate scores, ranks, or percentiles.
-    // A verified public leaderboard snapshot will be added once a secure aggregation path is available.
-    return [];
-  }, []);
-
-  // Filtered leaderboard entries based on district
-  const filteredEntries = useMemo(() => {
-    let list = leaderboardData;
-    if (districtFilter !== 'All Districts') {
-      const distName = districtFilter.split(' ')[0].toLowerCase();
-      list = list.filter(e => e.district.toLowerCase().includes(distName) || e.isCurrentUser);
+  const targets=useMemo(()=>{
+    const m=new Map<string,string>();
+    rows.forEach(r=>m.set(r.targetKey,labelForTarget(r.targetExam)));
+    if(user?.targetExam){
+      const authority=/cgpsc/i.test(user.targetExam)?'CGPSC':'CGSSB';
+      const key=authority+':'+String(user.targetExam).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80)+':'+(user.targetYear||2026);
+      m.set(key,labelForTarget(user.targetExam));
     }
-    return list;
-  }, [leaderboardData, districtFilter]);
+    return [...m.entries()].map(([key,label])=>({key,label}));
+  },[rows,user?.targetExam,user?.targetYear]);
 
-  // Top 3 Podium
-  const top1 = filteredEntries.find(e => e.rank === 1) || filteredEntries[0];
-  const top2 = filteredEntries.find(e => e.rank === 2) || filteredEntries[1];
-  const top3 = filteredEntries.find(e => e.rank === 3) || filteredEntries[2];
+  useEffect(()=>{
+    if(!target && targets.length){
+      const mine=user?.targetExam ? targets.find(t=>t.label===labelForTarget(user.targetExam)) : undefined;
+      setTarget(mine?.key || targets[0].key);
+    }
+  },[target,targets,user?.targetExam]);
 
-  // User's own entry
-  const currentUserEntry = filteredEntries.find(e => e.isCurrentUser);
+  const seriesOptions=useMemo(()=>{
+    const m=new Map<string,string>();
+    rows.filter(r=>!target||r.targetKey===target).forEach(r=>{
+      if(r.seriesId && !m.has(r.seriesId)){
+        const t=tests.find(x=>x.id===r.testId);
+        m.set(r.seriesId,t?.title ? 'Series: '+t.title.split(' Mock')[0] : r.seriesId);
+      }
+    });
+    return [...m.entries()].map(([id,label])=>({id,label}));
+  },[rows,target,tests]);
 
-  // Available tests for selector dropdown
-  const filteredTestsList = useMemo(() => {
-    if (!testSearchQuery.trim()) return tests.slice(0, 12);
-    const q = testSearchQuery.toLowerCase();
-    return tests.filter(t => t.title.toLowerCase().includes(q) || (t.category && t.category.toLowerCase().includes(q)));
-  }, [tests, testSearchQuery]);
+  useEffect(()=>{if(!series&&seriesOptions.length)setSeries(seriesOptions[0].id)},[series,seriesOptions]);
+  useEffect(()=>{if(!testId&&tests.length)setTestId(tests[0].id)},[testId,tests]);
 
-  return (
-    <div className="space-y-6">
-      
-      {/* 1. Header & Live Indicator Bar */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
-          <div>
-            <div className="flex items-center space-x-2 text-xs font-bold text-amber-400 mb-1">
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-              </span>
-              <span className="uppercase tracking-wider">Live State Leaderboard 2026</span>
-              <span aria-hidden="true" className="text-slate-600">·</span>
-              <span className="text-slate-400 font-mono">TCS iON CBT Evaluation</span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center space-x-2.5">
-              <span>All-Chhattisgarh Rank & Top Performers</span>
-              <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
-              A verified state-wide merit list will appear when a trusted aggregation service is available.
-            </p>
-          </div>
+  const scoped=useMemo(()=>{
+    if(mode==='test') return rows.filter(r=>r.testId===testId);
+    if(mode==='series') return rows.filter(r=>(!target||r.targetKey===target)&&(!series||r.seriesId===series));
+    return rows.filter(r=>!target||r.targetKey===target);
+  },[rows,mode,target,series,testId]);
 
-          {/* Test Selector Dropdown & Refresh Button */}
-          <div className="flex items-center space-x-2 self-start md:self-auto shrink-0 flex-wrap gap-y-2">
-            <div className="relative min-w-[240px] sm:min-w-[280px]">
-              <label htmlFor="test-select" className="sr-only">Select Test</label>
-              <select
-                id="test-select"
-                value={selectedTestId}
-                onChange={e => setSelectedTestId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white font-bold focus:outline-none focus:border-emerald-500 appearance-none pr-8 cursor-pointer shadow-inner"
-              >
-                {filteredTestsList.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.title} ({t.durationMinutes}m)
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+  const minimumTests=mode==='test'?1:2;
+  const ranked=useMemo(()=>buildRanking(scoped,minimumTests),[scoped,minimumTests]);
+  const visible=useMemo(()=>{
+    if(district==='All Districts')return ranked;
+    const d=district.split(' ')[0].toLowerCase();
+    return ranked.filter(c=>c.district.toLowerCase().includes(d)||c.userId===user?.id);
+  },[ranked,district,user?.id]);
 
-            <button
-              type="button"
-              onClick={handleManualRefresh}
-              className={`p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer ${
-                isRefreshing ? 'animate-spin text-emerald-400' : ''
-              }`}
-              title="Refresh Leaderboard"
-              aria-label="Refresh leaderboard"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+  const me=visible.find(c=>c.userId===user?.id);
+  const distribution=useMemo(()=>Array.from({length:10},(_,i)=>({label:i*10+'-'+((i+1)*10),count:visible.filter(c=>Math.min(9,Math.floor(c.percentage/10))===i).length})),[visible]);
+  const title=mode==='test'?(tests.find(t=>t.id===testId)?.title||'Individual Test'):mode==='series'?(seriesOptions.find(s=>s.id===series)?.label||'Test Series'):(targets.find(t=>t.key===target)?.label||'Exam Target');
 
-        {/* Live Stream Ticker & Summary Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-1">
-          {/* Ticker banner */}
-          <div className="md:col-span-2 bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3 flex items-center space-x-2.5 text-xs overflow-hidden">
-            <div className="p-1.5 bg-amber-500/15 rounded-lg text-amber-400 shrink-0">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] uppercase font-bold text-slate-500 block">Live Activity Stream</span>
-              <p className="text-white font-medium truncate transition-all duration-300">
-                {liveTickerUpdates[tickerIndex]}
-              </p>
-            </div>
-          </div>
-
-          {/* Metric 1: Aspirants Attempted */}
-          <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3 flex items-center space-x-2.5 text-xs">
-            <div className="p-1.5 bg-blue-500/15 rounded-lg text-blue-400 shrink-0">
-              <Users className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Attempted</span>
-              <span className="text-sm font-black text-white">Verified data pending</span>
-            </div>
-          </div>
-
-          {/* Metric 2: State Average Score */}
-          <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3 flex items-center space-x-2.5 text-xs">
-            <div className="p-1.5 bg-emerald-500/15 rounded-lg text-emerald-400 shrink-0">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-500 block">State Avg Score</span>
-              <span className="text-sm font-black text-emerald-300">Verified data pending</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters Row: District and Time Period */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-          <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-1 text-xs">
-            <span className="text-slate-500 font-semibold mr-1 shrink-0 flex items-center space-x-1">
-              <MapPin className="w-3.5 h-3.5" />
-              <span>District:</span>
-            </span>
-            <select
-              value={districtFilter}
-              onChange={e => setDistrictFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1 text-xs text-slate-300 font-bold focus:outline-none focus:border-emerald-500 cursor-pointer"
-            >
-              {CHHATTISGARH_DISTRICTS.map(dist => (
-                <option key={dist} value={dist}>{dist}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setTimeFilter('all_time')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                timeFilter === 'all_time' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              All Time
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeFilter('this_week')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                timeFilter === 'this_week' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              This Week
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeFilter('today')}
-              className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                timeFilter === 'today' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Today Live
-            </button>
-          </div>
-        </div>
+  return <div className="space-y-6">
+    <section className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div><div className="text-[11px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"/>CGTEST Performance Hub</div><h2 className="text-2xl sm:text-3xl font-black text-white mt-1 flex items-center gap-2">Exam Target Rankings <Trophy className="w-6 h-6 text-amber-400"/></h2><p className="text-xs text-slate-400 mt-1 max-w-3xl">{title}. This is a CGTEST practice ranking based on recorded attempts, not an official CGPSC/CGSSB rank.</p></div>
+        <button onClick={()=>void refresh()} className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 cursor-pointer" title="Refresh"><RefreshCw className={'w-4 h-4 '+(loading?'animate-spin text-emerald-400':'')}/></button>
       </div>
 
-      {/* 2. Podium (Top 3 State Performers) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 items-end pt-4">
-        
-        {/* Rank 2 (Silver) */}
-        {top2 && (
-          <div className="bg-gradient-to-t from-slate-900/90 to-slate-950/80 border border-slate-800 rounded-3xl p-5 text-center relative overflow-hidden order-2 md:order-1 shadow-lg hover:border-slate-700 transition">
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-slate-400 via-slate-200 to-slate-400" />
-            <div className="relative inline-block mb-3">
-              <div className="w-14 h-14 rounded-2xl bg-slate-800 border-2 border-slate-400 flex items-center justify-center text-slate-200 font-black text-xl shadow-md mx-auto">
-                {top2.avatarSeed}
-              </div>
-              <div className="absolute -bottom-2 -right-1 w-6 h-6 rounded-full bg-slate-300 text-slate-950 font-black text-xs flex items-center justify-center border-2 border-slate-900 shadow">
-                2
-              </div>
-            </div>
-            <h3 className="text-base font-black text-white truncate">{top2.candidateName}</h3>
-            <p className="text-xs text-slate-400 flex items-center justify-center space-x-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-slate-500" />
-              <span>{top2.district}</span>
-            </p>
-            <div className="mt-3 py-2 px-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-around text-xs">
-              <div>
-                <span className="text-[10px] text-slate-500 block">Score</span>
-                <span className="font-black text-slate-100">{top2.score}</span>
-              </div>
-              <div className="h-6 w-px bg-slate-800" />
-              <div>
-                <span className="text-[10px] text-slate-500 block">Accuracy</span>
-                <span className="font-bold text-teal-300">{top2.accuracy}%</span>
-              </div>
-              <div className="h-6 w-px bg-slate-800" />
-              <div>
-                <span className="text-[10px] text-slate-500 block">Time</span>
-                <span className="font-medium text-slate-300">{top2.timeSpentMinutes}m</span>
-              </div>
-            </div>
-            <div className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {top2.percentile}th Percentile
-            </div>
-          </div>
-        )}
-
-        {/* Rank 1 (Gold - Champion) */}
-        {top1 && (
-          <div className="bg-gradient-to-t from-amber-950/40 via-slate-900 to-slate-950 border-2 border-amber-500/50 rounded-3xl p-6 text-center relative overflow-hidden order-1 md:order-2 shadow-2xl scale-100 md:scale-105 z-10">
-            <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-400" />
-            <div className="flex justify-center mb-1">
-              <Crown className="w-7 h-7 text-amber-400 animate-bounce" />
-            </div>
-            <div className="relative inline-block mb-3">
-              <div className="w-18 h-18 rounded-2xl bg-gradient-to-br from-amber-500/30 to-amber-600/10 border-2 border-amber-400 flex items-center justify-center text-amber-300 font-black text-2xl shadow-xl mx-auto">
-                {top1.avatarSeed}
-              </div>
-              <div className="absolute -bottom-2 -right-1 w-7 h-7 rounded-full bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center border-2 border-slate-900 shadow">
-                1
-              </div>
-            </div>
-            <div className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold mb-1">
-              <span>STATE RANK #1</span>
-            </div>
-            <h3 className="text-lg font-black text-white truncate">{top1.candidateName}</h3>
-            <p className="text-xs text-slate-300 flex items-center justify-center space-x-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-amber-400" />
-              <span>{top1.district}</span>
-            </p>
-            <div className="mt-4 py-2.5 px-3 bg-slate-950/80 rounded-2xl border border-amber-500/30 flex items-center justify-around text-xs shadow-inner">
-              <div>
-                <span className="text-[10px] text-amber-400/80 font-bold block">Score</span>
-                <span className="font-black text-white text-base">{top1.score}</span>
-                <span className="text-[10px] text-slate-500">/{top1.totalMarks}</span>
-              </div>
-              <div className="h-7 w-px bg-slate-800" />
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold block">Accuracy</span>
-                <span className="font-black text-emerald-400 text-base">{top1.accuracy}%</span>
-              </div>
-              <div className="h-7 w-px bg-slate-800" />
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold block">Time</span>
-                <span className="font-bold text-slate-200">{top1.timeSpentMinutes}m</span>
-              </div>
-            </div>
-            <div className="mt-2 text-xs font-black text-amber-400 tracking-wide">
-              {top1.percentile}th State Percentile
-            </div>
-          </div>
-        )}
-
-        {/* Rank 3 (Bronze) */}
-        {top3 && (
-          <div className="bg-gradient-to-t from-slate-900/90 to-slate-950/80 border border-slate-800 rounded-3xl p-5 text-center relative overflow-hidden order-3 md:order-3 shadow-lg hover:border-slate-700 transition">
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700" />
-            <div className="relative inline-block mb-3">
-              <div className="w-14 h-14 rounded-2xl bg-slate-800 border-2 border-amber-700/80 flex items-center justify-center text-amber-400 font-black text-xl shadow-md mx-auto">
-                {top3.avatarSeed}
-              </div>
-              <div className="absolute -bottom-2 -right-1 w-6 h-6 rounded-full bg-amber-700 text-white font-black text-xs flex items-center justify-center border-2 border-slate-900 shadow">
-                3
-              </div>
-            </div>
-            <h3 className="text-base font-black text-white truncate">{top3.candidateName}</h3>
-            <p className="text-xs text-slate-400 flex items-center justify-center space-x-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-slate-500" />
-              <span>{top3.district}</span>
-            </p>
-            <div className="mt-3 py-2 px-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-around text-xs">
-              <div>
-                <span className="text-[10px] text-slate-500 block">Score</span>
-                <span className="font-black text-slate-100">{top3.score}</span>
-              </div>
-              <div className="h-6 w-px bg-slate-800" />
-              <div>
-                <span className="text-[10px] text-slate-500 block">Accuracy</span>
-                <span className="font-bold text-teal-300">{top3.accuracy}%</span>
-              </div>
-              <div className="h-6 w-px bg-slate-800" />
-              <div>
-                <span className="text-[10px] text-slate-500 block">Time</span>
-                <span className="font-medium text-slate-300">{top3.timeSpentMinutes}m</span>
-              </div>
-            </div>
-            <div className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {top3.percentile}th Percentile
-            </div>
-          </div>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-800">
+        {([['target','🎯 Exam Target'],['series','📚 Test Series'],['test','📝 Individual Test']] as [Mode,string][]).map(([v,l])=><button key={v} onClick={()=>setMode(v)} className={'py-2.5 rounded-xl text-xs font-black cursor-pointer '+(mode===v?'bg-emerald-500 text-slate-950':'text-slate-400 hover:text-white')}>{l}</button>)}
       </div>
 
-      {/* 3. "Your Standing" Sticky Strip */}
-      {currentUserEntry && (
-        <div className="bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border-2 border-emerald-500/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-          <div className="flex items-center space-x-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-slate-950 font-black text-base flex items-center justify-center shadow-lg shrink-0">
-              #{currentUserEntry.rank}
-            </div>
-            <div>
-              <div className="flex items-center space-x-2 flex-wrap">
-                <span className="font-black text-white text-sm sm:text-base">
-                  Your Current Standing
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  {currentUserEntry.badge}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Score: <strong className="text-white">{currentUserEntry.score}</strong> · Accuracy: <strong className="text-teal-300">{currentUserEntry.accuracy}%</strong> · Percentile: <strong className="text-emerald-400">{currentUserEntry.percentile}%ile</strong>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2 self-end sm:self-auto shrink-0">
-            {currentTest && (
-              <button
-                type="button"
-                onClick={() => onStartTest(currentTest)}
-                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition shadow-md flex items-center space-x-1.5 cursor-pointer"
-              >
-                <Play className="w-3.5 h-3.5 fill-slate-950" />
-                <span>Re-Attempt & Improve Rank</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 4. Complete Rank Table (Ranks 4 and below) */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h3 className="text-base font-black text-white flex items-center space-x-2">
-              <Medal className="w-4 h-4 text-emerald-400" />
-              <span>Full Merit Table — {currentTest?.title || 'Selected Test'}</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Verified candidate rankings and percentiles are currently unavailable on Firebase Spark.
-            </p>
-          </div>
-
-          {currentTest && (
-            <button
-              type="button"
-              onClick={() => onStartTest(currentTest)}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs border border-slate-700 transition flex items-center space-x-1.5 cursor-pointer"
-            >
-              <Play className="w-3 h-3 fill-emerald-400" />
-              <span>Challenge Top Score</span>
-            </button>
-          )}
-        </div>
-
-        {/* Responsive Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
-              <tr>
-                <th scope="col" className="py-3 px-4 font-bold">Rank</th>
-                <th scope="col" className="py-3 px-4 font-bold">Aspirant</th>
-                <th scope="col" className="py-3 px-4 font-bold">District / Category</th>
-                <th scope="col" className="py-3 px-4 font-bold">Score</th>
-                <th scope="col" className="py-3 px-4 font-bold">Accuracy</th>
-                <th scope="col" className="py-3 px-4 font-bold">Time</th>
-                <th scope="col" className="py-3 px-4 font-bold">Percentile</th>
-                <th scope="col" className="py-3 px-4 font-bold">Recognition</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/80">
-              {filteredEntries.map(entry => (
-                <tr
-                  key={`${entry.rank}-${entry.candidateName}`}
-                  className={`transition-colors hover:bg-slate-800/40 ${
-                    entry.isCurrentUser
-                      ? 'bg-emerald-950/30 font-bold border-l-4 border-l-emerald-400'
-                      : entry.rank <= 3
-                      ? 'bg-slate-950/40'
-                      : ''
-                  }`}
-                >
-                  {/* Rank */}
-                  <td className="py-3.5 px-4 font-mono font-black text-sm whitespace-nowrap">
-                    {entry.rank === 1 ? (
-                      <span className="text-amber-400 flex items-center space-x-1">
-                        <Crown className="w-4 h-4 fill-amber-400" />
-                        <span>#1</span>
-                      </span>
-                    ) : entry.rank === 2 ? (
-                      <span className="text-slate-300 flex items-center space-x-1">
-                        <Medal className="w-4 h-4" />
-                        <span>#2</span>
-                      </span>
-                    ) : entry.rank === 3 ? (
-                      <span className="text-amber-600 flex items-center space-x-1">
-                        <Medal className="w-4 h-4" />
-                        <span>#3</span>
-                      </span>
-                    ) : (
-                      <span className={entry.isCurrentUser ? 'text-emerald-400' : 'text-slate-400'}>
-                        #{entry.rank}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Aspirant Name */}
-                  <td className="py-3.5 px-4 font-medium text-white whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold ${
-                        entry.isCurrentUser ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'
-                      }`}>
-                        {entry.avatarSeed}
-                      </div>
-                      <span className={entry.isCurrentUser ? 'text-emerald-300 font-bold' : ''}>
-                        {entry.candidateName}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* District / Category */}
-                  <td className="py-3.5 px-4 text-slate-400 whitespace-nowrap">
-                    <div className="flex items-center space-x-1.5">
-                      <span>{entry.district.split(' ')[0]}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
-                        {entry.category}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Score */}
-                  <td className="py-3.5 px-4 font-black whitespace-nowrap">
-                    <span className="text-white text-sm">{entry.score}</span>
-                    <span className="text-slate-500 text-[11px] font-normal"> / {entry.totalMarks}</span>
-                  </td>
-
-                  {/* Accuracy */}
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-14 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            entry.accuracy >= 90
-                              ? 'bg-emerald-400'
-                              : entry.accuracy >= 80
-                              ? 'bg-teal-400'
-                              : 'bg-amber-400'
-                          }`}
-                          style={{ width: `${entry.accuracy}%` }}
-                        />
-                      </div>
-                      <span className="font-bold text-teal-300">{entry.accuracy}%</span>
-                    </div>
-                  </td>
-
-                  {/* Time */}
-                  <td className="py-3.5 px-4 text-slate-300 font-mono whitespace-nowrap">
-                    {entry.timeSpentMinutes} mins
-                  </td>
-
-                  {/* Percentile */}
-                  <td className="py-3.5 px-4 font-bold text-emerald-400 whitespace-nowrap">
-                    {entry.percentile}%ile
-                  </td>
-
-                  {/* Recognition Badge */}
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    {entry.badge ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
-                        entry.rank === 1
-                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                          : entry.rank <= 3
-                          ? 'bg-slate-800 text-slate-200 border-slate-700'
-                          : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-                      }`}>
-                        {entry.badge}
-                      </span>
-                    ) : (
-                      <span className="text-slate-600 text-[11px]">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Table Footer */}
-        <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-          <div className="flex items-center space-x-2">
-            <Shield className="w-4 h-4 text-emerald-400" />
-            <span>Verified ranking data requires trusted server-side aggregation.</span>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <span>Last refreshed: {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            {onExplorePass && (
-              <button
-                type="button"
-                onClick={onExplorePass}
-                className="text-amber-400 hover:text-amber-300 font-bold transition cursor-pointer"
-              >
-                State percentile report unavailable →
-              </button>
-            )}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {mode!=='test'&&<label className="text-[10px] text-slate-500 uppercase font-bold">Exam Target<select value={target} onChange={e=>{setTarget(e.target.value);setSeries('')}} className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold">{targets.length?targets.map(t=><option key={t.key} value={t.key}>{t.label}</option>):<option>No target data yet</option>}</select></label>}
+        {mode==='series'&&<label className="text-[10px] text-slate-500 uppercase font-bold">Test Series<select value={series} onChange={e=>setSeries(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold">{seriesOptions.length?seriesOptions.map(s=><option key={s.id} value={s.id}>{s.label}</option>):<option>No series data yet</option>}</select></label>}
+        {mode==='test'&&<label className="text-[10px] text-slate-500 uppercase font-bold md:col-span-2">Individual Test<select value={testId} onChange={e=>setTestId(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold">{tests.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select></label>}
+        <label className="text-[10px] text-slate-500 uppercase font-bold">District<select value={district} onChange={e=>setDistrict(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold"><option>All Districts</option><option>Raipur</option><option>Bilaspur</option><option>Durg</option><option>Bastar</option><option>Rajnandgaon</option><option>Surguja</option><option>Korba</option><option>Dhamtari</option><option>Kanker</option><option>Mahasamund</option><option>Raigarh</option></select></label>
       </div>
+    </section>
 
-    </div>
-  );
+    {me&&<section className="bg-gradient-to-r from-emerald-950/50 to-slate-900 border border-emerald-500/30 rounded-3xl p-5 sm:p-6"><div className="flex flex-col md:flex-row md:items-center justify-between gap-5"><div><p className="text-[10px] uppercase font-black tracking-widest text-emerald-400">Your CGTEST Standing</p><h3 className="text-3xl font-black text-white mt-1">#{me.rank}</h3><p className="text-xs text-slate-400 mt-1">among {visible.length.toLocaleString('en-IN')} qualifying candidates</p></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><div className="bg-slate-950/70 rounded-2xl px-4 py-3"><span className="text-[10px] text-slate-500 block">Percentile</span><b className="text-lg text-amber-300">{me.percentile}</b></div><div className="bg-slate-950/70 rounded-2xl px-4 py-3"><span className="text-[10px] text-slate-500 block">Avg Score</span><b className="text-lg text-emerald-300">{me.percentage}%</b></div><div className="bg-slate-950/70 rounded-2xl px-4 py-3"><span className="text-[10px] text-slate-500 block">Accuracy</span><b className="text-lg text-white">{me.accuracy}%</b></div><div className="bg-slate-950/70 rounded-2xl px-4 py-3"><span className="text-[10px] text-slate-500 block">Tests</span><b className="text-lg text-white">{me.tests}</b></div></div></div></section>}
+
+    <section className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl"><div className="flex items-center justify-between mb-4"><div><h3 className="text-base font-black text-white flex items-center gap-2"><Layers className="w-4 h-4 text-emerald-400"/>Score Distribution</h3><p className="text-[11px] text-slate-500">Candidate distribution by score percentage.</p></div><span className="text-xs text-slate-500 font-bold">{visible.length} candidates</span></div>{visible.length>=3?<div className="h-44 flex items-end gap-1 sm:gap-2">{distribution.map((b,i)=>{const max=Math.max(...distribution.map(x=>x.count),1);const h=Math.max(4,Math.round(b.count/max*100));const mine=me&&Math.floor(me.percentage/10)===i;return <div key={b.label} className="flex-1 h-full flex flex-col justify-end items-center gap-1"><span className="text-[9px] text-slate-500">{b.count||''}</span><div className={'w-full rounded-t-lg '+(mine?'bg-amber-400':'bg-emerald-500/50')} style={{height:h+'%'}}/><span className={'text-[8px] '+(mine?'text-amber-300 font-black':'text-slate-600')}>{b.label}</span></div>})}</div>:<div className="py-12 text-center text-xs text-slate-500">Distribution curve will appear after at least 3 qualifying candidates are recorded.</div>}</section>
+
+    <section className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"><Podium candidate={visible[1]} place={2}/><Podium candidate={visible[0]} place={1}/><Podium candidate={visible[2]} place={3}/></section>
+
+    <section className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl"><div className="p-5 border-b border-slate-800 flex items-center justify-between"><div><h3 className="text-lg font-black text-white">Full Ranking</h3><p className="text-xs text-slate-500 mt-1">Top performers, percentile and your relative position.</p></div><div className="text-xs text-emerald-300 flex items-center gap-1"><Shield className="w-3.5 h-3.5"/>Practice ranking</div></div>{visible.length?<div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-slate-950 text-[10px] uppercase text-slate-500"><tr><th className="px-5 py-3">Rank</th><th className="px-5 py-3">Aspirant</th><th className="px-5 py-3">District</th><th className="px-5 py-3">Score %</th><th className="px-5 py-3">Percentile</th><th className="px-5 py-3">Accuracy</th><th className="px-5 py-3">Tests</th></tr></thead><tbody className="divide-y divide-slate-800">{visible.slice(0,100).map(c=><tr key={c.userId} className={c.userId===user?.id?'bg-emerald-500/10':'hover:bg-slate-800/30'}><td className="px-5 py-3 font-black text-white">#{c.rank}</td><td className="px-5 py-3"><div className="font-bold text-sm text-white">{c.name}{c.userId===user?.id?' (You)':''}</div><div className="text-[10px] text-slate-500">{c.category}</div></td><td className="px-5 py-3 text-xs text-slate-400">{c.district}</td><td className="px-5 py-3 font-black text-emerald-300">{c.percentage}%</td><td className="px-5 py-3 font-black text-amber-300">{c.percentile}</td><td className="px-5 py-3 text-xs text-slate-300">{c.accuracy}%</td><td className="px-5 py-3 text-xs text-slate-300">{c.tests}</td></tr>)}</tbody></table></div>:<div className="py-16 px-6 text-center"><Trophy className="w-10 h-10 mx-auto text-slate-700"/><h4 className="font-black text-white mt-3">No qualifying ranking data yet</h4><p className="text-xs text-slate-500 mt-2">Complete at least {minimumTests} qualifying test{minimumTests>1?'s':''} for this ranking. Individual test ranking requires one attempt.</p><div className="flex justify-center gap-2 mt-5">{tests[0]&&<button onClick={()=>onStartTest(tests[0])} className="px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs cursor-pointer"><Play className="inline w-3.5 h-3.5 mr-1"/>Attempt a Test</button>}{onExplorePass&&<button onClick={onExplorePass} className="px-4 py-2.5 rounded-xl bg-slate-800 text-white font-bold text-xs border border-slate-700 cursor-pointer">View Pass</button>}</div></div>}</section>
+  </div>;
 };
