@@ -36,6 +36,12 @@ import {
   saveTestAttempt,
   getDatabaseCounts,
   getRepositoryStats,
+  getAllUsersAdmin,
+  saveUserAdmin,
+  deleteUserAdmin,
+  getAllCouponsAdmin,
+  saveCouponAdmin,
+  deleteCouponAdmin,
   getAllCmsPages,
   getCmsPageBySlug,
   saveCmsPage,
@@ -2597,7 +2603,44 @@ Respond strictly with a JSON object having key "questions" containing an array o
   });
 
   // ==========================================
-  // 14. USER PERSONALIZATION & ENTITLEMENTS API
+  // 14. ADMIN STUDENT CRM / COUPONS
+  // ==========================================
+  app.get('/api/admin/students', requireAdmin, async (_req, res) => {
+    try { res.json(await getAllUsersAdmin()); }
+    catch { res.status(500).json({ error: 'Failed to load student registry' }); }
+  });
+
+  app.put('/api/admin/students/:id', requireAdmin, async (req, res) => {
+    try {
+      const user = { ...(req.body || {}), id: req.params.id } as User;
+      delete (user as any).token;
+      res.json(await saveUserAdmin(user));
+    } catch { res.status(500).json({ error: 'Failed to save student' }); }
+  });
+
+  app.delete('/api/admin/students/:id', requireAdmin, async (req, res) => {
+    try { await deleteUserAdmin(req.params.id); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Failed to delete student' }); }
+  });
+
+  app.get('/api/admin/coupons', requireAdmin, async (_req, res) => {
+    try { res.json(await getAllCouponsAdmin()); }
+    catch { res.status(500).json({ error: 'Failed to load coupons' }); }
+  });
+
+  app.put('/api/admin/coupons/:id', requireAdmin, async (req, res) => {
+    try { res.json(await saveCouponAdmin({ ...(req.body || {}), id: req.params.id })); }
+    catch { res.status(500).json({ error: 'Failed to save coupon' }); }
+  });
+
+  app.delete('/api/admin/coupons/:id', requireAdmin, async (req, res) => {
+    try { await deleteCouponAdmin(req.params.id); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Failed to delete coupon' }); }
+  });
+
+  // ==========================================
+  // 15. USER PERSONALIZATION & ENTITLEMENTS API
+  // ==========================================
   // ==========================================
   app.get('/api/user/bookmarks', requireStudentAuth, async (req, res) => {
     try {
