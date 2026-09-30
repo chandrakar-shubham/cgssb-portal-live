@@ -1,16 +1,14 @@
-import type { Firestore } from 'firebase-admin/firestore';
+import type { Firestore, CollectionReference, DocumentReference } from 'firebase-admin/firestore';
 
-export type DocumentReference = ReturnType<Firestore['collection']>['doc'] extends (...args: any[]) => infer R ? R : never;
-
-export function collection(db: Firestore, name: string) {
+export function collection(db: Firestore, name: string): CollectionReference {
   return db.collection(name);
 }
 
-export function doc(db: Firestore, collectionName: string, id: string) {
+export function doc(db: Firestore, collectionName: string, id: string): DocumentReference {
   return db.collection(collectionName).doc(id);
 }
 
-export async function getDocs(ref: ReturnType<Firestore['collection']>) {
+export async function getDocs(ref: CollectionReference) {
   return ref.get();
 }
 
