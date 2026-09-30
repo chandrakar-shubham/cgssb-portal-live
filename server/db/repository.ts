@@ -631,10 +631,6 @@ export async function exportCompleteDatabaseSnapshot() {
 // ==========================================
 // DEMO DATA PURGE & RESTORE ENGINES
 // ==========================================
-export function isServerDemoDataPurged(): boolean {
-  return memoryCache.demoDataPurged === true;
-}
-
 export async function purgeServerDemoData(purgeAll = true): Promise<{
   purgedQuestions: number;
   purgedTests: number;
@@ -642,42 +638,18 @@ export async function purgeServerDemoData(purgeAll = true): Promise<{
   purgedBundles: number;
   timestamp: string;
 }> {
-  const questionsCountBefore = memoryCache.questions.length;
-  const testsCountBefore = memoryCache.mockTests.length;
-  const pypCountBefore = memoryCache.pypPapers.length;
-  const bundlesCountBefore = memoryBundles.length;
-
-  memoryCache.questions = [];
-  memoryCache.mockTests = [];
-  memoryCache.pypPapers = [];
-  memoryCache.attempts = [];
-  memoryBundles = [];
-  memoryCache.demoDataPurged = true;
-
   const db = getFirestoreServer();
-  if (db) {
-    try {
-      const testSnap = await getDocs(collection(db, 'mockTests')).catch(() => null);
-      if (testSnap) for (const d of testSnap.docs) await deleteDoc(d.ref).catch(() => null);
-
-      const qSnap = await getDocs(collection(db, 'questions')).catch(() => null);
-      if (qSnap) for (const d of qSnap.docs) await deleteDoc(d.ref).catch(() => null);
-
-      const pSnap = await getDocs(collection(db, 'pypPapers')).catch(() => null);
-      if (pSnap) for (const d of pSnap.docs) await deleteDoc(d.ref).catch(() => null);
-
-      const bSnap = await getDocs(collection(db, 'bundles')).catch(() => null);
-      if (bSnap) for (const d of bSnap.docs) await deleteDoc(d.ref).catch(() => null);
-    } catch (err) {
-      console.warn('Firestore purge warning in server:', err);
-    }
+  const collections = ['mockTests', 'questions', 'pypPapers', 'bundles'];
+  const before = await Promise.all(collections.map(async name => (await getDocs(collection(db, name))).size));
+  for (const name of collections) {
+    const snap = await getDocs(collection(db, name));
+    for (const d of snap.docs) await deleteDoc(d.ref);
   }
-
   return {
-    purgedQuestions: questionsCountBefore,
-    purgedTests: testsCountBefore,
-    purgedPyp: pypCountBefore,
-    purgedBundles: bundlesCountBefore,
+    purgedQuestions: before[1],
+    purgedTests: before[0],
+    purgedPyp: before[2],
+    purgedBundles: before[3],
     timestamp: new Date().toISOString(),
   };
 }
@@ -688,11 +660,16 @@ export async function restoreServerDemoData(): Promise<{
   pypPapers: number;
   bundles: number;
 }> {
-  await syncWithFirestore();
+  const [questions, mockTests, pypPapers, bundles] = await Promise.all([
+    getDocs(collection(getFirestoreServer(), 'questions')),
+    getDocs(collection(getFirestoreServer(), 'mockTests')),
+    getDocs(collection(getFirestoreServer(), 'pypPapers')),
+    getDocs(collection(getFirestoreServer(), 'bundles')),
+  ]);
   return {
-    questions: memoryCache.questions.length,
-    mockTests: memoryCache.mockTests.length,
-    pypPapers: memoryCache.pypPapers.length,
-    bundles: memoryBundles.length,
+    questions: questions.size,
+    mockTests: mockTests.size,
+    pypPapers: pypPapers.size,
+    bundles: bundles.size,
   };
 }
