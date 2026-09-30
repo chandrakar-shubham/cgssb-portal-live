@@ -221,8 +221,7 @@ export async function fetchQuestionsFromFirestore(): Promise<Question[]> {
         });
         return items;
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching questions from Firestore:', err);
@@ -293,8 +292,7 @@ export async function fetchPypPapersFromFirestore(): Promise<PreviousYearPaper[]
         });
         return items;
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching PYP papers from Firestore:', err);
@@ -353,8 +351,7 @@ export async function fetchBundlesFromFirestore(): Promise<TestSeriesBundle[]> {
         });
         return items;
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching bundles from Firestore:', err);
@@ -411,8 +408,7 @@ export async function fetchCmsPagesFromFirestore(): Promise<CMSPage[]> {
         snap.forEach(d => items.push(d.data() as CMSPage));
         return items;
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching CMS pages from Firestore:', err);
@@ -464,8 +460,7 @@ export async function fetchCmsPostsFromFirestore(): Promise<CMSPost[]> {
         snap.forEach(d => items.push(d.data() as CMSPost));
         return items;
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching CMS posts from Firestore:', err);
@@ -517,8 +512,7 @@ export async function fetchCmsSeriesPacksFromFirestore(): Promise<CMSTestSeriesP
         snap.forEach(d => items.push(d.data() as CMSTestSeriesPack));
         return items;
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching CMS series packs from Firestore:', err);
@@ -567,8 +561,7 @@ export async function fetchCmsSettingsFromFirestore(): Promise<CMSSiteSettings |
     const ref = doc(db, COLLECTIONS.CMS_SETTINGS, 'global');
     return await withTimeout(
       getDoc(ref).then(snap => snap.exists() ? (snap.data() as CMSSiteSettings) : null),
-      4000,
-      null
+      4000
     );
   } catch (err) {
     console.warn('Error fetching CMS settings from Firestore:', err);
@@ -614,8 +607,7 @@ export async function fetchSliderBannersFromFirestore(): Promise<SliderBanner[]>
         snap.forEach(d => items.push(d.data() as SliderBanner));
         return items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
       }),
-      4000,
-      []
+      4000
     );
   } catch (err) {
     console.warn('Error fetching slider banners from Firestore:', err);
@@ -649,8 +641,7 @@ export async function fetchRemoteConfigFromFirestore(): Promise<AppRemoteConfig 
     const ref = doc(db, COLLECTIONS.REMOTE_CONFIG, 'global');
     return await withTimeout(
       getDoc(ref).then(snap => snap.exists() ? (snap.data() as AppRemoteConfig) : null),
-      4000,
-      null
+      4000
     );
   } catch (err) {
     console.warn('Error fetching remote config from Firestore:', err);
