@@ -9,32 +9,17 @@ import {
 } from '../firebase/firestoreService';
 
 export function useTestManager() {
-  const [tests, setTests] = useState<MockTest[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_tests');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {}
-    return [];
-  });
+  const [tests, setTests] = useState<MockTest[]>([]);
 
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
     const unsubscribe = subscribeToTests((firestoreTests) => {
       setTests(firestoreTests);
-      try {
-        localStorage.setItem('cgssb_tests', JSON.stringify(firestoreTests));
-      } catch {}
     });
 
     fetchTestsFromFirestore().then((remoteTests) => {
       if (Array.isArray(remoteTests)) {
         setTests(remoteTests);
-        try {
-          localStorage.setItem('cgssb_tests', JSON.stringify(remoteTests));
-        } catch {}
       }
     }).catch(() => {});
 
@@ -52,13 +37,6 @@ export function useTestManager() {
     return () => window.removeEventListener('cgssb-tests-updated', handleUpdate);
   }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('cgssb_tests', JSON.stringify(tests));
-    } catch (e) {
-      console.warn('LocalStorage quota warning for tests:', e);
-    }
-  }, [tests]);
 
   const addTest = useCallback((newTest: Partial<MockTest>) => {
     const testObj: MockTest = {
