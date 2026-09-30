@@ -432,18 +432,7 @@ function MainApp() {
   const [activePageSlug, setActivePageSlug] = useState<string | null>(null);
   const [activePostSlug, setActivePostSlug] = useState<string | null>(null);
 
-  const [attempts, setAttempts] = useState<TestAttempt[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_attempts');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return dedupeById(parsed.map(a => migrateLegacyAttempt(a, INITIAL_QUESTIONS)));
-        }
-      }
-    } catch {}
-    return INITIAL_ATTEMPTS;
-  });
+  const [attempts, setAttempts] = useState<TestAttempt[]>([]);
 
   // Run taxonomy migration on initial mount
   useEffect(() => {
@@ -490,38 +479,6 @@ function MainApp() {
     };
   }, []);
 
-  // Sync to localStorage with quota protection
-  useEffect(() => {
-    try {
-      localStorage.setItem('cgssb_tests', JSON.stringify(tests));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded or unavailable for tests:', e);
-    }
-  }, [tests]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('cgssb_questions', JSON.stringify(questions));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded or unavailable for questions:', e);
-    }
-  }, [questions]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('cgssb_pyp', JSON.stringify(pypPapers));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded or unavailable for PYP:', e);
-    }
-  }, [pypPapers]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('cgssb_attempts', JSON.stringify(attempts));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded or unavailable for attempts:', e);
-    }
-  }, [attempts]);
 
   // Fetch initial data from server or Firebase Firestore
   useEffect(() => {
@@ -1049,16 +1006,6 @@ function MainApp() {
     const updated = tests.filter(t => t.id !== testId);
     setTests(updated);
     try {
-      localStorage.setItem('cgssb_tests', JSON.stringify(updated));
-    } catch {}
-    try {
-      const custom = localStorage.getItem('cgssb_custom_mock_tests');
-      if (custom) {
-        const arr = JSON.parse(custom);
-        if (Array.isArray(arr)) {
-          localStorage.setItem('cgssb_custom_mock_tests', JSON.stringify(arr.filter((t: any) => t.id !== testId)));
-        }
-      }
     } catch {}
     cleanTestFromAllBundles(testId);
     deleteTestFromFirestore(testId).catch(() => null);
