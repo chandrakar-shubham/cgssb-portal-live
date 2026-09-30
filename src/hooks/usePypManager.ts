@@ -35,9 +35,6 @@ export function usePypManager() {
     fetchPypPapersFromFirestore().then((remotePapers) => {
       if (Array.isArray(remotePapers)) {
         setPypPapers(remotePapers);
-        try {
-          localStorage.setItem('cgssb_pyp', JSON.stringify(remotePapers));
-        } catch {}
       }
     }).catch(() => {});
 
@@ -55,13 +52,6 @@ export function usePypManager() {
     return () => window.removeEventListener('cgssb-pyp-updated', handleUpdate);
   }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('cgssb_pyp', JSON.stringify(pypPapers));
-    } catch (e) {
-      console.warn('LocalStorage quota warning for PYP:', e);
-    }
-  }, [pypPapers]);
 
   const addPypPaper = useCallback((newPaper: Partial<PreviousYearPaper>) => {
     const paper: PreviousYearPaper = {
