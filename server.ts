@@ -76,6 +76,8 @@ import {
   resetAppRemoteConfig,
   purgeServerDemoData,
   restoreServerDemoData,
+  applyReferralBonusForUser,
+  getReferralRecordsForUser,
 } from './server/db/repository.ts';
 import {
   getAllCaTopics,
@@ -2660,6 +2662,29 @@ app.delete('/api/admin/members/:id', requireAdmin, async (req, res) => {
   });
 
   // ==========================================
+  // 14b. STUDENT REFERRAL API (Firestore-authoritative)
+  app.get('/api/user/referrals', requireStudentAuth, async (req, res) => {
+    try {
+      const userId = String((req as any).firebaseUid);
+      const records = await getReferralRecordsForUser(userId);
+      res.json({ success: true, records });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/user/referrals/claim', requireStudentAuth, async (req, res) => {
+    try {
+      const userId = String((req as any).firebaseUid);
+      const code = String(req.body?.code || '');
+      const result = await applyReferralBonusForUser(userId, code);
+      if (!result.success) return res.status(400).json(result);
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
   // 15. USER PERSONALIZATION & ENTITLEMENTS API
   // ==========================================
   // ==========================================
