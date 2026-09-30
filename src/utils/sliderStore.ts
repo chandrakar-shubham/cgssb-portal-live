@@ -1,6 +1,5 @@
 import { SliderBanner } from '../types';
 import { db } from '../firebase/config';
-import { api } from './apiClient';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { subscribeToSliderBanners } from '../firebase/firestoreService';
 
@@ -217,7 +216,7 @@ export function getStoredSliderBanners(): SliderBanner[] {
 }
 
 /**
- * Update the local UI cache only. Persistence is performed through the authenticated API.
+ * Update the local UI cache and persist through Firestore Security Rules.
  */
 export function saveSliderBanners(banners: SliderBanner[]): void {
   const sorted = [...banners].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
@@ -232,13 +231,16 @@ export function saveSliderBanners(banners: SliderBanner[]): void {
  * Sync all banners to Firestore collection `slider_banners`
  */
 async function syncBannersToFirestore(banners: SliderBanner[]): Promise<void> {
-  try {
-    for (const banner of banners) {
-      await api.post('/api/slider-banners', banner, { requireAdmin: true });
-    }
-  } catch (err) {
-    console.warn('[SliderStore] Authenticated API sync failed:', err);
-  }
+  const snapshot = await getDocs(collection(db, 'slider_banners'));
+  const existingIds = new Set(snapshot.docs.map(d => d.id));
+  const desiredIds = new Set(banners.map(b => b.id));
+
+  await Promise.all(banners.map(banner =>
+    setDoc(doc(db, 'slider_banners', banner.id), banner, { merge: true })
+  ));
+
+  const staleIds = [...existingIds].filter(id => !desiredIds.has(id));
+  await Promise.all(staleIds.map(id => deleteDoc(doc(db, 'slider_banners', id))));
 }
 
 /**
@@ -326,9 +328,6 @@ export function deleteBanner(id: string): SliderBanner[] {
   const updated = current.filter(b => b.id !== id);
   saveSliderBanners(updated);
 
-  api.delete('/api/slider-banners/' + encodeURIComponent(id), { requireAdmin: true }).catch(err => {
-    console.warn('[SliderStore] Error deleting banner via API:', err);
-  });
   return updated;
 }
 
