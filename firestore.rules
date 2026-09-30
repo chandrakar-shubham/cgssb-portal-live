@@ -1,137 +1,144 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == 'coolboy171717@gmail.com' ||
-        (request.auth.token.email_verified == true && request.auth.token.email == 'coolboy171717@gmail.com') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-      );
-    }
 
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
-    }
+    // Admin writes are performed by the server Firebase Admin SDK.
+    // Do not expose an admin role check here as a substitute for server authorization.
 
-    // User Profiles
+    // User profile: a signed-in user can only access their own document.
     match /users/{userId} {
-      allow read, write: if true;
+      allow read, write: if isOwner(userId);
     }
-    
-    // Mock Tests Catalog - Real-time sync across all candidate devices
+
+    // Public exam/catalog content: browser reads are intentionally public.
+    // All writes go through authenticated server APIs.
     match /mockTests/{testId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
-    
-    // Question Bank - Real-time question sync
+
     match /questions/{questionId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
-    // Previous Year Papers (PYP) Repository
     match /pypPapers/{paperId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
-    
-    // Test Series Bundles & Packages
+
     match /bundles/{bundleId} {
-      allow read, write: if true;
-    }
-    
-    // Student Test Attempts & State-Wide Leaderboard
-    match /attempts/{attemptId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
-    // Connection Diagnostics & Health Ping Check Collection
-    match /_connection_check_/{docId} {
-      allow read, write: if true;
-    }
-
-    // Student Referrals
-    match /referrals/{referralId} {
-      allow read, write: if true;
-    }
-
-    // Global Server-Driven Remote Config & Feature Flags
-    match /remoteConfig/{configId} {
-      allow read, write: if true;
-    }
-
-    // User Bookmarks & Mistake Notebooks
-    match /userBookmarks/{userId} {
-      allow read, write: if true;
-    }
-
-    match /userMistakes/{userId} {
-      allow read, write: if true;
-    }
-
-    match /userEntitlements/{userId} {
-      allow read, write: if true;
-    }
-
-    // Current Affairs Repositories
-    match /currentAffairsSources/{docId} {
-      allow read, write: if true;
-    }
-
-    match /currentAffairsTopics/{docId} {
-      allow read, write: if true;
-    }
-
-    match /currentAffairsQuestions/{docId} {
-      allow read, write: if true;
-    }
-
-    match /dailyEditions/{docId} {
-      allow read, write: if true;
-    }
-
-    match /monthlyEditions/{docId} {
-      allow read, write: if true;
-    }
-
-    match /monthlyEditions/{docId}/sections/{sectionId} {
-      allow read, write: if true;
-    }
-
-    // CMS Dynamic Pages, Posts, Series Packs, and Site Settings
     match /pages/{pageId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
     match /posts/{postId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
     match /seriesPacks/{packId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
     match /cmsSettings/{settingsId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
-    // Hero Slider and Promotional Banners
     match /slider_banners/{bannerId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
-    // Fallback default rule
+    // Current affairs is public content; mutations are server-admin only.
+    match /currentAffairsSources/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /currentAffairsTopics/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /currentAffairsQuestions/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /dailyEditions/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /monthlyEditions/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /monthlyEditions/{docId}/sections/{sectionId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Attempts are written by the trusted server submission endpoint.
+    match /attempts/{attemptId} {
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // User-specific application data is server/API controlled.
+    match /userBookmarks/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
+    match /userMistakes/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
+    match /userEntitlements/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
+    // Referral records contain multiple users' data and are server controlled.
+    match /referrals/{referralId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Server-driven configuration.
+    match /remoteConfig/{configId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Diagnostics should never be client-writable in production.
+    match /_connection_check_/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Deny every collection not explicitly listed above.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

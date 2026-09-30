@@ -1,5 +1,6 @@
 import { SliderBanner } from '../types';
 import { db } from '../firebase/config';
+import { api } from './apiClient';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { subscribeToSliderBanners } from '../firebase/firestoreService';
 
@@ -250,14 +251,12 @@ export function saveSliderBanners(banners: SliderBanner[]): void {
  * Sync all banners to Firestore collection `slider_banners`
  */
 async function syncBannersToFirestore(banners: SliderBanner[]): Promise<void> {
-  if (!db) return;
   try {
     for (const banner of banners) {
-      const ref = doc(db, 'slider_banners', banner.id);
-      await setDoc(ref, banner, { merge: true });
+      await api.post('/api/slider-banners', banner, { requireAuth: true });
     }
   } catch (err) {
-    console.warn('[SliderStore] Firestore batch write error:', err);
+    console.warn('[SliderStore] Authenticated API sync failed:', err);
   }
 }
 
@@ -357,11 +356,9 @@ export function deleteBanner(id: string): SliderBanner[] {
   const updated = current.filter(b => b.id !== id);
   saveSliderBanners(updated);
 
-  if (db) {
-    deleteDoc(doc(db, 'slider_banners', id)).catch(err => {
-      console.warn('[SliderStore] Error deleting banner in Firestore:', err);
-    });
-  }
+  api.delete('/api/slider-banners/' + encodeURIComponent(id), { requireAuth: true }).catch(err => {
+    console.warn('[SliderStore] Error deleting banner via API:', err);
+  });
   return updated;
 }
 

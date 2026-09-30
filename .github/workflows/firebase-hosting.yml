@@ -57,17 +57,12 @@ jobs:
             echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
             export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
 
-            echo "📦 Deploying Firebase Hosting & Rules to [$TARGET_PROJECT]..."
-            npx firebase-tools deploy --only hosting,firestore:rules --project "$TARGET_PROJECT" || {
-              echo "⚠️ Combined deploy encountered an error. Attempting hosting-only deployment..."
-              npx firebase-tools deploy --only hosting --project "$TARGET_PROJECT"
-            }
+            echo "📦 Deploying Firebase Hosting & Firestore Rules to [$TARGET_PROJECT]..."
+            npx firebase-tools deploy --only hosting,firestore:rules --project "$TARGET_PROJECT"
           elif [ -n "$FIREBASE_TOKEN" ]; then
             echo "🔑 Authenticating via Firebase CI Token..."
-            npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT" || {
-              echo "⚠️ Combined deploy encountered an error. Attempting hosting-only deployment..."
-              npx firebase-tools deploy --only hosting --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT"
-            }
+            echo "📦 Deploying Firebase Hosting & Firestore Rules to [$TARGET_PROJECT]..."
+            npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT"
           else
             echo "::warning title=Firebase Secret Missing::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets. Skipping Firebase deploy."
           fi

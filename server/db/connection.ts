@@ -1,8 +1,8 @@
-import dotenv from 'dotenv';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
+import { App, cert, getApps, initializeApp, applicationDefault } from 'firebase-admin/app';
+import { Firestore, getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -24,58 +24,87 @@ export const dbConfig: DbConfig = {
 
 let serverFirestore: Firestore | null = null;
 
-export function getFirestoreServer(): Firestore {
-  if (serverFirestore) return serverFirestore;
-
-  const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
-  let config: any = {};
-  if (fs.existsSync(configPath)) {
+function loadServiceAccount(): Record<string, any> | null {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (raw) {
     try {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    } catch (_) {
-      config = {};
+      return JSON.parse(raw);
+    } catch (err) {
+      throw new Error(`FATAL DATABASE CONFIG ERROR: FIREBASE_SERVICE_ACCOUNT is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  const firebaseConfig = {
-    projectId: config.projectId || dbConfig.projectId,
-    appId: config.appId || '1:1073802091917:web:9e64b8997c63480093f1c4',
-    apiKey: config.apiKey || process.env.GEMINI_API_KEY || 'AIzaSyDWUsIeYRsigcC-CY47iv3jpNSMWFLgakQ',
-    authDomain: config.authDomain || `${dbConfig.projectId}.firebaseapp.com`,
-    firestoreDatabaseId: config.firestoreDatabaseId || dbConfig.databaseId,
-  };
+  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (credentialsPath && fs.existsSync(credentialsPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+    } catch (err) {
+      throw new Error(`FATAL DATABASE CONFIG ERROR: Unable to read GOOGLE_APPLICATION_CREDENTIALS: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const localConfigPath = path.resolve(process.cwd(), 'firebase-service-account.json');
+  if (process.env.NODE_ENV !== 'production' && fs.existsSync(localConfigPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(localConfigPath, 'utf8'));
+    } catch (err) {
+      throw new Error(`FATAL DATABASE CONFIG ERROR: Unable to read local service account: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return null;
+}
+
+export function getFirestoreServer(): Firestore {
+  if (serverFirestore) return serverFirestore;
 
   try {
-    const existingApp = getApps().find(a => a.name === 'cgssb-server-app');
-    const app = existingApp || initializeApp(firebaseConfig, 'cgssb-server-app');
-    const dbId = firebaseConfig.firestoreDatabaseId || dbConfig.databaseId;
-    serverFirestore = getFirestore(app, dbId);
+    const existingApp = getApps().find(a => a.name === 'cgssb-server-admin');
+    let app: App;
+
+    if (existingApp) {
+      app = existingApp;
+    } else {
+      const serviceAccount = loadServiceAccount();
+      app = serviceAccount
+        ? initializeApp({
+            credential: cert(serviceAccount as any),
+            projectId: serviceAccount.project_id || dbConfig.projectId,
+          }, 'cgssb-server-admin')
+        : initializeApp({
+            credential: applicationDefault(),
+            projectId: dbConfig.projectId,
+          }, 'cgssb-server-admin');
+    }
+
+    serverFirestore = getFirestore(app, dbConfig.databaseId);
     return serverFirestore;
   } catch (err: any) {
-    console.error(`[Firestore Server Init Error]`, err?.message || err);
-    throw new Error(`FATAL DATABASE ERROR: Failed to connect to live Cloud Firestore database (${dbConfig.databaseId}): ${err?.message || err}`);
+    console.error('[Firestore Admin Init Error]', err?.message || err);
+    throw new Error(`FATAL DATABASE ERROR: Failed to initialize Cloud Firestore database (${dbConfig.databaseId}): ${err?.message || err}`);
   }
 }
 
 export async function testConnection(): Promise<{ ok: boolean; message: string; database: string; engine: string }> {
   try {
     const db = getFirestoreServer();
-    // Validate live connectivity to Firestore Server with timeout
-    const testPromise = getDocFromServer(doc(db, 'test', 'connection')).catch(() => null);
-    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
-    await Promise.race([testPromise, timeoutPromise]);
+    await Promise.race([
+      db.collection('__health').doc('connection').get(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore health check timed out after 3000ms')), 3000)),
+    ]);
+
     return {
       ok: true,
-      engine: 'Google Cloud Firestore (Enterprise Edition)',
-      message: `Google Cloud Firestore Enterprise is live and connected (database: ${dbConfig.databaseId})`,
+      engine: 'Google Cloud Firestore via Firebase Admin SDK',
+      message: `Google Cloud Firestore is live and connected (database: ${dbConfig.databaseId})`,
       database: dbConfig.databaseId,
     };
   } catch (err: any) {
-    console.warn(`[Firestore Connection Check Note]`, err?.message || err);
+    console.warn('[Firestore Connection Check Failed]', err?.message || err);
     return {
-      ok: true,
-      engine: 'Google Cloud Firestore (Enterprise Edition)',
-      message: `Google Cloud Firestore Enterprise active (database: ${dbConfig.databaseId})`,
+      ok: false,
+      engine: 'Google Cloud Firestore via Firebase Admin SDK',
+      message: `Google Cloud Firestore connection failed (database: ${dbConfig.databaseId}): ${err?.message || err}`,
       database: dbConfig.databaseId,
     };
   }

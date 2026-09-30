@@ -56,7 +56,7 @@ const AdminStudentManagement = lazyWithRetry(() => import('./components/AdminStu
 const AdminRoleManagement = lazyWithRetry(() => import('./components/AdminRoleManagement').then(m => ({ default: m.AdminRoleManagement })));
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
-import { syncBundlesFromFirestore, cleanTestFromAllBundles, isDemoDataPurged } from './utils/bundleStore';
+import { syncBundlesFromFirestore, cleanTestFromAllBundles } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
 const AdminRemoteConfigStudio = lazyWithRetry(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
 const AdminSliderStudio = lazyWithRetry(() => import('./components/AdminSliderStudio').then(m => ({ default: m.AdminSliderStudio })));
@@ -71,7 +71,7 @@ import {
   CMSTestSeriesPack,
   CMSSiteSettings
 } from './types/cms';
-import { getAdminToken } from './utils/apiClient';
+import { getAdminToken, api } from './utils/apiClient';
 import {
   cacheTestBundleForDevice,
   clearCachedTestBundle,
@@ -111,7 +111,6 @@ import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
 import { auth } from './firebase/config';
 import { testConnection } from './firebase/connectionTest';
 import {
-  saveAttemptToFirestore,
   fetchTestsFromFirestore,
   saveTestToFirestore,
   fetchQuestionsFromFirestore,
@@ -121,7 +120,6 @@ import {
   fetchPypPapersFromFirestore,
   savePypPaperToFirestore,
   deletePypPaperFromFirestore,
-  seedInitialDataIfEmpty
 } from './firebase/firestoreService';
 
 function MainApp() {
@@ -528,9 +526,8 @@ function MainApp() {
   // Fetch initial data from server or Firebase Firestore
   useEffect(() => {
     async function loadData() {
-      // 1. Verify Firestore Connection and seed initial verified catalog if database is empty
+      // Production invariant: an empty database is valid production state. Never seed demo/factory data from the client.
       testConnection().catch(() => null);
-      seedInitialDataIfEmpty().catch(() => null);
 
       try {
         const [testsRes, pypRes, qRes, firestoreTests, firestoreQuestions, firestorePyp] = await Promise.all([
@@ -687,17 +684,15 @@ function MainApp() {
     const activeQuestionList = testQs;
 
     try {
-      const res = await fetch(`/api/tests/${currentTest.id}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timeTakenSeconds: submission.timeTakenSeconds,
-          responses: submission.responses,
-        }),
+      const data = await api.post(`/api/tests/${currentTest.id}/submit`, {
+        userId: user?.id || 'guest',
+        userName: user?.name || 'Aspirant Student',
+        timeTakenSeconds: submission.timeTakenSeconds,
+        responses: submission.responses,
+        questionStatuses: submission.questionStatuses,
       });
+      {
 
-      if (res.ok) {
-        const data = await res.json();
         const attempt = data.attempt || data;
         setAttempts(prev => [attempt, ...prev]);
         clearCachedTestBundle(currentTest.id);
@@ -817,7 +812,6 @@ function MainApp() {
     };
 
     setAttempts(prev => [newAttempt, ...prev]);
-    saveAttemptToFirestore(newAttempt).catch(() => null);
     setActiveExamTest(null);
     setActiveAttemptReview(newAttempt);
 

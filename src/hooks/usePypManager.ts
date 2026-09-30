@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PreviousYearPaper } from '../types';
-import { INITIAL_PYP_PAPERS } from '../mockData';
 import {
   fetchPypPapersFromFirestore,
   savePypPaperToFirestore,
@@ -89,13 +88,11 @@ export function usePypManager() {
     deletePypPaperFromFirestore(id).catch(err => console.warn('Cloud delete PYP paper warning:', err));
   }, []);
 
+  // Factory/demo PYP restoration is intentionally disabled in production.
   const syncPyp = useCallback(() => {
-    setPypPapers(INITIAL_PYP_PAPERS);
-    try {
-      localStorage.setItem('cgssb_pyp', JSON.stringify(INITIAL_PYP_PAPERS));
-    } catch {}
-    for (const p of INITIAL_PYP_PAPERS) {
-      savePypPaperToFirestore(p).catch(() => {});
+    if (!import.meta.env.DEV) {
+      console.warn('Demo PYP restore is disabled in production.');
+      return;
     }
   }, []);
 

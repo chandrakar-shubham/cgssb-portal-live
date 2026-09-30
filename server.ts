@@ -29,6 +29,7 @@ import {
   deleteMockTest,
   getAllPypPapers,
   savePypPaper,
+  deletePypPaper,
   getAllTestAttempts,
   getTestAttemptById,
   saveTestAttempt,
@@ -617,7 +618,12 @@ async function startServer() {
 
   // CORS support for Android clients connecting over network
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://cgtest.in,https://www.cgtest.in,http://localhost:5173,http://localhost:4173').split(',').map(origin => origin.trim()).filter(Boolean);
+    const requestOrigin = req.headers.origin;
+    if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+      res.header('Access-Control-Allow-Origin', requestOrigin);
+      res.header('Vary', 'Origin');
+    }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-admin-key');
     if (req.method === 'OPTIONS') {
@@ -772,7 +778,13 @@ async function startServer() {
   }, 30 * 60 * 1000);
 
   // --- Admin Authentication Security & Token Verification ---
-  const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD || 'cgssb_admin_2026';
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
+  if (!ADMIN_SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL CONFIG ERROR: ADMIN_SECRET must be configured in production.');
+  }
+  if (!ADMIN_SECRET) {
+    console.warn('[Security] ADMIN_SECRET is not configured; admin login is disabled.');
+  }
   const activeAdminTokens = new Set<string>();
 
   function generateAdminToken(): string {
@@ -785,14 +797,13 @@ async function startServer() {
     const authHeader = req.headers.authorization;
     const adminKeyHeader = req.headers['x-admin-key'] as string;
 
-    if (adminKeyHeader && (adminKeyHeader === ADMIN_SECRET || adminKeyHeader === 'admin123' || adminKeyHeader === 'cgssb2024')) {
+    if (adminKeyHeader && ADMIN_SECRET && adminKeyHeader === ADMIN_SECRET) {
       return true;
     }
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.slice(7).trim();
       if (activeAdminTokens.has(token)) return true;
-      if (token === ADMIN_SECRET || token.startsWith('adm_')) return true;
     }
     return false;
   }
@@ -814,8 +825,9 @@ async function startServer() {
     const userStr = String(username || '').trim().toLowerCase();
     const passStr = String(password || '').trim();
 
-    const validUser = userStr === 'admin' || userStr === 'admin@cgssbtest.com' || userStr === 'controller' || userStr === 'coolboy171717@gmail.com';
-    const validPass = passStr === ADMIN_SECRET || passStr === 'admin123' || passStr === 'cgssb2024' || passStr === 'cgssb_admin_2026';
+    const configuredUser = String(process.env.ADMIN_USERNAME || '').trim().toLowerCase();
+    const validUser = Boolean(configuredUser && userStr === configuredUser);
+    const validPass = Boolean(ADMIN_SECRET && passStr === ADMIN_SECRET);
 
     if (validUser && validPass) {
       const token = generateAdminToken();
@@ -1218,6 +1230,37 @@ async function startServer() {
     }
   });
 
+  // Hero slider banner mutations
+  app.post('/api/slider-banners', requireAdmin, async (req, res) => {
+    try {
+      const banner = req.body;
+      if (!banner?.id || typeof banner.id !== 'string' || banner.id.length > 128) {
+        return res.status(400).json({ success: false, error: 'Valid banner id is required' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('slider_banners').doc(banner.id).set({
+        ...banner,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      res.json({ success: true, banner });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/slider-banners/:id', requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('slider_banners').doc(id).delete();
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // =========================================================================
   // REMOTE CLOUD RUN / DEPLOYED INSTANCE & FIRESTORE SYNC API
   // =========================================================================
@@ -1350,7 +1393,7 @@ async function startServer() {
       const pattern = EXAM_PATTERNS[data.category as ExamCategory] || EXAM_PATTERNS.CGSSB;
 
       const newTest: MockTest = {
-        id: `test-${Date.now()}`,
+        id: data.id || `test-${Date.now()}`,
         title: data.title || 'New Mock Test',
         category: data.category || 'CGSSB',
         description: data.description || '',
@@ -1658,7 +1701,7 @@ async function startServer() {
     try {
       const data = req.body;
       const newPyp: PreviousYearPaper = {
-        id: `pyp-${Date.now()}`,
+        id: data.id || `pyp-${Date.now()}`,
         title: data.title || 'Official Previous Year Paper',
         examCategory: data.examCategory || 'CGSSB',
         year: Number(data.year) || new Date().getFullYear() - 1,
@@ -1680,6 +1723,16 @@ async function startServer() {
       res.status(201).json({ success: true, pyp: newPyp });
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/pyp/:id', requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await deletePypPaper(id);
+      res.json({ success: true, deleted, message: 'PYP paper deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 
@@ -2623,6 +2676,81 @@ Respond strictly with a JSON object having key "questions" containing an array o
   });
 
   // --- Current Affairs & AI Professor Production Engine APIs ---
+  // Privileged Current Affairs Firestore mutations. Public reads remain available separately.
+  const CA_ADMIN_COLLECTIONS = new Set([
+    'currentAffairsSources',
+    'currentAffairsTopics',
+    'currentAffairsQuestions',
+    'dailyEditions',
+    'monthlyEditions',
+  ]);
+
+  app.post('/api/current-affairs/:collection/:id', requireAdmin, async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      if (!CA_ADMIN_COLLECTIONS.has(collection) || !id || id.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid current affairs collection or document id' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection(collection).doc(id).set({
+        ...req.body,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/current-affairs/:collection/:id', requireAdmin, async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      if (!CA_ADMIN_COLLECTIONS.has(collection) || !id || id.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid current affairs collection or document id' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection(collection).doc(id).delete();
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/current-affairs/monthly/:yearMonth/sections/:sectionId', requireAdmin, async (req, res) => {
+    try {
+      const { yearMonth, sectionId } = req.params;
+      if (!/^\d{4}-\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid monthly section identifier' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('monthlyEditions').doc(yearMonth).collection('sections').doc(sectionId).set({
+        ...req.body,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      res.json({ success: true, id: sectionId });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/current-affairs/monthly/:yearMonth/sections/:sectionId', requireAdmin, async (req, res) => {
+    try {
+      const { yearMonth, sectionId } = req.params;
+      if (!/^\\d{4}-\\d{2}$/.test(yearMonth) || !sectionId || sectionId.length > 128) {
+        return res.status(400).json({ success: false, error: 'Invalid monthly section identifier' });
+      }
+      const { getFirestoreServer } = await import('./server/db/connection.ts');
+      const db = getFirestoreServer();
+      await db.collection('monthlyEditions').doc(yearMonth).collection('sections').doc(sectionId).delete();
+      res.json({ success: true, id: sectionId });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.get('/api/current-affairs/topics', async (req, res) => {
     try {
       const topics = getAllCaTopics();

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Question } from '../types';
-import { INITIAL_QUESTIONS } from '../mockData';
 import { migrateLegacyQuestion } from '../utils/taxonomyMigration';
 import {
   fetchQuestionsFromFirestore,
@@ -86,13 +85,12 @@ export function useQuestionManager() {
     deleteQuestionFromFirestore(questionId).catch(err => console.warn('Cloud delete question warning:', err));
   }, []);
 
+  // Factory/demo question restoration is intentionally disabled in production.
   const syncQuestions = useCallback(() => {
-    const items = INITIAL_QUESTIONS.map(migrateLegacyQuestion);
-    setQuestions(items);
-    try {
-      localStorage.setItem('cgssb_questions', JSON.stringify(items));
-    } catch {}
-    saveQuestionsToFirestore(items).catch(() => {});
+    if (!import.meta.env.DEV) {
+      console.warn('Demo question restore is disabled in production.');
+      return;
+    }
   }, []);
 
   return {

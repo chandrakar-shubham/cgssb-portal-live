@@ -10,6 +10,7 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db, auth } from './config';
+import { api } from '../utils/apiClient';
 import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG } from '../types';
 import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
@@ -193,8 +194,7 @@ export function subscribeToTests(callback: (tests: MockTest[]) => void): Unsubsc
 export async function saveTestToFirestore(test: MockTest): Promise<void> {
   if (!db || !test?.id) return;
   try {
-    const testDocRef = doc(db, COLLECTIONS.TESTS, test.id);
-    await setDoc(testDocRef, test, { merge: true });
+    await api.post('/api/tests', test, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving test to Firestore:', err);
   }
@@ -203,8 +203,7 @@ export async function saveTestToFirestore(test: MockTest): Promise<void> {
 export async function deleteTestFromFirestore(testId: string): Promise<void> {
   if (!db || !testId) return;
   try {
-    const testDocRef = doc(db, COLLECTIONS.TESTS, testId);
-    await deleteDoc(testDocRef);
+    await api.delete('/api/tests/' + encodeURIComponent(testId), { requireAuth: true });
   } catch (err) {
     console.warn('Error deleting test from Firestore:', err);
   }
@@ -255,11 +254,9 @@ export function subscribeToQuestions(callback: (questions: Question[]) => void):
 export async function saveQuestionsToFirestore(questions: Question[]): Promise<void> {
   if (!db) return;
   try {
-    for (const q of questions) {
-      if (q && q.id) {
-        const qDocRef = doc(db, COLLECTIONS.QUESTIONS, q.id);
-        await setDoc(qDocRef, q, { merge: true });
-      }
+    const validQuestions = questions.filter(q => q && q.id);
+    if (validQuestions.length > 0) {
+      await api.post('/api/questions/bulk', { questions: validQuestions }, { requireAuth: true });
     }
   } catch (err) {
     console.warn('Error saving questions to Firestore:', err);
@@ -269,8 +266,7 @@ export async function saveQuestionsToFirestore(questions: Question[]): Promise<v
 export async function saveSingleQuestionToFirestore(question: Question): Promise<void> {
   if (!db || !question?.id) return;
   try {
-    const qDocRef = doc(db, COLLECTIONS.QUESTIONS, question.id);
-    await setDoc(qDocRef, question, { merge: true });
+    await api.post('/api/questions', question, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving question to Firestore:', err);
   }
@@ -279,8 +275,7 @@ export async function saveSingleQuestionToFirestore(question: Question): Promise
 export async function deleteQuestionFromFirestore(questionId: string): Promise<void> {
   if (!db || !questionId) return;
   try {
-    const qDocRef = doc(db, COLLECTIONS.QUESTIONS, questionId);
-    await deleteDoc(qDocRef);
+    await api.delete('/api/questions/' + encodeURIComponent(questionId), { requireAuth: true });
   } catch (err) {
     console.warn('Error deleting question from Firestore:', err);
   }
@@ -331,8 +326,7 @@ export function subscribeToPypPapers(callback: (papers: PreviousYearPaper[]) => 
 export async function savePypPaperToFirestore(paper: PreviousYearPaper): Promise<void> {
   if (!db || !paper?.id) return;
   try {
-    const paperDocRef = doc(db, COLLECTIONS.PYP_PAPERS, paper.id);
-    await setDoc(paperDocRef, paper, { merge: true });
+    await api.post('/api/pyp', paper, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving PYP paper to Firestore:', err);
   }
@@ -341,8 +335,7 @@ export async function savePypPaperToFirestore(paper: PreviousYearPaper): Promise
 export async function deletePypPaperFromFirestore(paperId: string): Promise<void> {
   if (!db || !paperId) return;
   try {
-    const paperDocRef = doc(db, COLLECTIONS.PYP_PAPERS, paperId);
-    await deleteDoc(paperDocRef);
+    await api.delete('/api/pyp/' + encodeURIComponent(paperId), { requireAuth: true });
   } catch (err) {
     console.warn('Error deleting PYP paper from Firestore:', err);
   }
@@ -393,8 +386,7 @@ export function subscribeToBundles(callback: (bundles: TestSeriesBundle[]) => vo
 export async function saveBundleToFirestore(bundle: TestSeriesBundle): Promise<void> {
   if (!db || !bundle?.id) return;
   try {
-    const bundleDocRef = doc(db, COLLECTIONS.BUNDLES, bundle.id);
-    await setDoc(bundleDocRef, bundle, { merge: true });
+    await api.post('/api/bundles', bundle, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving bundle to Firestore:', err);
   }
@@ -403,8 +395,7 @@ export async function saveBundleToFirestore(bundle: TestSeriesBundle): Promise<v
 export async function deleteBundleFromFirestore(bundleId: string): Promise<void> {
   if (!db || !bundleId) return;
   try {
-    const bundleDocRef = doc(db, COLLECTIONS.BUNDLES, bundleId);
-    await deleteDoc(bundleDocRef);
+    await api.delete('/api/bundles/' + encodeURIComponent(bundleId), { requireAuth: true });
   } catch (err) {
     console.warn('Error deleting bundle from Firestore:', err);
   }
@@ -451,8 +442,7 @@ export function subscribeToCmsPages(callback: (pages: CMSPage[]) => void): Unsub
 export async function saveCmsPageToFirestore(page: CMSPage): Promise<void> {
   if (!db || !page?.id) return;
   try {
-    const ref = doc(db, COLLECTIONS.PAGES, page.id);
-    await setDoc(ref, page, { merge: true });
+    await api.post('/api/cms/pages', page, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving CMS page to Firestore:', err);
   }
@@ -461,8 +451,7 @@ export async function saveCmsPageToFirestore(page: CMSPage): Promise<void> {
 export async function deleteCmsPageFromFirestore(pageId: string): Promise<void> {
   if (!db || !pageId) return;
   try {
-    const ref = doc(db, COLLECTIONS.PAGES, pageId);
-    await deleteDoc(ref);
+    await api.delete('/api/cms/pages/' + encodeURIComponent(pageId), { requireAuth: true });
   } catch (err) {
     console.warn('Error deleting CMS page from Firestore:', err);
   }
@@ -506,8 +495,7 @@ export function subscribeToCmsPosts(callback: (posts: CMSPost[]) => void): Unsub
 export async function saveCmsPostToFirestore(post: CMSPost): Promise<void> {
   if (!db || !post?.id) return;
   try {
-    const ref = doc(db, COLLECTIONS.POSTS, post.id);
-    await setDoc(ref, post, { merge: true });
+    await api.post('/api/cms/posts', post, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving CMS post to Firestore:', err);
   }
@@ -516,8 +504,7 @@ export async function saveCmsPostToFirestore(post: CMSPost): Promise<void> {
 export async function deleteCmsPostFromFirestore(postId: string): Promise<void> {
   if (!db || !postId) return;
   try {
-    const ref = doc(db, COLLECTIONS.POSTS, postId);
-    await deleteDoc(ref);
+    await api.delete('/api/cms/posts/' + encodeURIComponent(postId), { requireAuth: true });
   } catch (err) {
     console.warn('Error deleting CMS post from Firestore:', err);
   }
@@ -561,8 +548,7 @@ export function subscribeToCmsSeriesPacks(callback: (packs: CMSTestSeriesPack[])
 export async function saveCmsSeriesPackToFirestore(pack: CMSTestSeriesPack): Promise<void> {
   if (!db || !pack?.id) return;
   try {
-    const ref = doc(db, COLLECTIONS.SERIES_PACKS, pack.id);
-    await setDoc(ref, pack, { merge: true });
+    await api.post('/api/cms/series', pack, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving CMS series pack to Firestore:', err);
   }
@@ -571,8 +557,7 @@ export async function saveCmsSeriesPackToFirestore(pack: CMSTestSeriesPack): Pro
 export async function deleteCmsSeriesPackFromFirestore(packId: string): Promise<void> {
   if (!db || !packId) return;
   try {
-    const ref = doc(db, COLLECTIONS.SERIES_PACKS, packId);
-    await deleteDoc(ref);
+    await api.delete('/api/cms/series/' + encodeURIComponent(packId), { requireAuth: true });
   } catch (err) {
     console.warn('Error deleting CMS series pack from Firestore:', err);
   }
@@ -613,8 +598,7 @@ export function subscribeToCmsSettings(callback: (settings: CMSSiteSettings) => 
 export async function saveCmsSettingsToFirestore(settings: CMSSiteSettings): Promise<void> {
   if (!db) return;
   try {
-    const ref = doc(db, COLLECTIONS.CMS_SETTINGS, 'global');
-    await setDoc(ref, settings, { merge: true });
+    await api.post('/api/cms/settings', settings, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving CMS settings to Firestore:', err);
   }
@@ -696,11 +680,7 @@ export function subscribeToRemoteConfig(callback: (config: AppRemoteConfig) => v
 export async function saveRemoteConfigToFirestore(config: Partial<AppRemoteConfig>): Promise<void> {
   if (!db) return;
   try {
-    const ref = doc(db, COLLECTIONS.REMOTE_CONFIG, 'global');
-    await setDoc(ref, {
-      ...config,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await api.post('/api/admin/config/remote', { ...config, updatedAt: new Date().toISOString() }, { requireAuth: true });
   } catch (err) {
     console.warn('Error saving remote config to Firestore:', err);
   }
@@ -710,7 +690,8 @@ export async function saveRemoteConfigToFirestore(config: Partial<AppRemoteConfi
 // SEEDING INITIAL DATA TO FIRESTORE
 // ==========================================
 export async function seedInitialDataIfEmpty(): Promise<void> {
-  if (!db) return;
+  // Demo/factory seeding is development-only. Production must never mutate an empty database by itself.
+  if (!db || !import.meta.env.DEV) return;
   try {
     // Check if tests exist
     const testSnap = await getDocs(collection(db, COLLECTIONS.TESTS)).catch(() => null);
@@ -917,32 +898,28 @@ export async function migrateAllLocalDataToFirestore(params: {
 }
 
 export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void> {
-  if (!db || !attempt?.id) return;
+  if (!attempt?.id) return;
   try {
-    const attemptDocRef = doc(db, COLLECTIONS.ATTEMPTS, attempt.id);
-    await setDoc(attemptDocRef, {
-      ...attempt,
-      submittedAtServer: serverTimestamp()
-    }, { merge: true });
+    await api.post('/api/tests/' + encodeURIComponent(attempt.testId) + '/submit', {
+      userId: attempt.userId,
+      userName: attempt.userName,
+      timeTakenSeconds: attempt.timeTakenSeconds,
+      responses: attempt.responses,
+      questionStatuses: attempt.questionStatuses,
+      idempotencyKey: attempt.id,
+    });
   } catch (err) {
-    console.warn('Error saving test attempt to Firestore:', err);
+    console.warn('Error submitting test attempt through API:', err);
   }
 }
 
 export async function fetchLeaderboardFromFirestore(testId?: string): Promise<TestAttempt[]> {
-  if (!db) return [];
+  if (!testId) return [];
   try {
-    const snap = await getDocs(collection(db, COLLECTIONS.ATTEMPTS));
-    const items: TestAttempt[] = [];
-    snap.forEach(d => {
-      const data = d.data() as TestAttempt;
-      if (!testId || data.testId === testId) {
-        items.push(data);
-      }
-    });
-    return items.sort((a, b) => (b.score || 0) - (a.score || 0));
+    const data = await api.get<{ success: boolean; leaderboard: TestAttempt[] }>('/api/tests/' + encodeURIComponent(testId) + '/leaderboard');
+    return Array.isArray(data.leaderboard) ? data.leaderboard : [];
   } catch (err) {
-    console.warn('Error fetching leaderboard from Firestore:', err);
+    console.warn('Error fetching leaderboard through API:', err);
     return [];
   }
 }

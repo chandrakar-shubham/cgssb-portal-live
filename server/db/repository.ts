@@ -1,4 +1,4 @@
-import { doc, getDoc, getDocs, collection, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, deleteDoc } from './firestoreAdapter.ts';
 import { dbConfig, getFirestoreServer, canServerWriteFirestore } from './connection.ts';
 import type {
   Question,
@@ -181,7 +181,7 @@ export async function getQuestionById(id: string): Promise<Question | null> {
   const db = getFirestoreServer();
   try {
     const snap = await getDoc(doc(db, 'questions', id));
-    if (snap.exists()) return snap.data() as Question;
+    if (snap.exists) return snap.data() as Question;
   } catch (err) {
     console.warn('Firestore getQuestionById note:', err);
   }
@@ -247,7 +247,7 @@ export async function getMockTestById(id: string): Promise<MockTest | null> {
   const db = getFirestoreServer();
   try {
     const snap = await getDoc(doc(db, 'mockTests', id));
-    if (snap.exists()) return snap.data() as MockTest;
+    if (snap.exists) return snap.data() as MockTest;
   } catch (err) {
     console.warn('Firestore getMockTestById note:', err);
   }
@@ -303,6 +303,13 @@ export async function savePypPaper(p: PreviousYearPaper): Promise<PreviousYearPa
   return p;
 }
 
+export async function deletePypPaper(id: string): Promise<boolean> {
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'pypPapers', id));
+  memoryCache.pypPapers = memoryCache.pypPapers.filter(p => p.id !== id);
+  return true;
+}
+
 // ----------------- ATTEMPTS COLLECTION REPOSITORY (/attempts) -----------------
 
 export async function getAllTestAttempts(userId?: string): Promise<TestAttempt[]> {
@@ -327,7 +334,7 @@ export async function getTestAttemptById(id: string): Promise<TestAttempt | null
   const db = getFirestoreServer();
   try {
     const snap = await getDoc(doc(db, 'attempts', id));
-    if (snap.exists()) return snap.data() as TestAttempt;
+    if (snap.exists) return snap.data() as TestAttempt;
   } catch (err) {
     console.warn('Firestore getTestAttemptById note:', err);
   }
@@ -465,7 +472,7 @@ export async function getCmsSettings(): Promise<CMSSiteSettings> {
   const db = getFirestoreServer();
   try {
     const snap = await getDoc(doc(db, 'cmsSettings', 'global'));
-    if (snap.exists()) memoryCmsSettings = snap.data() as CMSSiteSettings;
+    if (snap.exists) memoryCmsSettings = snap.data() as CMSSiteSettings;
   } catch (err) {
     console.warn('Firestore getCmsSettings note:', err);
   }
@@ -667,7 +674,7 @@ export async function getAppRemoteConfig(): Promise<AppRemoteConfig> {
   const db = getFirestoreServer();
   try {
     const snap = await getDoc(doc(db, 'remoteConfig', 'global'));
-    if (snap.exists()) {
+    if (snap.exists) {
       const data = snap.data() as AppRemoteConfig;
       memoryRemoteConfig = {
         ...DEFAULT_REMOTE_CONFIG,

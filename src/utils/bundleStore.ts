@@ -7,7 +7,6 @@ import {
   purgeFirestoreDemoData,
   subscribeToBundles
 } from '../firebase/firestoreService';
-import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 
 const BUNDLE_STORAGE_KEY = 'cgssb_custom_bundles_catalog_v2';
 
@@ -111,17 +110,16 @@ export const setTrueZeroDataMode = (_enabled: boolean): void => {
 };
 
 export const getStoredBundles = (): TestSeriesBundle[] => {
-  if (typeof window === 'undefined') return OFFICIAL_BUNDLES_CATALOG;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(BUNDLE_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Error loading bundles from cache:', err);
+    return [];
   }
-  return OFFICIAL_BUNDLES_CATALOG;
 };
 
 export const saveStoredBundles = (bundles: TestSeriesBundle[]): void => {
@@ -139,7 +137,8 @@ export const saveStoredBundles = (bundles: TestSeriesBundle[]): void => {
 export const syncBundlesFromFirestore = async (_customUrl?: string): Promise<{ list: TestSeriesBundle[]; count: number; source: string }> => {
   try {
     const firestoreBundles = await fetchBundlesFromFirestore();
-    if (firestoreBundles && Array.isArray(firestoreBundles) && firestoreBundles.length > 0) {
+    if (Array.isArray(firestoreBundles)) {
+      // Empty is a legitimate production state; persist it instead of resurrecting the factory catalog.
       saveStoredBundles(firestoreBundles);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: firestoreBundles }));
