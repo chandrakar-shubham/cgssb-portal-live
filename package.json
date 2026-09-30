@@ -4,23 +4,17 @@
   "version": "2.5.2",
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development tsx serverEntry.ts",
+    "dev": "vite",
     "build": "node scripts/build.cjs",
-    "start": "node dist/server.js",
+    "start": "vite preview",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist",
     "lint": "./node_modules/.bin/tsc --noEmit",
-    "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\"",
-    "start:dev": "tsx serverEntry.ts",
-    "build:functions": "esbuild firebaseFunctions.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/firebase-functions.cjs"
+    "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\""
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
-    "dotenv": "^17.2.3",
-    "esbuild": "^0.25.0",
-    "express": "^4.21.2",
     "firebase": "^12.19.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -28,12 +22,9 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tsx": "^4.21.0",
-    "vite": "^8.3.0",
-    "firebase-admin": "^13.5.0",
-    "firebase-functions": "^7.0.0"
+    "vite": "^8.3.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.3.0",
@@ -46,5 +37,5 @@
   "engines": {
     "node": ">=20 <25"
   },
-  "main": "dist/firebase-functions.cjs"
+  "description": "CGSSB Test — Firebase Spark-only competitive exam platform"
 }
