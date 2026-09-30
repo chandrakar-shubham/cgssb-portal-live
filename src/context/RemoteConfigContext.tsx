@@ -109,11 +109,11 @@ export const RemoteConfigProvider: React.FC<{ children: React.ReactNode }> = ({ 
         brandingConfig: { ...config.brandingConfig, ...(newConfig.brandingConfig || {}) },
         updatedAt: new Date().toISOString(),
       };
+      await saveRemoteConfigToFirestore(merged);
       setConfig(merged);
       if (typeof window !== 'undefined') {
         localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(merged));
       }
-      await saveRemoteConfigToFirestore(merged);
       return true;
     } catch (err) {
       console.error('Failed to update remote config:', err);
@@ -123,11 +123,11 @@ export const RemoteConfigProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const resetToDefaults = async (): Promise<boolean> => {
     try {
+      await saveRemoteConfigToFirestore(DEFAULT_REMOTE_CONFIG);
       setConfig(DEFAULT_REMOTE_CONFIG);
       if (typeof window !== 'undefined') {
         localStorage.setItem(LOCAL_STORAGE_REMOTE_CONFIG_KEY, JSON.stringify(DEFAULT_REMOTE_CONFIG));
       }
-      await saveRemoteConfigToFirestore(DEFAULT_REMOTE_CONFIG);
       return true;
     } catch (err) {
       console.error('Failed to reset remote config:', err);
