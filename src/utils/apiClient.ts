@@ -60,6 +60,7 @@ async function requireAdminAuth() {
   if (!user || user.isAnonymous) throw new Error('Admin authentication is required.');
 
   const email = (user.email || '').trim().toLowerCase();
+  if (!user.emailVerified) throw new Error('Administrator email must be verified in Firebase Authentication.');
   if (email === ADMIN_BOOTSTRAP_EMAIL) {
     return { user, role: 'superadmin', permissions: { all: true } };
   }
