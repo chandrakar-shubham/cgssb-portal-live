@@ -11,7 +11,6 @@ import {
   signOut as firebaseSignOut 
 } from 'firebase/auth';
 import { auth, googleAuthProvider } from '../firebase/config';
-import { getAdminMembers } from '../utils/studentStore';
 import { api } from '../utils/apiClient';
 import { 
   generateReferralCode, 
@@ -355,7 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const adminLogout = () => {
     setAdminUser(null);
-    localStorage.removeItem('cgssb_admin_session');
+    sessionStorage.removeItem('cgssb_admin_session');
   };
 
   const deductCredits = (amount: number): boolean => {
