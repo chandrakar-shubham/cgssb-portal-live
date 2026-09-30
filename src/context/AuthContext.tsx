@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, AdminPermissions } from '../types';
 import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
-import { syncUserProfileToFirestore, fetchUserProfileFromFirestore } from '../firebase/firestoreService';
+import {
+  syncUserProfileToFirestore,
+  fetchUserProfileFromFirestore,
+  fetchUserEntitlementFromFirestore,
+  saveUserEntitlementToFirestore,
+} from '../firebase/firestoreService';
 import { 
   signInAnonymously,
   setPersistence,
@@ -188,22 +193,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hydrateAuthoritativeEntitlements = async (baseUser: User): Promise<User> => {
     try {
-      const result = await api.get<{ success: boolean; entitlements?: any }>(
-        '/api/user/entitlements',
-        { requireAuth: true }
-      );
-      const ent = result.entitlements;
-      if (!ent) return baseUser;
-      return {
-        ...baseUser,
-        credits: typeof ent.credits === 'number' ? ent.credits : baseUser.credits,
-        hasProPass: ent.hasActivePass === true || baseUser.hasProPass === true,
-        proPassPlan: ent.passType || baseUser.proPassPlan,
-        passExpiresAt: ent.passExpiry || baseUser.passExpiresAt,
-      };
+      const ent = await fetchUserEntitlementFromFirestore(baseUser.id);
+      if (ent) {
+        const expiry = ent.expiresAt || baseUser.passExpiresAt;
+        const active = ent.status === 'ACTIVE' && (!expiry || new Date(expiry).getTime() > Date.now());
+        return {
+          ...baseUser,
+          hasProPass: active,
+          proPassPlan: ent.planName || ent.planType || baseUser.proPassPlan,
+          passExpiresAt: expiry,
+          passDurationDays: ent.durationDays || baseUser.passDurationDays,
+          boundDeviceId: ent.boundDeviceId || baseUser.boundDeviceId,
+          boundDeviceName: ent.boundDeviceName || baseUser.boundDeviceName,
+        };
+      }
     } catch {
-      return baseUser;
+      // Fall through to legacy profile/API compatibility below.
     }
+
+    // Legacy compatibility only: do not resurrect an expired pass.
+    try {
+      const result = await api.get<{ success: boolean; entitlements?: any }>('/api/user/entitlements', { requireAuth: true });
+      const ent = result.entitlements;
+      if (ent) {
+        const expiry = ent.passExpiry || baseUser.passExpiresAt;
+        const active = ent.hasActivePass === true && (!expiry || new Date(expiry).getTime() > Date.now());
+        return { ...baseUser, credits: typeof ent.credits === 'number' ? ent.credits : baseUser.credits,
+          hasProPass: active, proPassPlan: ent.passType || baseUser.proPassPlan, passExpiresAt: expiry };
+      }
+    } catch {}
+
+    if (baseUser.passExpiresAt && new Date(baseUser.passExpiresAt).getTime() <= Date.now()) {
+      return { ...baseUser, hasProPass: false };
+    }
+    return baseUser;
   };
 
   // Helper: Generates default 1-Month Free Pro Pass for every newly registered/onboarded student
@@ -245,6 +268,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       referralCount: 0, referralBonusMonths: 0, ...passDetails,
     };
     await syncUserProfileToFirestore(initialUser);
+    const welcomeExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await saveUserEntitlementToFirestore({
+      userId: studentId,
+      planType: 'WELCOME_FREE',
+      status: 'ACTIVE',
+      issuedAt: new Date().toISOString(),
+      expiresAt: welcomeExpiry,
+      durationDays: 30,
+      source: 'WELCOME_FREE',
+      planName: '1-Month Free Welcome Pass (30 Days)',
+      boundDeviceId: passDetails.boundDeviceId,
+      boundDeviceName: passDetails.boundDeviceName,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => null);
     const finalUser = await processSignupReferral(initialUser, details.referralCode);
     if (finalUser !== initialUser) {
       await syncUserProfileToFirestore(finalUser);
@@ -307,6 +344,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...createInitialProPassDetails(),
     };
     await syncUserProfileToFirestore(newUser);
+    const welcomeExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await saveUserEntitlementToFirestore({
+      userId: fbUser.uid,
+      planType: 'WELCOME_FREE', status: 'ACTIVE', issuedAt: new Date().toISOString(),
+      expiresAt: welcomeExpiry, durationDays: 30, source: 'WELCOME_FREE',
+      planName: '1-Month Free Welcome Pass (30 Days)',
+      boundDeviceId: newUser.boundDeviceId, boundDeviceName: newUser.boundDeviceName,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => null);
     setUser(await hydrateAuthoritativeEntitlements(newUser));
   };
 
@@ -326,7 +372,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const finalPlanName = customName || (isMonthly ? 'Monthly All-Access Pass (30 Days)' : 'Yearly All-Access Pass (365 Days)');
 
     if (user) {
-      setUser({
+      const updated = {
         ...user,
         hasProPass: true,
         proPassPlan: finalPlanName,
@@ -334,6 +380,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         passExpiresAt: tenure.expiresAt,
         boundDeviceId: device.id,
         boundDeviceName: device.name,
+      };
+      setUser(updated);
+      void saveUserEntitlementToFirestore({
+        userId: user.id,
+        planType: planKey.toUpperCase(),
+        status: 'ACTIVE',
+        issuedAt: new Date().toISOString(),
+        expiresAt: tenure.expiresAt,
+        durationDays: tenure.days,
+        source: 'CLIENT_CHECKOUT',
+        planName: finalPlanName,
+        boundDeviceId: device.id,
+        boundDeviceName: device.name,
+        updatedAt: new Date().toISOString(),
       });
     } else {
       console.warn('Cannot activate a pass before student authentication.');
@@ -386,10 +446,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const transferPassDevice = () => {
     if (!user) return;
     const currentDevice = getOrCreateDeviceId();
-    setUser({
-      ...user,
+    const updated = { ...user, boundDeviceId: currentDevice.id, boundDeviceName: currentDevice.name };
+    setUser(updated);
+    void saveUserEntitlementToFirestore({
+      userId: user.id,
+      planType: user.proPassPlan || 'PASS',
+      status: 'ACTIVE',
+      expiresAt: user.passExpiresAt,
+      durationDays: user.passDurationDays || 30,
+      source: 'CLIENT_CHECKOUT',
+      planName: user.proPassPlan,
       boundDeviceId: currentDevice.id,
       boundDeviceName: currentDevice.name,
+      updatedAt: new Date().toISOString(),
     });
   };
 
