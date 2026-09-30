@@ -56,12 +56,12 @@ export function usePypManager() {
       ...newPaper,
     };
     setPypPapers(prev => [paper, ...prev.filter(p => p.id !== paper.id)]);
-    savePypPaperToFirestore(paper).catch(err => console.warn('Cloud save PYP paper warning:', err));
+    savePypPaperToFirestore(paper).catch(async err => { console.error('Cloud save PYP paper failed:', err); setPypPapers(await fetchPypPapersFromFirestore()); });
   }, []);
 
   const deletePypPaper = useCallback((id: string) => {
     setPypPapers(prev => prev.filter(p => p.id !== id));
-    deletePypPaperFromFirestore(id).catch(err => console.warn('Cloud delete PYP paper warning:', err));
+    deletePypPaperFromFirestore(id).catch(async err => { console.error('Cloud delete PYP paper failed:', err); setPypPapers(await fetchPypPapersFromFirestore()); });
   }, []);
 
   // Factory/demo PYP restoration is intentionally disabled in production.
