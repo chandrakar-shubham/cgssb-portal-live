@@ -2669,9 +2669,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
   // ==========================================
   // 15. ADMIN DATABASE SNAPSHOT & BACKUP API
   // ==========================================
-  app.get('/api/admin/backup/download', requireAdmin, (req, res) => {
+  app.get('/api/admin/backup/download', requireAdmin, async (req, res) => {
     try {
-      const snapshot = exportCompleteDatabaseSnapshot();
+      const snapshot = await exportCompleteDatabaseSnapshot();
       const filename = `cgssb-db-backup-${new Date().toISOString().split('T')[0]}.json`;
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Type', 'application/json');
