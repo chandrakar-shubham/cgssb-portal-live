@@ -9,7 +9,8 @@
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "./node_modules/.bin/tsc --noEmit"
+    "lint": "./node_modules/.bin/tsc --noEmit",
+    "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\""
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -37,6 +38,7 @@
     "autoprefixer": "^10.4.21",
     "firebase-tools": "^15.31.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@firebase/rules-unit-testing": "^4.0.1"
   }
 }
