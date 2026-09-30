@@ -48,8 +48,11 @@ for (const collection of publicCollections) {
 const usersStart = rules.indexOf('match /users/{userId}');
 const usersEnd = rules.indexOf('\n    // Public exam/catalog content', usersStart);
 const usersBlock = rules.slice(usersStart, usersEnd);
-if (!usersBlock.includes('allow create: if (isOwner(userId) || hasManageStudents())')) {
-  throw new Error('User profile create protection missing');
+if (!usersBlock.includes('allow create: if (isOwner(userId)')) {
+  throw new Error('Student profile create protection missing');
+}
+if (!usersBlock.includes('(hasManageStudents() &&')) {
+  throw new Error('Admin profile create protection missing');
 }
 if (!usersBlock.includes('affectedKeys().hasOnly')) {
   throw new Error('User profile update allowlist missing');
