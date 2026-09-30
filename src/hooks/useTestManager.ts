@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MockTest } from '../types';
-import { INITIAL_MOCK_TESTS } from '../mockData';
 import { cleanTestFromAllBundles } from '../utils/bundleStore';
 import {
   fetchTestsFromFirestore,
@@ -115,13 +114,11 @@ export function useTestManager() {
     });
   }, []);
 
+  // Factory/demo catalog restoration is intentionally disabled in production.
   const syncDefaultCatalog = useCallback(() => {
-    setTests(INITIAL_MOCK_TESTS);
-    try {
-      localStorage.setItem('cgssb_tests', JSON.stringify(INITIAL_MOCK_TESTS));
-    } catch {}
-    for (const t of INITIAL_MOCK_TESTS) {
-      saveTestToFirestore(t).catch(() => {});
+    if (!import.meta.env.DEV) {
+      console.warn('Demo catalog restore is disabled in production.');
+      return;
     }
   }, []);
 
