@@ -67,6 +67,27 @@ export async function deleteCouponAdmin(id: string): Promise<boolean> {
   return true;
 }
 
+export async function getAllAdminMembers(): Promise<User[]> {
+  const db = getFirestoreServer();
+  const snap = await getDocs(collection(db, 'adminMembers'));
+  const list: User[] = [];
+  snap.forEach(d => list.push({ ...(d.data() as User), id: d.id }));
+  return list;
+}
+
+export async function saveAdminMemberAdmin(admin: User): Promise<User> {
+  const db = getFirestoreServer();
+  const { id, ...adminData } = admin;
+  await setDoc(doc(db, 'adminMembers', id), adminData, { merge: true });
+  return { ...admin, id };
+}
+
+export async function deleteAdminMemberAdmin(id: string): Promise<boolean> {
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'adminMembers', id));
+  return true;
+}
+
 // ----------------- QUESTIONS COLLECTION REPOSITORY (/questions) -----------------
 
 export async function getAllQuestions(filters?: { subject?: string; topic?: string; subtopic?: string; difficulty?: string; category?: string; search?: string; }): Promise<Question[]> {
