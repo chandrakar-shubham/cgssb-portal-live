@@ -130,6 +130,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isStudentBlocked = Boolean(user?.isBlocked || user?.status === 'blocked');
 
+  const hydrateAuthoritativeEntitlements = async (baseUser: User): Promise<User> => {
+    try {
+      const result = await api.get<{ success: boolean; entitlements?: any }>(
+        '/api/user/entitlements',
+        { requireAuth: true }
+      );
+      const ent = result.entitlements;
+      if (!ent) return baseUser;
+      return {
+        ...baseUser,
+        credits: typeof ent.credits === 'number' ? ent.credits : baseUser.credits,
+        hasProPass: ent.hasActivePass === true || baseUser.hasProPass === true,
+        proPassPlan: ent.passType || baseUser.proPassPlan,
+        passExpiresAt: ent.passExpiry || baseUser.passExpiresAt,
+      };
+    } catch {
+      return baseUser;
+    }
+  };
+
   // Helper: Generates default 1-Month Free Pro Pass for every newly registered/onboarded student
   const createInitialProPassDetails = () => {
     const device = getOrCreateDeviceId();
@@ -173,7 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (finalUser !== initialUser) {
       await syncUserProfileToFirestore(finalUser);
     }
-    setUser(finalUser);
+    setUser(await hydrateAuthoritativeEntitlements(finalUser));
   };
 
   // Student Login
@@ -188,8 +208,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       registeredAt: today, lastLoginAt: today, targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)', district: 'Raipur', medium: 'Hindi',
       ...createInitialProPassDetails(),
     };
-    setUser(profile);
-    await syncUserProfileToFirestore(profile);
+    const hydratedProfile = await hydrateAuthoritativeEntitlements(profile);
+    setUser(hydratedProfile);
+    await syncUserProfileToFirestore(hydratedProfile);
   };
 
 
@@ -209,7 +230,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastLoginAt: today,
       };
       await syncUserProfileToFirestore(updated);
-      setUser(updated);
+      const hydrated = await hydrateAuthoritativeEntitlements(updated);
+      setUser(hydrated);
       return;
     }
 
@@ -229,7 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...createInitialProPassDetails(),
     };
     await syncUserProfileToFirestore(newUser);
-    setUser(newUser);
+    setUser(await hydrateAuthoritativeEntitlements(newUser));
   };
 
   const loginWithPhoneOtp = (_phone: string, _otp: string, _name?: string) => {
@@ -301,6 +323,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setUser(updatedUser);
+    void syncUserProfileToFirestore(updatedUser);
     return { unlockedBonus: shouldUnlockBonus, newCount };
   };
 
