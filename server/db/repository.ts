@@ -5,7 +5,9 @@ import type {
   MockTest,
   PreviousYearPaper,
   TestAttempt,
-  AppRemoteConfig
+  AppRemoteConfig,
+  User,
+  DiscountCoupon
 } from '../../src/types.ts';
 import { DEFAULT_REMOTE_CONFIG } from '../../src/types.ts';
 import type { TestSeriesBundle } from '../../src/data/bundleCatalog.ts';
@@ -20,6 +22,48 @@ export interface DatabaseShape {
   pypPapers: PreviousYearPaper[];
   attempts: TestAttempt[];
   demoDataPurged?: boolean;
+}
+
+// ----------------- ADMIN IDENTITY / CRM REPOSITORIES -----------------
+
+export async function getAllUsersAdmin(): Promise<User[]> {
+  const db = getFirestoreServer();
+  const snap = await getDocs(collection(db, 'users'));
+  const list: User[] = [];
+  snap.forEach(d => list.push({ id: d.id, ...(d.data() as User) }));
+  return list;
+}
+
+export async function saveUserAdmin(user: User): Promise<User> {
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'users', user.id), user, { merge: true });
+  return user;
+}
+
+export async function deleteUserAdmin(id: string): Promise<boolean> {
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'users', id));
+  return true;
+}
+
+export async function getAllCouponsAdmin(): Promise<DiscountCoupon[]> {
+  const db = getFirestoreServer();
+  const snap = await getDocs(collection(db, 'discountCoupons'));
+  const list: DiscountCoupon[] = [];
+  snap.forEach(d => list.push({ id: d.id, ...(d.data() as DiscountCoupon) }));
+  return list;
+}
+
+export async function saveCouponAdmin(coupon: DiscountCoupon): Promise<DiscountCoupon> {
+  const db = getFirestoreServer();
+  await setDoc(doc(db, 'discountCoupons', coupon.id), coupon, { merge: true });
+  return coupon;
+}
+
+export async function deleteCouponAdmin(id: string): Promise<boolean> {
+  const db = getFirestoreServer();
+  await deleteDoc(doc(db, 'discountCoupons', id));
+  return true;
 }
 
 // ----------------- QUESTIONS COLLECTION REPOSITORY (/questions) -----------------
