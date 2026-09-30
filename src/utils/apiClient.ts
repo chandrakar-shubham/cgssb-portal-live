@@ -14,14 +14,20 @@ export function getApiBaseUrl(): string {
   // If running inside browser
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
-    // If hosted on Firebase Hosting static CDN, point to production backend or custom origin
-    if (host.endsWith('.web.app') || host.endsWith('.firebaseapp.com')) {
-      // Return primary production API origin
-      return 'https://cgtest.in';
+    // Firebase Hosting serves the SPA only. The Express API is a separate origin.
+    // Keep this fallback aligned with the production API DNS; override with VITE_API_URL
+    // for staging/local deployments.
+    if (
+      host === 'cgtest.in' ||
+      host === 'www.cgtest.in' ||
+      host.endsWith('.web.app') ||
+      host.endsWith('.firebaseapp.com')
+    ) {
+      return 'https://api.cgtest.in';
     }
   }
 
-  // Otherwise, use relative path (same origin: localhost, Cloud Run, or Hostinger fullstack)
+  // Same-origin is appropriate only when Express itself serves the frontend.
   return '';
 }
 
