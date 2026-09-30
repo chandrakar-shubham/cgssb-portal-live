@@ -846,16 +846,7 @@ function MainApp() {
         const merged = prev.map(q => updatedMap.has(q.id) ? updatedMap.get(q.id)! : q);
         return dedupeById([...newQuestions, ...merged]);
       });
-      saveQuestionsToFirestore(updatedQuestions).catch(() => null);
-      const token = getAdminToken();
-      fetch('/api/questions/bulk', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ questions: updatedQuestions }),
-      }).catch(() => {});
+      saveQuestionsToFirestore(updatedQuestions).catch(err => console.error('Cloud completed-test question save failed:', err));
     }
   };
 
