@@ -109,6 +109,7 @@ import {
 import { extractHierarchyFromApp } from './utils/examHierarchy';
 import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
 import { auth } from './firebase/config';
+import { isUserPassActive } from './utils/devicePassManager';
 import { testConnection } from './firebase/connectionTest';
 import {
   fetchTestsFromFirestore,
@@ -640,7 +641,7 @@ function MainApp() {
       }
     }
     // If test is marked as Pro and candidate does not have pass
-    if (test.isPro && !user?.hasProPass) {
+    if (test.isPro && !isUserPassActive(user)) {
       setStudentActiveTab('pass');
       return;
     }
@@ -657,10 +658,7 @@ function MainApp() {
       return;
     }
 
-    if (user?.role === 'student') {
-      deductCredits(10);
-    }
-
+    // All-access passes are time-based and do not consume per-test credits.
     const examTest = buildExamTest(preFlightTest, examQuestions);
     cacheTestBundleForDevice(examTest, examQuestions);
     setActiveExamQuestions(examQuestions);
