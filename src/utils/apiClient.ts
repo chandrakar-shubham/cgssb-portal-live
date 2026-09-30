@@ -103,20 +103,63 @@ function slugLookup(items: any[], slug: string) {
   ) || null;
 }
 
+function resolveTestQuestions(test: any, allQuestions: any[]): any[] {
+  const expected = Math.max(0, Number(test?.questionCount || 0));
+  const ids = Array.isArray(test?.sections)
+    ? test.sections.flatMap((section: any) => Array.isArray(section?.questionIds) ? section.questionIds : [])
+    : [];
+
+  const selectedIds = new Set<string>();
+  const selected: any[] = [];
+  const add = (q: any) => {
+    if (q?.id && !selectedIds.has(q.id)) {
+      selectedIds.add(q.id);
+      selected.push(q);
+    }
+  };
+
+  ids.forEach((id: string) => {
+    const q = allQuestions.find(item => item.id === id);
+    if (q) add(q);
+  });
+
+  if (expected > selected.length) {
+    const examName = String(test?.examName || '').trim().toLowerCase();
+    const authority = String(test?.authority || '').trim().toLowerCase();
+    const category = String(test?.category || '').trim().toLowerCase();
+
+    if (examName) {
+      allQuestions
+        .filter(q => String(q.examName || '').trim().toLowerCase() === examName)
+        .forEach(add);
+    }
+
+    if (expected > selected.length) {
+      allQuestions
+        .filter(q => {
+          if (selectedIds.has(q.id)) return false;
+          const qAuthority = String(q.authority || '').trim().toLowerCase();
+          const qCategory = String(q.category || '').trim().toLowerCase();
+          return (authority && qAuthority === authority) || (category && qCategory === category);
+        })
+        .forEach(add);
+    }
+  }
+
+  if (expected > selected.length) {
+    allQuestions.forEach(add);
+  }
+
+  return expected > 0 ? selected.slice(0, expected) : selected;
+}
+
 async function submitAttempt(testId: string, body: any) {
   const user = await requireStudentAuth();
   const test = await readById<any>('mockTests', testId);
   if (!test) throw new Error('Test not found');
 
   const allQuestions = await readCollection<any>('questions');
-  const ids = Array.isArray(test.sections)
-    ? test.sections.flatMap((s: any) => Array.isArray(s.questionIds) ? s.questionIds : [])
-    : [];
-  let testQuestions = allQuestions.filter(q => ids.includes(q.id));
-  if (!testQuestions.length) {
-    testQuestions = allQuestions.filter(q => q.category === test.category).slice(0, test.questionCount || 100);
-  }
-  if (!testQuestions.length) testQuestions = allQuestions.slice(0, test.questionCount || 100);
+  const testQuestions = resolveTestQuestions(test, allQuestions);
 
   const responses = body?.responses || {};
   const questionStatuses = body?.questionStatuses || {};
