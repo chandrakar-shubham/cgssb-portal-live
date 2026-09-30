@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -62,16 +63,15 @@ jobs:
 
       - name: 🧪 Capture TypeScript diagnostics (temporary)
         if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set +e
           npm run lint > /tmp/tsc-errors.txt 2>&1
           status=$?
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp /tmp/tsc-errors.txt TS_ERRORS.txt
-          git add TS_ERRORS.txt
-          git commit -m "ci: capture TypeScript diagnostics [skip ci]" || true
-          git push origin main
+          printf 'Temporary CI diagnostic for commit ${{ github.sha }}\n\n' > /tmp/issue-body.txt
+          cat /tmp/tsc-errors.txt >> /tmp/issue-body.txt
+          gh issue create --title "TEMP TSC DIAGNOSTICS ${{ github.run_id }}" --body-file /tmp/issue-body.txt
           exit $status
 
       - name: 🏗️ Execute Production Bundle Build
