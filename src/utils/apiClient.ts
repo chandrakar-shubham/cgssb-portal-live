@@ -398,11 +398,12 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
   if (method==='POST' && parts[1]==='user' && parts[2]==='validate-coupon') {
     await requireStudentAuth();
     const code = String(body?.code || '').trim().toUpperCase();
-    const coupon = await readById<any>('discountCoupons', code);
-    if (coupon && coupon.isActive !== false) {
-      return { valid:true, coupon } as T;
-    }
-    return { valid:false, error:'Invalid or inactive promo code.' } as T;
+    // Coupon verification requires a trusted server/payment path in Spark mode.
+    // Do not expose or trust client-side promotional codes.
+    return {
+      valid: false,
+      error: 'Coupon validation is temporarily unavailable in Firebase Spark mode.'
+    } as T;
   }
 
   if (method==='POST' && parts[1]==='user') {
