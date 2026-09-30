@@ -128,7 +128,7 @@ export const AdminAndroidAPIManager: React.FC = () => {
     {
       method: 'GET',
       path: '/firebase/health',
-      title: 'Server Health & Android Compatibility',
+      title: 'Firebase Health & Android Compatibility',
       desc: 'Checks backend runtime, API version, and supported Android SDK levels (Min 24, Target 34).',
     },
     {
@@ -215,7 +215,7 @@ class CGSSBFirebaseRepository {
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center space-x-2 border border-slate-700 shadow-md transition cursor-pointer disabled:opacity-50"
             >
               <Activity className={`w-3.5 h-3.5 ${pingStatus === 'testing' ? 'animate-spin text-indigo-400' : 'text-emerald-400'}`} />
-              <span>{pingStatus === 'testing' ? 'Pinging Server...' : 'Ping Live Health'}</span>
+              <span>{pingStatus === 'testing' ? 'Checking Firestore...' : 'Ping Live Health'}</span>
             </button>
             <button
               onClick={downloadOfflineSyncJson}
@@ -227,47 +227,40 @@ class CGSSBFirebaseRepository {
           </div>
         </div>
 
-        {/* Server & Connectivity Badges */}
+        {/* Firebase Connectivity Badges */}
         <div className="mt-5 pt-4 border-t border-indigo-900/40 flex flex-wrap items-center gap-3 text-xs text-slate-400">
           <div className="flex items-center space-x-2 bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800">
-            <Server className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Active Base URL:</span>
-            <code className="text-indigo-300 font-mono text-[11px]">{apiBaseUrl}</code>
+            <Database className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Platform:</span>
+            <code className="text-indigo-300 font-mono text-[11px]">{firebasePlatform}</code>
             <button
-              onClick={() => copyToClipboard(apiBaseUrl, 'base-url')}
+              onClick={() => copyToClipboard(firebaseProject, 'firebase-project')}
               className="text-slate-400 hover:text-white"
             >
-              {copiedSection === 'base-url' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              {copiedSection === 'firebase-project' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
             </button>
           </div>
 
           <div className="flex items-center space-x-2 bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800">
-            <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-            <span>Hostinger URL:</span>
-            <code className="text-blue-300 font-mono text-[11px]">{liveProductionUrl}/api</code>
-            <button
-              onClick={() => copyToClipboard(`${liveProductionUrl}/api`, 'hostinger-url')}
-              className="text-slate-400 hover:text-white"
-            >
-              {copiedSection === 'hostinger-url' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-            </button>
+            <Database className="w-3.5 h-3.5 text-blue-400" />
+            <span>Firestore Project:</span>
+            <code className="text-blue-300 font-mono text-[11px]">{firebaseProject}</code>
           </div>
 
           {pingStatus === 'success' && (
             <div className="flex items-center space-x-1.5 text-emerald-400 bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-800/40 text-[11px] font-bold">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>200 OK ({pingLatency}ms)</span>
+              <span>Firestore OK ({pingLatency}ms)</span>
             </div>
           )}
 
           {pingStatus === 'failed' && (
             <div className="flex items-center space-x-1.5 text-rose-400 bg-rose-950/50 px-2.5 py-1 rounded-lg border border-rose-800/40 text-[11px] font-bold">
               <AlertCircle className="w-3.5 h-3.5" />
-              <span>Ping failed</span>
+              <span>Firestore check failed</span>
             </div>
           )}
         </div>
-      </div>
 
       {/* Navigation Sub-Tabs */}
       <div className="flex items-center space-x-2 border-b border-slate-800 pb-2">
@@ -436,7 +429,7 @@ class CGSSBFirebaseRepository {
             <div>
               <h3 className="text-base font-bold text-white mb-1">Android Room Database Synchronization</h3>
               <p className="text-xs text-slate-400 max-w-2xl">
-                The mobile app uses the <code className="text-emerald-400">/api/android/sync</code> endpoint to download tests and questions for 100% offline practice. Aspirants in rural Chhattisgarh can practice mock tests even without continuous internet access.
+                The mobile app reads published exam data from Cloud Firestore using the Firebase Android SDK, then mirrors it into Room for 100% offline practice. No REST server or Hostinger dependency is required.
               </p>
             </div>
             <button
@@ -455,7 +448,7 @@ class CGSSBFirebaseRepository {
                 <span>1. Network Detection</span>
               </div>
               <p className="text-[11px] text-slate-400">
-                WorkManager periodically queries <code className="text-slate-300">/api/health</code> when Wi-Fi or cellular network is available.
+                WorkManager can trigger Firebase Firestore synchronization when network connectivity is available.
               </p>
             </div>
 
