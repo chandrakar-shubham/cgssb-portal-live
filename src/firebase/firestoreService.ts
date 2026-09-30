@@ -191,20 +191,12 @@ export function subscribeToTests(callback: (tests: MockTest[]) => void): Unsubsc
 
 export async function saveTestToFirestore(test: MockTest): Promise<void> {
   if (!db || !test?.id) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.TESTS, test.id), test, { merge: true });
-  } catch (err) {
-    console.warn('Error saving test to Firestore:', err);
-  }
 }
 
 export async function deleteTestFromFirestore(testId: string): Promise<void> {
   if (!db || !testId) return;
-  try {
     await deleteDoc(doc(db, COLLECTIONS.TESTS, testId));
-  } catch (err) {
-    console.warn('Error deleting test from Firestore:', err);
-  }
 }
 
 // ==========================================
@@ -250,32 +242,20 @@ export function subscribeToQuestions(callback: (questions: Question[]) => void):
 
 export async function saveQuestionsToFirestore(questions: Question[]): Promise<void> {
   if (!db) return;
-  try {
     const validQuestions = questions.filter(q => q && q.id);
     if (validQuestions.length > 0) {
       await Promise.all(validQuestions.map(q => setDoc(doc(db, COLLECTIONS.QUESTIONS, q.id), q, { merge: true })));
     }
-  } catch (err) {
-    console.warn('Error saving questions to Firestore:', err);
-  }
 }
 
 export async function saveSingleQuestionToFirestore(question: Question): Promise<void> {
   if (!db || !question?.id) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.QUESTIONS, question.id), question, { merge: true });
-  } catch (err) {
-    console.warn('Error saving question to Firestore:', err);
-  }
 }
 
 export async function deleteQuestionFromFirestore(questionId: string): Promise<void> {
   if (!db || !questionId) return;
-  try {
     await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, questionId));
-  } catch (err) {
-    console.warn('Error deleting question from Firestore:', err);
-  }
 }
 
 // ==========================================
@@ -321,20 +301,12 @@ export function subscribeToPypPapers(callback: (papers: PreviousYearPaper[]) => 
 
 export async function savePypPaperToFirestore(paper: PreviousYearPaper): Promise<void> {
   if (!db || !paper?.id) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.PYP_PAPERS, paper.id), paper, { merge: true });
-  } catch (err) {
-    console.warn('Error saving PYP paper to Firestore:', err);
-  }
 }
 
 export async function deletePypPaperFromFirestore(paperId: string): Promise<void> {
   if (!db || !paperId) return;
-  try {
     await deleteDoc(doc(db, COLLECTIONS.PYP_PAPERS, paperId));
-  } catch (err) {
-    console.warn('Error deleting PYP paper from Firestore:', err);
-  }
 }
 
 // ==========================================
@@ -380,20 +352,12 @@ export function subscribeToBundles(callback: (bundles: TestSeriesBundle[]) => vo
 
 export async function saveBundleToFirestore(bundle: TestSeriesBundle): Promise<void> {
   if (!db || !bundle?.id) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.BUNDLES, bundle.id), bundle, { merge: true });
-  } catch (err) {
-    console.warn('Error saving bundle to Firestore:', err);
-  }
 }
 
 export async function deleteBundleFromFirestore(bundleId: string): Promise<void> {
   if (!db || !bundleId) return;
-  try {
     await deleteDoc(doc(db, COLLECTIONS.BUNDLES, bundleId));
-  } catch (err) {
-    console.warn('Error deleting bundle from Firestore:', err);
-  }
 }
 
 // ==========================================
@@ -435,20 +399,12 @@ export function subscribeToCmsPages(callback: (pages: CMSPage[]) => void): Unsub
 
 export async function saveCmsPageToFirestore(page: CMSPage): Promise<void> {
   if (!db || !page?.id) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.PAGES, page.id), page, { merge: true });
-  } catch (err) {
-    console.warn('Error saving CMS page to Firestore:', err);
-  }
 }
 
 export async function deleteCmsPageFromFirestore(pageId: string): Promise<void> {
   if (!db || !pageId) return;
-  try {
     await deleteDoc(doc(db, COLLECTIONS.PAGES, pageId));
-  } catch (err) {
-    console.warn('Error deleting CMS page from Firestore:', err);
-  }
 }
 
 export async function fetchCmsPostsFromFirestore(): Promise<CMSPost[]> {
@@ -487,20 +443,12 @@ export function subscribeToCmsPosts(callback: (posts: CMSPost[]) => void): Unsub
 
 export async function saveCmsPostToFirestore(post: CMSPost): Promise<void> {
   if (!db || !post?.id) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.POSTS, post.id), post, { merge: true });
-  } catch (err) {
-    console.warn('Error saving CMS post to Firestore:', err);
-  }
 }
 
 export async function deleteCmsPostFromFirestore(postId: string): Promise<void> {
   if (!db || !postId) return;
-  try {
     await deleteDoc(doc(db, COLLECTIONS.POSTS, postId));
-  } catch (err) {
-    console.warn('Error deleting CMS post from Firestore:', err);
-  }
 }
 
 export async function fetchCmsSeriesPacksFromFirestore(): Promise<CMSTestSeriesPack[]> {
@@ -539,20 +487,12 @@ export function subscribeToCmsSeriesPacks(callback: (packs: CMSTestSeriesPack[])
 
 export async function saveCmsSeriesPackToFirestore(pack: CMSTestSeriesPack): Promise<void> {
   if (!db || !pack?.id) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.SERIES_PACKS, pack.id), pack, { merge: true });
-  } catch (err) {
-    console.warn('Error saving CMS series pack to Firestore:', err);
-  }
 }
 
 export async function deleteCmsSeriesPackFromFirestore(packId: string): Promise<void> {
   if (!db || !packId) return;
-  try {
     await deleteDoc(doc(db, COLLECTIONS.SERIES_PACKS, packId));
-  } catch (err) {
-    console.warn('Error deleting CMS series pack from Firestore:', err);
-  }
 }
 
 export async function fetchCmsSettingsFromFirestore(): Promise<CMSSiteSettings | null> {
@@ -588,11 +528,7 @@ export function subscribeToCmsSettings(callback: (settings: CMSSiteSettings) => 
 
 export async function saveCmsSettingsToFirestore(settings: CMSSiteSettings): Promise<void> {
   if (!db) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.CMS_SETTINGS, 'global'), settings, { merge: true });
-  } catch (err) {
-    console.warn('Error saving CMS settings to Firestore:', err);
-  }
 }
 
 // ==========================================
@@ -668,11 +604,7 @@ export function subscribeToRemoteConfig(callback: (config: AppRemoteConfig) => v
 
 export async function saveRemoteConfigToFirestore(config: Partial<AppRemoteConfig>): Promise<void> {
   if (!db) return;
-  try {
     await setDoc(doc(db, COLLECTIONS.REMOTE_CONFIG, 'global'), { ...config, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (err) {
-    console.warn('Error saving remote config to Firestore:', err);
-  }
 }
 
 // ==========================================
