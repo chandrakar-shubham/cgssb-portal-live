@@ -583,7 +583,7 @@ function findSimilarOrRepeatedQuestion(newText: string, currentQuestions: Questi
   return null;
 }
 
-async function startServer() {
+export async function startServer({ listen = !process.env.FIREBASE_FUNCTIONS } : { listen?: boolean } = {}) {
   // Ensure default environment variables are set for Firestore mode
   if (!process.env.DATABASE_MODE) {
     process.env.DATABASE_MODE = 'firestore';
@@ -595,7 +595,7 @@ async function startServer() {
     process.env.FIREBASE_PROJECT_ID = 'gen-lang-client-0783153446';
   }
   if (!process.env.GEMINI_API_KEY) {
-    process.env.GEMINI_API_KEY = process.env.API_KEY || 'AIzaSyProductionKeyConfigured';
+    process.env.GEMINI_API_KEY = process.env.API_KEY || '';
   }
 
   // Strict Production Environment & Secret Guardrails Validation
@@ -3241,12 +3241,20 @@ Ensure all URLs are real official URLs (e.g. jansampark.cg.gov.in, pib.gov.in, f
     });
   }
 
-  app.listen(PORT, '0.0.0.0', async () => {
-    const counts = await getDatabaseCounts();
-    console.log(`🚀 CGSSB Test Server running on port ${PORT}`);
-    console.log(`🔌 Database Engine: [CLOUD FIRESTORE ENTERPRISE] (Database: ${dbConfig.databaseId})`);
-    console.log(`📊 Catalog: ${counts.questions} questions, ${counts.mockTests} tests, ${counts.pypPapers} PYPs, ${counts.attempts} attempts`);
-  });
+  if (listen) {
+    app.listen(PORT, '0.0.0.0', async () => {
+      const counts = await getDatabaseCounts();
+      console.log(`🚀 CGSSB Test Server running on port ${PORT}`);
+      console.log(`🔌 Database Engine: [CLOUD FIRESTORE ENTERPRISE] (Database: ${dbConfig.databaseId})`);
+      console.log(`📊 Catalog: ${counts.questions} questions, ${counts.mockTests} tests, ${counts.pypPapers} PYPs, ${counts.attempts} attempts`);
+    });
+  }
+  return app;
 }
 
-startServer();
+if (!process.env.FIREBASE_FUNCTIONS) {
+  startServer().catch(err => {
+    console.error('❌ CGSSB server startup failed:', err);
+    process.exit(1);
+  });
+}
