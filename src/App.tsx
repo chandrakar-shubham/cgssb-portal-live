@@ -120,6 +120,9 @@ import {
   fetchPypPapersFromFirestore,
   savePypPaperToFirestore,
   deletePypPaperFromFirestore,
+  fetchMyAttemptsFromFirestore,
+  saveAttemptToFirestore,
+  saveLeaderboardEntryToFirestore,
 } from './firebase/firestoreService';
 
 function MainApp() {
@@ -607,29 +610,18 @@ function MainApp() {
     return unsubscribe;
   }, []);
 
-  // Hydrate only the current authenticated student's real attempts.
-  // This reacts to auth changes because the initial app mount may be unauthenticated.
+  // Hydrate the current student's attempts directly from Firestore.
+  // This survives refresh/login and is the source of truth for Re-attempt/View Result.
   useEffect(() => {
     let cancelled = false;
-
     if (!user) {
       setAttempts([]);
       return;
     }
-
-    api.get('/api/user/attempts', { requireAuth: true })
-      .then(data => {
-        if (!cancelled && data && Array.isArray(data.attempts)) {
-          setAttempts(data.attempts);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setAttempts([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    fetchMyAttemptsFromFirestore(user.id)
+      .then(items => { if (!cancelled) setAttempts(items); })
+      .catch(() => { if (!cancelled) setAttempts([]); });
+    return () => { cancelled = true; };
   }, [user?.id]);
 
   // START TEST HANDLER (Routes through TCS iON Pre-Flight Screen)
@@ -712,7 +704,7 @@ function MainApp() {
     handleStartTest(pypTest);
   };
 
-  // SUBMIT TEST HANDLER (Auto-calculates scores & negative marking)
+  // SUBMIT TEST HANDLER — Firebase-only scoring + persistent attempt storage.
   const handleSubmitTest = async (submission: {
     testId: string;
     timeTakenSeconds: number;
@@ -720,59 +712,10 @@ function MainApp() {
     questionStatuses: Record<string, QuestionPaletteStatus>;
   }) => {
     if (!activeExamTest) return;
-
     const currentTest = activeExamTest;
-    const testQs = resolveQuestionsForTest(currentTest, questions);
+    const activeQuestionList = resolveQuestionsForTest(currentTest, questions);
+    if (activeQuestionList.length === 0) return;
 
-    const activeQuestionList = testQs;
-
-    try {
-      const data = await api.post(`/api/tests/${currentTest.id}/submit`, {
-        userId: user?.id || 'guest',
-        userName: user?.name || 'Aspirant Student',
-        timeTakenSeconds: submission.timeTakenSeconds,
-        responses: submission.responses,
-        questionStatuses: submission.questionStatuses,
-      });
-      {
-
-        const attempt = data.attempt || data;
-        setAttempts(prev => [attempt, ...prev]);
-        clearCachedTestBundle(currentTest.id);
-        if (Array.isArray(data.solutions) && data.solutions.length > 0) {
-          setQuestions((prev: Question[]): Question[] => {
-            const solMap = new Map<string, Question>();
-            data.solutions.forEach((s: Question) => solMap.set(s.id, s));
-            return prev.map(q => solMap.get(q.id) || q);
-          });
-        }
-        setActiveExamTest(null);
-        setActiveAttemptReview(attempt);
-
-        const milestoneRes = recordTestCompletion();
-        if (milestoneRes.unlockedBonus) {
-          setShowMilestoneCelebrationModal(true);
-        }
-        if (!user && typeof window !== 'undefined') {
-          localStorage.setItem('cgtest_guest_test_completed', 'true');
-        }
-        return;
-      }
-    } catch (e) {
-      console.warn('Server submission failed or offline, performing local evaluation and queuing for sync:', e);
-      // Queue offline attempt for automatic sync upon reconnection
-      queueOfflineSubmission({
-        testId: currentTest.id,
-        testTitle: currentTest.title,
-        userId: user?.id || 'guest',
-        userName: user?.name || 'Aspirant Student',
-        timeTakenSeconds: submission.timeTakenSeconds,
-        responses: submission.responses,
-        questionStatuses: submission.questionStatuses,
-      });
-    }
-
-    // Local evaluation engine
     let correctCount = 0;
     let incorrectCount = 0;
     let unattemptedCount = 0;
@@ -780,12 +723,9 @@ function MainApp() {
 
     activeQuestionList.forEach(q => {
       const resp = submission.responses[q.id];
-      const cleanSubj = normalizeSubjectName(q.subject, `${q.questionHindi || ''} ${q.questionText || ''}`);
-      if (!subjectMap[cleanSubj]) {
-        subjectMap[cleanSubj] = { total: 0, correct: 0, incorrect: 0, unattempted: 0 };
-      }
+      const cleanSubj = normalizeSubjectName(q.subject, \${q.questionHindi || ''} \${q.questionText || ''});
+      if (!subjectMap[cleanSubj]) subjectMap[cleanSubj] = { total: 0, correct: 0, incorrect: 0, unattempted: 0 };
       subjectMap[cleanSubj].total += 1;
-
       if (resp == null) {
         unattemptedCount += 1;
         subjectMap[cleanSubj].unattempted += 1;
@@ -798,37 +738,43 @@ function MainApp() {
       }
     });
 
-    const marksPerQ = currentTest.marksPerQuestion || 1.0;
-    const negPenaltyPerQ = currentTest.negativeMarksPerQuestion || 0.333;
-
+    const marksPerQ = currentTest.marksPerQuestion || 1;
+    const negPenaltyPerQ = currentTest.negativeMarksPerQuestion || 0;
     const rawScore = correctCount * marksPerQ;
     const negDeduction = Number((incorrectCount * negPenaltyPerQ).toFixed(2));
     const netScore = Number(Math.max(0, rawScore - negDeduction).toFixed(2));
     const maxScore = activeQuestionList.length * marksPerQ;
-    const percentage = Number(((netScore / maxScore) * 100).toFixed(1));
+    const percentage = maxScore > 0 ? Number(((netScore / maxScore) * 100).toFixed(2)) : 0;
     const attemptedCount = correctCount + incorrectCount;
-    const accuracy = attemptedCount > 0 ? Math.round((correctCount / attemptedCount) * 100) : 0;
+    const accuracy = attemptedCount > 0 ? Number(((correctCount / attemptedCount) * 100).toFixed(2)) : 0;
 
     const sectorAnalysis = Object.keys(subjectMap).map(subj => {
       const data = subjectMap[subj];
       const subjMax = data.total * marksPerQ;
       const subjScore = Number(Math.max(0, data.correct * marksPerQ - data.incorrect * negPenaltyPerQ).toFixed(2));
       const subjAtt = data.correct + data.incorrect;
-      const subjAcc = subjAtt > 0 ? Math.round((data.correct / subjAtt) * 100) : 0;
       return {
         subject: subj,
         total: data.total,
         correct: data.correct,
         incorrect: data.incorrect,
         unattempted: data.unattempted,
-        accuracy: subjAcc,
+        accuracy: subjAtt > 0 ? Number(((data.correct / subjAtt) * 100).toFixed(2)) : 0,
         score: subjScore,
         maxScore: subjMax,
       };
     });
 
+    const targetExam = user?.targetExam || currentTest.examName || currentTest.title;
+    const authority = String(currentTest.authority || currentTest.category || 'CG').toUpperCase();
+    const year = user?.targetYear || 2026;
+    const normalizedTarget = String(targetExam).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+    const targetKey = authority + ':' + normalizedTarget + ':' + year;
+    const seriesId = currentTest.bundleId || currentTest.id;
+    const attemptId = user?.id ? 'att-' + user.id + '-' + currentTest.id + '-' + Date.now() : 'att-guest-' + Date.now();
+
     const newAttempt: TestAttempt = {
-      id: `att-${Date.now()}`,
+      id: attemptId,
       testId: currentTest.id,
       testTitle: currentTest.title,
       category: currentTest.category,
@@ -838,30 +784,60 @@ function MainApp() {
       timeTakenSeconds: submission.timeTakenSeconds,
       totalDurationSeconds: (currentTest.durationMinutes || 90) * 60,
       score: netScore,
-      maxScore: maxScore,
-      percentage: percentage,
-      accuracy: accuracy,
-      correctCount: correctCount,
-      incorrectCount: incorrectCount,
-      unattemptedCount: unattemptedCount,
+      maxScore,
+      percentage,
+      accuracy,
+      correctCount,
+      incorrectCount,
+      unattemptedCount,
+      attemptedCount,
       negativeMarksDeducted: negDeduction,
       responses: submission.responses,
       questionStatuses: submission.questionStatuses,
-      markedForReviewCount: 0,
-      sectorAnalysis: sectorAnalysis,
+      markedForReviewCount: Object.values(submission.questionStatuses).filter(s => s === 'marked_for_review' || s === 'answered_and_marked').length,
+      sectorAnalysis,
+      seriesId,
+      targetKey,
+      targetExam,
     };
 
-    setAttempts(prev => [newAttempt, ...prev]);
+    setAttempts(prev => [newAttempt, ...prev.filter(a => a.id !== newAttempt.id)]);
     setActiveExamTest(null);
     setActiveAttemptReview(newAttempt);
+    clearCachedTestBundle(currentTest.id);
 
-    const localMilestoneRes = recordTestCompletion();
-    if (localMilestoneRes.unlockedBonus) {
-      setShowMilestoneCelebrationModal(true);
+    if (user?.id) {
+      try {
+        await saveAttemptToFirestore(newAttempt);
+        await saveLeaderboardEntryToFirestore({
+          id: newAttempt.id,
+          userId: newAttempt.userId,
+          candidateName: newAttempt.userName,
+          district: user.district,
+          category: user.categoryReservation,
+          targetKey,
+          targetExam,
+          seriesId,
+          testId: currentTest.id,
+          score: netScore,
+          maxScore,
+          percentage,
+          accuracy,
+          correctCount,
+          incorrectCount,
+          unattemptedCount,
+          timeTakenSeconds: submission.timeTakenSeconds,
+          submittedAt: newAttempt.submittedAt,
+          source: 'practice_attempt',
+        });
+      } catch (error) {
+        console.warn('Attempt saved locally but Firestore persistence failed:', error);
+      }
     }
-    if (!user && typeof window !== 'undefined') {
-      localStorage.setItem('cgtest_guest_test_completed', 'true');
-    }
+
+    const milestoneRes = recordTestCompletion();
+    if (milestoneRes.unlockedBonus) setShowMilestoneCelebrationModal(true);
+    if (!user && typeof window !== 'undefined') localStorage.setItem('cgtest_guest_test_completed', 'true');
   };
 
   // ADMIN QUESTION BANK ACTIONS
