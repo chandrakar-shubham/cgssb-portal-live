@@ -17,7 +17,7 @@ export async function getDoc(ref: DocumentReference) {
 }
 
 export async function setDoc(ref: DocumentReference, data: Record<string, any>, options?: { merge?: boolean }) {
-  return ref.set(data, options);
+  return options ? ref.set(data, options) : ref.set(data);
 }
 
 export async function deleteDoc(ref: DocumentReference) {
