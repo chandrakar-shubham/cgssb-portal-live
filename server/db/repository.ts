@@ -573,15 +573,16 @@ export async function getAppRemoteConfig(): Promise<AppRemoteConfig> {
 
 export async function saveAppRemoteConfig(config: Partial<AppRemoteConfig>, updatedBy = 'Admin'): Promise<AppRemoteConfig> {
   const db = getFirestoreServer();
-  memoryRemoteConfig = {
-    ...memoryRemoteConfig,
+  const current = await getAppRemoteConfig();
+  const updated: AppRemoteConfig = {
+    ...current,
     ...config,
     updatedAt: new Date().toISOString(),
     updatedBy,
   };
-
-  await setDoc(doc(db, 'remoteConfig', 'global'), memoryRemoteConfig, { merge: true });
-  return memoryRemoteConfig;
+  await setDoc(doc(db, 'remoteConfig', 'global'), updated, { merge: true });
+  memoryRemoteConfig = updated;
+  return updated;
 }
 
 export async function resetAppRemoteConfig(): Promise<AppRemoteConfig> {
