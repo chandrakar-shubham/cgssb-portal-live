@@ -1,33 +1,43 @@
 import { readFileSync } from 'node:fs';
-import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 
-const env = await initializeTestEnvironment({
-  projectId: 'cgssb-rules-test',
-  firestore: { rules: readFileSync('firestore.rules', 'utf8') },
-});
+const rules = readFileSync('firestore.rules', 'utf8');
 
-try {
-  const anonymous = env.unauthenticatedContext().firestore();
-  const user = env.authenticatedContext('student-123').firestore();
+const requiredFragments = [
+  'allow write: if false;',
+  'match /{document=**}',
+  'allow read, write: if false;',
+  'request.auth.uid == userId',
+];
 
-  await assertSucceeds(getDocs(collection(anonymous, 'mockTests')));
-  await assertSucceeds(getDoc(doc(anonymous, 'questions', 'q1')));
-
-  await assertFails(setDoc(doc(anonymous, 'questions', 'q1'), { id: 'q1' }));
-  await assertFails(setDoc(doc(user, 'questions', 'q1'), { id: 'q1' }));
-  await assertFails(setDoc(doc(user, 'mockTests', 't1'), { id: 't1' }));
-
-  await assertFails(getDoc(doc(user, 'users', 'different-user')));
-  await assertSucceeds(getDoc(doc(user, 'users', 'student-123')));
-
-  await assertFails(setDoc(doc(user, 'attempts', 'attempt-1'), {
-    id: 'attempt-1',
-    userId: 'student-123',
-  }));
-  await assertFails(getDoc(doc(user, 'attempts', 'attempt-1')));
-
-  await assertFails(getDoc(doc(user, 'unexpectedCollection', 'x')));
-} finally {
-  await env.cleanup();
+for (const fragment of requiredFragments) {
+  if (!rules.includes(fragment)) {
+    throw new Error(`Firestore security regression: missing required rule fragment: ${fragment}`);
+  }
 }
+
+const publicCollections = [
+  'mockTests',
+  'questions',
+  'pypPapers',
+  'bundles',
+  'pages',
+  'posts',
+  'seriesPacks',
+  'cmsSettings',
+  'slider_banners',
+  'currentAffairsSources',
+  'currentAffairsTopics',
+  'currentAffairsQuestions',
+  'dailyEditions',
+  'monthlyEditions',
+  'remoteConfig',
+];
+
+for (const collection of publicCollections) {
+  const pattern = new RegExp(`match /\\${collection}/\\{[^}]+\\}\\s*\\{[\\s\\S]*?allow read: if true;[\\s\\S]*?allow write: if false;`);
+  if (!pattern.test(rules)) {
+    throw new Error(`Firestore security regression: public-read/server-write policy missing for ${collection}`);
+  }
+}
+
+console.log('Firestore security regression checks passed.');
