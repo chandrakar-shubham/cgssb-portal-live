@@ -617,7 +617,7 @@ async function startServer() {
 
   // CORS support for Android clients connecting over network
   app.use((req, res, next) => {
-    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:4173').split(',').map(origin => origin.trim()).filter(Boolean);
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://cgtest.in,https://www.cgtest.in,http://localhost:5173,http://localhost:4173').split(',').map(origin => origin.trim()).filter(Boolean);
     const requestOrigin = req.headers.origin;
     if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
       res.header('Access-Control-Allow-Origin', requestOrigin);
