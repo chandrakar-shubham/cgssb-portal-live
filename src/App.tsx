@@ -56,7 +56,7 @@ const AdminStudentManagement = lazyWithRetry(() => import('./components/AdminStu
 const AdminRoleManagement = lazyWithRetry(() => import('./components/AdminRoleManagement').then(m => ({ default: m.AdminRoleManagement })));
 import { LiveTestLeaderboard } from './components/LiveTestLeaderboard';
 import { LegalModal, LegalTab } from './components/LegalModal';
-import { syncBundlesFromFirestore, cleanTestFromAllBundles, isDemoDataPurged } from './utils/bundleStore';
+import { syncBundlesFromFirestore, cleanTestFromAllBundles } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
 const AdminRemoteConfigStudio = lazyWithRetry(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
 const AdminSliderStudio = lazyWithRetry(() => import('./components/AdminSliderStudio').then(m => ({ default: m.AdminSliderStudio })));
@@ -121,7 +121,6 @@ import {
   fetchPypPapersFromFirestore,
   savePypPaperToFirestore,
   deletePypPaperFromFirestore,
-  seedInitialDataIfEmpty
 } from './firebase/firestoreService';
 
 function MainApp() {
@@ -528,9 +527,8 @@ function MainApp() {
   // Fetch initial data from server or Firebase Firestore
   useEffect(() => {
     async function loadData() {
-      // 1. Verify Firestore Connection and seed initial verified catalog if database is empty
+      // Production invariant: an empty database is valid production state. Never seed demo/factory data from the client.
       testConnection().catch(() => null);
-      seedInitialDataIfEmpty().catch(() => null);
 
       try {
         const [testsRes, pypRes, qRes, firestoreTests, firestoreQuestions, firestorePyp] = await Promise.all([
