@@ -212,7 +212,17 @@ service cloud.firestore {
           'durationDays', 'source', 'planName', 'boundDeviceId',
           'boundDeviceName', 'updatedAt'
         ]);
-      allow update: if hasManagePayments();
+      allow update: if hasManagePayments() ||
+        (isOwner(userId) &&
+         request.resource.data.userId == userId &&
+         request.resource.data.source == 'CLIENT_CHECKOUT' &&
+         request.resource.data.status == 'ACTIVE' &&
+         request.resource.data.durationDays in [30, 365] &&
+         request.resource.data.keys().hasOnly([
+           'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
+           'durationDays', 'source', 'planName', 'boundDeviceId',
+           'boundDeviceName', 'updatedAt'
+         ]));
       allow delete: if hasManagePayments();
     }
 
