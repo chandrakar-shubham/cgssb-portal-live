@@ -41,12 +41,10 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   const candidateName = attempt.userName || 'Candidate';
   const score = attempt.score;
   const maxScore = attempt.maxScore;
-  const rank = attempt.simulatedRank || 15;
-  const percentile = attempt.percentile || 98.4;
   const accuracy = attempt.accuracy || 88.5;
 
   const shareTitle = `🎯 ${candidateName}'s cgtest.in Scorecard: ${score}/${maxScore} Marks!`;
-  const shareText = `🏆 I scored ${score}/${maxScore} Marks (${accuracy}% Accuracy) in "${testTitle}" on cgtest.in!\n📊 Simulated Rank: #${rank} | ${percentile}%ile\n💬 "${customNote}"\n\nPracticing for CGPSC & Vyapam 2026 exams on TCS iON CBT engine:`;
+  const shareText = `🏆 I scored ${score}/${maxScore} Marks (${accuracy}% Accuracy) in "${testTitle}" on cgtest.in!\n📊 Verified statewide rank/percentile: unavailable on Firebase Spark\n💬 "${customNote}"\n\nPracticing for CGPSC & Vyapam 2026 exams on TCS iON CBT engine:`;
   const shareUrl = `${appUrl}/test-series`;
 
   const fullShareMessage = `${shareText}\n${shareUrl}`;
