@@ -9,7 +9,7 @@ import {
   signOut as firebaseSignOut 
 } from 'firebase/auth';
 import { auth, googleAuthProvider } from '../firebase/config';
-import { upsertStudentInRegistry, getRegisteredStudents, saveRegisteredStudents, getAdminMembers } from '../utils/studentStore';
+import { getAdminMembers } from '../utils/studentStore';
 import { api } from '../utils/apiClient';
 import { 
   generateReferralCode, 
@@ -23,7 +23,7 @@ interface AuthContextType {
   // Student Auth
   user: User | null;
   isStudentBlocked: boolean;
-  login: (email: string, role?: UserRole, name?: string) => void;
+  login: (email: string, role?: UserRole, name?: string, password?: string) => Promise<void>;
   registerStudent: (details: {
     name: string;
     email: string;
@@ -33,7 +33,7 @@ interface AuthContextType {
     medium?: 'Hindi' | 'English';
     categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
     referralCode?: string;
-  }) => void;
+  }, password?: string) => Promise<void>;
   loginWithGoogle: (googleData: { email: string; name: string; avatar?: string }) => Promise<void>;
   loginWithPhoneOtp: (phone: string, otp: string, name?: string) => void;
   loginWithWhatsApp: (phone: string, tokenOrOtp?: string, name?: string) => void;
@@ -60,18 +60,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Student Auth State - Defaults to NULL for clean guest preview mode!
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_student_user');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.id) return parsed;
-      }
-    } catch {
-      // ignore
-    }
-    return null; // Clean guest mode by default
-  });
+  const [user, setUser] = useState<User | null>(null);
 
   // Admin Auth State (Strictly separated)
   const [adminUser, setAdminUser] = useState<User | null>(() => {
@@ -122,11 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (user) {
-      localStorage.setItem('cgssb_student_user', JSON.stringify(user));
-      upsertStudentInRegistry(user);
       syncUserProfileToFirestore(user).catch(() => null);
-    } else {
-      localStorage.removeItem('cgssb_student_user');
     }
   }, [user]);
 
@@ -160,81 +145,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Student Registration with Onboarding Data & Automatic 1-Month Free Pro Pass (+1 Month extra if referred)
-  const registerStudent = (details: {
-    name: string;
-    email: string;
-    phone?: string;
-    targetExam?: string;
-    district?: string;
-    medium?: 'Hindi' | 'English';
-    categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
-    referralCode?: string;
-  }) => {
+  const registerStudent = async (details: {
+    name: string; email: string; phone?: string; targetExam?: string; district?: string;
+    medium?: 'Hindi' | 'English'; categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS'; referralCode?: string;
+  }, password = '') => {
+    if (password.length < 6) throw new Error('Password must be at least 6 characters long.');
+    const credential = await createUserWithEmailAndPassword(auth, details.email.trim().toLowerCase(), password);
+    const studentId = credential.user.uid;
     const passDetails = createInitialProPassDetails();
-    const studentId = `std-${Date.now()}`;
     const initialUser: User = {
-      id: studentId,
-      name: details.name.trim(),
-      email: details.email.trim().toLowerCase(),
-      phone: details.phone?.trim() || '',
-      role: 'student',
-      status: 'active',
-      isBlocked: false,
-      registeredAt: new Date().toISOString().split('T')[0],
-      lastLoginAt: new Date().toISOString().split('T')[0],
-      targetExam: details.targetExam || 'CG Teacher 2026 (शिक्षक भर्ती)',
-      targetYear: 2026,
-      district: details.district || 'Raipur',
-      medium: details.medium || 'Hindi',
+      id: studentId, name: details.name.trim(), email: details.email.trim().toLowerCase(), phone: details.phone?.trim() || '',
+      role: 'student', status: 'active', isBlocked: false,
+      registeredAt: new Date().toISOString().split('T')[0], lastLoginAt: new Date().toISOString().split('T')[0],
+      targetExam: details.targetExam || 'CG Teacher 2026 (शिक्षक भर्ती)', targetYear: 2026,
+      district: details.district || 'Raipur', medium: details.medium || 'Hindi',
       categoryReservation: details.categoryReservation || 'UR',
-      token: `jwt-std-${Date.now()}`,
       referralCode: generateReferralCode({ id: studentId, name: details.name.trim(), email: details.email }),
-      referralCount: 0,
-      referralBonusMonths: 0,
-      ...passDetails,
+      referralCount: 0, referralBonusMonths: 0, ...passDetails,
     };
-
-    // Auto-process referral bonus if user signed up with a friend's code (+1 Month for both)
     const finalUser = processSignupReferral(initialUser, details.referralCode);
+    await syncUserProfileToFirestore(finalUser);
     setUser(finalUser);
   };
 
   // Student Login
-  const login = (email: string, role: UserRole = 'student', name?: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const existing = getRegisteredStudents().find(s => s.email.toLowerCase() === cleanEmail);
-    
-    if (existing) {
-      const updated = {
-        ...existing,
-        lastLoginAt: new Date().toISOString().split('T')[0],
-        completedTestsCount: existing.completedTestsCount || 0,
-        hasProPass: existing.hasProPass ?? true,
-        proPassPlan: existing.proPassPlan || '1-Month Free Welcome Pass (30 Days)',
-        passExpiresAt: existing.passExpiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      };
-      setUser(updated);
-      return;
-    }
-
-    const passDetails = createInitialProPassDetails();
-    const newUser: User = {
-      id: `std-${Date.now()}`,
-      name: name || 'Aspirant Student',
-      email: cleanEmail,
-      role: 'student',
-      status: 'active',
-      isBlocked: false,
-      registeredAt: new Date().toISOString().split('T')[0],
-      lastLoginAt: new Date().toISOString().split('T')[0],
-      targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
-      district: 'Raipur',
-      medium: 'Hindi',
-      token: `jwt-student-${Date.now()}`,
-      ...passDetails,
+  const login = async (email: string, _role: UserRole = 'student', name?: string, password = '') => {
+    if (!password) throw new Error('Password is required.');
+    const credential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+    const existing = await fetchUserProfileFromFirestore();
+    const today = new Date().toISOString().split('T')[0];
+    const profile: User = existing ? { ...existing, id: credential.user.uid, email: credential.user.email || existing.email, lastLoginAt: today } : {
+      id: credential.user.uid, name: name || credential.user.displayName || 'Aspirant Student',
+      email: credential.user.email || email.trim().toLowerCase(), role: 'student', status: 'active', isBlocked: false,
+      registeredAt: today, lastLoginAt: today, targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)', district: 'Raipur', medium: 'Hindi',
+      ...createInitialProPassDetails(),
     };
-    setUser(newUser);
+    setUser(profile);
+    await syncUserProfileToFirestore(profile);
   };
+
 
   const loginWithGoogle = async (googleData: { email: string; name: string; avatar?: string }) => {
     let fbUserUid = `g-${Date.now()}`;
@@ -255,16 +204,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const cleanEmail = fbEmail.trim().toLowerCase();
-    const existing = getRegisteredStudents().find(s => s.email.toLowerCase() === cleanEmail);
-
+    const existing = await fetchUserProfileFromFirestore();
     if (existing) {
-      setUser({
-        ...existing,
-        avatar: fbAvatar || existing.avatar,
-        lastLoginAt: new Date().toISOString().split('T')[0],
-        hasProPass: existing.hasProPass ?? true,
-        completedTestsCount: existing.completedTestsCount || 0,
-      });
+      setUser({ ...existing, email: cleanEmail, avatar: fbAvatar || existing.avatar, lastLoginAt: new Date().toISOString().split('T')[0] });
       return;
     }
 
@@ -288,167 +230,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(newUser);
   };
 
-  const loginWithPhoneOtp = (phone: string, _otp: string, name?: string) => {
-    const cleanPhone = phone.trim();
-    const cleanEmail = `${cleanPhone}@student.cgtest.in`;
-    const existing = getRegisteredStudents().find(s => s.phone === cleanPhone || s.email === cleanEmail);
-
-    if (existing) {
-      setUser({
-        ...existing,
-        lastLoginAt: new Date().toISOString().split('T')[0],
-        hasProPass: existing.hasProPass ?? true,
-        completedTestsCount: existing.completedTestsCount || 0,
-      });
-      return;
-    }
-
-    const passDetails = createInitialProPassDetails();
-    const newUser: User = {
-      id: `std-p-${Date.now()}`,
-      name: name || `Candidate ${cleanPhone.slice(-4)}`,
-      email: cleanEmail,
-      phone: cleanPhone,
-      role: 'student',
-      status: 'active',
-      isBlocked: false,
-      registeredAt: new Date().toISOString().split('T')[0],
-      lastLoginAt: new Date().toISOString().split('T')[0],
-      targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
-      district: 'Raipur',
-      medium: 'Hindi',
-      token: `jwt-phone-${Date.now()}`,
-      ...passDetails,
-    };
-    setUser(newUser);
+  const loginWithPhoneOtp = (_phone: string, _otp: string, _name?: string) => {
+    throw new Error('Phone OTP authentication is not enabled yet. Please use email/password or Google sign-in.');
   };
 
-  const loginWithWhatsApp = (phone: string, _tokenOrOtp?: string, name?: string) => {
-    const cleanPhone = phone.trim();
-    const cleanEmail = `${cleanPhone}@whatsapp.cgtest.in`;
-    const existing = getRegisteredStudents().find(s => s.phone === cleanPhone || s.email === cleanEmail);
-
-    if (existing) {
-      setUser({
-        ...existing,
-        lastLoginAt: new Date().toISOString().split('T')[0],
-        hasProPass: existing.hasProPass ?? true,
-        completedTestsCount: existing.completedTestsCount || 0,
-      });
-      return;
-    }
-
-    const passDetails = createInitialProPassDetails();
-    const newUser: User = {
-      id: `std-wa-${Date.now()}`,
-      name: name || `WhatsApp Candidate (${cleanPhone.slice(-4)})`,
-      email: cleanEmail,
-      phone: cleanPhone,
-      role: 'student',
-      status: 'active',
-      isBlocked: false,
-      registeredAt: new Date().toISOString().split('T')[0],
-      lastLoginAt: new Date().toISOString().split('T')[0],
-      targetExam: 'CG Teacher 2026 (शिक्षक भर्ती)',
-      district: 'Raipur',
-      medium: 'Hindi',
-      token: `jwt-whatsapp-${Date.now()}`,
-      ...passDetails,
-    };
-    setUser(newUser);
-  };
-
-  const activateProPass = (planTypeOrName: 'monthly' | 'yearly' | string, customName?: string) => {
-    const isMonthly = planTypeOrName.toLowerCase().includes('monthly') || planTypeOrName === 'monthly';
-    const planKey = isMonthly ? 'monthly' : 'yearly';
-    const tenure = createPassTenure(planKey);
-    const device = getOrCreateDeviceId();
-    const finalPlanName = customName || (isMonthly ? 'Monthly All-Access Pass (30 Days)' : 'Yearly All-Access Pass (365 Days)');
-
-    if (user) {
-      setUser({
-        ...user,
-        hasProPass: true,
-        proPassPlan: finalPlanName,
-        passDurationDays: tenure.days,
-        passExpiresAt: tenure.expiresAt,
-        boundDeviceId: device.id,
-        boundDeviceName: device.name,
-      });
-    } else {
-      const newUser: User = {
-        id: `std-${Date.now()}`,
-        name: 'Enrolled Aspirant',
-        email: 'aspirant@cgtest.in',
-        role: 'student',
-        status: 'active',
-        isBlocked: false,
-        hasProPass: true,
-        proPassPlan: finalPlanName,
-        passDurationDays: tenure.days,
-        passExpiresAt: tenure.expiresAt,
-        boundDeviceId: device.id,
-        boundDeviceName: device.name,
-        completedTestsCount: 0,
-        freePassStage: '1_month_active',
-        unlockedMilestoneBonus: false,
-        registeredAt: new Date().toISOString().split('T')[0],
-        lastLoginAt: new Date().toISOString().split('T')[0],
-      };
-      setUser(newUser);
-    }
-  };
-
-  // Milestone Test Completion Hook (+2 Months Free on 5 Tests)
-  const recordTestCompletion = (): { unlockedBonus: boolean; newCount: number } => {
-    if (!user) {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('cgtest_guest_test_completed', 'true');
-      }
-      return { unlockedBonus: false, newCount: 1 };
-    }
-
-    const currentCount = user.completedTestsCount || 0;
-    const newCount = currentCount + 1;
-    const shouldUnlockBonus = newCount >= 5 && !user.unlockedMilestoneBonus;
-
-    let updatedExpiresAt = user.passExpiresAt;
-    let updatedDurationDays = user.passDurationDays || 30;
-    let updatedPlan = user.proPassPlan || '1-Month Free Welcome Pass (30 Days)';
-    let updatedStage = user.freePassStage || '1_month_active';
-
-    if (shouldUnlockBonus) {
-      const baseTime = user.passExpiresAt ? new Date(user.passExpiresAt).getTime() : Date.now();
-      const extendedTime = Math.max(Date.now(), baseTime) + 60 * 24 * 60 * 60 * 1000; // +60 days (2 months)
-      updatedExpiresAt = new Date(extendedTime).toISOString();
-      updatedDurationDays = updatedDurationDays + 60;
-      updatedPlan = '3-Month Milestone Pro Pass (90 Days Total)';
-      updatedStage = '3_months_unlocked';
-    }
-
-    const updatedUser: User = {
-      ...user,
-      hasProPass: true,
-      completedTestsCount: newCount,
-      unlockedMilestoneBonus: Boolean(user.unlockedMilestoneBonus || shouldUnlockBonus),
-      freePassStage: updatedStage,
-      proPassPlan: updatedPlan,
-      passDurationDays: updatedDurationDays,
-      passExpiresAt: updatedExpiresAt,
-    };
-
-    setUser(updatedUser);
-    return { unlockedBonus: shouldUnlockBonus, newCount };
-  };
-
-  const transferPassDevice = () => {
-    if (!user) return;
-    const currentDevice = getOrCreateDeviceId();
-    setUser({
-      ...user,
-      boundDeviceId: currentDevice.id,
-      boundDeviceName: currentDevice.name,
-    });
+  const loginWithWhatsApp = (_phone: string, _tokenOrOtp?: string, _name?: string) => {
+    throw new Error('WhatsApp authentication is not enabled yet. Please use email/password or Google sign-in.');
   };
 
   const updateUserProfile = (updates: Partial<User>) => {
