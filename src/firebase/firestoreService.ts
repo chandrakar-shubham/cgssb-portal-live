@@ -103,12 +103,25 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 4000, fallbackVal
 // ==========================================
 // USER SERVICES
 // ==========================================
+// Only these fields are client-owned. Entitlements, moderation, roles, credits,
+// device binding and admin permissions remain server-authoritative.
+const CLIENT_USER_PROFILE_FIELDS = [
+  'name', 'email', 'phone', 'avatar', 'lastLoginAt',
+  'targetExam', 'targetYear', 'district', 'categoryReservation',
+  'gender', 'education', 'medium', 'bio', 'dailyGoalQuestions'
+] as const;
+
 export async function syncUserProfileToFirestore(user: User): Promise<void> {
   if (!db || !user?.id) return;
   try {
+    const profile = CLIENT_USER_PROFILE_FIELDS.reduce<Record<string, unknown>>((out, field) => {
+      const value = user[field];
+      if (value !== undefined) out[field] = value;
+      return out;
+    }, {});
     const userDocRef = doc(db, COLLECTIONS.USERS, user.id);
     await setDoc(userDocRef, {
-      ...user,
+      ...profile,
       lastSyncedAt: serverTimestamp()
     }, { merge: true });
   } catch (err) {
