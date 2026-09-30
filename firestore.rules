@@ -81,8 +81,15 @@ service cloud.firestore {
     // Admins can manage profiles from the admin portal.
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if (isOwner(userId) || hasManageStudents()) &&
+      allow create: if (isOwner(userId) &&
         request.resource.data.keys().hasOnly([
+          'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
+          'lastLoginAt', 'targetExam', 'targetYear', 'district',
+          'categoryReservation', 'gender', 'education', 'medium', 'bio',
+          'dailyGoalQuestions', 'referralCode', 'referredBy', 'lastSyncedAt'
+        ])) ||
+        (hasManageStudents() &&
+         request.resource.data.keys().hasOnly([
           'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
           'lastLoginAt', 'targetExam', 'targetYear', 'district',
           'categoryReservation', 'gender', 'education', 'medium', 'bio',
@@ -91,7 +98,7 @@ service cloud.firestore {
           'hasProPass', 'proPassPlan', 'passDurationDays', 'passExpiresAt',
           'boundDeviceId', 'boundDeviceName', 'freePassStage',
           'unlockedMilestoneBonus', 'referralCount', 'referralBonusMonths'
-        ]);
+        ]));
       allow update: if hasManageStudents() ||
         (isOwner(userId) &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
