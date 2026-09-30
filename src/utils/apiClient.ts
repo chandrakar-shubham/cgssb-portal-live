@@ -22,6 +22,7 @@ import {
 import { auth, db } from '../firebase/config';
 
 const ADMIN_BOOTSTRAP_EMAIL = 'admin@cgtest.in';
+const BOOTSTRAP_ADMIN_UID = 'VOynxZyDOJR4lg2x4va2U3qF5m72';
 
 export function getApiBaseUrl(): string {
   return '';
@@ -61,7 +62,7 @@ async function requireAdminAuth() {
 
   const email = (user.email || '').trim().toLowerCase();
   if (!user.emailVerified) throw new Error('Administrator email must be verified in Firebase Authentication.');
-  if (email === ADMIN_BOOTSTRAP_EMAIL) {
+  if (user.uid === BOOTSTRAP_ADMIN_UID || email === ADMIN_BOOTSTRAP_EMAIL) {
     return { user, role: 'superadmin', permissions: { all: true } };
   }
 
@@ -254,7 +255,7 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     if (!identifier || !password) return { success:false, error:'Admin email and password are required.' } as T;
     try {
       const cred = await signInWithEmailAndPassword(auth, identifier, password);
-      const member = identifier === ADMIN_BOOTSTRAP_EMAIL
+      const member = cred.user.uid === BOOTSTRAP_ADMIN_UID || identifier === ADMIN_BOOTSTRAP_EMAIL
         ? { role:'superadmin', permissions:{ all:true } }
         : (await getDoc(doc(db,'adminMembers',cred.user.uid))).data();
       if (!member) {
