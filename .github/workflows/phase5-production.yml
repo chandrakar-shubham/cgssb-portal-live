@@ -18,7 +18,17 @@ jobs:
           node-version: 20
           cache: npm
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: |
+          set -e
+          for attempt in 1 2 3; do
+            if npm install --legacy-peer-deps --no-audit --no-fund; then
+              exit 0
+            fi
+            echo "npm install attempt $attempt failed; refreshing npm metadata before retry..."
+            npm cache clean --force || true
+            sleep 5
+          done
+          exit 1
       - name: TypeScript validation
         run: npm run lint
       - name: Production build
