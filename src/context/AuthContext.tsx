@@ -396,7 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         const member = memberSnap.data() as any;
         role = member.role || 'admin';
-        permissions = member.permissions || { all: true };
+        permissions = member.permissions || member.adminPermissions || { all: true };
       } else {
         role = 'superadmin' as UserRole;
       }
