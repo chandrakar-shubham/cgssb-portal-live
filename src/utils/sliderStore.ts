@@ -10,9 +10,9 @@ let sliderCache: SliderBanner[] = [];
 if (typeof window !== 'undefined') {
   try {
     subscribeToSliderBanners((remoteBanners) => {
-      if (Array.isArray(remoteBanners) && remoteBanners.length > 0) {
-        const sorted = remoteBanners.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-        sliderCache = [...sorted];
+      if (Array.isArray(remoteBanners)) {
+        const sorted = [...remoteBanners].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+        sliderCache = sorted;
         window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
       }
     });
@@ -369,6 +369,9 @@ export function reorderBanners(orderedIds: string[]): SliderBanner[] {
  * Reset all banners to factory defaults
  */
 export function resetBannersToDefault(): SliderBanner[] {
+  if (!import.meta.env.DEV) {
+    return getStoredSliderBanners();
+  }
   saveSliderBanners(DEFAULT_SLIDER_BANNERS);
-  return DEFAULT_SLIDER_BANNERS;
+  return [...DEFAULT_SLIDER_BANNERS];
 }
