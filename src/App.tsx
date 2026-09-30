@@ -591,7 +591,7 @@ function MainApp() {
         },
       ],
       difficultyDistribution: { easy: 40, medium: 40, hard: 20 },
-      attemptsCount: 142,
+      attemptsCount: 0,
       createdAt: new Date().toISOString(),
     };
 
