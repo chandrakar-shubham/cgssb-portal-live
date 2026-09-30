@@ -8,27 +8,13 @@ import {
 } from '../firebase/firestoreService';
 
 export function usePypManager() {
-  const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>(() => {
-    try {
-      const saved = localStorage.getItem('cgssb_pyp');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-      }
-    } catch {}
-    return [];
-  });
+  const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>([]);
 
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
     const unsubscribe = subscribeToPypPapers((firestorePapers) => {
       if (Array.isArray(firestorePapers)) {
         setPypPapers(firestorePapers);
-        try {
-          localStorage.setItem('cgssb_pyp', JSON.stringify(firestorePapers));
-        } catch {}
       }
     });
 
