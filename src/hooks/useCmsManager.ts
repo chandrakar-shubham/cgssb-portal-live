@@ -70,21 +70,21 @@ export function useCmsManager() {
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
     const unsubPages = subscribeToCmsPages((remotePages) => {
-      if (remotePages.length > 0) {
+      if (Array.isArray(remotePages)) {
         setCmsPages(remotePages);
         try { localStorage.setItem('cgssb_cms_pages', JSON.stringify(remotePages)); } catch {}
       }
     });
 
     const unsubPosts = subscribeToCmsPosts((remotePosts) => {
-      if (remotePosts.length > 0) {
+      if (Array.isArray(remotePosts)) {
         setCmsPosts(remotePosts);
         try { localStorage.setItem('cgssb_cms_posts', JSON.stringify(remotePosts)); } catch {}
       }
     });
 
     const unsubSeries = subscribeToCmsSeriesPacks((remoteSeries) => {
-      if (remoteSeries.length > 0) {
+      if (Array.isArray(remoteSeries)) {
         setCmsSeriesPacks(remoteSeries);
         try { localStorage.setItem('cgssb_cms_series', JSON.stringify(remoteSeries)); } catch {}
       }
@@ -99,17 +99,15 @@ export function useCmsManager() {
 
     // Initial fetch fallbacks
     fetchCmsPagesFromFirestore().then(p => {
-      if (p.length > 0) {
-        setCmsPages(p);
-      }
+      setCmsPages(p);
     }).catch(() => {});
 
     fetchCmsPostsFromFirestore().then(p => {
-      if (p.length > 0) setCmsPosts(p);
+      setCmsPosts(p);
     }).catch(() => {});
 
     fetchCmsSeriesPacksFromFirestore().then(s => {
-      if (s.length > 0) setCmsSeriesPacks(s);
+      setCmsSeriesPacks(s);
     }).catch(() => {});
 
     fetchCmsSettingsFromFirestore().then(s => {
