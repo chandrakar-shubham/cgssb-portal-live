@@ -68,11 +68,10 @@ jobs:
           status=$?
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B ci-tsc-diagnostics
           cp /tmp/tsc-errors.txt TS_ERRORS.txt
           git add TS_ERRORS.txt
           git commit -m "ci: capture TypeScript diagnostics [skip ci]" || true
-          git push --force origin ci-tsc-diagnostics
+          git push origin main
           exit $status
 
       - name: 🏗️ Execute Production Bundle Build
