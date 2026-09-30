@@ -199,8 +199,9 @@ async function submitAttempt(testId: string, body: any) {
     simulatedRank, totalParticipants: participants, percentile, sectorAnalysis,
   };
 
+  // Student submissions may only write their own attempt document under Spark rules.
+  // Do not mutate the public mockTests document from the student client.
   await setDoc(doc(db, 'attempts', attempt.id), attempt, { merge: true });
-  await setDoc(doc(db, 'mockTests', test.id), { attemptsCount: participants }, { merge: true });
 
   return { success: true, attempt, solutions: testQuestions };
 }
