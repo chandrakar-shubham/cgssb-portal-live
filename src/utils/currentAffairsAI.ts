@@ -12,6 +12,7 @@ import {
 } from '../types/currentAffairs';
 import { QuestionType, DifficultyLevel, ExamCategory } from '../types';
 import { validateTopic, validateQuestion, QCResult } from './currentAffairsQC';
+import { api } from './apiClient';
 
 export interface AIGenerationOptions {
   date: string; // YYYY-MM-DD
@@ -36,23 +37,16 @@ export async function generateAICurrentAffairsPackage(options: AIGenerationOptio
   const editionId = `edition-${dateStr}`;
 
   try {
-    // Call server-side AI generation endpoint with Google Search grounding
-    const res = await fetch('/api/current-affairs/generate-ai', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('adminToken') || 'adm_cgssb_master'}`,
-        'x-admin-key': localStorage.getItem('adminKey') || 'cgssb_admin_2026'
-      },
-      body: JSON.stringify(options)
-    });
+    // Spark mode has no server-side secret store. AI generation is intentionally
+    // delegated to the manual/JSON ingestion workflow until a Firebase-native
+    // serverless AI path is explicitly enabled.
+    const data = await api.post<any>('/api/current-affairs/generate-ai', options, { requireAdmin: true });
 
     let generatedSources: CurrentAffairSource[] = [];
     let generatedTopics: CurrentAffairTopic[] = [];
     let rawQuestions: any[] = [];
 
-    if (res.ok) {
-      const data = await res.json();
+    if (data?.success) {
       if (data.success) {
         generatedSources = (data.sources || []).map((s: any, idx: number) => ({
           id: s.id || `src-${dateStr}-${idx}`,
