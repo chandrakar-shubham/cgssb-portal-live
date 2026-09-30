@@ -1,18 +1,11 @@
 import { QuestionBookmark } from '../types';
+import { api } from './apiClient';
 export type { QuestionBookmark };
 
 const STORAGE_KEY = 'cgssb_bookmarks';
 export const BOOKMARKS_CHANGED_EVENT = 'cgssb_bookmarks_changed';
 
-function getCurrentUserId(): string | null {
-  try {
-    const raw = localStorage.getItem('cgssb_student_user');
-    const user = raw ? JSON.parse(raw) : null;
-    return user?.id ? String(user.id) : null;
-  } catch {
-    return null;
-  }
-}
+
 
 export function getBookmarks(): QuestionBookmark[] {
   try {
@@ -65,12 +58,8 @@ export function toggleBookmark(
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
     window.dispatchEvent(new CustomEvent(BOOKMARKS_CHANGED_EVENT, { detail: { questionId, isBookmarked: isBookmarkedNow } }));
-    // Asynchronously sync with server
-    fetch('/api/user/bookmarks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: getCurrentUserId(), bookmarks })
-    }).catch(() => null);
+    // Asynchronously sync with the authenticated server identity.
+    api.post('/api/user/bookmarks', { bookmarks }, { requireAuth: true }).catch(() => null);
   } catch (err) {
     console.warn('Failed to save bookmark to localStorage:', err);
   }
