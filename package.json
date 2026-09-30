@@ -11,7 +11,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "./node_modules/.bin/tsc --noEmit",
     "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\"",
-    "start:dev": "tsx server.ts",
+    "start:dev": "tsx serverEntry.ts",
     "build:functions": "esbuild firebaseFunctions.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/firebase-functions.cjs"
   },
   "dependencies": {
