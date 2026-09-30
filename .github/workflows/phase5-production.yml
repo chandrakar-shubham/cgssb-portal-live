@@ -21,7 +21,7 @@ jobs:
         run: |
           set -e
           for attempt in 1 2 3; do
-            if npm install --legacy-peer-deps --no-audit --no-fund; then
+            if npm install --legacy-peer-deps --package-lock=false --no-audit --no-fund;
               exit 0
             fi
             echo "npm install attempt $attempt failed; refreshing npm metadata before retry..."
