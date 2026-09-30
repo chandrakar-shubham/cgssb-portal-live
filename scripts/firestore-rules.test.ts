@@ -5,6 +5,12 @@ const rules = readFileSync('firestore.rules', 'utf8');
 for (const fragment of [
   "rules_version = '2';",
   'function isAdmin()',
+  'function hasManageTests()',
+  'function hasManageQuestions()',
+  'function hasManageStudents()',
+  'function hasManageCMS()',
+  'function hasManagePayments()',
+  'function hasManageSystem()',
   "request.auth.token.email == 'admin@cgtest.in'",
   'match /{document=**}',
   'allow read, write: if false;',
@@ -27,15 +33,22 @@ for (const collection of publicCollections) {
   if (!block.includes('allow read: if true;')) {
     throw new Error(`Public read policy missing for ${collection}`);
   }
-  if (!block.includes('allow write: if isAdmin();')) {
-    throw new Error(`Admin write policy missing for ${collection}`);
+  const permissionMarkers: Record<string, string> = {
+    mockTests: 'hasManageTests()', questions: 'hasManageQuestions()', pypPapers: 'hasManageTests()',
+    bundles: 'hasManageCMS()', pages: 'hasManageCMS()', posts: 'hasManageCMS()', seriesPacks: 'hasManageCMS()',
+    cmsSettings: 'hasManageCMS()', slider_banners: 'hasManageCMS()', currentAffairsSources: 'hasManageQuestions()',
+    currentAffairsTopics: 'hasManageQuestions()', currentAffairsQuestions: 'hasManageQuestions()', dailyEditions: 'hasManageQuestions()',
+    monthlyEditions: 'hasManageQuestions()', remoteConfig: 'hasManageSystem()'
+  };
+  if (!block.includes(permissionMarkers[collection])) {
+    throw new Error(`Permission-aware admin write policy missing for ${collection}`);
   }
 }
 
 const usersStart = rules.indexOf('match /users/{userId}');
 const usersEnd = rules.indexOf('\n    // Public exam/catalog content', usersStart);
 const usersBlock = rules.slice(usersStart, usersEnd);
-if (!usersBlock.includes('allow create: if (isOwner(userId) || isAdmin())')) {
+if (!usersBlock.includes('allow create: if (isOwner(userId) || hasManageStudents())')) {
   throw new Error('User profile create protection missing');
 }
 if (!usersBlock.includes('affectedKeys().hasOnly')) {
@@ -65,11 +78,11 @@ for (const collection of adminCollections) {
     throw new Error(`Admin read policy missing for ${collection}`);
   }
   if (collection === 'adminMembers') {
-    if (!block.includes('allow create, update, delete: if isBootstrapAdmin();')) {
+    if (!block.includes('allow create, update, delete: if hasManageAdmins();')) {
       throw new Error('Admin role mutation policy must be Super Admin only');
     }
-  } else if (!block.includes('allow read, write: if isAdmin();')) {
-    throw new Error(`Admin write policy missing for ${collection}`);
+  } else if (!block.includes('allow read, write: if hasManagePayments();')) {
+    throw new Error(`Payment permission policy missing for ${collection}`);
   }
 }
 
