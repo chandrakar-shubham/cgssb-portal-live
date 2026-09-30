@@ -513,31 +513,6 @@ function MainApp() {
     }
     loadData();
 
-    // Hydrate only the current authenticated student's real attempts.
-    // This reacts to auth changes because the initial app mount may be unauthenticated.
-    useEffect(() => {
-      let cancelled = false;
-
-      if (!user || user.isAnonymous) {
-        setAttempts([]);
-        return;
-      }
-
-      api.get('/api/user/attempts', { requireAuth: true })
-        .then(data => {
-          if (!cancelled && data && Array.isArray(data.attempts)) {
-            setAttempts(data.attempts);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setAttempts([]);
-        });
-
-      return () => {
-        cancelled = true;
-      };
-    }, [user?.uid]);
-
     // Initialize Auto-Sync for queued on-device exam attempts when internet reconnects
     const unsubscribe = initOfflineAutoSync((syncedAttempt, solutions) => {
       setAttempts(prev => dedupeById([syncedAttempt, ...prev]));
@@ -551,6 +526,31 @@ function MainApp() {
     });
     return unsubscribe;
   }, []);
+
+  // Hydrate only the current authenticated student's real attempts.
+  // This reacts to auth changes because the initial app mount may be unauthenticated.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user || user.isAnonymous) {
+      setAttempts([]);
+      return;
+    }
+
+    api.get('/api/user/attempts', { requireAuth: true })
+      .then(data => {
+        if (!cancelled && data && Array.isArray(data.attempts)) {
+          setAttempts(data.attempts);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAttempts([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   // START TEST HANDLER (Routes through TCS iON Pre-Flight Screen)
   const handleStartTest = (test: MockTest) => {
