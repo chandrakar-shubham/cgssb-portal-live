@@ -47,18 +47,18 @@ export function useQuestionManager() {
       newQuestions.forEach(q => map.set(q.id, migrateLegacyQuestion(q)));
       return Array.from(map.values());
     });
-    saveQuestionsToFirestore(newQuestions).catch(err => console.warn('Cloud save questions warning:', err));
+    saveQuestionsToFirestore(newQuestions).catch(async err => { console.error('Cloud save questions failed:', err); setQuestions((await fetchQuestionsFromFirestore()).map(migrateLegacyQuestion)); });
   }, []);
 
   const updateQuestion = useCallback((updatedQuestion: Question) => {
     const migrated = migrateLegacyQuestion(updatedQuestion);
     setQuestions(prev => prev.map(q => (q.id === migrated.id ? migrated : q)));
-    saveSingleQuestionToFirestore(migrated).catch(err => console.warn('Cloud update question warning:', err));
+    saveSingleQuestionToFirestore(migrated).catch(async err => { console.error('Cloud update question failed:', err); setQuestions((await fetchQuestionsFromFirestore()).map(migrateLegacyQuestion)); });
   }, []);
 
   const deleteQuestion = useCallback((questionId: string) => {
     setQuestions(prev => prev.filter(q => q.id !== questionId));
-    deleteQuestionFromFirestore(questionId).catch(err => console.warn('Cloud delete question warning:', err));
+    deleteQuestionFromFirestore(questionId).catch(async err => { console.error('Cloud delete question failed:', err); setQuestions((await fetchQuestionsFromFirestore()).map(migrateLegacyQuestion)); });
   }, []);
 
   // Factory/demo question restoration is intentionally disabled in production.
