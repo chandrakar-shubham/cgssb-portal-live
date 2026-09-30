@@ -34,8 +34,13 @@ const publicCollections = [
 ];
 
 for (const collection of publicCollections) {
-  const pattern = new RegExp(`match /\\${collection}/\\{[^}]+\\}\\s*\\{[\\s\\S]*?allow read: if true;[\\s\\S]*?allow write: if false;`);
-  if (!pattern.test(rules)) {
+  const start = rules.indexOf(`match /${collection}/`);
+  if (start === -1) {
+    throw new Error(`Firestore security regression: missing match block for ${collection}`);
+  }
+
+  const block = rules.slice(start, rules.indexOf('\\n    }', start) + 6);
+  if (!block.includes('allow read: if true;') || !block.includes('allow write: if false;')) {
     throw new Error(`Firestore security regression: public-read/server-write policy missing for ${collection}`);
   }
 }
