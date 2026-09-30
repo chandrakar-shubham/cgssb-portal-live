@@ -61,8 +61,15 @@ for (const collection of adminCollections) {
   if (start === -1) throw new Error(`Missing admin collection rule: ${collection}`);
   const nextMatch = rules.indexOf("\n    match /", start + 1);
   const block = rules.slice(start, nextMatch === -1 ? rules.length : nextMatch);
-  if (!block.includes('allow read, write: if isAdmin();')) {
-    throw new Error(`Admin-only policy missing for ${collection}`);
+  if (!block.includes('allow read: if isAdmin();')) {
+    throw new Error(`Admin read policy missing for ${collection}`);
+  }
+  if (collection === 'adminMembers') {
+    if (!block.includes('allow create, update, delete: if isBootstrapAdmin();')) {
+      throw new Error('Admin role mutation policy must be Super Admin only');
+    }
+  } else if (!block.includes('allow read, write: if isAdmin();')) {
+    throw new Error(`Admin write policy missing for ${collection}`);
   }
 }
 
