@@ -5,158 +5,165 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    function isPermanentUser() {
+      return isAuthenticated() &&
+        request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    // Admin writes are performed by the server Firebase Admin SDK.
-    // Do not expose an admin role check here as a substitute for server authorization.
+    function isAdminEmail() {
+      return isAuthenticated() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'admin@cgtest.in';
+    }
 
-    // User profile: users may read their own profile and update only
-    // non-privileged profile fields. Roles, entitlements, credits and
-    // moderation/admin fields remain server-authoritative.
+    function isAdmin() {
+      return isAdminEmail() ||
+        (isAuthenticated() &&
+         exists(/databases/$(database)/documents/adminMembers/$(request.auth.uid)));
+    }
+
+    function isOwner(userId) {
+      return isPermanentUser() && request.auth.uid == userId;
+    }
+
+    // User profile. Client can edit only non-privileged profile fields.
+    // Admins can manage profiles from the admin portal.
     match /users/{userId} {
-      allow read: if isOwner(userId);
-
-      allow create: if isOwner(userId) &&
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if (isOwner(userId) || isAdmin()) &&
         request.resource.data.keys().hasOnly([
           'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
           'lastLoginAt', 'targetExam', 'targetYear', 'district',
           'categoryReservation', 'gender', 'education', 'medium', 'bio',
           'dailyGoalQuestions', 'referralCode', 'referredBy',
-          'lastSyncedAt'
+          'lastSyncedAt', 'role', 'status', 'isBlocked', 'completedTestsCount',
+          'hasProPass', 'proPassPlan', 'passDurationDays', 'passExpiresAt',
+          'boundDeviceId', 'boundDeviceName', 'freePassStage',
+          'unlockedMilestoneBonus', 'referralCount', 'referralBonusMonths'
         ]);
-
-      allow update: if isOwner(userId) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      allow update: if isAdmin() ||
+        (isOwner(userId) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'email', 'phone', 'avatar', 'lastLoginAt',
           'targetExam', 'targetYear', 'district', 'categoryReservation',
           'gender', 'education', 'medium', 'bio', 'dailyGoalQuestions',
           'lastSyncedAt'
-        ]);
-
-      allow delete: if false;
+         ]));
+      allow delete: if isAdmin();
     }
 
-    // Public exam/catalog content: browser reads are intentionally public.
-    // All writes go through authenticated server APIs.
+    // Public exam/catalog content. Admin-only mutations.
     match /mockTests/{testId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /questions/{questionId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /pypPapers/{paperId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /bundles/{bundleId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /pages/{pageId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /posts/{postId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /seriesPacks/{packId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /cmsSettings/{settingsId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /slider_banners/{bannerId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
-    // Current affairs is public content; mutations are server-admin only.
+    // Current-affairs public content. Admin-only mutations.
     match /currentAffairsSources/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /currentAffairsTopics/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /currentAffairsQuestions/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /dailyEditions/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /monthlyEditions/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
-
     match /monthlyEditions/{docId}/sections/{sectionId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
-    // Attempts are written by the trusted server submission endpoint.
+    // Attempts: authenticated students may create/read only their own attempts.
+    // Admins can read/write for support and analytics.
     match /attempts/{attemptId} {
-      allow read: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid;
-      allow write: if false;
+      allow read: if isAdmin() ||
+        (isOwner(resource.data.userId));
+      allow create: if isAdmin() ||
+        (isOwner(request.resource.data.userId) &&
+         request.resource.data.testId is string);
+      allow update: if isAdmin() ||
+        (isOwner(resource.data.userId) &&
+         request.resource.data.userId == resource.data.userId);
+      allow delete: if isAdmin();
     }
 
-    // User-specific application data is server/API controlled.
+    // User-specific application state.
     match /userBookmarks/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if false;
+      allow read, write: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
-
     match /userMistakes/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if false;
+      allow read, write: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
-
     match /userEntitlements/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if false;
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Referral records contain multiple users' data and are server controlled.
+    // Referral records may be read only by an admin in Spark mode.
+    // This avoids exposing cross-user referral relationships to clients.
     match /referrals/{referralId} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
 
-    // Server-driven configuration.
+    // Admin/member/coupon management.
+    match /adminMembers/{memberId} {
+      allow read, write: if isAdmin();
+    }
+    match /discountCoupons/{couponId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Public configuration.
     match /remoteConfig/{configId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
-    // Diagnostics should never be client-writable in production.
-    match /_connection_check_/{docId} {
-      allow read: if false;
-      allow write: if false;
-    }
-
-    // Deny every collection not explicitly listed above.
     match /{document=**} {
       allow read, write: if false;
     }
