@@ -22,123 +22,6 @@ export interface DatabaseShape {
   demoDataPurged?: boolean;
 }
 
-// In-memory runtime cache fed strictly by live Cloud Firestore
-let memoryCache: DatabaseShape = {
-  questions: [],
-  mockTests: [],
-  pypPapers: [],
-  attempts: [],
-  demoDataPurged: false,
-};
-
-let memoryBundles: TestSeriesBundle[] = [];
-let memoryCmsPages: CMSPage[] = [];
-let memoryCmsPosts: CMSPost[] = [];
-let memoryCmsSeries: CMSTestSeriesPack[] = [];
-let memoryCmsSettings: CMSSiteSettings = { ...INITIAL_CMS_SETTINGS };
-let memoryRemoteConfig: AppRemoteConfig = { ...DEFAULT_REMOTE_CONFIG };
-
-/**
- * Sync in-memory catalog with live Cloud Firestore collections
- */
-export async function syncWithFirestore(): Promise<{
-  syncedQuestions: number;
-  syncedTests: number;
-  syncedAttempts: number;
-}> {
-  const db = getFirestoreServer();
-  if (!db) {
-    throw new Error(`LIVE DATABASE ERROR: Could not get Firestore server instance for database ID ${dbConfig.databaseId}`);
-  }
-
-  const timeoutPromise = <T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
-    return Promise.race([
-      promise,
-      new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))
-    ]);
-  };
-
-  try {
-    // 1. Fetch questions from Cloud Firestore
-    const qSnap = await timeoutPromise(getDocs(collection(db, 'questions')), 5000, null as any);
-    if (qSnap && !qSnap.empty) {
-      const list: Question[] = [];
-      qSnap.forEach((d: any) => list.push(d.data() as Question));
-      memoryCache.questions = list;
-    } else {
-      memoryCache.questions = [];
-    }
-
-    // 2. Fetch mock tests from Cloud Firestore
-    const tSnap = await timeoutPromise(getDocs(collection(db, 'mockTests')), 5000, null as any);
-    if (tSnap && !tSnap.empty) {
-      const list: MockTest[] = [];
-      tSnap.forEach((d: any) => list.push(d.data() as MockTest));
-      memoryCache.mockTests = list;
-    } else {
-      memoryCache.mockTests = [];
-    }
-
-    // 3. Fetch PYP papers from Cloud Firestore
-    const pSnap = await timeoutPromise(getDocs(collection(db, 'pypPapers')), 5000, null as any);
-    if (pSnap && !pSnap.empty) {
-      const list: PreviousYearPaper[] = [];
-      pSnap.forEach((d: any) => list.push(d.data() as PreviousYearPaper));
-      memoryCache.pypPapers = list;
-    } else {
-      memoryCache.pypPapers = [];
-    }
-
-    // 4. Fetch attempts from Cloud Firestore
-    const aSnap = await timeoutPromise(getDocs(collection(db, 'attempts')), 5000, null as any);
-    if (aSnap && !aSnap.empty) {
-      const list: TestAttempt[] = [];
-      aSnap.forEach((d: any) => list.push(d.data() as TestAttempt));
-      memoryCache.attempts = list;
-    } else {
-      memoryCache.attempts = [];
-    }
-
-    // 5. Fetch bundles from Cloud Firestore
-    const bSnap = await timeoutPromise(getDocs(collection(db, 'bundles')), 5000, null as any);
-    if (bSnap && !bSnap.empty) {
-      const list: TestSeriesBundle[] = [];
-      bSnap.forEach((d: any) => list.push(d.data() as TestSeriesBundle));
-      memoryBundles = list;
-    } else {
-      memoryBundles = [];
-    }
-
-    // 6. Fetch CMS Pages from Cloud Firestore
-    const pageSnap = await timeoutPromise(getDocs(collection(db, 'pages')), 5000, null as any);
-    if (pageSnap && !pageSnap.empty) {
-      const list: CMSPage[] = [];
-      pageSnap.forEach((d: any) => list.push(d.data() as CMSPage));
-      memoryCmsPages = list;
-    } else {
-      memoryCmsPages = [];
-    }
-
-    // 7. Fetch CMS Posts from Cloud Firestore
-    const postSnap = await timeoutPromise(getDocs(collection(db, 'posts')), 5000, null as any);
-    if (postSnap && !postSnap.empty) {
-      const list: CMSPost[] = [];
-      postSnap.forEach((d: any) => list.push(d.data() as CMSPost));
-      memoryCmsPosts = list;
-    } else {
-      memoryCmsPosts = [];
-    }
-  } catch (err) {
-    console.warn('⚠️ Cloud Firestore initial sync note:', err);
-  }
-
-  return {
-    syncedQuestions: memoryCache.questions.length,
-    syncedTests: memoryCache.mockTests.length,
-    syncedAttempts: memoryCache.attempts.length,
-  };
-}
-
 // ----------------- QUESTIONS COLLECTION REPOSITORY (/questions) -----------------
 
 export async function getAllQuestions(filters?: { subject?: string; topic?: string; subtopic?: string; difficulty?: string; category?: string; search?: string; }): Promise<Question[]> {
@@ -172,18 +55,12 @@ export async function saveQuestion(q: Question): Promise<Question> {
   const db = getFirestoreServer();
   const qRef = doc(db, 'questions', q.id);
   await setDoc(qRef, q, { merge: true });
-
-  const idx = memoryCache.questions.findIndex(x => x.id === q.id);
-  if (idx !== -1) memoryCache.questions[idx] = q;
-  else memoryCache.questions.unshift(q);
-
   return q;
 }
 
 export async function deleteQuestion(id: string): Promise<boolean> {
   const db = getFirestoreServer();
   await deleteDoc(doc(db, 'questions', id));
-  memoryCache.questions = memoryCache.questions.filter(q => q.id !== id);
   return true;
 }
 
@@ -192,7 +69,9 @@ export async function bulkUpsertQuestions(questionsList: Question[]): Promise<{ 
   let updated = 0;
 
   for (const q of questionsList) {
-    const exists = memoryCache.questions.some(x => x.id === q.id || (q.uniqueQuestionId && x.uniqueQuestionId === q.uniqueQuestionId));
+    const db = getFirestoreServer();
+    const existing = await getDoc(doc(db, 'questions', q.id));
+    const exists = existing.exists;
     if (exists) updated++;
     else inserted++;
     await saveQuestion(q);
@@ -221,18 +100,12 @@ export async function getMockTestById(id: string): Promise<MockTest | null> {
 export async function saveMockTest(t: MockTest): Promise<MockTest> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'mockTests', t.id), t, { merge: true });
-
-  const idx = memoryCache.mockTests.findIndex(x => x.id === t.id);
-  if (idx !== -1) memoryCache.mockTests[idx] = t;
-  else memoryCache.mockTests.unshift(t);
-
   return t;
 }
 
 export async function deleteMockTest(id: string): Promise<boolean> {
   const db = getFirestoreServer();
   await deleteDoc(doc(db, 'mockTests', id));
-  memoryCache.mockTests = memoryCache.mockTests.filter(t => t.id !== id);
   return true;
 }
 
@@ -250,18 +123,12 @@ export async function getAllPypPapers(category?: string): Promise<PreviousYearPa
 export async function savePypPaper(p: PreviousYearPaper): Promise<PreviousYearPaper> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'pypPapers', p.id), p, { merge: true });
-
-  const idx = memoryCache.pypPapers.findIndex(x => x.id === p.id);
-  if (idx !== -1) memoryCache.pypPapers[idx] = p;
-  else memoryCache.pypPapers.unshift(p);
-
   return p;
 }
 
 export async function deletePypPaper(id: string): Promise<boolean> {
   const db = getFirestoreServer();
   await deleteDoc(doc(db, 'pypPapers', id));
-  memoryCache.pypPapers = memoryCache.pypPapers.filter(p => p.id !== id);
   return true;
 }
 
@@ -285,7 +152,6 @@ export async function getTestAttemptById(id: string): Promise<TestAttempt | null
 export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'attempts', a.id), a, { merge: true });
-  memoryCache.attempts.unshift(a);
   return a;
 }
 
@@ -356,18 +222,12 @@ export async function getCmsPageBySlug(slug: string): Promise<CMSPage | null> {
 export async function saveCmsPage(page: CMSPage): Promise<CMSPage> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'pages', page.id), page, { merge: true });
-
-  const idx = memoryCmsPages.findIndex(p => p.id === page.id);
-  if (idx !== -1) memoryCmsPages[idx] = page;
-  else memoryCmsPages.unshift(page);
-
   return page;
 }
 
 export async function deleteCmsPage(id: string): Promise<boolean> {
   const db = getFirestoreServer();
   await deleteDoc(doc(db, 'pages', id));
-  memoryCmsPages = memoryCmsPages.filter(p => p.id !== id);
   return true;
 }
 
@@ -387,18 +247,12 @@ export async function getCmsPostBySlug(slug: string): Promise<CMSPost | null> {
 export async function saveCmsPost(post: CMSPost): Promise<CMSPost> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'posts', post.id), post, { merge: true });
-
-  const idx = memoryCmsPosts.findIndex(p => p.id === post.id);
-  if (idx !== -1) memoryCmsPosts[idx] = post;
-  else memoryCmsPosts.unshift(post);
-
   return post;
 }
 
 export async function deleteCmsPost(id: string): Promise<boolean> {
   const db = getFirestoreServer();
   await deleteDoc(doc(db, 'posts', id));
-  memoryCmsPosts = memoryCmsPosts.filter(p => p.id !== id);
   return true;
 }
 
@@ -413,18 +267,12 @@ export async function getAllCmsSeriesPacks(): Promise<CMSTestSeriesPack[]> {
 export async function saveCmsSeriesPack(pack: CMSTestSeriesPack): Promise<CMSTestSeriesPack> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'seriesPacks', pack.id), pack, { merge: true });
-
-  const idx = memoryCmsSeries.findIndex(p => p.id === pack.id);
-  if (idx !== -1) memoryCmsSeries[idx] = pack;
-  else memoryCmsSeries.unshift(pack);
-
   return pack;
 }
 
 export async function deleteCmsSeriesPack(id: string): Promise<boolean> {
   const db = getFirestoreServer();
   await deleteDoc(doc(db, 'seriesPacks', id));
-  memoryCmsSeries = memoryCmsSeries.filter(p => p.id !== id);
   return true;
 }
 
@@ -462,18 +310,12 @@ export async function getBundleById(id: string): Promise<TestSeriesBundle | unde
 export async function saveBundle(bundle: TestSeriesBundle): Promise<TestSeriesBundle> {
   const db = getFirestoreServer();
   await setDoc(doc(db, 'bundles', bundle.id), bundle, { merge: true });
-
-  const idx = memoryBundles.findIndex(b => b.id === bundle.id || b.slug === bundle.slug);
-  if (idx !== -1) memoryBundles[idx] = bundle;
-  else memoryBundles.unshift(bundle);
-
   return bundle;
 }
 
 export async function deleteBundle(id: string): Promise<boolean> {
   const db = getFirestoreServer();
   await deleteDoc(doc(db, 'bundles', id));
-  memoryBundles = memoryBundles.filter(b => b.id !== id && b.slug !== id);
   return true;
 }
 
@@ -607,17 +449,15 @@ export async function saveAppRemoteConfig(config: Partial<AppRemoteConfig>, upda
     updatedBy,
   };
   await setDoc(doc(db, 'remoteConfig', 'global'), updated, { merge: true });
-  memoryRemoteConfig = updated;
   return updated;
 }
 
 export async function resetAppRemoteConfig(): Promise<AppRemoteConfig> {
-  memoryRemoteConfig = {
+  return saveAppRemoteConfig({
     ...DEFAULT_REMOTE_CONFIG,
     updatedAt: new Date().toISOString(),
     updatedBy: 'Admin Reset to Defaults',
-  };
-  return saveAppRemoteConfig(memoryRemoteConfig);
+  });
 }
 
 // ==========================================
