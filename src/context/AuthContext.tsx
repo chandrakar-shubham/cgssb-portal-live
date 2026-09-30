@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Admin Auth State (Strictly separated)
   const [adminUser, setAdminUser] = useState<User | null>(() => {
     try {
-      const saved = localStorage.getItem('cgssb_admin_session');
+      const saved = sessionStorage.getItem('cgssb_admin_session');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && (parsed.role === 'admin' || parsed.role === 'superadmin' || parsed.role === 'content_manager' || parsed.role === 'support')) {
@@ -132,9 +132,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (adminUser) {
-      localStorage.setItem('cgssb_admin_session', JSON.stringify(adminUser));
+      sessionStorage.setItem('cgssb_admin_session', JSON.stringify(adminUser));
     } else {
-      localStorage.removeItem('cgssb_admin_session');
+      sessionStorage.removeItem('cgssb_admin_session');
     }
   }, [adminUser]);
 
@@ -488,7 +488,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const authenticatedUser = { ...result.user, token: result.token } as User;
       setAdminUser(authenticatedUser);
-      localStorage.setItem('cgssb_admin_session', JSON.stringify(authenticatedUser));
+      sessionStorage.setItem('cgssb_admin_session', JSON.stringify(authenticatedUser));
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error?.message || 'Admin authentication failed.' };
