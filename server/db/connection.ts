@@ -40,7 +40,7 @@ export function getFirestoreServer(): Firestore {
   const firebaseConfig = {
     projectId: config.projectId || dbConfig.projectId,
     appId: config.appId || '1:1073802091917:web:9e64b8997c63480093f1c4',
-    apiKey: config.apiKey || process.env.GEMINI_API_KEY || 'AIzaSyDWUsIeYRsigcC-CY47iv3jpNSMWFLgakQ',
+    apiKey: config.apiKey || process.env.FIREBASE_API_KEY || '',
     authDomain: config.authDomain || `${dbConfig.projectId}.firebaseapp.com`,
     firestoreDatabaseId: config.firestoreDatabaseId || dbConfig.databaseId,
   };
