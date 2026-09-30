@@ -70,13 +70,20 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   const savedSession = useMemo(() => {
     try {
       const raw = localStorage.getItem(sessionKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.testId === test.id) return parsed;
-      }
-    } catch {}
-    return null;
-  }, [sessionKey, test.id]);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.testId !== test.id) return null;
+
+      // Reject legacy checkpoints created with an incomplete question set.
+      // This prevents a previous 16-question session from contaminating a
+      // now-correct 98-question paper.
+      if (parsed.questionCount !== questions.length) return null;
+
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, [sessionKey, test.id, questions.length]);
 
   const initialDurationSeconds = (test.durationMinutes || 15) * 60;
   const [secondsRemaining, setSecondsRemaining] = useState(() => {
@@ -130,6 +137,8 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
           responses,
           questionStatuses,
           questionTimes,
+          questionCount: questions.length,
+          questionIds: questions.map(q => q.id),
           updatedAt: Date.now(),
         };
         localStorage.setItem(sessionKey, JSON.stringify(payload));
@@ -400,12 +409,13 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   const isWarningTimer = secondsRemaining <= 600 && !isUrgentTimer;
 
   // Question counts for palette
-  const answeredCount = Object.values(questionStatuses).filter(
-    s => s === 'answered' || s === 'answered_and_marked'
-  ).length;
-  const unansweredCount = Object.values(questionStatuses).filter(
-    s => s === 'unanswered'
-  ).length;
+  const answeredCount = questions.filter(q => {
+    const status = questionStatuses[q.id];
+    return responses[q.id] != null || status === 'answered' || status === 'answered_and_marked';
+  }).length;
+  // "Unanswered" in the submission confirmation means every question without
+  // a submitted response, including questions the candidate never visited.
+  const unansweredCount = Math.max(0, questions.length - answeredCount);
   const markedCount = Object.values(questionStatuses).filter(
     s => s === 'marked_for_review' || s === 'answered_and_marked'
   ).length;
@@ -1057,7 +1067,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              Are you sure you want to submit your mock test? Once submitted, your score, negative mark deduction, accuracy rate, and All-India Rank simulation will be generated immediately.
+              Are you sure you want to submit your mock test? Once submitted, your score, negative mark deduction and accuracy rate will be generated immediately. Verified statewide rank and percentile are unavailable on Firebase Spark.
             </p>
 
             {/* Summary Count Table */}
