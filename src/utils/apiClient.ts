@@ -285,6 +285,13 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
       const snap=await getDocs(collection(db,'referrals')); const records=snap.docs.map(d=>d.data()).filter((x:any)=>x.referrerId===user.uid||x.refereeId===user.uid);
       return { success:true, records } as T;
     }
+    if (parts[2] === 'attempts') {
+      const snap = await getDocs(query(collection(db, 'attempts'), where('userId', '==', user.uid)));
+      const attempts = snap.docs
+        .map(d => d.data())
+        .sort((a:any, b:any) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+      return { success:true, attempts } as T;
+    }
   }
 
   // Admin reads
