@@ -532,7 +532,7 @@ function MainApp() {
   useEffect(() => {
     let cancelled = false;
 
-    if (!user || user.isAnonymous) {
+    if (!user) {
       setAttempts([]);
       return;
     }
@@ -550,7 +550,7 @@ function MainApp() {
     return () => {
       cancelled = true;
     };
-  }, [user?.uid]);
+  }, [user?.id]);
 
   // START TEST HANDLER (Routes through TCS iON Pre-Flight Screen)
   const handleStartTest = (test: MockTest) => {
