@@ -49,6 +49,9 @@ async function runBuild() {
     outfile: 'dist/server.cjs'
   });
   fs.copyFileSync('dist/server.cjs', 'dist/server.js');
+  // Firebase Functions receives the same production API bundle.
+  fs.mkdirSync('functions', { recursive: true });
+  fs.copyFileSync('dist/server.cjs', 'functions/server.cjs');
 
   // 3. Generate version.json inside dist/
   const versionInfo = {
