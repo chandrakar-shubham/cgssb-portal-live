@@ -234,7 +234,7 @@ export function saveSliderBanners(banners: SliderBanner[]): void {
 async function syncBannersToFirestore(banners: SliderBanner[]): Promise<void> {
   try {
     for (const banner of banners) {
-      await api.post('/api/slider-banners', banner, { requireAuth: true });
+      await api.post('/api/slider-banners', banner, { requireAdmin: true });
     }
   } catch (err) {
     console.warn('[SliderStore] Authenticated API sync failed:', err);
@@ -326,7 +326,7 @@ export function deleteBanner(id: string): SliderBanner[] {
   const updated = current.filter(b => b.id !== id);
   saveSliderBanners(updated);
 
-  api.delete('/api/slider-banners/' + encodeURIComponent(id), { requireAuth: true }).catch(err => {
+  api.delete('/api/slider-banners/' + encodeURIComponent(id), { requireAdmin: true }).catch(err => {
     console.warn('[SliderStore] Error deleting banner via API:', err);
   });
   return updated;
