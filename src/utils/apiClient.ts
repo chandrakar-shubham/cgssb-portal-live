@@ -50,6 +50,12 @@ export interface ApiFetchOptions extends RequestInit {
 }
 
 export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
+  const baseUrl = getApiBaseUrl();
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const fullUrl = `${baseUrl}${cleanEndpoint}`;
+
+  const headers = new Headers(options.headers || {});
+
   if (options.requireAuth) {
     try {
       const { auth } = await import('../firebase/config');
@@ -66,12 +72,7 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
       throw new Error('Unable to establish student authentication.');
     }
   }
-  const baseUrl = getApiBaseUrl();
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const fullUrl = `${baseUrl}${cleanEndpoint}`;
 
-  const headers = new Headers(options.headers || {});
-  
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
