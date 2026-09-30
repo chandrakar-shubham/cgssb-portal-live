@@ -10,6 +10,11 @@ service cloud.firestore {
         request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    function isBootstrapAdmin() {
+      return isAuthenticated() &&
+        request.auth.uid == 'VOynxZyDOJR4lg2x4va2U3qF5m72';
+    }
+
     function isAdminEmail() {
       return isAuthenticated() &&
         request.auth.token.email_verified == true &&
@@ -17,7 +22,8 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAdminEmail() ||
+      return isBootstrapAdmin() ||
+        isAdminEmail() ||
         (isAuthenticated() &&
          exists(/databases/$(database)/documents/adminMembers/$(request.auth.uid)));
     }
