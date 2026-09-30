@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   Globe,
@@ -36,6 +37,33 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const menuContainerRef = React.useRef<HTMLDivElement>(null);
+  const { adminPermissions } = useAuth();
+
+  const permissionByItem: Record<string, string | undefined> = {
+    'admin-tests': 'manageTests',
+    'admin-pyp': 'manageTests',
+    'admin-chapters': 'manageTests',
+    'admin-practice': 'manageQuestions',
+    'admin-questions': 'manageQuestions',
+    'admin-ca-studio': 'manageQuestions',
+    'admin-ai': 'manageTests',
+    'admin-slider': 'manageCMS',
+    'admin-overview': 'manageCMS',
+    'admin-cms-pages': 'manageCMS',
+    'admin-cms-posts': 'manageCMS',
+    'admin-cms-series': 'manageCMS',
+    'admin-cms-customizer': 'manageCMS',
+    'admin-remote-config': 'manageSystem',
+    'admin-database': 'manageSystem',
+    'admin-android-api': 'manageSystem',
+  };
+
+  const canAccess = (itemId: string) => {
+    const permissions = adminPermissions as any;
+    if (!permissions || permissions.all === true) return true;
+    const permission = permissionByItem[itemId];
+    return !permission || permissions[permission] === true;
+  };
 
   // Grouped Navigation Structure
   const navGroups = [
@@ -89,8 +117,14 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
+  // Filter navigation by delegated admin permissions.
+  // Firestore Security Rules remain the authoritative enforcement layer.
+  const visibleNavGroups = navGroups
+    .map(group => ({ ...group, items: group.items.filter(item => canAccess(item.id)) }))
+    .filter(group => group.items.length > 0);
+
   // All flat items for search & breadcrumb lookup
-  const allNavItems = navGroups.flatMap(g => g.items);
+  const allNavItems = visibleNavGroups.flatMap(g => g.items);
   const activeItem = allNavItems.find(i => i.id === activeTab) || allNavItems[0];
   const activeGroup = navGroups.find(g => g.items.some(i => i.id === activeTab)) || navGroups[0];
 
@@ -124,7 +158,7 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
 
           {/* Right: 3 Category Dropdowns + Quick Search */}
           <div className="flex items-center space-x-2 shrink-0" ref={menuContainerRef}>
-            {navGroups.map(group => {
+            {visibleNavGroups.map(group => {
               const Icon = group.icon;
               const isGroupActive = group.items.some(i => i.id === activeTab);
               const isOpen = activeMenu === group.groupId;
