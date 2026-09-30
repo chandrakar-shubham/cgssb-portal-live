@@ -61,7 +61,6 @@ async function requireAdminAuth() {
   if (!user || user.isAnonymous) throw new Error('Admin authentication is required.');
 
   const email = (user.email || '').trim().toLowerCase();
-  if (!user.emailVerified) throw new Error('Administrator email must be verified in Firebase Authentication.');
   if (user.uid === BOOTSTRAP_ADMIN_UID || email === ADMIN_BOOTSTRAP_EMAIL) {
     return { user, role: 'superadmin', permissions: { all: true } };
   }
@@ -341,9 +340,13 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
   // Admin reads
   if (parts[1] === 'admin' && method === 'GET') {
     await requireAdminAuth();
-    if (parts[2] === 'students') return { success:true, students:await readCollection<any>('users') } as T;
-    if (parts[2] === 'members') return { success:true, members:await readCollection<any>('adminMembers') } as T;
-    if (parts[2] === 'coupons') return { success:true, coupons:await readCollection<any>('discountCoupons') } as T;
+    if (parts[2] === 'students') return await readCollection<any>('users') as T;
+    if (parts[2] === 'members') {
+      const members = await readCollection<any>('adminMembers');
+      const bootstrap = { id: BOOTSTRAP_ADMIN_UID, uid: BOOTSTRAP_ADMIN_UID, name: 'Super Administrator', email: auth.currentUser?.email || 'Administrator', role: 'superadmin', status: 'active', adminPermissions: { manageStudents:true, manageAdmins:true, manageTests:true, manageQuestions:true, manageCMS:true, managePayments:true, manageSystem:true } };
+      return [bootstrap, ...members.filter((m:any) => m.id !== BOOTSTRAP_ADMIN_UID && m.uid !== BOOTSTRAP_ADMIN_UID)] as T;
+    }
+    if (parts[2] === 'coupons') return await readCollection<any>('discountCoupons') as T;
   }
 
   // Leaderboard and attempts
