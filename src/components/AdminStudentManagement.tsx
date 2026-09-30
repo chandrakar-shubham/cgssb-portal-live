@@ -1,11 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, DiscountCoupon, TestAttempt } from '../types';
-import {
-  getRegisteredStudents,
-  saveRegisteredStudents,
-  getCoupons,
-  saveCoupons
-} from '../utils/studentStore';
+import { api } from '../utils/apiClient';
 import {
   Users,
   Search,
@@ -40,8 +35,33 @@ interface AdminStudentManagementProps {
 }
 
 export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({ attempts = [] }) => {
-  const [students, setStudents] = useState<User[]>(() => getRegisteredStudents());
-  const [coupons, setCoupons] = useState<DiscountCoupon[]>(() => getCoupons());
+  const [students, setStudents] = useState<User[]>([]);
+  const [coupons, setCoupons] = useState<DiscountCoupon[]>([]);
+  const [crmLoading, setCrmLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadCRM = async () => {
+      setCrmLoading(true);
+      try {
+        const [studentResponse, couponResponse] = await Promise.all([
+          api.get<User[]>('/api/admin/students', { requireAdmin: true }),
+          api.get<DiscountCoupon[]>('/api/admin/coupons', { requireAdmin: true })
+        ]);
+        if (!cancelled) {
+          setStudents(Array.isArray(studentResponse) ? studentResponse : []);
+          setCoupons(Array.isArray(couponResponse) ? couponResponse : []);
+        }
+      } catch (error) {
+        console.error('Failed to load admin CRM data:', error);
+        if (!cancelled) { setStudents([]); setCoupons([]); }
+      } finally {
+        if (!cancelled) setCrmLoading(false);
+      }
+    };
+    void loadCRM();
+    return () => { cancelled = true; };
+  }, []);
   const [activeTab, setActiveTab] = useState<'crm' | 'marketing' | 'coupons'>('crm');
 
   // Search & Filter
@@ -98,71 +118,47 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({ 
   const proPassStudents = students.filter(s => s.hasProPass).length;
   const blockedStudents = students.filter(s => s.isBlocked || s.status === 'blocked').length;
 
-  const handleSaveStudentEdit = (e: React.FormEvent) => {
+  const handleSaveStudentEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
-    const updated = students.map(s => s.id === editingStudent.id ? editingStudent : s);
-    setStudents(updated);
-    saveRegisteredStudents(updated);
-    setEditingStudent(null);
+    try {
+      const saved = await api.put<User>(`/api/admin/students/${encodeURIComponent(editingStudent.id)}`, editingStudent, { requireAdmin: true });
+      setStudents(current => current.map(s => s.id === saved.id ? saved : s));
+      setEditingStudent(null);
+    } catch (error) { console.error('Failed to save student:', error); alert('Could not save student record.'); }
   };
 
-  const handleToggleBlock = (student: User, isBlocking: boolean, reason?: string) => {
-    const updated = students.map(s => {
-      if (s.id === student.id) {
-        return {
-          ...s,
-          isBlocked: isBlocking,
-          status: isBlocking ? 'blocked' as const : 'active' as const,
-          blockReason: isBlocking ? (reason || 'Violation of exam honor code') : undefined
-        };
-      }
-      return s;
-    });
-    setStudents(updated);
-    saveRegisteredStudents(updated);
-    setBlockModalStudent(null);
-    setBlockReasonInput('');
+  const handleToggleBlock = async (student: User, isBlocking: boolean, reason?: string) => {
+    const updatedStudent = { ...student, isBlocked: isBlocking, status: isBlocking ? 'blocked' as const : 'active' as const, blockReason: isBlocking ? (reason || 'Violation of exam honor code') : undefined };
+    try {
+      const saved = await api.put<User>(`/api/admin/students/${encodeURIComponent(student.id)}`, updatedStudent, { requireAdmin: true });
+      setStudents(current => current.map(s => s.id === saved.id ? saved : s));
+      setBlockModalStudent(null); setBlockReasonInput('');
+    } catch (error) { console.error('Failed to update student status:', error); alert('Could not update student status.'); }
   };
 
-  const handleGrantProPass = (studentId: string, days = 365) => {
-    const updated = students.map(s => {
-      if (s.id === studentId) {
-        return {
-          ...s,
-          hasProPass: true,
-          proPassPlan: `Admin Granted Pass (${days} Days)`,
-          passDurationDays: days,
-          passExpiresAt: new Date(Date.now() + days * 86400000).toISOString()
-        };
-      }
-      return s;
-    });
-    setStudents(updated);
-    saveRegisteredStudents(updated);
+  const handleGrantProPass = async (studentId: string, days = 365) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    try {
+      const saved = await api.put<User>(`/api/admin/students/${encodeURIComponent(studentId)}`, { ...student, hasProPass: true, proPassPlan: `Admin Granted Pass (${days} Days)`, passDurationDays: days, passExpiresAt: new Date(Date.now() + days * 86400000).toISOString() }, { requireAdmin: true });
+      setStudents(current => current.map(s => s.id === saved.id ? saved : s));
+    } catch (error) { console.error('Failed to grant pass:', error); alert('Could not grant pass.'); }
   };
 
-  const handleRevokePass = (studentId: string) => {
-    const updated = students.map(s => {
-      if (s.id === studentId) {
-        return {
-          ...s,
-          hasProPass: false,
-          proPassPlan: undefined,
-          passExpiresAt: undefined
-        };
-      }
-      return s;
-    });
-    setStudents(updated);
-    saveRegisteredStudents(updated);
+  const handleRevokePass = async (studentId: string) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    try {
+      const saved = await api.put<User>(`/api/admin/students/${encodeURIComponent(studentId)}`, { ...student, hasProPass: false, proPassPlan: undefined, passExpiresAt: undefined }, { requireAdmin: true });
+      setStudents(current => current.map(s => s.id === saved.id ? saved : s));
+    } catch (error) { console.error('Failed to revoke pass:', error); alert('Could not revoke pass.'); }
   };
 
-  const handleDeleteStudent = (studentId: string) => {
+  const handleDeleteStudent = async (studentId: string) => {
     if (!confirm('Are you sure you want to permanently delete this student record?')) return;
-    const updated = students.filter(s => s.id !== studentId);
-    setStudents(updated);
-    saveRegisteredStudents(updated);
+    try { await api.delete(`/api/admin/students/${encodeURIComponent(studentId)}`, { requireAdmin: true }); setStudents(current => current.filter(s => s.id !== studentId)); }
+    catch (error) { console.error('Failed to delete student:', error); alert('Could not delete student.'); }
   };
 
   // Export CSV
@@ -220,23 +216,22 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({ 
       isActive: true,
       createdAt: new Date().toISOString().split('T')[0]
     };
-    const updated = [newC, ...coupons];
-    setCoupons(updated);
-    saveCoupons(updated);
+    void api.put<DiscountCoupon>(`/api/admin/coupons/${encodeURIComponent(newC.id)}`, newC, { requireAdmin: true }).then(saved => {
+      setCoupons(current => [saved, ...current]);
+    }).catch(error => { console.error('Failed to create coupon:', error); alert('Could not create coupon.'); });
     setIsNewCouponModalOpen(false);
     setNewCouponCode('');
   };
 
-  const handleToggleCouponActive = (couponId: string) => {
-    const updated = coupons.map(c => c.id === couponId ? { ...c, isActive: !c.isActive } : c);
-    setCoupons(updated);
-    saveCoupons(updated);
+  const handleToggleCouponActive = async (couponId: string) => {
+    const coupon = coupons.find(c => c.id === couponId); if (!coupon) return;
+    try { const saved = await api.put<DiscountCoupon>(`/api/admin/coupons/${encodeURIComponent(couponId)}`, { ...coupon, isActive: !coupon.isActive }, { requireAdmin: true }); setCoupons(current => current.map(c => c.id === saved.id ? saved : c)); }
+    catch (error) { console.error('Failed to update coupon:', error); alert('Could not update coupon.'); }
   };
 
-  const handleDeleteCoupon = (couponId: string) => {
-    const updated = coupons.filter(c => c.id !== couponId);
-    setCoupons(updated);
-    saveCoupons(updated);
+  const handleDeleteCoupon = async (couponId: string) => {
+    try { await api.delete(`/api/admin/coupons/${encodeURIComponent(couponId)}`, { requireAdmin: true }); setCoupons(current => current.filter(c => c.id !== couponId)); }
+    catch (error) { console.error('Failed to delete coupon:', error); alert('Could not delete coupon.'); }
   };
 
   // WhatsApp Campaign Text
@@ -313,6 +308,8 @@ _शुभकामनाएं,_
           </button>
         </div>
       </div>
+
+      {crmLoading && <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-xs text-slate-400">Loading live CRM data…</div>}
 
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
