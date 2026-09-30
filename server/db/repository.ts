@@ -293,7 +293,7 @@ export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
 
 export async function getDatabaseCounts(): Promise<{ questions: number; mockTests: number; pypPapers: number; attempts: number; bundles: number }> {
   const db = getFirestoreServer();
-  const [questions, mockTests, pypPapers, attempts] = await Promise.all([
+  const [questions, mockTests, pypPapers, attempts, bundles] = await Promise.all([
     getDocs(collection(db, 'questions')),
     getDocs(collection(db, 'mockTests')),
     getDocs(collection(db, 'pypPapers')),
