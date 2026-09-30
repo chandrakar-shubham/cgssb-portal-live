@@ -80,7 +80,7 @@ import {
   saveSource
 } from './server/db/currentAffairsRepository.ts';
 import { bootstrapAndMigrate } from './server/db/migrator.ts';
-import { dbConfig, isFirestoreActive, testConnection } from './server/db/connection.ts';
+import { dbConfig, isFirestoreActive, testConnection, verifyFirebaseIdToken } from './server/db/connection.ts';
 
 dotenv.config();
 
@@ -861,6 +861,25 @@ async function startServer() {
       error: 'Access Denied: Administrative authorization token or key required for this operation.',
     });
   }
+  async function requireStudentAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+    try {
+      const authorization = String(req.headers.authorization || '');
+      const match = authorization.match(/^Bearer\s+(.+)$/i);
+      if (!match) {
+        return res.status(401).json({ success: false, error: 'Student authentication token is required.' });
+      }
+      const decoded = await verifyFirebaseIdToken(match[1]);
+      if (!decoded.uid) {
+        return res.status(401).json({ success: false, error: 'Invalid student authentication token.' });
+      }
+      (req as any).firebaseUid = decoded.uid;
+      (req as any).firebaseClaims = decoded;
+      return next();
+    } catch {
+      return res.status(401).json({ success: false, error: 'Invalid or expired student authentication token.' });
+    }
+  }
+
 
   // 1c. Official Admin Authentication Endpoint
   const adminLoginLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 8, message: 'Too many admin login attempts. Please wait 1 minute.' });
@@ -1507,17 +1526,19 @@ async function startServer() {
 
   // 6. Test Submission & Analytics Evaluation Engine with Idempotency Guard
   const testSubmitLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 15, message: 'Too many test submissions from this IP. Please wait.' });
-  app.post('/api/tests/:id/submit', testSubmitLimiter, async (req, res) => {
+  app.post('/api/tests/:id/submit', testSubmitLimiter, requireStudentAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const {
-        userId = 'u-student-01',
         userName = 'Aspirant Student',
         timeTakenSeconds = 600,
         responses = {},
         questionStatuses = {},
         sessionId,
       } = req.body;
+
+      const userId = String((req as any).firebaseUid);
+      const authenticatedName = String((req as any).firebaseClaims?.name || userName || 'Aspirant Student');
 
       // Validate session if provided
       if (sessionId && activeExamSessions.has(sessionId)) {
@@ -1654,7 +1675,7 @@ async function startServer() {
       const attemptResult: TestAttempt = {
         id: `att-${Date.now()}`,
         userId,
-        userName,
+        userName: authenticatedName,
         testId: test.id,
         testTitle: test.title,
         category: test.category,
@@ -1700,20 +1721,20 @@ async function startServer() {
   });
 
   // 7. Attempts History
-  app.get('/api/attempts', async (req, res) => {
+  app.get('/api/attempts', requireStudentAuth, async (req, res) => {
     try {
-      const { userId } = req.query;
-      const list = await getAllTestAttempts(userId as string);
+      const userId = String((req as any).firebaseUid);
+      const list = await getAllTestAttempts(userId);
       res.json({ success: true, attempts: list });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
   });
 
-  app.get('/api/attempts/:id', async (req, res) => {
+  app.get('/api/attempts/:id', requireStudentAuth, async (req, res) => {
     try {
       const attempt = await getTestAttemptById(req.params.id);
-      if (!attempt) {
+      if (!attempt || attempt.userId !== String((req as any).firebaseUid)) {
         return res.status(404).json({ success: false, error: 'Attempt not found' });
       }
       const test = await getMockTestById(attempt.testId);
@@ -2578,10 +2599,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
   // ==========================================
   // 14. USER PERSONALIZATION & ENTITLEMENTS API
   // ==========================================
-  app.get('/api/user/bookmarks', async (req, res) => {
+  app.get('/api/user/bookmarks', requireStudentAuth, async (req, res) => {
     try {
-      const userId = String(req.query.userId || req.headers['x-user-id'] || '').trim();
-      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
+      const userId = String((req as any).firebaseUid);
       const bookmarks = await getUserBookmarks(userId);
       res.json({ success: true, userId, bookmarks });
     } catch (err: any) {
@@ -2589,10 +2609,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
     }
   });
 
-  app.post('/api/user/bookmarks', async (req, res) => {
+  app.post('/api/user/bookmarks', requireStudentAuth, async (req, res) => {
     try {
-      const userId = String(req.body.userId || req.headers['x-user-id'] || '').trim();
-      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
+      const userId = String((req as any).firebaseUid);
       const { bookmarks = [] } = req.body;
       const saved = await saveUserBookmarks(userId, bookmarks);
       res.json({ success: true, userId, count: saved.length, bookmarks: saved });
@@ -2601,10 +2620,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
     }
   });
 
-  app.get('/api/user/mistakes', async (req, res) => {
+  app.get('/api/user/mistakes', requireStudentAuth, async (req, res) => {
     try {
-      const userId = String(req.query.userId || req.headers['x-user-id'] || '').trim();
-      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
+      const userId = String((req as any).firebaseUid);
       const mistakes = await getUserMistakes(userId);
       res.json({ success: true, userId, mistakes });
     } catch (err: any) {
@@ -2612,10 +2630,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
     }
   });
 
-  app.post('/api/user/mistakes', async (req, res) => {
+  app.post('/api/user/mistakes', requireStudentAuth, async (req, res) => {
     try {
-      const userId = String(req.body.userId || req.headers['x-user-id'] || '').trim();
-      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
+      const userId = String((req as any).firebaseUid);
       const { mistakes = [] } = req.body;
       const saved = await saveUserMistakes(userId, mistakes);
       res.json({ success: true, userId, count: saved.length, mistakes: saved });
@@ -2624,10 +2641,9 @@ Respond strictly with a JSON object having key "questions" containing an array o
     }
   });
 
-  app.get('/api/user/entitlements', async (req, res) => {
+  app.get('/api/user/entitlements', requireStudentAuth, async (req, res) => {
     try {
-      const userId = String(req.query.userId || req.headers['x-user-id'] || '').trim();
-      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
+      const userId = String((req as any).firebaseUid);
       const entitlements = await getUserEntitlements(userId);
       res.json({ success: true, entitlements });
     } catch (err: any) {
@@ -2635,10 +2651,10 @@ Respond strictly with a JSON object having key "questions" containing an array o
     }
   });
 
-  app.post('/api/user/redeem-pass', async (req, res) => {
+  app.post('/api/user/redeem-pass', requireStudentAuth, async (req, res) => {
     try {
-      const { userId, couponCode, planId } = req.body;
-      if (!userId) return res.status(400).json({ success: false, error: 'userId is required.' });
+      const { couponCode, planId } = req.body;
+      const userId = String((req as any).firebaseUid);
       const updated = await redeemPassForUser(userId, couponCode, planId);
       res.json({
         success: true,
