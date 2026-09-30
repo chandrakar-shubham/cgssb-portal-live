@@ -12,9 +12,30 @@ service cloud.firestore {
     // Admin writes are performed by the server Firebase Admin SDK.
     // Do not expose an admin role check here as a substitute for server authorization.
 
-    // User profile: a signed-in user can only access their own document.
+    // User profile: users may read their own profile and update only
+    // non-privileged profile fields. Roles, entitlements, credits and
+    // moderation/admin fields remain server-authoritative.
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
+          'lastLoginAt', 'targetExam', 'targetYear', 'district',
+          'categoryReservation', 'gender', 'education', 'medium', 'bio',
+          'dailyGoalQuestions', 'referralCode', 'referredBy',
+          'lastSyncedAt'
+        ]);
+
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'email', 'phone', 'avatar', 'lastLoginAt',
+          'targetExam', 'targetYear', 'district', 'categoryReservation',
+          'gender', 'education', 'medium', 'bio', 'dailyGoalQuestions',
+          'lastSyncedAt'
+        ]);
+
+      allow delete: if false;
     }
 
     // Public exam/catalog content: browser reads are intentionally public.
@@ -120,8 +141,7 @@ service cloud.firestore {
 
     // Referral records contain multiple users' data and are server controlled.
     match /referrals/{referralId} {
-      allow read: if isAuthenticated();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // Server-driven configuration.
