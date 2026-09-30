@@ -905,7 +905,6 @@ export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void
       questionStatuses: attempt.questionStatuses,
       idempotencyKey: attempt.id,
     }, { requireAuth: true });
-    });
   } catch (err) {
     console.warn('Error submitting test attempt through API:', err);
   }
