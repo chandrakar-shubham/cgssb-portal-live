@@ -4,6 +4,16 @@ export type { QuestionBookmark };
 const STORAGE_KEY = 'cgssb_bookmarks';
 export const BOOKMARKS_CHANGED_EVENT = 'cgssb_bookmarks_changed';
 
+function getCurrentUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('cgssb_student_user');
+    const user = raw ? JSON.parse(raw) : null;
+    return user?.id ? String(user.id) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getBookmarks(): QuestionBookmark[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -59,7 +69,7 @@ export function toggleBookmark(
     fetch('/api/user/bookmarks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookmarks })
+      body: JSON.stringify({ userId: getCurrentUserId(), bookmarks })
     }).catch(() => null);
   } catch (err) {
     console.warn('Failed to save bookmark to localStorage:', err);
