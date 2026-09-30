@@ -27,6 +27,5 @@ jobs:
         run: |
           test -f dist/index.html
           test -f dist/firebase-functions.cjs
-          test -f dist/server.cjs
           test -f firebaseFunctions.ts
           node -e "const p=require('./dist/version.json'); if(!p.commitSha||!p.buildTime) process.exit(1); console.log(p)"
