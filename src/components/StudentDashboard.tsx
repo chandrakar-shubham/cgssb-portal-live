@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ExamCategory, MockTest } from '../types';
+import { ExamCategory, MockTest, TestAttempt } from '../types';
 import { EXAM_PATTERNS } from '../mockData';
 import { deduplicateAndConsolidateTests } from '../utils/testDeduplication';
 import {
@@ -49,6 +49,7 @@ export type TestSegment = 'ALL' | 'MOCK' | 'PYP' | 'PRO';
 
 interface StudentDashboardProps {
   tests: MockTest[];
+  attempts?: TestAttempt[];
   onStartTest: (test: MockTest) => void;
   onSelectCategory: (category: ExamCategory | 'ALL') => void;
   selectedCategory: ExamCategory | 'ALL';
@@ -65,6 +66,7 @@ interface StudentDashboardProps {
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   tests,
+  attempts = [],
   onStartTest,
   onSelectCategory,
   selectedCategory,
@@ -170,6 +172,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return localStorage.getItem('cgssb_user_target') || 'CG Teacher 2026';
   });
   const [isChangeTargetModalOpen, setIsChangeTargetModalOpen] = useState(false);
+
+  const realAttemptCount = attempts.length;
+  const realAccuracy = realAttemptCount > 0
+    ? Math.round(attempts.reduce((sum, attempt) => sum + Number(attempt.accuracy || 0), 0) / realAttemptCount)
+    : null;
 
   const targetSubtitle = useMemo(() => {
     const match = TARGET_EXAM_OPTIONS.find(
@@ -910,14 +917,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <span className="text-[9px] sm:text-[10px] text-slate-400 block font-medium truncate">Practiced</span>
                 <span className="text-xs sm:text-sm font-black text-white flex items-center justify-center space-x-1 mt-0.5 truncate">
                   <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-400 shrink-0" />
-                  <span>4 Mocks</span>
+                  <span>{realAttemptCount} {realAttemptCount === 1 ? 'Mock' : 'Mocks'}</span>
                 </span>
               </div>
               <div className="bg-slate-950/60 rounded-xl p-1.5 sm:p-2.5 border border-slate-800/80 text-center min-w-0">
                 <span className="text-[9px] sm:text-[10px] text-slate-400 block font-medium truncate">Accuracy</span>
                 <span className="text-xs sm:text-sm font-black text-teal-300 flex items-center justify-center space-x-1 mt-0.5 truncate">
                   <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-teal-400 shrink-0" />
-                  <span>88.5%</span>
+                  <span>{realAccuracy === null ? '—' : realAccuracy + '%'}</span>
                 </span>
               </div>
             </div>
