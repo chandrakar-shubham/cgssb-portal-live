@@ -257,6 +257,7 @@ export interface MockTest {
   passingPercentage?: number;
   isPublished?: boolean;
   bundleId?: string;
+  targetKey?: string;
   difficultyDistribution?: { easy: number; medium: number; hard: number };
   createdAt?: string;
 }
@@ -320,6 +321,34 @@ export interface TestAttempt {
   markedForReviewCount: number;
   negativeMarksDeducted: number;
   sectorAnalysis: SectorAnalysis[];
+  attemptedCount?: number;
+  seriesId?: string;
+  targetKey?: string;
+  targetExam?: string;
+  rank?: number;
+  percentile?: number;
+}
+
+export interface LeaderboardEntryRecord {
+  id: string;
+  userId: string;
+  candidateName: string;
+  district?: string;
+  category?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
+  targetKey: string;
+  targetExam: string;
+  seriesId?: string;
+  testId: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  accuracy: number;
+  correctCount: number;
+  incorrectCount: number;
+  unattemptedCount: number;
+  timeTakenSeconds: number;
+  submittedAt: string;
+  source: 'practice_attempt';
 }
 
 export interface HierarchicalSubjectNode {
