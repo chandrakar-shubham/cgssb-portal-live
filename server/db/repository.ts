@@ -292,11 +292,18 @@ export async function saveTestAttempt(a: TestAttempt): Promise<TestAttempt> {
 // ----------------- DATABASE COUNTS & METRICS -----------------
 
 export async function getDatabaseCounts(): Promise<{ questions: number; mockTests: number; pypPapers: number; attempts: number }> {
+  const db = getFirestoreServer();
+  const [questions, mockTests, pypPapers, attempts] = await Promise.all([
+    getDocs(collection(db, 'questions')),
+    getDocs(collection(db, 'mockTests')),
+    getDocs(collection(db, 'pypPapers')),
+    getDocs(collection(db, 'attempts')),
+  ]);
   return {
-    questions: memoryCache.questions.length,
-    mockTests: memoryCache.mockTests.length,
-    pypPapers: memoryCache.pypPapers.length,
-    attempts: memoryCache.attempts.length,
+    questions: questions.size,
+    mockTests: mockTests.size,
+    pypPapers: pypPapers.size,
+    attempts: attempts.size,
   };
 }
 
@@ -596,25 +603,34 @@ export async function resetAppRemoteConfig(): Promise<AppRemoteConfig> {
 // ==========================================
 // COMPLETE BACKUP EXPORTER
 // ==========================================
-export function exportCompleteDatabaseSnapshot() {
+export async function exportCompleteDatabaseSnapshot() {
+  const db = getFirestoreServer();
+  const [questionsSnap, testsSnap, pypSnap, attemptsSnap, bundlesSnap] = await Promise.all([
+    getDocs(collection(db, 'questions')),
+    getDocs(collection(db, 'mockTests')),
+    getDocs(collection(db, 'pypPapers')),
+    getDocs(collection(db, 'attempts')),
+    getDocs(collection(db, 'bundles')),
+  ]);
+  const catalog = {
+    questions: questionsSnap.docs.map(d => d.data() as Question),
+    mockTests: testsSnap.docs.map(d => d.data() as MockTest),
+    pypPapers: pypSnap.docs.map(d => d.data() as PreviousYearPaper),
+    attempts: attemptsSnap.docs.map(d => d.data() as TestAttempt),
+    bundles: bundlesSnap.docs.map(d => d.data() as TestSeriesBundle),
+  };
   return {
     version: '2.0.0',
     exportTimestamp: new Date().toISOString(),
     databaseId: dbConfig.databaseId,
     counts: {
-      questions: memoryCache.questions.length,
-      mockTests: memoryCache.mockTests.length,
-      pypPapers: memoryCache.pypPapers.length,
-      attempts: memoryCache.attempts.length,
-      bundles: memoryBundles.length,
+      questions: catalog.questions.length,
+      mockTests: catalog.mockTests.length,
+      pypPapers: catalog.pypPapers.length,
+      attempts: catalog.attempts.length,
+      bundles: catalog.bundles.length,
     },
-    catalog: {
-      questions: memoryCache.questions,
-      mockTests: memoryCache.mockTests,
-      pypPapers: memoryCache.pypPapers,
-      attempts: memoryCache.attempts,
-      bundles: memoryBundles,
-    }
+    catalog,
   };
 }
 
