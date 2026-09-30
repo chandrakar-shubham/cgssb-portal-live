@@ -225,6 +225,7 @@ export function saveSliderBanners(banners: SliderBanner[]): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('cgtest-slider-updated', { detail: sorted }));
   }
+  void syncBannersToFirestore(sorted);
 }
 
 /**
