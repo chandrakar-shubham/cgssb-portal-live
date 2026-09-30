@@ -254,13 +254,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
     setLoadingStepText('Authenticating credentials & loading your enrolled test series...');
 
     setTimeout(() => {
-      login(signInEmail, 'student');
-      setLoadingStepText('Synchronizing state ranks & analytics...');
+      await login(signInEmail, 'student', undefined, signInPassword);
+        setLoadingStepText('Synchronizing state ranks & analytics...');
       setTimeout(() => {
         setIsLoading(false);
         setSuccessMsg('Welcome back, Candidate! Loading dashboard...');
         setTimeout(() => onClose(), 600);
-      }, 400);
+        }, 400);
+      } catch (err) {
+        setIsLoading(false);
+        setErrorMsg(err instanceof Error ? err.message : 'Sign-in failed. Please check your credentials.');
+      }
     }, 500);
   };
 
@@ -296,7 +300,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
         medium,
         categoryReservation: category,
         referralCode: cleanRefCode,
-      });
+      }, signUpPassword);
 
       setTimeout(() => {
         setIsLoading(false);
