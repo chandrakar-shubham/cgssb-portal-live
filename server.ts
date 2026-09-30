@@ -78,6 +78,7 @@ import {
   restoreServerDemoData,
   applyReferralBonusForUser,
   getReferralRecordsForUser,
+  validateCouponForUser,
 } from './server/db/repository.ts';
 import {
   getAllCaTopics,
@@ -2682,6 +2683,15 @@ app.delete('/api/admin/members/:id', requireAdmin, async (req, res) => {
       res.json(result);
     } catch (err: any) {
       res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/user/validate-coupon', requireStudentAuth, async (req, res) => {
+    try {
+      const result = await validateCouponForUser(String(req.body?.code || ''), String(req.body?.planType || ''));
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ valid: false, error: err.message });
     }
   });
 
