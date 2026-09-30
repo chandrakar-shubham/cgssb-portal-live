@@ -240,9 +240,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-500 block">State Avg Score</span>
-              <span className="text-sm font-black text-emerald-300">
-                {currentTest ? Math.round((currentTest.totalMarks || 150) * 0.54) : 84} / {currentTest?.totalMarks || 150}
-              </span>
+              <span className="text-sm font-black text-emerald-300">Verified data pending</span>
             </div>
           </div>
         </div>
