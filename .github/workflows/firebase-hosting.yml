@@ -1,70 +1,41 @@
-name: Deploy to Firebase Hosting on Push
+name: Deploy to Firebase Spark Hosting
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-
+          cache: npm
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
-
       - name: Build Production Bundle
         run: npm run build
-
-      - name: Deploy to Firebase Hosting & Rules
+      - name: Configure Firebase authentication
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          CUSTOM_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
         run: |
-          # 1. Dynamically detect Target Project ID
-          SA_PROJECT_ID=""
-          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            SA_PROJECT_ID=$(node -e '
-              try {
-                const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
-                console.log(sa.project_id || "");
-              } catch (e) {
-                console.log("");
-              }
-            ')
-          fi
-
-          TARGET_PROJECT="${CUSTOM_PROJECT_ID:-$SA_PROJECT_ID}"
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          TARGET_PROJECT="$FIREBASE_PROJECT_ID"
           if [ -z "$TARGET_PROJECT" ]; then
-            echo "::error title=Firebase Project Missing::The Firebase project ID must be present in FIREBASE_PROJECT_ID or the service-account JSON."
-            exit 1
+            TARGET_PROJECT=$(node -e 'const sa=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT); console.log(sa.project_id||"")')
           fi
-
-          echo "🎯 Target Firebase Project: $TARGET_PROJECT"
-
-          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "🔑 Authenticating via Firebase Service Account..."
-            echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
-            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
-
-            echo "📦 Deploying Firebase Hosting & Firestore Rules to [$TARGET_PROJECT]..."
-            npx firebase-tools deploy --only functions,hosting,firestore:rules --project "$TARGET_PROJECT"
-          elif [ -n "$FIREBASE_TOKEN" ]; then
-            echo "🔑 Authenticating via Firebase CI Token..."
-            echo "📦 Deploying Firebase Hosting & Firestore Rules to [$TARGET_PROJECT]..."
-            npx firebase-tools deploy --only functions,hosting,firestore:rules --token "$FIREBASE_TOKEN" --project "$TARGET_PROJECT"
-          else
-            echo "::error title=Firebase Secret Missing::Neither FIREBASE_SERVICE_ACCOUNT nor FIREBASE_TOKEN secret was found in GitHub repository secrets."
-            exit 1
-          fi
+          test -n "$TARGET_PROJECT"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+          printf '{"projects":{"default":"%s"}}\n' "$TARGET_PROJECT" > .firebaserc
+      - name: Deploy Hosting and Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: ./node_modules/.bin/firebase deploy --only hosting,firestore:rules --project "$(node -p "require('./.firebaserc').projects.default")" --non-interactive
