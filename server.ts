@@ -1361,7 +1361,7 @@ async function startServer() {
       const pattern = EXAM_PATTERNS[data.category as ExamCategory] || EXAM_PATTERNS.CGSSB;
 
       const newTest: MockTest = {
-        id: `test-${Date.now()}`,
+        id: data.id || `test-${Date.now()}`,
         title: data.title || 'New Mock Test',
         category: data.category || 'CGSSB',
         description: data.description || '',
@@ -1669,7 +1669,7 @@ async function startServer() {
     try {
       const data = req.body;
       const newPyp: PreviousYearPaper = {
-        id: `pyp-${Date.now()}`,
+        id: data.id || `pyp-${Date.now()}`,
         title: data.title || 'Official Previous Year Paper',
         examCategory: data.examCategory || 'CGSSB',
         year: Number(data.year) || new Date().getFullYear() - 1,
