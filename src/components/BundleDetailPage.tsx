@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TestSeriesBundle, BundleTestItem } from '../data/bundleCatalog';
-import { MockTest } from '../types';
+import { MockTest, TestAttempt } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { toggleBundlePublish, doesTestMatchBundle, convertMockTestToBundleItem } from '../utils/bundleStore';
 import {
@@ -56,6 +56,7 @@ interface BundleDetailPageProps {
   onExplorePass: () => void;
   isEnrolled?: boolean;
   onEnrollSuccess?: (bundleId: string) => void;
+  attempts?: TestAttempt[];
 }
 
 export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
@@ -66,6 +67,7 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
   onExplorePass,
   isEnrolled = false,
   onEnrollSuccess,
+  attempts = [],
 }) => {
   const { user, activateProPass } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -166,10 +168,26 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
       });
     }
 
+    const normalizeItem = (item: BundleTestItem): BundleTestItem => {
+      const liveTest = availableTests.find(test => test.id === item.id);
+      if (!liveTest) return item;
+
+      // Firestore test metadata is authoritative for the playable paper.
+      // This prevents stale bundle metadata such as "100 Questions" from
+      // disagreeing with the actual 98-question test.
+      return {
+        ...item,
+        questionCount: liveTest.questionCount || item.questionCount,
+        durationMinutes: liveTest.durationMinutes || item.durationMinutes,
+        marks: liveTest.totalMarks || item.marks,
+        mockTestRef: liveTest,
+      };
+    };
+
     return [
-      ...directMocks.map(t => ({ ...t, kind: 'MOCK' as const })),
-      ...directChapters.map(t => ({ ...t, kind: 'CHAPTER' as const })),
-      ...directPyps.map(t => ({ ...t, kind: 'PYP' as const }))
+      ...directMocks.map(t => ({ ...normalizeItem(t), kind: 'MOCK' as const })),
+      ...directChapters.map(t => ({ ...normalizeItem(t), kind: 'CHAPTER' as const })),
+      ...directPyps.map(t => ({ ...normalizeItem(t), kind: 'PYP' as const }))
     ];
   }, [bundle, availableTests]);
 
@@ -218,6 +236,13 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
       durationMinutes: item.durationMinutes,
       questionCount: item.questionCount,
     };
+  };
+
+  const hasAttemptedItem = (item: BundleTestItem): boolean => {
+    return attempts.some(attempt =>
+      attempt.testId === item.id ||
+      (attempt.testTitle || '').trim().toLowerCase() === (item.title || '').trim().toLowerCase()
+    );
   };
 
   const handleStartItemTest = (item: BundleTestItem) => {
@@ -643,7 +668,7 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
                         className="px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-900/40 transition flex items-center space-x-2 cursor-pointer"
                       >
                         <Play className="w-3.5 h-3.5 fill-slate-950" />
-                        <span>Start Test</span>
+                        <span>{hasAttemptedItem(item) ? 'Re-attempt' : 'Start Test'}</span>
                       </button>
                     ) : (
                       <button
