@@ -35,7 +35,7 @@ import {
   getTestAttemptById,
   saveTestAttempt,
   getDatabaseCounts,
-  syncWithFirestore,
+  getRepositoryStats,
   getAllCmsPages,
   getCmsPageBySlug,
   saveCmsPage,
@@ -1412,7 +1412,7 @@ async function startServer() {
 
       // 5. Dual-sync from Cloud Firestore Enterprise
       try {
-        const fsCounts = await syncWithFirestore();
+        const fsCounts = await getRepositoryStats();
         if (fsCounts) {
           stats.tests = Math.max(stats.tests, fsCounts.syncedTests);
           stats.questions = Math.max(stats.questions, fsCounts.syncedQuestions);
@@ -2537,7 +2537,7 @@ Respond strictly with a JSON object having key "questions" containing an array o
             job.completedAt = new Date().toISOString();
             job.result = { message: 'Batch job completed successfully', count: payload.count || 10 };
           } else if (type === 'firestore_sync') {
-            const fsCounts = await syncWithFirestore();
+            const fsCounts = await getRepositoryStats();
             job.progress = 100;
             job.status = 'completed';
             job.completedAt = new Date().toISOString();
