@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx server.ts",
     "build": "node scripts/build.cjs",
-    "start": "node server.ts",
+    "start": "node dist/server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "./node_modules/.bin/tsc --noEmit",
-    "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\"",
+    "start:dev": "tsx server.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
