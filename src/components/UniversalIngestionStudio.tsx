@@ -42,6 +42,7 @@ import { apiFetch, getAdminHeaders } from '../utils/apiClient';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { QuestionRenderer } from './QuestionRenderer';
 import { saveQuestionsToFirestore, saveTestToFirestore, savePypPaperToFirestore } from '../firebase/firestoreService';
+import { ensureCanonicalHierarchyForBundle } from '../firebase/examCatalogService';
 
 export type IngestionContentType = 'MOCK_TEST' | 'PYP' | 'CHAPTER_TEST' | 'QUESTION_BANK';
 export type IngestionInputTab = 'SMART_PASTE' | 'JSON_EDITOR' | 'AI_GEMINI';
@@ -468,10 +469,23 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
 
     try {
       const timestamp = Date.now();
-      const createdQuestionIds = parsedQuestions.map(q => q.id);
+
+      // Phase 7: resolve the canonical Authority → Program → Post → Series
+      // before content is persisted. Legacy strings remain populated for
+      // backwards compatibility, but new content is anchored by stable IDs.
+      const targetBundle = targetBundleId ? allBundles.find(b => b.id === targetBundleId) : undefined;
+      const canonical = targetBundle ? await ensureCanonicalHierarchyForBundle(targetBundle) : null;
+      const questionsForPublish = parsedQuestions.map(q => ({
+        ...q,
+        authorityId: canonical?.authority.id,
+        programId: canonical?.program.id,
+        postId: canonical?.post?.id,
+        seriesId: canonical?.series.id,
+      }));
+      const createdQuestionIds = questionsForPublish.map(q => q.id);
 
       // 1. Dual-Write all questions directly to Cloud Firestore & backend
-      saveQuestionsToFirestore(parsedQuestions).catch(err => {
+      saveQuestionsToFirestore(questionsForPublish).catch(err => {
         console.warn('Firestore bulk question save note:', err);
       });
 
@@ -481,7 +495,7 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
           'Content-Type': 'application/json',
           ...getAdminHeaders(),
         },
-        body: JSON.stringify({ questions: parsedQuestions }),
+        body: JSON.stringify({ questions: questionsForPublish }),
       });
 
       if (!qRes.ok) {
@@ -489,7 +503,7 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
       }
 
       if (onQuestionsIngested) {
-        onQuestionsIngested(parsedQuestions);
+        onQuestionsIngested(questionsForPublish);
       }
 
       let createdMockTestId: string | null = null;
@@ -510,12 +524,18 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
           postName: cadre,
           description: contentType === 'CHAPTER_TEST' ? `Topic quiz on ${topic}` : `${cadre} full length simulation exam`,
           durationMinutes: durationMinutes,
-          totalMarks: parsedQuestions.length * marksPerQuestion,
+          totalMarks: questionsForPublish.length * marksPerQuestion,
           marksPerQuestion: marksPerQuestion,
           negativeMarksPerQuestion: negativeMarking,
-          questionCount: parsedQuestions.length,
+          questionCount: questionsForPublish.length,
           attemptsCount: 0,
           isPublished: true,
+          authorityId: canonical?.authority.id,
+          programId: canonical?.program.id,
+          postId: canonical?.post?.id,
+          seriesId: canonical?.series.id,
+          seriesType: contentType === 'CHAPTER_TEST' ? 'chapter_test' : 'full_mock',
+          bundleId: targetBundleId || undefined,
           createdAt: new Date().toISOString(),
           sections: [
             {
@@ -569,6 +589,10 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
           downloadFileName: `${(testTitle || examName).replace(/\s+/g, '_')}_Official.pdf`,
           isOfficialPaper: true,
           linkedQuestionIds: createdQuestionIds,
+          authorityId: canonical?.authority.id,
+          programId: canonical?.program.id,
+          postId: canonical?.post?.id,
+          seriesId: canonical?.series.id,
           createdAt: new Date().toISOString(),
         };
 
@@ -596,6 +620,10 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
         if (bundle) {
           const updatedBundle: TestSeriesBundle = {
             ...bundle,
+            authorityId: canonical?.authority.id || bundle.authorityId,
+            programId: canonical?.program.id || bundle.programId,
+            postId: canonical?.post?.id || bundle.postId,
+            seriesType: canonical?.series.seriesType || bundle.seriesType,
             totalTestsCount: (bundle.totalTestsCount || 0) + 1,
             testItems: [
               ...(bundle.testItems || []),
@@ -622,7 +650,7 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
 
       setStatusMessage({
         type: 'success',
-        text: `🚀 Successfully published ${parsedQuestions.length} questions and created ${contentType}!`,
+        text: `🚀 Successfully published ${questionsForPublish.length} questions and created ${contentType}!`,
       });
 
       setTimeout(() => {
