@@ -1749,7 +1749,7 @@ function MainApp() {
       </main>
 
       {/* Student Portal Footer with SEO Links */}
-      <footer className="bg-slate-900 border-t border-slate-800 py-8 mt-12 text-xs text-slate-400">
+      <footer className="hidden md:block bg-slate-900 border-t border-slate-800 py-8 mt-12 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pb-6 border-b border-slate-800">
             <div>
