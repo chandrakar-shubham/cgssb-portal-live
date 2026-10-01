@@ -167,7 +167,6 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
           <span className="truncate">{hasEnrolled ? 'View Bundle' : 'Enroll Now'}</span>
         </button>
       </div>
-/div>
     </div>
   );
 };
