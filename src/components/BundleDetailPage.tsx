@@ -569,9 +569,8 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
             {!isAdmin && user && !isPassActive && !isEnrolled && (
               <div className="px-6 py-3.5 rounded-2xl font-black text-sm bg-slate-800 text-slate-300 border border-slate-700 flex items-center space-x-2">
                 <Clock className="w-4 h-4 text-amber-400" />
-                <span>Activate All-Access Pass to Enroll</span>
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </button>
+                <span>Free launch pass expired</span>
+              </div>
             )}
 
             {isAdmin && (
@@ -737,13 +736,10 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
                         <span>{hasAttemptedItem(item) ? 'Re-attempt' : 'Start Test'}</span>
                       </button>
                     ) : (
-                      <button
-                        onClick={() => setIsPassModalOpen(true)}
-                        className="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 flex items-center space-x-1.5 transition cursor-pointer"
-                      >
-                        <Crown className="w-3.5 h-3.5 fill-amber-400" />
-                        <span>Unlock with Pass</span>
-                      </button>
+                      <div className="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-800 text-slate-400 border border-slate-700 flex items-center space-x-1.5">
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Free Pass Expired</span>
+                      </div>
                     )}
                   </div>
                 </div>
