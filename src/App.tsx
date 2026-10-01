@@ -9,7 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { StudentDashboard } from './components/StudentDashboard';
-import { StudentTestsPage, getStudentSlug } from './components/StudentTestsPage';
+import { StudentTestsPage } from './components/StudentTestsPage';
 import { PYPSection } from './components/PYPSection';
 import { AnalyticsHub } from './components/AnalyticsHub';
 import { ExamEngine } from './components/ExamEngine';
