@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
-import { getStoredBundles, purgeAllDemoDatabaseData, restoreFactoryDemoData } from '../utils/bundleStore';
+import { getStoredBundles, purgeAllDemoDatabaseData } from '../utils/bundleStore';
 import {
   Database,
   Download,
@@ -917,18 +917,6 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                     <span>Purge All Demo Data (Clean Slate)</span>
                   </button>
 
-                  <button
-                    onClick={async () => {
-                      if (window.confirm('Reset all mock tests, PYQs, and question banks to factory default demo catalog?')) {
-                        await restoreFactoryDemoData();
-                        window.location.reload();
-                      }
-                    }}
-                    className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition space-x-2 cursor-pointer"
-                  >
-                    <RefreshCw className="w-4 h-4 text-sky-400" />
-                    <span>Reload Master Demo Catalog</span>
-                  </button>
                 </div>
               </div>
 
