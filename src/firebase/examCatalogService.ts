@@ -104,11 +104,41 @@ function inferProgramName(bundle: TestSeriesBundle): string {
 function inferProgramType(name: string): 'recruitment' | 'examination' {
   return /recruitment|bharti/i.test(name) ? 'recruitment' : 'examination';
 }
-function getKnownPostMetadata(postName: string): Pick<ExamPost, 'vacancies'|'cadreBreakup'|'payLevel'|'salaryRange'|'subjects'> {
+function getKnownPostMetadata(programName: string, postName: string): Pick<ExamPost, 'vacancies'|'cadreBreakup'|'payLevel'|'salaryRange'|'subjects'> {
   const value = postName.toLowerCase();
-  if (value.includes('assistant teacher') || value.includes('sahayak shikshak')) return { vacancies: 2292, cadreBreakup: '795 E-Cadre · 1,497 T-Cadre', payLevel: 'Level-06', salaryRange: '₹35,400–₹1,12,400' };
-  if (value === 'teacher' || value.includes('teacher / tgt') || value.includes('tgt')) return { vacancies: 1654, cadreBreakup: '868 E-Cadre · 786 T-Cadre', payLevel: 'Level-08', subjects: ['English','Hindi','Mathematics','Science','Social Science'] };
-  if (value.includes('lecturer') || value.includes('vyakhyata') || value.includes('pgt')) return { vacancies: 854, cadreBreakup: '424 E-Cadre · 430 T-Cadre', payLevel: 'Level-09 · Gazetted Class II', subjects: ['English','Hindi','Mathematics','Physics','Chemistry','Biology'] };
+  const program = programName.toLowerCase();
+  const isTeacherOrAtmanandRecruitment = /teacher recruitment|atmanand/i.test(program);
+
+  // Cadre breakup and subject lists are recruitment-specific metadata. Do not infer
+  // them for unrelated CGSSB posts merely because a post name contains "teacher".
+  if (value.includes('assistant teacher') || value.includes('sahayak shikshak')) {
+    return {
+      vacancies: 2292,
+      payLevel: 'Level-06',
+      salaryRange: '₹35,400–₹1,12,400',
+      ...(isTeacherOrAtmanandRecruitment ? { cadreBreakup: '795 E-Cadre · 1,497 T-Cadre' } : {})
+    };
+  }
+  if (value === 'teacher' || value.includes('teacher / tgt') || value.includes('tgt')) {
+    return {
+      vacancies: 1654,
+      payLevel: 'Level-08',
+      ...(isTeacherOrAtmanandRecruitment ? {
+        cadreBreakup: '868 E-Cadre · 786 T-Cadre',
+        subjects: ['English','Hindi','Mathematics','Science','Social Science']
+      } : {})
+    };
+  }
+  if (value.includes('lecturer') || value.includes('vyakhyata') || value.includes('pgt')) {
+    return {
+      vacancies: 854,
+      payLevel: 'Level-09 · Gazetted Class II',
+      ...(isTeacherOrAtmanandRecruitment ? {
+        cadreBreakup: '424 E-Cadre · 430 T-Cadre',
+        subjects: ['English','Hindi','Mathematics','Physics','Chemistry','Biology']
+      } : {})
+    };
+  }
   return {};
 }
 
@@ -152,7 +182,7 @@ export async function ensureCanonicalHierarchyForBundle(bundle: TestSeriesBundle
   let post: ExamPost | undefined;
   if (program.hasPosts) {
     const postId = bundle.postId || `post-${programId.replace(/^program-/, '')}-${slugifyCatalog(postName)}`;
-    const postMetadata = getKnownPostMetadata(postName);
+    const postMetadata = getKnownPostMetadata(programName, postName);
     post = {
       id: postId, programId, name: postName, slug: slugifyCatalog(postName),
       status, sortOrder: 0, createdAt: timestamp, updatedAt: timestamp,
