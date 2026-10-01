@@ -913,39 +913,18 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
                 }}
               />
 
-              {/* Test Details & Optional Bundle Linkage */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Test Display Title
-                  </label>
-                  <input
-                    type="text"
-                    value={testTitle}
-                    onChange={e => setTestTitle(e.target.value)}
-                    placeholder="e.g. Sahayak Shikshak 2026 - Mock 01 (Pedagogy + GK)"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-
-                {/* Optional Bundle Linkage */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                    <span>Link to Test Series Bundle (Optional)</span>
-                    <span className="text-[10px] text-indigo-400 font-mono">Instant Monetization</span>
-                  </label>
-                  <select
-                    value={targetBundleId}
-                    onChange={e => setTargetBundleId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:border-indigo-500 focus:outline-none"
-                  >
-                    <option value="">-- Standalone Test (No Bundle Assigned) --</option>
-                    {allBundles.map(b => (
-                      <option key={b.id} value={b.id}>
-                        📦 {b.title} (₹{b.price || 199}) - {b.totalTestsCount || 0} tests
-                      </option>
-                    ))}
-                  </select>
+              {/* Test details — series is selected only through the canonical hierarchy */}
+              <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Test Display Title</label>
+                <input
+                  type="text"
+                  value={testTitle}
+                  onChange={e => setTestTitle(e.target.value)}
+                  placeholder="e.g. Assistant Teacher 2026 — Full Mock 01"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:border-indigo-500 focus:outline-none"
+                />
+                <div className="text-[11px] text-slate-500 mt-2">
+                  The selected Test Series is the canonical destination. Standalone bundle assignment is no longer supported by the ingestion workflow.
                 </div>
               </div>
 
