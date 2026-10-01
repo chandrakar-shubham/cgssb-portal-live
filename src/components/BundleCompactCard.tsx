@@ -133,7 +133,12 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
       {/* Card Footer: Universal Pass Model Pricing & Action Buttons */}
       <div className="pt-4 mt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
         <div className="flex flex-col">
-          {isPassActive || hasEnrolled ? (
+          {hasEnrolled ? (
+            <div className="flex items-center space-x-1.5 text-emerald-300">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="text-xs font-black">Series Enrolled</span>
+            </div>
+          ) : isPassActive ? (
             <div className="flex items-center space-x-1.5 text-amber-300">
               <Crown className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
               <span className="text-xs font-black">All-Access Pass Active</span>
@@ -150,9 +155,8 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             </div>
           )}
           <span className="text-[10px] text-emerald-400 font-semibold mt-0.5">
-            {isPassActive || hasEnrolled ? '✓ All Tests Unlocked' : `${bundle.freeTestsCount} Free Diagnostic Mocks`}
+            {hasEnrolled ? (isPassActive ? '✓ All Tests Unlocked' : 'Pass expired • Renew to continue') : isPassActive ? '✓ All Tests Unlocked' : `${bundle.freeTestsCount} Free Diagnostic Mocks`}
           </span>
-        </div>
 
         <div className="flex items-center space-x-2">
           <button
