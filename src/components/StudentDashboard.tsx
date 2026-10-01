@@ -1227,7 +1227,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
 
               {/* Compact Bundles Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
                 {visibleBundlesForViewer.filter(b => bundleAuthorityFilter === 'ALL' || b.authority === bundleAuthorityFilter).map(bundle => (
                   <BundleCompactCard
                     key={bundle.id}
