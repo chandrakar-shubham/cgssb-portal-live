@@ -840,6 +840,10 @@ export interface UserEntitlement {
   boundDeviceId?: string;
   boundDeviceName?: string;
   updatedAt?: string;
+  completedTestsCount?: number;
+  freePassStage?: 'not_started' | '1_month_active' | '3_months_unlocked';
+  unlockedMilestoneBonus?: boolean;
+  campaignId?: string;
 }
 
 export async function fetchUserEntitlementFromFirestore(userId?: string): Promise<UserEntitlement | null> {
