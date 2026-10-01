@@ -597,10 +597,10 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
           downloadFileName: `${(testTitle || examName).replace(/\s+/g, '_')}_Official.pdf`,
           isOfficialPaper: true,
           linkedQuestionIds: createdQuestionIds,
-          authorityId: canonical?.authority.id,
-          programId: canonical?.program.id,
-          postId: canonical?.post?.id,
-          seriesId: canonical?.series.id,
+          authorityId: targetBundle.authorityId,
+          programId: targetBundle.programId,
+          postId: targetBundle.postId,
+          seriesId: targetBundle.seriesId,
           createdAt: new Date().toISOString(),
         };
 
