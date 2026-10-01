@@ -20,12 +20,6 @@ export function useQuestionManager() {
       }
     });
 
-    fetchQuestionsFromFirestore().then((remoteQs) => {
-      if (Array.isArray(remoteQs)) {
-        setQuestions(remoteQs.map(migrateLegacyQuestion));
-      }
-    }).catch(() => {});
-
     return () => unsubscribe();
   }, []);
 
