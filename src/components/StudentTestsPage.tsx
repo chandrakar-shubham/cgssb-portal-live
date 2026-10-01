@@ -212,6 +212,7 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
         currentSeries.tests.map((test, index) => {
           const attempt = attempts.find(a => a.testId === test.id);
           const isCompleted = !!attempt;
+          const isInProgress = !isCompleted && hasLiveCheckpointForTest(test);
           return <div key={test.id} className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-3 min-w-0 flex-1">
