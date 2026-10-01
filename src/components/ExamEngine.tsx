@@ -80,6 +80,18 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
       // now-correct 98-question paper.
       if (parsed.questionCount !== questions.length) return null;
 
+      // A checkpoint is a snapshot, not a pause in wall-clock exam time.
+      // Consume elapsed time since the last checkpoint before restoring it.
+      const updatedAt = Number(parsed.updatedAt || 0);
+      const savedRemaining = Number(parsed.secondsRemaining);
+      if (!Number.isFinite(savedRemaining) || savedRemaining <= 0) return null;
+      if (updatedAt > 0) {
+        const elapsedSinceCheckpoint = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+        const effectiveRemaining = savedRemaining - elapsedSinceCheckpoint;
+        if (effectiveRemaining <= 0) return null;
+        return { ...parsed, secondsRemaining: effectiveRemaining, updatedAt: Date.now() };
+      }
+
       return parsed;
     } catch {
       return null;
