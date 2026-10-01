@@ -66,7 +66,7 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
       const name = canonical?.name || p.name;
       const existing = map.get(key);
       if (existing) existing.bundles.push(b);
-      else map.set(key, { key, authority:b.authority, name, year:b.targetYear, bundles:[b] });
+      else map.set(key, { key, authority:b.authority || 'Unknown', name, year:b.targetYear || new Date().getFullYear(), bundles:[b] });
     });
     return Array.from(map.values()).sort((a,b)=>a.name.localeCompare(b.name));
   }, [visible, authority, canonicalPrograms]);
@@ -81,7 +81,7 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
       const list = map.get(key) || [];
       list.push(b); map.set(key,list);
     });
-    return Array.from(map.entries()).map(([key,list])=>({key,name:canonicalPosts.find(x=>x.id===key)?.name || list[0].targetPost || 'General Exam',bundles:list}));
+    return Array.from(map.entries()).map(([key,list]) => ({ key, name: canonicalPosts.find(x=>x.id===key)?.name || list[0]?.targetPost || 'General Exam', bundles:list }));
   }, [program, canonicalPosts]);
 
   const selectedPost = posts.find(p=>p.key===postKey) || null;
@@ -120,7 +120,7 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
     </div>}
 
     {programKey && !postKey && posts.length > 1 && <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {posts.map(p=><button key={p.key} onClick={()=>setPostKey(p.key)} className="text-left group rounded-2xl bg-slate-900/90 border border-slate-800 p-5 hover:border-indigo-500/50 transition">
+      {posts.map(p=><button key={p.key} onClick={()=>setPostKey(String(p.key))} className="text-left group rounded-2xl bg-slate-900/90 border border-slate-800 p-5 hover:border-indigo-500/50 transition">
         <div className="flex items-center justify-between"><GraduationCap className="w-5 h-5 text-indigo-400"/><ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400"/></div>
         <h3 className="mt-3 text-base font-black text-white">{p.name}</h3>
         <p className="text-xs text-slate-400 mt-1">{p.bundles.length} preparation series</p>
