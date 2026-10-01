@@ -1525,6 +1525,7 @@ function MainApp() {
           <StudentDashboard
             tests={tests}
             onStartTest={handleStartTest}
+            onReviewAttempt={attempt => setActiveAttemptReview(attempt)}
             attempts={attempts}
             onSelectCategory={cat => setSelectedCategory(cat)}
             selectedCategory={selectedCategory}
