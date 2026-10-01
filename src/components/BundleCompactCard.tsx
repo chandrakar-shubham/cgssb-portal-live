@@ -128,6 +128,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             <span className="truncate">{bundle.languageDisplay.split(' ')[0]}</span>
           </div>
         </div>
+      </div>
 
       {/* Card Footer: Universal Pass Model Pricing & Action Buttons */}
       <div className="pt-4 mt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
