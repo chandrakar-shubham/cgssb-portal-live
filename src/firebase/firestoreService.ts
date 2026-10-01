@@ -1085,6 +1085,15 @@ export async function purgeFirestoreDemoData(): Promise<void> {
     if (bundleSnap && !bundleSnap.empty) {
       await Promise.allSettled(bundleSnap.docs.map(d => deleteDoc(d.ref)));
     }
+
+    // Phase 7 reset: the previous demo taxonomy is disposable too.
+    // Clear canonical catalog records so the production catalog starts clean.
+    for (const collectionName of ['examTestSeries', 'examPosts', 'examPrograms', 'examAuthorities']) {
+      const snap = await getDocs(collection(db, collectionName)).catch(() => null);
+      if (snap && !snap.empty) {
+        await Promise.allSettled(snap.docs.map(d => deleteDoc(d.ref)));
+      }
+    }
   } catch (err) {
     console.warn('Error purging Firestore demo data:', err);
   }
