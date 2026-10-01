@@ -651,14 +651,8 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
       }
     }
 
-    // Check if bundles exist
-    const bundleSnap = await getDocs(collection(db, COLLECTIONS.BUNDLES)).catch(() => null);
-    if (!bundleSnap || bundleSnap.empty) {
-      console.log('🌱 Seeding initial verified Test Series Bundles into Firestore...');
-      for (const b of OFFICIAL_BUNDLES_CATALOG) {
-        await setDoc(doc(db, COLLECTIONS.BUNDLES, b.id), b, { merge: true });
-      }
-    }
+    // Bundles are created only through the canonical Exam & Recruitment Catalog.
+    // Never seed legacy/static demo bundles automatically.
 
     // Check if CMS pages exist
     const pageSnap = await getDocs(collection(db, COLLECTIONS.PAGES)).catch(() => null);
