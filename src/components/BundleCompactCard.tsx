@@ -1,24 +1,5 @@
 import React from 'react';
-import { useAuth } from '../context/AuthContext';
-import { TestSeriesBundle } from '../data/bundleCatalog';
-import { isUserPassActive } from '../utils/devicePassManager';
-import {
-  Award,
-  BookOpen,
-  Calendar,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Crown,
-  FileText,
-  Flame,
-  Globe2,
-  Lock,
-  Play,
-  ShieldCheck,
-  Sparkles,
-  Users
-} from 'lucide-react';
+import {\n  BookOpen,\n  CheckCircle2,\n  ChevronRight,\n  Clock,\n  Crown,\n  Sparkles,\n} from 'lucide-react';
 
 interface BundleCompactCardProps {
   bundle: TestSeriesBundle;
@@ -144,24 +125,6 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
           <div className="bg-slate-950/70 rounded-xl px-2.5 py-1.5 border border-slate-800 flex items-center space-x-1.5 text-slate-300">
             <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
             <span className="truncate">{bundle.freeTestsCount} Free Preview{bundle.freeTestsCount === 1 ? '' : 's'}</span>
-          </div>
-        </div>      </div>
-
-          <div className="bg-slate-950/70 rounded-xl px-2.5 py-1.5 border border-slate-800 flex items-center space-x-1.5 text-slate-300">
-            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="truncate">
-              {bundle.examPattern.totalQuestions} Qs • {bundle.examPattern.durationMinutes}m
-            </span>
-          </div>
-
-          <div className="bg-slate-950/70 rounded-xl px-2.5 py-1.5 border border-slate-800 flex items-center space-x-1.5 text-slate-300">
-            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span className="truncate">{bundle.examPattern.negativeMarkPenalty.split(' ')[0]} Neg</span>
-          </div>
-
-          <div className="bg-slate-950/70 rounded-xl px-2.5 py-1.5 border border-slate-800 flex items-center space-x-1.5 text-slate-300">
-            <Globe2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-            <span className="truncate">{bundle.languageDisplay.split(' ')[0]}</span>
           </div>
         </div>
       </div>
