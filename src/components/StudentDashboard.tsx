@@ -51,6 +51,7 @@ interface StudentDashboardProps {
   tests: MockTest[];
   attempts?: TestAttempt[];
   onStartTest: (test: MockTest) => void;
+  onReviewAttempt?: (attempt: TestAttempt) => void;
   onSelectCategory: (category: ExamCategory | 'ALL') => void;
   selectedCategory: ExamCategory | 'ALL';
   onExplorePass?: () => void;
@@ -68,6 +69,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   tests,
   attempts = [],
   onStartTest,
+  onReviewAttempt,
   onSelectCategory,
   selectedCategory,
   onExplorePass,
@@ -83,6 +85,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const hasAttemptedTest = (testId: string) => attempts.some(attempt => attempt.testId === testId);
+  const getLatestAttempt = (testId: string) => attempts.find(attempt => attempt.testId === testId) || null;
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [displayMode, setDisplayMode] = useState<'nested' | 'grid'>('nested');
@@ -533,7 +536,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-1 shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
               >
                 <Play className="w-3 h-3 fill-slate-950" />
-                <span>Start</span>
+                <span>{hasAttemptedTest(test.id) ? 'Re-attempt' : 'Start'}</span>
               </button>
             )}
           </div>
@@ -715,6 +718,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </button>
               )}
 
+              {hasAttemptedTest(test.id) && onReviewAttempt && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const latest = getLatestAttempt(test.id);
+                    if (latest) onReviewAttempt(latest);
+                  }}
+                  className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-sky-200 border border-slate-700 hover:border-sky-500/40 transition cursor-pointer flex items-center space-x-1.5"
+                  title="View latest result"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-bold hidden sm:inline">Result</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
