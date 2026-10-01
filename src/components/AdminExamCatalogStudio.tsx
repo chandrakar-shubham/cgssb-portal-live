@@ -26,6 +26,11 @@ export const AdminExamCatalogStudio: React.FC = () => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [status, setStatus] = useState<'DRAFT'|'PUBLISHED'>('DRAFT');
   const [programType, setProgramType] = useState<'recruitment'|'examination'>('recruitment');
+  const [postVacancies, setPostVacancies] = useState('');
+  const [postCadreBreakup, setPostCadreBreakup] = useState('');
+  const [postPayLevel, setPostPayLevel] = useState('');
+  const [postSalaryRange, setPostSalaryRange] = useState('');
+  const [postSubjects, setPostSubjects] = useState('');
   const [message, setMessage] = useState('');
 
   const load = async () => {
@@ -69,11 +74,26 @@ export const AdminExamCatalogStudio: React.FC = () => {
   const createPost = async () => {
     if (!selectedProgram || !name.trim()) return;
     const id = `post-${selectedProgram.replace(/^program-/, '')}-${slugifyCatalog(name)}`;
-    const record: ExamPost = { id, programId: selectedProgram, name: name.trim(), slug: slugifyCatalog(name), status, sortOrder: posts.length, createdAt: now(), updatedAt: now() };
+    const record: ExamPost = {
+      id, programId: selectedProgram, name: name.trim(), slug: slugifyCatalog(name),
+      status, sortOrder: posts.length, createdAt: now(), updatedAt: now(),
+      ...(postVacancies.trim() ? { vacancies: Number(postVacancies) } : {}),
+      ...(postCadreBreakup.trim() ? { cadreBreakup: postCadreBreakup.trim() } : {}),
+      ...(postPayLevel.trim() ? { payLevel: postPayLevel.trim() } : {}),
+      ...(postSalaryRange.trim() ? { salaryRange: postSalaryRange.trim() } : {}),
+      ...(postSubjects.trim() ? { subjects: postSubjects.split(',').map(s => s.trim()).filter(Boolean) } : {})
+    };
     await saveExamPost(record);
     const program = programs.find(p=>p.id===selectedProgram);
     if (program && !program.hasPosts) await saveExamProgram({ ...program, hasPosts:true, updatedAt:now() });
-    setName(''); setMessage('Post created.'); await load();
+    setName('');
+    setPostVacancies('');
+    setPostCadreBreakup('');
+    setPostPayLevel('');
+    setPostSalaryRange('');
+    setPostSubjects('');
+    setMessage('Post created with explicit recruitment metadata.');
+    await load();
   };
 
   const createSeries = async () => {
@@ -153,6 +173,16 @@ export const AdminExamCatalogStudio: React.FC = () => {
       {section('3. Post (optional)', <ChevronRight className="w-4 h-4 text-amber-400" />, <>
         <select value={selectedPost} onChange={e=>setSelectedPost(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"><option value="">No post / direct exam</option>{posts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
         <div className="flex gap-2 mt-2"><input value={name} onChange={e=>setName(e.target.value)} placeholder="New post" className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/><button onClick={createPost} className="px-3 rounded-xl bg-amber-400 text-slate-950 font-black"><Plus className="w-4 h-4"/></button></div>
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Optional recruitment metadata</p>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={postVacancies} onChange={e=>setPostVacancies(e.target.value)} inputMode="numeric" placeholder="Vacancies" className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/>
+            <input value={postPayLevel} onChange={e=>setPostPayLevel(e.target.value)} placeholder="Pay level" className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/>
+          </div>
+          <input value={postSalaryRange} onChange={e=>setPostSalaryRange(e.target.value)} placeholder="Salary range (optional)" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/>
+          <input value={postCadreBreakup} onChange={e=>setPostCadreBreakup(e.target.value)} placeholder="Cadre breakup — only if applicable" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/>
+          <input value={postSubjects} onChange={e=>setPostSubjects(e.target.value)} placeholder="Subjects, comma separated — only if applicable" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/>
+        </div>
       </>)}
     </div>
     {section('4. Test Series', <Layers3 className="w-4 h-4 text-purple-400" />, <>
