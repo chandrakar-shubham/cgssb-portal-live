@@ -42,7 +42,6 @@ import { apiFetch, getAdminHeaders } from '../utils/apiClient';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { QuestionRenderer } from './QuestionRenderer';
 import { saveQuestionsToFirestore, saveTestToFirestore, savePypPaperToFirestore } from '../firebase/firestoreService';
-import { ensureCanonicalHierarchyForBundle } from '../firebase/examCatalogService';
 import { CanonicalIngestionSelector } from './CanonicalIngestionSelector';
 
 export type IngestionContentType = 'MOCK_TEST' | 'PYP' | 'CHAPTER_TEST' | 'QUESTION_BANK';
@@ -478,17 +477,18 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
     try {
       const timestamp = Date.now();
 
-      // Phase 7: resolve the canonical Authority → Program → Post → Series
-      // before content is persisted. Legacy strings remain populated for
-      // backwards compatibility, but new content is anchored by stable IDs.
+      // Phase 7: content must already belong to a canonical Test Series.
+      // The catalog is authoritative; ingestion never creates or infers taxonomy.
       const targetBundle = targetBundleId ? allBundles.find(b => b.id === targetBundleId) : undefined;
-      const canonical = targetBundle ? await ensureCanonicalHierarchyForBundle(targetBundle) : null;
+      if (!targetBundle?.authorityId || !targetBundle?.programId || !targetBundle?.seriesId) {
+        throw new Error('Selected Test Series is not linked to the canonical exam catalog. Recreate it from Admin → Exam & Recruitment Catalog.');
+      }
       const questionsForPublish = parsedQuestions.map(q => ({
         ...q,
-        authorityId: canonical?.authority.id,
-        programId: canonical?.program.id,
-        postId: canonical?.post?.id,
-        seriesId: canonical?.series.id,
+        authorityId: targetBundle.authorityId,
+        programId: targetBundle.programId,
+        postId: targetBundle.postId,
+        seriesId: targetBundle.seriesId,
       }));
       const createdQuestionIds = questionsForPublish.map(q => q.id);
 
