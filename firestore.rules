@@ -242,6 +242,33 @@ service cloud.firestore {
       allow delete: if hasManagePayments();
     }
 
+    // Student test-series enrollments. The active pass remains the authoritative
+    // entitlement for pass-based test access; this collection organizes My Tests.
+    match /seriesEnrollments/{enrollmentId} {
+      allow get: if isOwner(resource.data.userId) || isAdmin();
+      allow list: if isPermanentUser() && resource.data.userId == request.auth.uid;
+      allow create: if isOwner(request.resource.data.userId) &&
+        request.resource.data.seriesId is string &&
+        request.resource.data.status == 'active' &&
+        request.resource.data.accessType == 'PASS' &&
+        request.resource.data.amountPaid == 0 &&
+        request.resource.data.price is number &&
+        request.resource.data.enrolledAt is string &&
+        request.resource.data.accessExpiresAt is string &&
+        request.resource.data.updatedAt is string &&
+        request.resource.data.keys().hasOnly([
+          'id', 'userId', 'seriesId', 'status', 'accessType',
+          'enrolledAt', 'accessExpiresAt', 'price', 'amountPaid', 'updatedAt'
+        ]);
+      allow update: if isOwner(resource.data.userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.seriesId == resource.data.seriesId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'accessExpiresAt', 'updatedAt'
+        ]);
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
     // Legacy per-attempt leaderboard entries remain readable for migration only.
     // New production rankings use compact per-student profile documents below.
     match /leaderboardEntries/{entryId} {
