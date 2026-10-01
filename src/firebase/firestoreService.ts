@@ -12,6 +12,7 @@ import {
   deleteDoc,
   onSnapshot,
   serverTimestamp,
+  runTransaction,
   Unsubscribe
 } from 'firebase/firestore';
 import { db, auth } from './config';
@@ -857,10 +858,20 @@ export async function saveUserEntitlementToFirestore(entitlement: UserEntitlemen
   await setDoc(doc(db, COLLECTIONS.USER_ENTITLEMENTS, entitlement.userId), entitlement, { merge: true });
 }
 
-export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<void> {
-  if (!db || !attempt?.id || !auth.currentUser || auth.currentUser.uid !== attempt.userId) return;
+export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<TestAttempt> {
+  if (!db || !attempt?.id || !auth.currentUser || auth.currentUser.uid !== attempt.userId) {
+    throw new Error('Cannot persist attempt: authenticated owner mismatch.');
+  }
   try {
-    await setDoc(doc(db, COLLECTIONS.ATTEMPTS, attempt.id), attempt, { merge: false });
+    const attemptRef = doc(db, COLLECTIONS.ATTEMPTS, attempt.id);
+    return await runTransaction(db, async (transaction) => {
+      const existing = await transaction.get(attemptRef);
+      if (existing.exists()) {
+        return existing.data() as TestAttempt;
+      }
+      transaction.set(attemptRef, attempt, { merge: false });
+      return attempt;
+    });
   } catch (err) {
     console.warn('Error saving test attempt to Firestore:', err);
     throw err;
