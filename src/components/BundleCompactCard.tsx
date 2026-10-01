@@ -161,7 +161,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:shrink-0">
           <button
             type="button"
             onClick={(e) => {
