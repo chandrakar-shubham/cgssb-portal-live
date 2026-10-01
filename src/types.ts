@@ -299,6 +299,19 @@ export interface SectorAnalysis {
   timeSpentSeconds?: number;
 }
 
+export interface SeriesEnrollment {
+  id: string;
+  userId: string;
+  seriesId: string;
+  status: 'active' | 'cancelled';
+  accessType: 'PASS' | 'PURCHASED';
+  enrolledAt: string;
+  accessExpiresAt?: string;
+  price: number;
+  amountPaid: number;
+  updatedAt: string;
+}
+
 export interface TestAttempt {
   id: string;
   userId: string;
