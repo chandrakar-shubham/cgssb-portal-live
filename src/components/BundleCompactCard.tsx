@@ -198,7 +198,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
               </>
             )}
           </button>
-        </div>        </div>
+        </div>
       </div>
     </div>
   );
