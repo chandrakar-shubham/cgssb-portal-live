@@ -67,7 +67,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
       {/* Top Header: Authority & Launch Badge */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center space-x-1.5">
+          <div className="flex items-center space-x-1.5 flex-wrap justify-end">
             <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md border tracking-wider ${authorityBg}`}>
               {bundle.authority}
             </span>
@@ -91,7 +91,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
 
         {/* Title & Hindi Title */}
         <div>
-          <h3 className="text-base sm:text-lg font-black text-white group-hover:text-emerald-400 transition-colors leading-snug">
+          <h3 className="text-base sm:text-lg font-black text-white group-hover:text-emerald-400 transition-colors leading-snug line-clamp-2 break-words">
             {bundle.title}
           </h3>
           <p className="text-xs font-semibold text-slate-400 mt-0.5 line-clamp-1">
@@ -100,7 +100,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
         </div>
 
         {/* Short description */}
-        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed min-h-[2.9rem]">
           {bundle.shortDescription}
         </p>
 
@@ -133,7 +133,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
       </div>
 
       {/* Card Footer: Universal Pass Model Pricing & Action Buttons */}
-      <div className="pt-4 mt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="pt-4 mt-3 border-t border-slate-800/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex flex-col">
           {hasEnrolled ? (
             <div className="flex items-center space-x-1.5 text-emerald-300">
@@ -143,16 +143,16 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
           ) : isPassActive ? (
             <div className="flex items-center space-x-1.5 text-amber-300">
               <Crown className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
-              <span className="text-xs font-black">All-Access Pass Active</span>
+              <span className="text-xs font-black">Free Pass Active</span>
             </div>
           ) : (
             <div className="flex flex-col">
               <div className="flex items-center space-x-1 text-xs font-black text-amber-300">
                 <Crown className="w-3.5 h-3.5 fill-amber-400" />
-                <span>All-Access Pass</span>
+                <span>Free Launch Pass</span>
               </div>
               <span className="text-[10px] text-slate-400 font-medium">
-                Unlocks All {bundle.totalTestsCount} Tests (From ₹199)
+                Unlocks All {bundle.totalTestsCount} Tests
               </span>
             </div>
           )}
@@ -206,7 +206,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             ) : (
               <>
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{!user ? 'Sign In to Enroll' : isPassActive ? 'Enroll in Test Series' : 'Activate All-Access Pass'}</span>
+                <span>{!user ? 'Sign In to Enroll' : isPassActive ? 'Enroll in Test Series' : 'Start Free Pass'}</span>
               </>
             )}
           </button>
