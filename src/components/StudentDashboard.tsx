@@ -115,7 +115,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return null;
   });
   const [portalDisplayMode, setPortalDisplayMode] = useState<'bundles' | 'individual' | 'leaderboard' | 'my-tests'>('bundles');
-  const [bundleAuthorityFilter, setBundleAuthorityFilter] = useState<'ALL' | 'CGSSB' | 'CGPSC'>('ALL');
   const [enrolledBundleIds, setEnrolledBundleIds] = useState<string[]>([]);
   const [seriesEnrollments, setSeriesEnrollments] = useState<SeriesEnrollment[]>([]);
   const [isEnrollmentLoading, setIsEnrollmentLoading] = useState(false);
