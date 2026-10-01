@@ -40,7 +40,7 @@ import {
   resetBannersToDefault,
   syncSliderFromFirestore
 } from '../utils/sliderStore';
-import { OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
+import { getStoredBundles } from '../utils/bundleStore';
 
 const ICON_OPTIONS: { name: SliderIconName; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { name: 'Gift', label: 'Gift (Referral/Free)', icon: Gift },
@@ -901,7 +901,7 @@ const SlideEditorModal: React.FC<SlideEditorModalProps> = ({
                     className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white cursor-pointer"
                   >
                     <option value="">Default (First Bundle)</option>
-                    {OFFICIAL_BUNDLES_CATALOG.map(b => (
+                    {getStoredBundles().map((b: any) => (
                       <option key={b.id} value={b.slug || b.id}>
                         {b.title} ({b.targetPost || b.authority})
                       </option>
