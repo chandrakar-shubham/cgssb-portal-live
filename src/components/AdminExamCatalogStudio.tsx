@@ -54,6 +54,59 @@ export const AdminExamCatalogStudio: React.FC = () => {
 
   useEffect(() => { load(); }, [selectedAuthority, selectedProgram, selectedPost]);
 
+  const createProductionCatalog = async () => {
+    const timestamp = now();
+    const authorityId = 'authority-cgssb';
+    const programId = 'program-cgssb-teacher-recruitment-2026';
+    const authority: ExamAuthority = {
+      id: authorityId, name: 'CGSSB', shortName: 'CGSSB', slug: 'cgssb',
+      status: 'PUBLISHED', sortOrder: 0, createdAt: timestamp, updatedAt: timestamp
+    };
+    const program: ExamProgram = {
+      id: programId, authorityId, name: 'CGSSB Teacher Recruitment 2026',
+      slug: 'cgssb-teacher-recruitment-2026', year: 2026, programType: 'recruitment',
+      status: 'PUBLISHED', hasPosts: true, sortOrder: 0, totalVacancies: 4800,
+      recruitmentLabel: '4,800 Vacancies', description: 'CGSSB Teacher Recruitment 2026',
+      createdAt: timestamp, updatedAt: timestamp
+    };
+    const posts: ExamPost[] = [
+      {
+        id: 'post-cgssb-teacher-recruitment-2026-assistant-teacher',
+        programId, name: 'Assistant Teacher', slug: 'assistant-teacher',
+        status: 'PUBLISHED', sortOrder: 0, vacancies: 2292,
+        cadreBreakup: '795 E-Cadre + 1,497 T-Cadre',
+        payLevel: 'Level-06', salaryRange: '₹35,400–₹1,12,400',
+        createdAt: timestamp, updatedAt: timestamp
+      },
+      {
+        id: 'post-cgssb-teacher-recruitment-2026-teacher-tgt',
+        programId, name: 'Teacher / TGT', slug: 'teacher-tgt',
+        status: 'PUBLISHED', sortOrder: 1, vacancies: 1654,
+        cadreBreakup: '868 E-Cadre + 786 T-Cadre',
+        payLevel: 'Level-08',
+        subjects: ['English', 'Hindi', 'Mathematics', 'Science', 'Social Science'],
+        createdAt: timestamp, updatedAt: timestamp
+      },
+      {
+        id: 'post-cgssb-teacher-recruitment-2026-lecturer-pgt',
+        programId, name: 'Lecturer / PGT', slug: 'lecturer-pgt',
+        status: 'PUBLISHED', sortOrder: 2, vacancies: 854,
+        cadreBreakup: '424 E-Cadre + 430 T-Cadre',
+        payLevel: 'Level-09', salaryRange: 'Gazetted Class II',
+        subjects: ['English', 'Hindi', 'Mathematics', 'Physics', 'Chemistry', 'Biology'],
+        createdAt: timestamp, updatedAt: timestamp
+      }
+    ];
+    await saveExamAuthority(authority);
+    await saveExamProgram(program);
+    for (const post of posts) await saveExamPost(post);
+    setSelectedAuthority(authorityId);
+    setSelectedProgram(programId);
+    setSelectedPost('');
+    setMessage('CGSSB Teacher Recruitment 2026 production catalog created/updated: 4,800 vacancies across 3 posts.');
+    await load();
+  };
+
   const createAuthority = async () => {
     if (!name.trim()) return;
     const id = `authority-${slugifyCatalog(name)}`;
@@ -161,6 +214,13 @@ export const AdminExamCatalogStudio: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-black text-white">Exam & Recruitment Catalog</h1>
           <p className="text-sm text-slate-400 mt-1">One canonical hierarchy for the student portal, Universal Ingestion Studio, SEO and all test content.</p>
         </div>
+        <button
+          type="button"
+          onClick={createProductionCatalog}
+          className="shrink-0 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-black text-cyan-300 hover:bg-cyan-500/20"
+        >
+          Create CGSSB 2026 Catalog
+        </button>
         <button
           type="button"
           onClick={purgeDemoData}
