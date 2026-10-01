@@ -17,12 +17,6 @@ export function useTestManager() {
       setTests(firestoreTests);
     });
 
-    fetchTestsFromFirestore().then((remoteTests) => {
-      if (Array.isArray(remoteTests)) {
-        setTests(remoteTests);
-      }
-    }).catch(() => {});
-
     return () => unsubscribe();
   }, []);
 
