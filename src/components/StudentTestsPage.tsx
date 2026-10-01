@@ -92,7 +92,7 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
     }
   };
   const next = series.flatMap(s => s.tests.map(test => ({ series: s, test }))).find(x => !attempts.some(a => a.testId === x.test.id));
-  const nextInProgress = series.flatMap(s => s.tests.map(test => ({ series: s, test }))).find(x => hasLiveCheckpointForTest(x.test));
+  const nextInProgress = series.flatMap(s => s.tests.map(test => ({ series: s, test }))).find(x => !attempts.some(a => a.testId === x.test.id) && hasLiveCheckpointForTest(x.test));
   const passActive = isUserPassActive(user);
   const passDays = calculateDaysRemaining(user?.passExpiresAt);
 
@@ -118,8 +118,13 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
       if (parsed?.testId === currentTest.id && parsed?.sessionId && Number(parsed.secondsRemaining) > 0 && Number(parsed.questionCount) > 0) checkpoint = parsed;
     } catch (_) {}
 
-    const checkpointAge = checkpoint?.updatedAt ? Math.max(0, Date.now() - checkpoint.updatedAt) : 0;
-    const hasLiveCheckpoint = !!checkpoint && checkpoint.questionCount === currentTest.questionCount && checkpointAge < 1000 * 60 * 60 * 24 * 7;
+    const checkpointAge = checkpoint?.updatedAt ? Math.max(0, Date.now() - checkpoint.updatedAt) : Infinity;
+    const savedRemaining = Number(checkpoint?.secondsRemaining);
+    const effectiveRemaining = savedRemaining - (Number.isFinite(checkpointAge) ? Math.floor(checkpointAge / 1000) : Infinity);
+    const hasLiveCheckpoint = !!checkpoint
+      && checkpoint.questionCount === currentTest.questionCount
+      && effectiveRemaining > 0
+      && checkpointAge < 1000 * 60 * 60 * 24 * 7;
     const completion = latestAttempt ? Number(latestAttempt.percentage || 0) : null;
 
     return <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 space-y-6">
@@ -257,7 +262,7 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
 
     <section><div className="mb-3"><h2 className="text-lg font-black text-white">Your Tests</h2><p className="text-xs text-slate-400 mt-1">Quick access to tests from your enrolled series.</p></div>
       {!enrolledTests.length && !loading ? <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">Tests will appear here once your enrolled series is available.</div> :
-      <div className="space-y-2">{enrolledTests.map(test => { const attempt=attempts.find(a=>a.testId===test.id); return <div key={test.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3.5 sm:p-4"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${attempt?'bg-emerald-500/10 text-emerald-300 border-emerald-500/20':'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'}`}>{attempt?'COMPLETED':'AVAILABLE'}</span><span className="text-[10px] text-slate-500">{test.questionCount} Q · {test.durationMinutes} min</span></div><button onClick={() => go(`/u/${slug}/tests/${encodeURIComponent(test.id)}`)} className="mt-1 text-sm font-bold text-white truncate text-left hover:text-emerald-300">{test.title}</button></div><div className="flex items-center gap-2">{attempt&&onReviewAttempt&&<button onClick={()=>onReviewAttempt(attempt)} className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-black inline-flex items-center gap-1.5"><Eye className="w-3.5 h-3.5"/> Result</button>}<button onClick={()=>onStartTest(test)} className="px-3.5 py-2 rounded-xl bg-emerald-500 text-slate-950 text-[10px] font-black inline-flex items-center gap-1.5">{attempt?<RotateCcw className="w-3.5 h-3.5"/>:<Play className="w-3.5 h-3.5 fill-current" />}{attempt?'Re-attempt':'Start'}</button></div></div>})}</div>}
+      <div className="space-y-2">{enrolledTests.map(test => { const attempt=attempts.find(a=>a.testId===test.id); return <div key={test.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3.5 sm:p-4"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${attempt?'bg-emerald-500/10 text-emerald-300 border-emerald-500/20':'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'}`}>{attempt?'COMPLETED':'AVAILABLE'}</span><span className="text-[10px] text-slate-500">{test.questionCount} Q · {test.durationMinutes} min</span></div><button onClick={() => go(`/u/${slug}/tests/${encodeURIComponent(test.id)}`)} className="mt-1 text-sm font-bold text-white truncate text-left hover:text-emerald-300">{test.title}</button></div><div className="flex items-center gap-2">{attempt&&onReviewAttempt&&<button onClick={()=>onReviewAttempt(attempt)} className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-black inline-flex items-center gap-1.5"><Eye className="w-3.5 h-3.5"/> Result</button>}<button onClick={()=>onStartTest(test)} className="px-3.5 py-2 rounded-xl bg-emerald-500 text-slate-950 text-[10px] font-black inline-flex items-center gap-1.5">{attempt ? <RotateCcw className="w-3.5 h-3.5"/> : <Play className="w-3.5 h-3.5 fill-current" />}{attempt ? 'Re-attempt' : hasLiveCheckpointForTest(test) ? 'Continue' : 'Start'}</button></div></div>})}</div>}
     </section>
   </div>;
 };
