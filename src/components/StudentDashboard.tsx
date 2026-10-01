@@ -36,7 +36,7 @@ import {
   Trophy,
   Gift
 } from 'lucide-react';
-import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
+import { TestSeriesBundle } from '../data/bundleCatalog';
 import { getStoredBundles, findBundleBySlugOrId, syncBundlesFromFirestore, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
