@@ -1,5 +1,12 @@
 import React from 'react';
-import {\n  BookOpen,\n  CheckCircle2,\n  ChevronRight,\n  Clock,\n  Crown,\n  Sparkles,\n} from 'lucide-react';
+import {
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Crown,
+  Sparkles,
+} from 'lucide-react';
 
 interface BundleCompactCardProps {
   bundle: TestSeriesBundle;
