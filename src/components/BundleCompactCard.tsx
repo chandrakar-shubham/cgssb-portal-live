@@ -1,10 +1,12 @@
 import React from 'react';
+import { TestSeriesBundle } from '../data/bundleCatalog';
+import { useAuth } from '../context/AuthContext';
+import { isUserPassActive } from '../utils/devicePassManager';
 import {
   BookOpen,
   CheckCircle2,
   ChevronRight,
   Clock,
-  Crown,
   Sparkles,
 } from 'lucide-react';
 
