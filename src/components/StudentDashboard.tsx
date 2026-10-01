@@ -1234,6 +1234,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     bundle={bundle}
                     onOpenBundle={handleOpenBundleDetail}
                     onEnrollNow={handleEnrollBundle}
+                    onOpenMyTests={() => setPortalDisplayMode('my-tests')}
                     onStartFreeTest={b => {
                       const freeItem = b.testItems.find(t => t.isFreePreview) || b.testItems[0];
                       if (freeItem) {
