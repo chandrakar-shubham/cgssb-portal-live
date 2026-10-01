@@ -53,6 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const testItems = useMemo(() => {
     const items = [
       { id: 'tests', label: 'Full Mock Tests', icon: BookOpen, desc: 'Timed simulated exams with state ranks', enabled: true },
+      { id: 'student-tests', label: 'My Tests', icon: CheckCircle2, desc: 'Your enrolled series, progress and results', enabled: !!user },
       { id: 'pyp', label: 'PYP Archives', icon: FileText, desc: 'Official solved papers (2014-2024)', enabled: config.featureFlags.enablePYPSection !== false },
       { id: 'chapters', label: 'Chapter Tests', icon: Layers, desc: 'Subject & Topic-wise revision quizzes', enabled: config.featureFlags.enableChapterTests !== false },
       { id: 'practice', label: 'Practice Drills', icon: Zap, desc: 'Untimed daily MCQs with instant solutions', enabled: true },
