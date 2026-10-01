@@ -258,6 +258,12 @@ export interface MockTest {
   isPublished?: boolean;
   bundleId?: string;
   targetKey?: string;
+  /** Canonical exam taxonomy IDs. Legacy fields remain for backward compatibility. */
+  authorityId?: string;
+  programId?: string;
+  postId?: string;
+  seriesId?: string;
+  seriesType?: 'full_mock' | 'chapter_test' | 'subject_test' | 'pyp' | 'live_test' | 'practice';
   difficultyDistribution?: { easy: number; medium: number; hard: number };
   createdAt?: string;
 }
@@ -284,6 +290,11 @@ export interface PreviousYearPaper {
   fileSize?: string;
   downloadUrl?: string;
   linkedQuestionIds?: string[];
+  /** Canonical exam taxonomy IDs. */
+  authorityId?: string;
+  programId?: string;
+  postId?: string;
+  seriesId?: string;
   createdAt?: string;
 }
 
