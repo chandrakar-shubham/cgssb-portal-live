@@ -155,53 +155,50 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          {bundle.freeTestsCount > 0 && onStartFreeTest && !isPassActive && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onStartFreeTest(bundle);
-              }}
-              className="text-xs font-bold text-slate-300 hover:text-white bg-slate-800/90 hover:bg-slate-700/80 px-2.5 py-1.5 rounded-xl border border-slate-700 transition flex items-center space-x-1 cursor-pointer"
-              title="Attempt Free Sample Test immediately"
-            >
-              <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
-              <span className="hidden sm:inline">Free Mock</span>
-            </button>
-          )}
-
-          {!hasEnrolled && isPassActive && onEnrollNow && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEnrollNow(bundle);
-              }}
-              className="text-xs font-black px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md transition flex items-center space-x-1.5 cursor-pointer"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Enroll Free</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onOpenBundle(bundle);
             }}
-            className={`text-xs font-black px-3.5 py-1.5 rounded-xl shadow-md transition flex items-center space-x-1.5 cursor-pointer ${
-              isPassActive || hasEnrolled
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-900/40'
-                : isCgpsc
-                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-900/40'
-            }`}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center space-x-1.5 cursor-pointer"
+            title="View test series details, syllabus and included tests"
           >
-            <span>{hasEnrolled ? 'My Tests' : isPassActive ? 'Open Series' : 'View Bundle'}</span>
+            <span>View Details</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
-        </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasEnrolled) {
+                onOpenBundle(bundle);
+              } else if (onEnrollNow) {
+                onEnrollNow(bundle);
+              } else {
+                onOpenBundle(bundle);
+              }
+            }}
+            className={`text-xs font-black px-3.5 py-1.5 rounded-xl shadow-md transition flex items-center space-x-1.5 cursor-pointer ${
+              hasEnrolled
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-900/40'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-900/40'
+            }`}
+          >
+            {hasEnrolled ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>View Bundle</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{!user ? 'Sign In to Enroll' : isPassActive ? 'Enroll in Test Series' : 'Activate All-Access Pass'}</span>
+              </>
+            )}
+          </button>
+        </div>        </div>
       </div>
     </div>
   );
