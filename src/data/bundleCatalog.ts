@@ -70,7 +70,12 @@ export interface TestSeriesBundle {
   slug: string;
   title: string;
   titleHindi: string;
-  authority: 'CGSSB' | 'CGPSC';
+  /** Canonical taxonomy references. Legacy authority/targetPost fields remain for compatibility. */
+  authorityId?: string;
+  programId?: string;
+  postId?: string;
+  seriesType?: 'full_mock' | 'chapter_test' | 'subject_test' | 'pyp' | 'live_test' | 'practice' | 'mixed';
+  authority: string;
   targetPost: string;
   targetYear: number;
   badge: string;
