@@ -97,23 +97,6 @@ export function useCmsManager() {
       }
     });
 
-    // Initial fetch fallbacks
-    fetchCmsPagesFromFirestore().then(p => {
-      setCmsPages(p);
-    }).catch(() => {});
-
-    fetchCmsPostsFromFirestore().then(p => {
-      setCmsPosts(p);
-    }).catch(() => {});
-
-    fetchCmsSeriesPacksFromFirestore().then(s => {
-      setCmsSeriesPacks(s);
-    }).catch(() => {});
-
-    fetchCmsSettingsFromFirestore().then(s => {
-      if (s) setCmsSettings(s);
-    }).catch(() => {});
-
     return () => {
       unsubPages();
       unsubPosts();
