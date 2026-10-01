@@ -405,11 +405,13 @@ function MainApp() {
       source.forEach(add);
     }
 
-    return expected > 0 ? selected.slice(0, expected) : selected;
+    // The section question IDs are the canonical paper definition. Never truncate
+    // a valid section-defined paper because a stale questionCount says 20/50/100.
+    return selected;
   }
 
   function buildExamTest(test: MockTest, examQuestions: Question[]): MockTest {
-    const expected = Math.max(0, Number(test.questionCount || examQuestions.length));
+    const actualCount = examQuestions.length;
     const existingIds = new Set(
       (test.sections || []).flatMap(section => section.questionIds || [])
     );
@@ -418,12 +420,12 @@ function MainApp() {
       .filter(id => !existingIds.has(id));
 
     if (missingIds.length === 0) {
-      return { ...test, questionCount: expected || examQuestions.length };
+      return { ...test, questionCount: actualCount };
     }
 
     return {
       ...test,
-      questionCount: expected || examQuestions.length,
+      questionCount: actualCount,
       sections: [
         ...(test.sections || []),
         {
