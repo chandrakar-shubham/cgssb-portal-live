@@ -238,7 +238,8 @@ service cloud.firestore {
          request.resource.data.keys().hasOnly([
            'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
            'durationDays', 'source', 'planName', 'boundDeviceId',
-           'boundDeviceName', 'updatedAt'
+           'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
+           'unlockedMilestoneBonus', 'campaignId'
          ]));
       allow delete: if hasManagePayments();
     }
