@@ -36,7 +36,7 @@ import {
   PlayCircle
 } from 'lucide-react';
 import { Question, MockTest, PreviousYearPaper, ExamCategory, DifficultyLevel, QuestionType } from '../types';
-import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
+import { TestSeriesBundle } from '../data/bundleCatalog';
 import { getStoredBundles, saveSingleBundle } from '../utils/bundleStore';
 import { apiFetch, getAdminHeaders } from '../utils/apiClient';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
