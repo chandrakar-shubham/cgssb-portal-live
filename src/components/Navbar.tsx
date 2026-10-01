@@ -326,7 +326,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('pass')}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 text-xs font-extrabold transition shadow-sm cursor-pointer whitespace-nowrap"
+                className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 text-xs font-extrabold transition shadow-sm cursor-pointer whitespace-nowrap"
                 title={`All-Access Pass Active (${calculateDaysRemaining(user.passExpiresAt)} Days Left)`}
               >
                 <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
@@ -340,7 +340,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('pass')}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:brightness-110 text-slate-950 text-xs font-black transition shadow-md shadow-amber-950/30 cursor-pointer whitespace-nowrap"
+                className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:brightness-110 text-slate-950 text-xs font-black transition shadow-md shadow-amber-950/30 cursor-pointer whitespace-nowrap"
                 title="Unlock All Exams with Monthly or Yearly Pass"
               >
                 <Crown className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
@@ -469,7 +469,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <div className="flex items-center space-x-1.5 text-xs font-bold">
                       <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                       <span className={isUserPassActive(user) ? 'text-amber-300' : 'text-slate-400'}>
-                        {isUserPassActive(user) ? `${calculateDaysRemaining(user.passExpiresAt)}d Pass Active` : 'Free Access Tier'}
+                        {isUserPassActive(user)
+                          ? `${calculateDaysRemaining(user.passExpiresAt)}d Pass Active`
+                          : user.passExpiresAt
+                            ? 'Pass Expired'
+                            : 'Free Access Tier'}
                       </span>
                     </div>
 
@@ -703,19 +707,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('pass')}
+          onClick={() => setActiveTab('student-tests')}
           className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all cursor-pointer min-w-[50px] ${
-            activeTab === 'pass'
-              ? 'text-amber-400 font-bold'
-              : 'text-slate-400 hover:text-amber-300 font-medium'
+            activeTab === 'student-tests'
+              ? 'text-emerald-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200 font-medium'
           }`}
         >
-          <div className={`p-1 rounded-lg transition-colors ${activeTab === 'pass' ? 'bg-amber-500/15' : ''}`}>
-            <Crown className={`w-4.5 h-4.5 ${activeTab === 'pass' ? 'fill-amber-400' : ''}`} />
+          <div className={`p-1 rounded-lg transition-colors ${activeTab === 'student-tests' ? 'bg-emerald-500/15' : ''}`}>
+            <CheckCircle2 className="w-4.5 h-4.5" />
           </div>
-          <span className="text-[9px] mt-0.5 tracking-tight">Pass Pro</span>
+          <span className="text-[9px] mt-0.5 tracking-tight">My Tests</span>
         </button>
-
         <button
           type="button"
           onClick={() => setActiveTab('analytics')}
