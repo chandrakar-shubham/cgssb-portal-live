@@ -23,6 +23,7 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --package-lock=false --no-audit --no-fund
 
+      # Validate the canonical Authority -> Recruitment -> Post -> Test Series architecture.
       - name: TypeScript validation
         run: npm run lint
 
