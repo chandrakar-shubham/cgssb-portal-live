@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TestSeriesBundle, BundleTestItem } from '../data/bundleCatalog';
 import { MockTest, TestAttempt } from '../types';
+import { saveSeriesEnrollmentToFirestore } from '../firebase/firestoreService';
 import { useAuth } from '../context/AuthContext';
 import { toggleBundlePublish, doesTestMatchBundle, convertMockTestToBundleItem } from '../utils/bundleStore';
 import {
@@ -56,6 +57,7 @@ interface BundleDetailPageProps {
   onExplorePass: () => void;
   isEnrolled?: boolean;
   onEnrollSuccess?: (bundleId: string) => void;
+  onOpenAuthModal?: () => void;
   attempts?: TestAttempt[];
 }
 
@@ -67,6 +69,7 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
   onExplorePass,
   isEnrolled = false,
   onEnrollSuccess,
+  onOpenAuthModal,
   attempts = [],
 }) => {
   const { user, activateProPass } = useAuth();
@@ -245,13 +248,54 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
     );
   };
 
-  const handleStartItemTest = (item: BundleTestItem) => {
-    if (!item.isFreePreview && !isPassActive) {
+  const handleEnrollSeries = async () => {
+    if (!user) {
+      onOpenAuthModal?.();
+      return;
+    }
+    if (!isPassActive || !user.passExpiresAt) {
       setIsPassModalOpen(true);
       return;
     }
-    const testToLaunch = resolvePlayableTest(item);
-    onStartTest(testToLaunch);
+    if (isEnrolled) return;
+
+    const now = new Date().toISOString();
+    try {
+      await saveSeriesEnrollmentToFirestore({
+        id: encodeURIComponent(user.id + '__series__' + bundle.id),
+        userId: user.id,
+        seriesId: bundle.id,
+        status: 'active',
+        accessType: 'PASS',
+        enrolledAt: now,
+        accessExpiresAt: user.passExpiresAt,
+        price: Number(bundle.price || 0),
+        amountPaid: 0,
+        updatedAt: now,
+      });
+      showToast('Enrolled successfully. Added to My Tests.');
+      onEnrollSuccess?.(bundle.id);
+    } catch (error) {
+      console.error('Series enrollment failed:', error);
+      showToast('Enrollment could not be saved. Please try again.');
+    }
+  };
+
+  const handleStartItemTest = (item: BundleTestItem) => {
+    if (item.isFreePreview) {
+      onStartTest(resolvePlayableTest(item));
+      return;
+    }
+    if (!isEnrolled) {
+      if (isPassActive) showToast('Enroll in this Test Series first to add it to My Tests.');
+      else setIsPassModalOpen(true);
+      return;
+    }
+    if (!isPassActive) {
+      setIsPassModalOpen(true);
+      return;
+    }
+    onStartTest(resolvePlayableTest(item));
   };
 
   const handleCopyShareLink = () => {
@@ -499,20 +543,34 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
 
           {/* CTA Action Row */}
           <div className="pt-3 flex flex-wrap items-center gap-3">
-            {isPassActive ? (
-              <div className="inline-flex items-center space-x-2 px-5 py-3 rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-sm font-black shadow-md">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                <span>All-Access Pass Active • All Tests Unlocked</span>
-              </div>
-            ) : (
-              <button
-                onClick={() => setIsPassModalOpen(true)}
-                className="px-6 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 shadow-xl shadow-amber-950/50 hover:brightness-110 transition flex items-center space-x-2 cursor-pointer"
-              >
-                <Crown className="w-4 h-4 fill-slate-950" />
-                <span>Activate All-Access Pass (Unlock All Exams)</span>
+            {!isAdmin && !isEnrolled && isPassActive && (
+              <button onClick={handleEnrollSeries} className="px-6 py-3.5 rounded-2xl font-black text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-xl shadow-emerald-950/40 transition flex items-center space-x-2 cursor-pointer">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Enroll in Test Series — FREE with Pass</span>
                 <ChevronRight className="w-4 h-4 ml-1" />
               </button>
+            )}
+
+            {!isAdmin && isEnrolled && isPassActive && (
+              <div className="inline-flex items-center space-x-2 px-5 py-3 rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-sm font-black shadow-md">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                <span>Enrolled • Free with Pass • {daysRemaining}d access left</span>
+              </div>
+            )}
+
+            {!isAdmin && !isPassActive && !isEnrolled && (
+              <button onClick={() => setIsPassModalOpen(true)} className="px-6 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 shadow-xl shadow-amber-950/50 hover:brightness-110 transition flex items-center space-x-2 cursor-pointer">
+                <Crown className="w-4 h-4 fill-slate-950" />
+                <span>Activate All-Access Pass to Enroll</span>
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
+            )}
+
+            {isAdmin && (
+              <div className="inline-flex items-center space-x-2 px-5 py-3 rounded-2xl bg-slate-900 text-slate-300 border border-slate-700 text-sm font-bold">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Admin Preview</span>
+              </div>
             )}
 
             {firstFreeItem && (
