@@ -7,8 +7,7 @@
  * 4. Resilient Offline Submission Queue (syncs automatically when network reconnects)
  */
 
-import { MockTest, Question, QuestionPaletteStatus, TestAttempt } from '../types';
-import { api } from './apiClient';
+import { MockTest, Question } from '../types';
 
 export interface PendingSubmission {
   id: string;
@@ -83,113 +82,8 @@ export function clearCachedTestBundle(testId: string): void {
 }
 
 /**
- * 2. Queue offline submission when network is unreachable at submit time
+ * Legacy submission queue removed.
+ * Submission is now committed directly to Firestore by App.tsx using a
+ * stable submissionId and a Firestore transaction. Keeping a second HTTP
+ * submission path here could create duplicate or conflicting attempts.
  */
-export function queueOfflineSubmission(submission: Omit<PendingSubmission, 'id' | 'timestamp' | 'synced'>): PendingSubmission {
-  const pendingItem: PendingSubmission = {
-    ...submission,
-    id: `pending-att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    timestamp: Date.now(),
-    synced: false,
-  };
-
-  try {
-    const queue = getPendingSubmissions();
-    // Avoid duplicates for same test
-    const updated = queue.filter(q => q.testId !== submission.testId);
-    updated.unshift(pendingItem);
-    localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(updated));
-  } catch (err) {
-    console.error('[OfflineExamManager] Failed to queue offline submission:', err);
-  }
-
-  return pendingItem;
-}
-
-export function getPendingSubmissions(): PendingSubmission[] {
-  try {
-    const raw = localStorage.getItem(PENDING_QUEUE_KEY);
-    if (raw) {
-      return JSON.parse(raw);
-    }
-  } catch (_) {}
-  return [];
-}
-
-export function removePendingSubmission(id: string): void {
-  try {
-    const queue = getPendingSubmissions();
-    const updated = queue.filter(q => q.id !== id);
-    localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(updated));
-  } catch (_) {}
-}
-
-/**
- * 3. Atomic Transaction Sync: Sync all queued offline attempts with server
- */
-export async function syncPendingSubmissions(
-  onAttemptSynced?: (attempt: TestAttempt, solutions?: Question[]) => void
-): Promise<{ syncedCount: number; errors: number }> {
-  const queue = getPendingSubmissions();
-  if (queue.length === 0) return { syncedCount: 0, errors: 0 };
-
-  let syncedCount = 0;
-  let errors = 0;
-
-  for (const item of queue) {
-    try {
-      const data = await api.post<any>(
-        `/api/tests/${item.testId}/submit`,
-        {
-          timeTakenSeconds: item.timeTakenSeconds,
-          responses: item.responses,
-          questionStatuses: item.questionStatuses,
-        },
-        { requireAuth: true }
-      );
-
-      if (data) {
-        if (data.success && data.attempt) {
-          removePendingSubmission(item.id);
-          clearCachedTestBundle(item.testId);
-          syncedCount++;
-          if (onAttemptSynced) {
-            onAttemptSynced(data.attempt, data.solutions);
-          }
-        } else {
-          errors++;
-        }
-      } else {
-        errors++;
-      }
-    } catch (err) {
-      console.warn(`[OfflineExamManager] Sync failed for pending attempt ${item.id}:`, err);
-      errors++;
-    }
-  }
-
-  return { syncedCount, errors };
-}
-
-/**
- * 4. Register automatic network reconnection sync listener
- */
-export function initOfflineAutoSync(
-  onAttemptSynced?: (attempt: TestAttempt, solutions?: Question[]) => void
-): () => void {
-  const handleOnline = () => {
-    console.log('[OfflineExamManager] Internet connection detected! Attempting batch sync...');
-    syncPendingSubmissions(onAttemptSynced);
-  };
-
-  window.addEventListener('online', handleOnline);
-
-  // Also check on init if online
-  if (navigator.onLine && getPendingSubmissions().length > 0) {
-    syncPendingSubmissions(onAttemptSynced);
-  }
-
-  return () => {
-    window.removeEventListener('online', handleOnline);
-  };
-}
