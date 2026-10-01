@@ -100,6 +100,12 @@ const attemptsBlock = rules.slice(attemptsStart, attemptsEnd);
 if (!attemptsBlock.includes('isOwner(request.resource.data.userId)')) {
   throw new Error('Attempt ownership rule missing');
 }
+if (!attemptsBlock.includes('request.resource.data.submissionId is string')) {
+  throw new Error('Attempt submission identity validation missing');
+}
+if (!attemptsBlock.includes('allow update: if hasManageStudents();')) {
+  throw new Error('Student attempts must be immutable after creation');
+}
 
 const adminCollections = ['adminMembers', 'discountCoupons'];
 for (const collection of adminCollections) {
