@@ -1033,16 +1033,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         />
       )}
 
-      {/* Exam Categories Navigation Tabs (Horizontal Scrollable on Mobile with no-scrollbar) */}
+      {/* Exams & Recruitments — canonical discovery entry point */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-base sm:text-lg font-black text-white flex items-center space-x-2">
               <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>Browse cgtest.in Exam Series</span>
+              <span>Explore Exams & Recruitments</span>
             </h2>
             <p className="text-xs text-slate-400">
-              Browse launched exam bundles with dedicated syllabus and test portals, or practice full-length mock tests.
+              Choose your exam or recruitment first, then your post and preparation suite.
             </p>
           </div>
 
@@ -1058,7 +1058,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Test Series ({visibleBundlesForViewer.length})</span>
+              <span>Exams ({new Set(visibleBundlesForViewer.map(b => b.programId || b.id)).size})</span>
             </button>
 
             <button
