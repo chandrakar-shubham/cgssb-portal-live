@@ -19,7 +19,6 @@ import {
 } from 'firebase/auth';
 import { auth, db, googleAuthProvider } from '../firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
-import { api } from '../utils/apiClient';
 import { initializeBookmarks, clearBookmarkCache } from '../utils/bookmarkStorage';
 import { 
   generateReferralCode, 
@@ -208,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
     } catch {
-      // Fall through to the legacy profile/API compatibility below.
+      // Continue with the Firestore-backed legacy registration-date migration below.
     }
 
     // Migration path for students who registered before the entitlement document
@@ -235,18 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Legacy compatibility only: do not resurrect an expired pass.
-    try {
-      const result = await api.get<{ success: boolean; entitlements?: any }>('/api/user/entitlements', { requireAuth: true });
-      const ent = result.entitlements;
-      if (ent) {
-        const expiry = ent.passExpiry || baseUser.passExpiresAt;
-        const active = ent.hasActivePass === true && (!expiry || new Date(expiry).getTime() > Date.now());
-        return { ...baseUser, credits: typeof ent.credits === 'number' ? ent.credits : baseUser.credits,
-          hasProPass: active, proPassPlan: ent.passType || baseUser.proPassPlan, passExpiresAt: expiry };
-      }
-    } catch {}
-
+    // Firebase-only architecture: never fall back to the retired HTTP API.
     if (baseUser.passExpiresAt && new Date(baseUser.passExpiresAt).getTime() <= Date.now()) {
       return { ...baseUser, hasProPass: false };
     }
