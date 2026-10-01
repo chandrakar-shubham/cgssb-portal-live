@@ -89,7 +89,8 @@ export const COLLECTIONS = {
   REFERRALS: 'referrals',
   USER_ENTITLEMENTS: 'userEntitlements',
   LEADERBOARD_ENTRIES: 'leaderboardEntries',
-  LEADERBOARD_PROFILES: 'leaderboardProfiles'
+  LEADERBOARD_PROFILES: 'leaderboardProfiles',
+  SERIES_ENROLLMENTS: 'seriesEnrollments'
 } as const;
 
 /**
@@ -856,6 +857,35 @@ export async function fetchUserEntitlementFromFirestore(userId?: string): Promis
 export async function saveUserEntitlementToFirestore(entitlement: UserEntitlement): Promise<void> {
   if (!db || !entitlement?.userId) return;
   await setDoc(doc(db, COLLECTIONS.USER_ENTITLEMENTS, entitlement.userId), entitlement, { merge: true });
+}
+
+export function seriesEnrollmentId(userId: string, seriesId: string): string {
+  return encodeURIComponent(userId + '__series__' + seriesId);
+}
+
+export async function fetchMySeriesEnrollmentsFromFirestore(userId?: string): Promise<import('../types').SeriesEnrollment[]> {
+  const uid = userId || auth.currentUser?.uid;
+  if (!db || !uid) return [];
+  try {
+    const snap = await withTimeout(
+      getDocs(query(collection(db, COLLECTIONS.SERIES_ENROLLMENTS), where('userId', '==', uid))),
+      5000
+    );
+    return snap.docs.map(d => d.data() as import('../types').SeriesEnrollment)
+      .sort((a, b) => String(b.enrolledAt || '').localeCompare(String(a.enrolledAt || '')));
+  } catch (err) {
+    console.warn('Error fetching student series enrollments:', err);
+    return [];
+  }
+}
+
+export async function saveSeriesEnrollmentToFirestore(enrollment: import('../types').SeriesEnrollment): Promise<import('../types').SeriesEnrollment> {
+  if (!db || !auth.currentUser || auth.currentUser.uid !== enrollment.userId) {
+    throw new Error('Cannot persist series enrollment: authenticated owner mismatch.');
+  }
+  const ref = doc(db, COLLECTIONS.SERIES_ENROLLMENTS, seriesEnrollmentId(enrollment.userId, enrollment.seriesId));
+  await setDoc(ref, enrollment, { merge: false });
+  return enrollment;
 }
 
 export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<TestAttempt> {
