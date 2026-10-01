@@ -129,86 +129,45 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
         </div>
       </div>
 
-      {/* Card Footer: Universal Pass Model Pricing & Action Buttons */}
-      <div className="pt-4 mt-3 border-t border-slate-800/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div className="flex flex-col">
-          {hasEnrolled ? (
-            <div className="flex items-center space-x-1.5 text-emerald-300">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="text-xs font-black">Series Enrolled</span>
-            </div>
-          ) : isPassActive ? (
-            <div className="flex items-center space-x-1.5 text-amber-300">
-              <Crown className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
-              <span className="text-xs font-black">Free Pass Active</span>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              <div className="flex items-center space-x-1 text-xs font-black text-amber-300">
-                <Crown className="w-3.5 h-3.5 fill-amber-400" />
-                <span>Free Launch Pass</span>
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium">
-                Unlocks All {bundle.totalTestsCount} Tests
-              </span>
-            </div>
-          )}
-          <span className="text-[10px] text-emerald-400 font-semibold mt-0.5">
-            {hasEnrolled ? (isPassActive ? '✓ All Tests Unlocked' : 'Free pass expired') : isPassActive ? '✓ All Tests Unlocked' : `${bundle.freeTestsCount} Free Diagnostic Mocks`}
-          </span>
-        </div>
+      {/* Card Footer: clean actions only — access status is already shown in the dashboard header */}
+      <div className="pt-4 mt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasEnrolled && onOpenMyTests) {
+              onOpenMyTests(bundle);
+            } else {
+              onOpenBundle(bundle);
+            }
+          }}
+          className="w-full min-w-0 text-xs font-bold px-3 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center gap-1.5 cursor-pointer"
+          title={hasEnrolled ? "Open your enrolled tests" : "View test series details, syllabus and included tests"}
+        >
+          {hasEnrolled ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <span>View Details</span>}
+          {hasEnrolled && <span className="truncate">My Tests</span>}
+          {!hasEnrolled && <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+        </button>
 
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:shrink-0">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasEnrolled && onOpenMyTests) {
-                onOpenMyTests(bundle);
-              } else {
-                onOpenBundle(bundle);
-              }
-            }}
-            className="w-full sm:w-auto text-xs font-bold px-3 py-2 sm:py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center space-x-1.5 cursor-pointer"
-            title={hasEnrolled ? "Open your enrolled tests" : "View test series details, syllabus and included tests"}
-          >
-            {hasEnrolled ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <span>View Details</span>}
-            {hasEnrolled && <span>My Tests</span>}
-            {!hasEnrolled && <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasEnrolled) {
-                onOpenBundle(bundle);
-              } else if (onEnrollNow) {
-                onEnrollNow(bundle);
-              } else {
-                onOpenBundle(bundle);
-              }
-            }}
-            className={`w-full sm:w-auto text-xs font-black px-3.5 py-2 sm:py-1.5 rounded-xl shadow-md transition flex items-center justify-center space-x-1.5 cursor-pointer ${
-              hasEnrolled
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-900/40'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-900/40'
-            }`}
-          >
-            {hasEnrolled ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>View Bundle</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{!user ? 'Sign In to Enroll' : isPassActive ? 'Enroll in Test Series' : 'Start Free Pass'}</span>
-              </>
-            )}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasEnrolled) {
+              onOpenBundle(bundle);
+            } else if (onEnrollNow) {
+              onEnrollNow(bundle);
+            } else {
+              onOpenBundle(bundle);
+            }
+          }}
+          className="w-full min-w-0 text-xs font-black px-3 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{hasEnrolled ? 'View Bundle' : 'Enroll Now'}</span>
+        </button>
       </div>
+/div>
     </div>
   );
 };
