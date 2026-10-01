@@ -498,6 +498,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { unlockedBonus: false, newCount: 1 };
     }
 
+    const isFreeCampaignPass = String(user.proPassPlan || '').startsWith('Free Launch Pass');
+    if (!isFreeCampaignPass) return { unlockedBonus: false, newCount: Number(user.completedTestsCount || 0) };
+
     const currentCount = Number(user.completedTestsCount || 0);
     const newCount = currentCount + 1;
     const shouldUnlockBonus = newCount >= 5 && !user.unlockedMilestoneBonus;
