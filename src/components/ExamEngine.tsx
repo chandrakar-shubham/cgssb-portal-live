@@ -52,7 +52,8 @@ interface ExamEngineProps {
     timeTakenSeconds: number;
     responses: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
     questionStatuses: Record<string, QuestionPaletteStatus>;
-  }) => void;
+    submissionId: string;
+  }) => Promise<boolean>;
 }
 
 export const ExamEngine: React.FC<ExamEngineProps> = ({
@@ -84,6 +85,16 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
       return null;
     }
   }, [sessionKey, test.id, questions.length]);
+
+  const [sessionId] = useState(() => {
+    if (savedSession?.sessionId && typeof savedSession.sessionId === 'string') {
+      return savedSession.sessionId;
+    }
+    const randomPart = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+    return `session-${Date.now()}-${randomPart}`;
+  });
 
   const initialDurationSeconds = (test.durationMinutes || 15) * 60;
   const [secondsRemaining, setSecondsRemaining] = useState(() => {
@@ -131,6 +142,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
       try {
         const payload = {
           testId: test.id,
+          sessionId,
           secondsRemaining,
           currentSectionIndex,
           currentQuestionIndex,
@@ -147,7 +159,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
 
     const timer = setTimeout(saveCheckpoint, 3000);
     return () => clearTimeout(timer);
-  }, [sessionKey, test.id, secondsRemaining, currentSectionIndex, currentQuestionIndex, responses, questionStatuses, questionTimes]);
+  }, [sessionKey, test.id, sessionId, secondsRemaining, currentSectionIndex, currentQuestionIndex, responses, questionStatuses, questionTimes, questions.length]);
 
   // UI state
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -284,20 +296,32 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
     }, 2500);
   };
 
-  const doFinalSubmit = () => {
+  const doFinalSubmit = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     recordActiveQuestionTime();
-    try {
-      localStorage.removeItem(sessionKey);
-    } catch (_) {}
     const timeTaken = initialDurationSeconds - secondsRemaining;
-    onSubmit({
-      testId: test.id,
-      timeTakenSeconds: Math.max(1, timeTaken),
-      responses,
-      questionStatuses,
-    });
+    try {
+      const persisted = await onSubmit({
+        testId: test.id,
+        timeTakenSeconds: Math.max(1, timeTaken),
+        responses,
+        questionStatuses,
+        submissionId: sessionId,
+      });
+      if (persisted) {
+        try {
+          localStorage.removeItem(sessionKey);
+        } catch (_) {}
+      } else {
+        setIsSubmitting(false);
+        setIsTimeOutModal(false);
+      }
+    } catch (error) {
+      console.warn('[ExamEngine] Submission failed; keeping local checkpoint for retry.', error);
+      setIsSubmitting(false);
+      setIsTimeOutModal(false);
+    }
   };
 
   // Status computation for active question when visiting
