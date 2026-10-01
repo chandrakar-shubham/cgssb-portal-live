@@ -7,8 +7,6 @@ import {
   saveExamPost, saveExamTestSeries, slugifyCatalog
 } from '../firebase/examCatalogService';
 import { saveBundleToFirestore } from '../firebase/firestoreService';
-import { OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
-import { migrateBundlesToCanonicalExamCatalog } from '../firebase/examCatalogService';
 import { saveSingleBundle, getStoredBundles } from '../utils/bundleStore';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 
@@ -141,22 +139,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-black text-white">Exam & Recruitment Catalog</h1>
           <p className="text-sm text-slate-400 mt-1">One canonical hierarchy for the student portal, Universal Ingestion Studio, SEO and all test content.</p>
         </div>
-        <button
-          onClick={async () => {
-            try {
-              const sourceBundles = getStoredBundles();
-              const merged = Array.from(new Map([...OFFICIAL_BUNDLES_CATALOG, ...sourceBundles].map(b => [b.id, b])).values());
-              const count = await migrateBundlesToCanonicalExamCatalog(merged);
-              setMessage(`Migrated ${count} legacy test-series bundles into the canonical hierarchy.`);
-              await load();
-            } catch (e:any) {
-              setMessage(e?.message || 'Migration failed.');
-            }
-          }}
-          className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-black text-slate-200"
-        >
-          Import Existing Series
-        </button>
+
       </div>
     </div>
     {message && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div>}
