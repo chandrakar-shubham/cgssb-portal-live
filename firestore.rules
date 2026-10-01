@@ -226,8 +226,8 @@ service cloud.firestore {
       allow delete: if hasManagePayments();
     }
 
-    // Sanitized practice leaderboard. It intentionally contains no answers or private profile data.
-    // It is a community/practice ranking, not an official government rank.
+    // Legacy per-attempt leaderboard entries remain readable for migration only.
+    // New production rankings use compact per-student profile documents below.
     match /leaderboardEntries/{entryId} {
       allow read: if true;
       allow create: if isOwner(request.resource.data.userId) &&
@@ -245,6 +245,32 @@ service cloud.firestore {
           'seriesId', 'testId', 'score', 'maxScore', 'percentage', 'accuracy',
           'correctCount', 'incorrectCount', 'unattemptedCount', 'timeTakenSeconds',
           'submittedAt', 'source'
+        ]);
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // Compact per-student ranking summaries. Public reads are bounded to 100 rows;
+    // writes are restricted to the owning authenticated student.
+    match /leaderboardProfiles/{profileId} {
+      allow get: if true;
+      allow list: if request.query.limit <= 100;
+      allow create: if isOwner(request.resource.data.userId) &&
+        request.resource.data.source == 'practice_summary' &&
+        request.resource.data.keys().hasOnly([
+          'id', 'userId', 'scopeType', 'scopeKey', 'targetKey', 'targetExam',
+          'seriesId', 'testId', 'candidateName', 'district', 'category',
+          'score', 'maxScore', 'averagePercentage', 'averageAccuracy',
+          'testsTaken', 'averageTimeSeconds', 'updatedAt', 'source'
+        ]);
+      allow update: if isOwner(resource.data.userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.scopeType == resource.data.scopeType &&
+        request.resource.data.scopeKey == resource.data.scopeKey &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'candidateName', 'district', 'category', 'score', 'maxScore',
+          'averagePercentage', 'averageAccuracy', 'testsTaken',
+          'averageTimeSeconds', 'updatedAt', 'targetExam', 'targetKey',
+          'seriesId', 'testId', 'source'
         ]);
       allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
