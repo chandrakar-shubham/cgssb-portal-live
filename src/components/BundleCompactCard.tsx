@@ -170,6 +170,20 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             </button>
           )}
 
+          {!hasEnrolled && isPassActive && onEnrollNow && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEnrollNow(bundle);
+              }}
+              className="text-xs font-black px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md transition flex items-center space-x-1.5 cursor-pointer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Enroll Free</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={(e) => {
@@ -184,7 +198,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
                 : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-900/40'
             }`}
           >
-            <span>{isPassActive || hasEnrolled ? 'Practice Tests' : 'View Bundle'}</span>
+            <span>{hasEnrolled ? 'My Tests' : isPassActive ? 'Open Series' : 'View Bundle'}</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
