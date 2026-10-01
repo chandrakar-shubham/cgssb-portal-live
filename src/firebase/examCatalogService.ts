@@ -13,12 +13,14 @@ export interface ExamProgram {
   id: string; authorityId: string; name: string; nameHindi?: string; slug: string;
   year: number; programType: 'recruitment' | 'examination'; description?: string;
   status: CatalogStatus; hasPosts: boolean; sortOrder: number;
+  totalVacancies?: number; recruitmentLabel?: string;
   createdAt: string; updatedAt: string;
 }
 export interface ExamPost {
   id: string; programId: string; name: string; nameHindi?: string; slug: string;
   shortName?: string; description?: string; status: CatalogStatus;
   sortOrder: number; createdAt: string; updatedAt: string;
+  vacancies?: number; cadreBreakup?: string; payLevel?: string; salaryRange?: string; subjects?: string[];
 }
 export type TestSeriesType = 'full_mock' | 'chapter_test' | 'subject_test' | 'pyp' | 'live_test' | 'practice' | 'mixed';
 export interface ExamTestSeries {
@@ -102,6 +104,14 @@ function inferProgramName(bundle: TestSeriesBundle): string {
 function inferProgramType(name: string): 'recruitment' | 'examination' {
   return /recruitment|bharti/i.test(name) ? 'recruitment' : 'examination';
 }
+function getKnownPostMetadata(postName: string): Pick<ExamPost, 'vacancies'|'cadreBreakup'|'payLevel'|'salaryRange'|'subjects'> {
+  const value = postName.toLowerCase();
+  if (value.includes('assistant teacher') || value.includes('sahayak shikshak')) return { vacancies: 2292, cadreBreakup: '795 E-Cadre · 1,497 T-Cadre', payLevel: 'Level-06', salaryRange: '₹35,400–₹1,12,400' };
+  if (value === 'teacher' || value.includes('teacher / tgt') || value.includes('tgt')) return { vacancies: 1654, cadreBreakup: '868 E-Cadre · 786 T-Cadre', payLevel: 'Level-08', subjects: ['English','Hindi','Mathematics','Science','Social Science'] };
+  if (value.includes('lecturer') || value.includes('vyakhyata') || value.includes('pgt')) return { vacancies: 854, cadreBreakup: '424 E-Cadre · 430 T-Cadre', payLevel: 'Level-09 · Gazetted Class II', subjects: ['English','Hindi','Mathematics','Physics','Chemistry','Biology'] };
+  return {};
+}
+
 function inferSeriesType(bundle: TestSeriesBundle): TestSeriesType {
   const text = bundle.title.toLowerCase();
   if (bundle.pypTests?.length && !bundle.testItems?.length && !bundle.chapterTests?.length) return 'pyp';
@@ -127,12 +137,14 @@ export async function ensureCanonicalHierarchyForBundle(bundle: TestSeriesBundle
     slug: slugifyCatalog(authorityName), status, sortOrder: 0,
     createdAt: timestamp, updatedAt: timestamp
   };
+  const isCgssbTeacherRecruitment = bundle.authority === 'CGSSB' && /teacher recruitment/i.test(programName);
   const program: ExamProgram = {
     id: programId, authorityId, name: programName,
     slug: slugifyCatalog(programName), year: bundle.targetYear,
     programType: inferProgramType(programName), status,
     hasPosts: Boolean(postName && !/^(exam aspirants|general cadre)$/i.test(postName)),
-    sortOrder: 0, createdAt: timestamp, updatedAt: timestamp
+    sortOrder: 0, createdAt: timestamp, updatedAt: timestamp,
+    ...(isCgssbTeacherRecruitment ? { totalVacancies: 4800, recruitmentLabel: 'CGSSB Teacher Recruitment 2026' } : {})
   };
   await saveExamAuthority(authority);
   await saveExamProgram(program);
@@ -140,9 +152,11 @@ export async function ensureCanonicalHierarchyForBundle(bundle: TestSeriesBundle
   let post: ExamPost | undefined;
   if (program.hasPosts) {
     const postId = bundle.postId || `post-${programId.replace(/^program-/, '')}-${slugifyCatalog(postName)}`;
+    const postMetadata = getKnownPostMetadata(postName);
     post = {
       id: postId, programId, name: postName, slug: slugifyCatalog(postName),
-      status, sortOrder: 0, createdAt: timestamp, updatedAt: timestamp
+      status, sortOrder: 0, createdAt: timestamp, updatedAt: timestamp,
+      ...postMetadata
     };
     await saveExamPost(post);
   }
