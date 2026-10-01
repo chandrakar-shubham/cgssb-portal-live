@@ -329,6 +329,30 @@ export interface TestAttempt {
   percentile?: number;
 }
 
+export type LeaderboardScopeType = 'target' | 'series' | 'test';
+
+export interface LeaderboardProfileRecord {
+  id: string;
+  userId: string;
+  scopeType: LeaderboardScopeType;
+  scopeKey: string;
+  targetKey: string;
+  targetExam: string;
+  seriesId?: string;
+  testId?: string;
+  candidateName: string;
+  district?: string;
+  category?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
+  score: number;
+  maxScore: number;
+  averagePercentage: number;
+  averageAccuracy: number;
+  testsTaken: number;
+  averageTimeSeconds: number;
+  updatedAt: string;
+  source: 'practice_summary';
+}
+
 export interface LeaderboardEntryRecord {
   id: string;
   userId: string;
