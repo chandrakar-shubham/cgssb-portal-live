@@ -103,7 +103,7 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
         </p>
       </div>
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-        {['ALL', ...Array.from(new Set(visible.map(b=>b.authority)))].map(a=><button key={a} onClick={()=>{setAuthority(a);setProgramKey(null);setPostKey(null)}} className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${authority===a?'bg-emerald-500 text-slate-950 border-emerald-400':'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}>{a==='ALL'?'All':a}</button>)}
+        {['ALL', ...Array.from(new Set(visible.map(b=>b.authority)))].map(a=><button key={a} onClick={()=>{setAuthority(String(a));setProgramKey(null);setPostKey(null)}} className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${authority===a?'bg-emerald-500 text-slate-950 border-emerald-400':'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}>{a==='ALL'?'All':a}</button>)}
       </div>
     </div>
 
