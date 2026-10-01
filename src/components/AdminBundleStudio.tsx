@@ -31,6 +31,8 @@ import {
 import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { extractHierarchyFromApp } from '../utils/examHierarchy';
+import { ensureCanonicalHierarchyForBundle } from '../firebase/examCatalogService';
+import { saveBundleToFirestore } from '../firebase/firestoreService';
 import {
   Crown,
   Plus,
@@ -243,6 +245,31 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
       initialList = reconcileAllTestsWithBundles(availableTests);
     }
     setBundles(initialList);
+
+    // Phase 7 canonical taxonomy migration bridge. Existing bundles are projected
+    // into Authority → Program → Post (optional) → Test Series without deleting
+    // the legacy bundle catalog. Once migration is complete, new content should
+    // use the canonical IDs rather than inferred category strings.
+    if (initialList.length > 0) {
+      Promise.all(initialList.map(async (bundle) => {
+        try {
+          const canonical = await ensureCanonicalHierarchyForBundle(bundle);
+          const enriched = {
+            ...bundle,
+            authorityId: canonical.authority.id,
+            programId: canonical.program.id,
+            postId: canonical.post?.id,
+            seriesType: canonical.series.seriesType,
+          };
+          await saveBundleToFirestore(enriched);
+          return enriched;
+        } catch {
+          return bundle;
+        }
+      })).then(enriched => {
+        if (enriched.length) setBundles(enriched);
+      });
+    }
 
     syncBundlesFromFirestore().then(({ list }) => {
       if (Array.isArray(list)) {
