@@ -711,10 +711,10 @@ function MainApp() {
     questionStatuses: Record<string, QuestionPaletteStatus>;
     submissionId: string;
   }): Promise<boolean> => {
-    if (!activeExamTest) return;
+    if (!activeExamTest) return false;
     const currentTest = activeExamTest;
     const activeQuestionList = resolveQuestionsForTest(currentTest, questions);
-    if (activeQuestionList.length === 0) return;
+    if (activeQuestionList.length === 0) return false;
 
     let correctCount = 0;
     let incorrectCount = 0;
