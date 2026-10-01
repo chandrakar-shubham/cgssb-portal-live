@@ -29,6 +29,23 @@ interface BundleCompactCardProps {
   hasEnrolled?: boolean;
 }
 
+const getBundleComposition = (bundle: TestSeriesBundle): string[] => {
+  const counts = new Map<string, number>();
+  const add = (label: string, items?: { type?: string }[]) => {
+    if (!items?.length) return;
+    const count = items.length;
+    if (count > 0) counts.set(label, (counts.get(label) || 0) + count);
+  };
+
+  add('Full Mocks', bundle.testItems?.filter(item => item.type === 'full_mock'));
+  add('Sectional Tests', bundle.testItems?.filter(item => item.type === 'sectional'));
+  add('PYPs', bundle.pypTests);
+  add('Chapter Tests', bundle.chapterTests);
+  add('Live Tests', bundle.testItems?.filter(item => item.type === 'live_test'));
+
+  return Array.from(counts.entries()).map(([label, count]) => `${count} ${label}`);
+};
+
 export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
   bundle,
   onOpenBundle,
@@ -99,19 +116,36 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
           </p>
         </div>
 
-        {/* Short description */}
-        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed min-h-[2.9rem]">
-          {bundle.shortDescription}
-        </p>
+        {/* What is included — keep the card scannable; full details live on the bundle page */}
+        <div className="min-h-[3.25rem]">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <BookOpen className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">What's included</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {getBundleComposition(bundle).length > 0 ? getBundleComposition(bundle).map(item => (
+              <span key={item} className="text-[11px] font-bold text-slate-200 bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-1">
+                {item}
+              </span>
+            )) : (
+              <span className="text-[11px] font-bold text-slate-200 bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-1">
+                {bundle.totalTestsCount} Tests
+              </span>
+            )}
+          </div>
+        </div>
 
-        {/* Compact Key Stats Grid */}
+        {/* Essential exam format only */}
         <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
           <div className="bg-slate-950/70 rounded-xl px-2.5 py-1.5 border border-slate-800 flex items-center space-x-1.5 text-slate-300">
-            <BookOpen className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span className="truncate">
-              <strong className="text-white font-bold">{bundle.totalTestsCount} Tests</strong> ({bundle.freeTestsCount} Free)
-            </span>
+            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="truncate">{bundle.examPattern.totalQuestions} Qs • {bundle.examPattern.durationMinutes}m</span>
           </div>
+          <div className="bg-slate-950/70 rounded-xl px-2.5 py-1.5 border border-slate-800 flex items-center space-x-1.5 text-slate-300">
+            <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span className="truncate">{bundle.freeTestsCount} Free Preview{bundle.freeTestsCount === 1 ? '' : 's'}</span>
+          </div>
+        </div>      </div>
 
           <div className="bg-slate-950/70 rounded-xl px-2.5 py-1.5 border border-slate-800 flex items-center space-x-1.5 text-slate-300">
             <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
