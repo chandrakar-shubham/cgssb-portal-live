@@ -10,6 +10,10 @@ interface QuestionRendererProps {
   selectedOption: 'A' | 'B' | 'C' | 'D' | string | null;
   onSelectOption?: (opt: any) => void;
   showSolution?: boolean;
+  /** Compact exam-mode layout keeps normal questions within the viewport. */
+  compact?: boolean;
+  /** Exam font scale persisted by the ExamEngine. */
+  fontScale?: number;
 }
 
 export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
@@ -17,6 +21,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   selectedOption,
   onSelectOption,
   showSolution = false,
+  compact = false,
+  fontScale = 1,
 }) => {
   const { language, t } = useLanguage();
 
@@ -234,7 +240,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       return (
         <div className="space-y-4">
           <div>
-            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
+            <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed">
               {stemText}
             </p>
             {showHindiSecondary && (
@@ -317,7 +323,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
 
     if (!hasListSplit) {
       return (
-        <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
+        <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
           {stemText}
         </p>
       );
@@ -350,7 +356,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     return (
       <div className="space-y-4">
         {introLines.length > 0 && (
-          <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
+          <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed">
             {introLines.join(' ')}
           </p>
         )}
@@ -397,7 +403,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       return (
         <div className="space-y-4">
           {stemText && stemText !== assertionText && (
-            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
+            <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed">
               {stemText}
             </p>
           )}
@@ -408,7 +414,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
               <span className="px-2.5 py-1 rounded bg-amber-500/30 text-amber-300 font-bold text-xs shrink-0 tracking-wide border border-amber-500/40">
                 {t('assertion', 'Assertion [A]')}
               </span>
-              <div className="text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
+              <div className="exam-stem-text text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
                 {assertionText}
               </div>
             </div>
@@ -420,7 +426,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
               <span className="px-2.5 py-1 rounded bg-cyan-500/30 text-cyan-300 font-bold text-xs shrink-0 tracking-wide border border-cyan-500/40">
                 {t('reason', 'Reason [R]')}
               </span>
-              <div className="text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
+              <div className="exam-stem-text text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
                 {reasonText}
               </div>
             </div>
@@ -461,7 +467,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       // Fallback: If not separated by newlines, render formatted stem
       return (
         <div className="space-y-3">
-          <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
+          <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
             {stemText}
           </p>
         </div>
@@ -471,7 +477,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     return (
       <div className="space-y-4">
         {intro && (
-          <p className="text-base sm:text-lg font-semibold text-slate-200 leading-relaxed">
+          <p className="exam-stem-text text-base sm:text-lg font-semibold text-slate-200 leading-relaxed">
             {intro}
           </p>
         )}
@@ -481,7 +487,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
           <span className="px-2.5 py-1 rounded bg-emerald-500/30 text-emerald-300 font-bold text-xs shrink-0 tracking-wide">
             {t('assertion', 'Assertion [A]')}
           </span>
-          <p className="text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
+          <p className="exam-stem-text text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
             {assertionText}
           </p>
         </div>
@@ -491,7 +497,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
           <span className="px-2.5 py-1 rounded bg-indigo-500/30 text-indigo-300 font-bold text-xs shrink-0 tracking-wide">
             {t('reason', 'Reason [R]')}
           </span>
-          <p className="text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
+          <p className="exam-stem-text text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
             {reasonText}
           </p>
         </div>
@@ -507,7 +513,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
 
     if (!hasSegments || segments.length === 0) {
       return (
-        <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
+        <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
           <FormattedMathText text={activeContent.stem} />
         </p>
       );
@@ -516,7 +522,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     return (
       <div className="space-y-4">
         {intro && (
-          <p className="text-base sm:text-lg font-semibold text-white leading-relaxed">
+          <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed">
             <FormattedMathText text={intro} />
           </p>
         )}
@@ -541,9 +547,12 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div
+      className={`exam-question-renderer ${compact ? 'exam-question-renderer--compact' : ''}`}
+      style={{ '--exam-font-scale': fontScale } as React.CSSProperties}
+    >
       {/* 1. Question Stem Box with Type Badge */}
-      <div className="bg-slate-900/80 p-5 sm:p-6 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden">
+      <div className="exam-question-stem-box bg-slate-900/80 p-5 sm:p-6 rounded-2xl border border-slate-800 shadow-sm relative overflow-hidden">
         {/* Type indicator banner */}
         <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800/80 text-xs">
           <div className="flex items-center space-x-2 flex-wrap gap-y-1">
@@ -604,7 +613,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         {resolvedType === 'multi_statement' && renderMultiStatementStem()}
         {resolvedType === 'mcq' && (
           parsedStem.hasSegments ? renderMultiStatementStem() : (
-            <p className="text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
+            <p className="exam-stem-text text-base sm:text-lg font-semibold text-white leading-relaxed whitespace-pre-line">
               {activeContent.stem}
             </p>
           )
@@ -629,7 +638,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       </div>
 
       {/* 2. Options Grid */}
-      <div className="space-y-3">
+      <div className="exam-question-options space-y-3">
         <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
           <span>{t('select_one', 'Select one option:')}</span>
         </div>
@@ -660,7 +669,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 type="button"
                 disabled={showSolution}
                 onClick={() => onSelectOption && onSelectOption(optLabel)}
-                className={`w-full text-left p-4 rounded-xl border transition-all flex items-start space-x-3.5 group cursor-pointer ${cardStyle}`}
+                className={`exam-question-option w-full text-left p-4 rounded-xl border transition-all flex items-start space-x-3.5 group cursor-pointer ${cardStyle}`}
               >
                 {/* Radio Circle */}
                 <div
@@ -678,7 +687,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 </div>
 
                 {/* Option Text */}
-                <div className="flex-1 text-sm sm:text-base font-medium leading-relaxed text-slate-200 pt-0.5">
+                <div className="exam-option-text flex-1 text-sm sm:text-base font-medium leading-relaxed text-slate-200 pt-0.5">
                   <FormattedMathText text={optionText} />
                 </div>
               </button>
