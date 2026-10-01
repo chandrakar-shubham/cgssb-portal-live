@@ -3,7 +3,6 @@ import {
   TestSeriesBundle,
   BundleTestItem,
   BundleSyllabusSection,
-  OFFICIAL_BUNDLES_CATALOG
 } from '../data/bundleCatalog';
 import { MockTest, Question, PreviousYearPaper } from '../types';
 import {
@@ -11,7 +10,6 @@ import {
   saveStoredBundles,
   saveSingleBundle,
   deleteStoredBundle,
-  resetBundlesToDefault,
   toggleBundlePublish,
   syncBundlesFromFirestore,
   doesTestMatchBundle,
@@ -31,7 +29,6 @@ import {
 import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { extractHierarchyFromApp } from '../utils/examHierarchy';
-import { ensureCanonicalHierarchyForBundle } from '../firebase/examCatalogService';
 import { saveBundleToFirestore } from '../firebase/firestoreService';
 import {
   Crown,
@@ -246,31 +243,6 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     }
     setBundles(initialList);
 
-    // Phase 7 canonical taxonomy migration bridge. Existing bundles are projected
-    // into Authority → Program → Post (optional) → Test Series without deleting
-    // the legacy bundle catalog. Once migration is complete, new content should
-    // use the canonical IDs rather than inferred category strings.
-    if (initialList.length > 0) {
-      Promise.all(initialList.map(async (bundle) => {
-        try {
-          const canonical = await ensureCanonicalHierarchyForBundle(bundle);
-          const enriched = {
-            ...bundle,
-            authorityId: canonical.authority.id,
-            programId: canonical.program.id,
-            postId: canonical.post?.id,
-            seriesType: canonical.series.seriesType,
-          };
-          await saveBundleToFirestore(enriched);
-          return enriched;
-        } catch {
-          return bundle;
-        }
-      })).then(enriched => {
-        if (enriched.length) setBundles(enriched);
-      });
-    }
-
     syncBundlesFromFirestore().then(({ list }) => {
       if (Array.isArray(list)) {
         if (availableTests && availableTests.length > 0) {
@@ -480,6 +452,8 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
       authority: 'CGSSB',
       targetPost: 'Exam Aspirants',
       targetYear: 2026,
+      authorityId: '',
+      programId: '',
       badge: 'New Series',
       badgeColor: 'emerald',
       shortDescription: 'Comprehensive test series with full mocks, chapter tests and previous year papers.',
@@ -616,14 +590,6 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
       const updated = deleteStoredBundle(bundleId);
       setBundles(updated);
       showToast(`Test Series "${title}" removed.`);
-    }
-  };
-
-  const handleResetDefaults = () => {
-    if (window.confirm('Reset all test series back to official catalog? Custom changes will be restored to defaults.')) {
-      const reset = resetBundlesToDefault();
-      setBundles(reset);
-      showToast('Restored all 6 official Test Series.');
     }
   };
 
@@ -961,7 +927,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
 
     const matchesSearch = b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.titleHindi.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.targetPost.toLowerCase().includes(searchQuery.toLowerCase()) ||
+(b.targetPost || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.slug.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesAuth && matchesPublish && matchesSearch;
   });
@@ -3174,13 +3140,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
               <span>{isSyncingCloud ? 'Syncing...' : 'Sync Cloud / Pull Updates'}</span>
             </button>
             <button
-              onClick={handleResetDefaults}
-              className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs flex items-center space-x-2 transition cursor-pointer"
-              title="Reset default catalog"
-            >
-              <RefreshCw className="w-4 h-4 text-slate-400" />
-              <span>Reset Defaults</span>
-            </button>
+
             <button
               onClick={handleCreateNewBundle}
               className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-xs shadow-xl shadow-indigo-600/30 flex items-center space-x-2 transition active:scale-95 cursor-pointer"
