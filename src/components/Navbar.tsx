@@ -525,7 +525,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <div className="flex items-center space-x-2.5">
                   <Crown className={`w-4 h-4 ${activeTab === 'pass' ? 'text-slate-950 fill-slate-950' : 'text-amber-400 fill-amber-400'}`} />
-                  <span>{isUserPassActive(user) ? 'Pass & Access' : user?.passExpiresAt ? 'Renew Pass' : 'Get All-Access Pass'}</span>
+                  <span>{isUserPassActive(user ?? null) ? 'Pass & Access' : user?.passExpiresAt ? 'Renew Pass' : 'Get All-Access Pass'}</span>
                 </div>
                 <span className={`text-[10px] font-semibold ${activeTab === 'pass' ? 'text-slate-900' : 'text-amber-300'}`}>
                   {isUserPassActive(user) && user?.passExpiresAt ? `${calculateDaysRemaining(user.passExpiresAt)}d left` : '₹199'}
