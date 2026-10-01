@@ -327,6 +327,7 @@ export interface TestAttempt {
   targetExam?: string;
   rank?: number;
   percentile?: number;
+  submissionId?: string;
 }
 
 export type LeaderboardScopeType = 'target' | 'series' | 'test';
