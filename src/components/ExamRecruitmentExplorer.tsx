@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Building2, ChevronRight, GraduationCap, Layers3 } from 'lucide-react';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 import { BundleCompactCard } from './BundleCompactCard';
+import { fetchExamPrograms, fetchExamPosts, ExamProgram, ExamPost } from '../firebase/examCatalogService';
 
 interface Props {
   bundles: TestSeriesBundle[];
@@ -44,30 +45,44 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
   const [authority, setAuthority] = useState('ALL');
   const [programKey, setProgramKey] = useState<string | null>(null);
   const [postKey, setPostKey] = useState<string | null>(null);
+  const [canonicalPrograms, setCanonicalPrograms] = useState<ExamProgram[]>([]);
+  const [canonicalPosts, setCanonicalPosts] = useState<ExamPost[]>([]);
+
+  React.useEffect(() => {
+    fetchExamPrograms().then(setCanonicalPrograms).catch(() => setCanonicalPrograms([]));
+  }, []);
+  React.useEffect(() => {
+    if (!programKey) { setCanonicalPosts([]); return; }
+    fetchExamPosts(programKey).then(setCanonicalPosts).catch(() => setCanonicalPosts([]));
+  }, [programKey]);
 
   const visible = bundles.filter(b => b.isPublished !== false && !b.isDraft);
   const programs = useMemo<ProgramGroup[]>(() => {
     const map = new Map<string, ProgramGroup>();
     visible.filter(b => authority === 'ALL' || b.authority === authority).forEach(b => {
       const p = programFor(b);
-      const existing = map.get(p.key);
+      const canonical = b.programId ? canonicalPrograms.find(x => x.id === b.programId) : undefined;
+      const key = canonical?.id || p.key;
+      const name = canonical?.name || p.name;
+      const existing = map.get(key);
       if (existing) existing.bundles.push(b);
-      else map.set(p.key, { key:p.key, authority:b.authority, name:p.name, year:b.targetYear, bundles:[b] });
+      else map.set(key, { key, authority:b.authority, name, year:b.targetYear, bundles:[b] });
     });
     return Array.from(map.values()).sort((a,b)=>a.name.localeCompare(b.name));
-  }, [visible, authority]);
+  }, [visible, authority, canonicalPrograms]);
 
   const program = programs.find(p=>p.key===programKey) || null;
   const posts = useMemo(() => {
     if (!program) return [];
     const map = new Map<string, TestSeriesBundle[]>();
     program.bundles.forEach(b => {
-      const key = b.postId || `post-${(b.targetPost || 'General').toLowerCase().replace(/\\s+/g,'-')}`;
+      const canonicalPost = b.postId ? canonicalPosts.find(x => x.id === b.postId) : undefined;
+      const key = canonicalPost?.id || b.postId || `post-${(b.targetPost || 'General').toLowerCase().replace(/\\s+/g,'-')}`;
       const list = map.get(key) || [];
       list.push(b); map.set(key,list);
     });
-    return Array.from(map.entries()).map(([key,list])=>({key,name:list[0].targetPost || 'General Exam',bundles:list}));
-  }, [program]);
+    return Array.from(map.entries()).map(([key,list])=>({key,name:canonicalPosts.find(x=>x.id===key)?.name || list[0].targetPost || 'General Exam',bundles:list}));
+  }, [program, canonicalPosts]);
 
   const selectedPost = posts.find(p=>p.key===postKey) || null;
   const series = selectedPost ? selectedPost.bundles : (program && posts.length === 1 ? posts[0].bundles : []);
