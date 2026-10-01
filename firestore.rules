@@ -229,7 +229,8 @@ service cloud.firestore {
     // Legacy per-attempt leaderboard entries remain readable for migration only.
     // New production rankings use compact per-student profile documents below.
     match /leaderboardEntries/{entryId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if request.query.limit <= 100;
       allow create: if isOwner(request.resource.data.userId) &&
         request.resource.data.source == 'practice_attempt' &&
         request.resource.data.keys().hasOnly([
