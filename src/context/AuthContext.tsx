@@ -434,9 +434,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const welcomeExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await saveUserEntitlementToFirestore({
       userId: fbUser.uid,
-      planType: 'WELCOME_FREE', status: 'ACTIVE', issuedAt: new Date().toISOString(),
-      expiresAt: welcomeExpiry, durationDays: 30, source: 'WELCOME_FREE',
-      planName: '1-Month Free Welcome Pass (30 Days)',
+      planType: 'FREE_CAMPAIGN', status: 'ACTIVE', issuedAt: new Date().toISOString(),
+      expiresAt: welcomeExpiry, durationDays: 30, source: 'FREE_CAMPAIGN',
+      planName: 'Free Launch Pass • 1 Month + 2 Month Milestone',
+      completedTestsCount: 0, freePassStage: '1_month_active', unlockedMilestoneBonus: false,
+      campaignId: FREE_ACCESS_CAMPAIGN_ID,
       boundDeviceId: newUser.boundDeviceId, boundDeviceName: newUser.boundDeviceName,
       updatedAt: new Date().toISOString(),
     }).catch(() => null);
