@@ -7,6 +7,7 @@ import {
   saveExamPost, saveExamTestSeries, slugifyCatalog
 } from '../firebase/examCatalogService';
 import { saveBundleToFirestore } from '../firebase/firestoreService';
+import { saveSingleBundle } from '../utils/bundleStore';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 
 const now = () => new Date().toISOString();
@@ -100,6 +101,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
       seriesType:'mixed'
     };
     await saveBundleToFirestore(bundle);
+    saveSingleBundle(bundle);
     setName(''); setMessage('Draft test series created. Open it in Test Series Studio to add content.'); await load();
   };
 
