@@ -36,7 +36,9 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
   const [bundles, setBundles] = useState<TestSeriesBundle[]>(() => getStoredBundles());
   const [loading, setLoading] = useState(true);
   const slug = getStudentSlug(user);
-  const requestedSlug = typeof window !== 'undefined' ? decodeURIComponent(window.location.pathname.match(/^\/u\/([^/]+)\/tests/i)?.[1] || '') : '';
+  const routeMatch = typeof window !== 'undefined' ? window.location.pathname.match(/^\/u\/([^/]+)\/tests(?:\/series\/([^/]+))?/i) : null;
+  const requestedSlug = routeMatch ? decodeURIComponent(routeMatch[1] || '') : '';
+  const requestedSeriesSlug = routeMatch?.[2] ? decodeURIComponent(routeMatch[2]) : '';
 
   useEffect(() => {
     if (!user?.id) { setEnrollments([]); setLoading(false); return; }
@@ -78,6 +80,41 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
   if (!user) return <div className="min-h-[65vh] flex items-center justify-center px-4"><div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center"><Lock className="w-10 h-10 mx-auto text-emerald-400"/><h1 className="mt-4 text-xl font-black text-white">Your private test workspace</h1><p className="mt-2 text-sm text-slate-400">Sign in to access enrolled series, attempts and results.</p><button onClick={onOpenAuthModal} className="mt-6 w-full py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black text-sm">Sign In</button></div></div>;
 
   if (requestedSlug && requestedSlug !== slug) { go(`/u/${slug}/tests`); return null; }
+
+  if (requestedSeriesSlug) {
+    const currentSeries = series.find(s => s.bundle.slug === requestedSeriesSlug);
+    if (!currentSeries) return <div className="max-w-3xl mx-auto px-4 py-16 text-center"><BookOpen className="w-12 h-12 mx-auto text-slate-600"/><h1 className="mt-4 text-xl font-black text-white">Test series not found</h1><p className="mt-2 text-sm text-slate-400">This series is not available in your enrolled workspace.</p><button onClick={() => go(`/u/${slug}/tests`)} className="mt-6 px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black">Back to My Tests</button></div>;
+    const progress = currentSeries.tests.length ? Math.round(currentSeries.completed / currentSeries.tests.length * 100) : 0;
+    return <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 space-y-6">
+      <button onClick={() => go(`/u/${slug}/tests`)} className="inline-flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white">← Back to My Tests</button>
+      <section className="rounded-[28px] border border-emerald-500/20 bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-950 p-5 sm:p-8">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+          <div className="min-w-0"><span className="text-[10px] font-black tracking-widest uppercase text-emerald-400">My Enrolled Series</span><h1 className="mt-2 text-2xl sm:text-3xl font-black text-white">{currentSeries.bundle.title}</h1><p className="mt-2 text-sm text-slate-400 max-w-3xl">{currentSeries.bundle.shortDescription}</p></div>
+          <div className="shrink-0 text-right"><div className="text-2xl font-black text-emerald-300">{progress}%</div><div className="text-[10px] text-slate-500">completed</div></div>
+        </div>
+        <div className="mt-6"><div className="flex justify-between text-[11px] mb-1.5"><span className="text-slate-400">{currentSeries.completed} of {currentSeries.tests.length} tests completed</span><span className="text-slate-500">{currentSeries.tests.length} tests</span></div><div className="h-2.5 rounded-full bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{width:`${progress}%`}}/></div></div>
+      </section>
+      <section className="space-y-2">
+        {currentSeries.tests.length === 0 ? <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-sm text-slate-400">No published tests are currently attached to this series.</div> :
+        currentSeries.tests.map((test, index) => {
+          const attempt = attempts.find(a => a.testId === test.id);
+          const isCompleted = !!attempt;
+          return <div key={test.id} className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-black text-slate-300 shrink-0">{String(index + 1).padStart(2,'0')}</div>
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${isCompleted ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'}`}>{isCompleted ? 'COMPLETED' : 'AVAILABLE'}</span><span className="text-[10px] text-slate-500">{test.questionCount} Questions · {test.durationMinutes} min</span></div><h2 className="mt-1 text-sm sm:text-base font-bold text-white truncate">{test.title}</h2></div>
+              </div>
+              <div className="flex items-center gap-2 sm:justify-end">
+                {isCompleted && onReviewAttempt && <button onClick={() => onReviewAttempt(attempt)} className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-black inline-flex items-center justify-center gap-1.5"><Eye className="w-3.5 h-3.5"/> Result</button>}
+                <button onClick={() => onStartTest(test)} className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-black inline-flex items-center justify-center gap-1.5">{isCompleted ? <RotateCcw className="w-3.5 h-3.5"/> : <Play className="w-3.5 h-3.5 fill-current"/>}{isCompleted ? 'Re-attempt' : 'Start Test'}</button>
+              </div>
+            </div>
+          </div>;
+        })}
+      </section>
+    </div>;
+  }
 
   return <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 space-y-6">
     <section className="relative overflow-hidden rounded-[28px] border border-emerald-500/20 bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-950 p-5 sm:p-8 shadow-2xl">
