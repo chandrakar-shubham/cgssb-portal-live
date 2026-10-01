@@ -3,8 +3,7 @@ import { MockTest, PreviousYearPaper } from '../types';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 import { getStoredBundles, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { useAuth } from '../context/AuthContext';
-import { BundleCompactCard } from './BundleCompactCard';
-import { BundleDetailPage } from './BundleDetailPage';
+import { CGSSBRecruitmentHub } from './CGSSBRecruitmentHub';
 import {
   Award,
   BookOpen,
@@ -189,91 +188,15 @@ export const CGSSBHeroPage: React.FC<CGSSBHeroPageProps> = ({
       </div>
 
       {/* ===================================================================== */}
-      {/* 3. TEST SERIES BUNDLES SECTION (REQUESTED BY USER)                     */}
+      {/* 3. RECRUITMENT-FIRST PREPARATION HUB */}
       {/* ===================================================================== */}
       {activeTab === 'bundles' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                <Flame className="w-3.5 h-3.5 fill-emerald-400" />
-                <span>Officially Launched Test Series Bundles 2026</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-0.5">
-                Clutter-Free Bundles with Dedicated Syllabus & Test Portals
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Click any compact card to enter its dedicated page with complete syllabus, marking scheme, and CBT test series.
-              </p>
-            </div>
-
-            <button
-              onClick={onExplorePass}
-              className="self-start sm:self-center px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-amber-500/25 transition flex items-center space-x-1.5 cursor-pointer"
-            >
-              <span>Unlock All with CG Exam Pass</span>
-            </button>
-          </div>
-
-          {/* Compact Bundles Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {cgssbBundles.map(bundle => (
-              <BundleCompactCard
-                key={bundle.id}
-                bundle={bundle}
-                onOpenBundle={setSelectedBundle}
-                onEnrollNow={b => setSelectedBundle(b)}
-                onStartFreeTest={b => {
-                  const freeItem = b.testItems.find(t => t.isFreePreview) || b.testItems[0];
-                  if (freeItem) {
-                    const match = tests.find(t => t.id === freeItem.id) || tests[0];
-                    if (match) onStartTest(match);
-                  }
-                }}
-                hasEnrolled={enrolledBundleIds.includes(bundle.id)}
-              />
-            ))}
-          </div>
-
-          {/* Feature highlights bar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-800/80">
-            <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl flex items-start space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
-                <Laptop className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Dedicated Syllabus Matrix</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Topic-wise weightage and marks breakdown for Assistant Teacher, Subject Teachers, and Sub-Inspector.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl flex items-start space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                <Compass className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">TCS iON CBT Simulator</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Identical Question Palette with bilingual Devnagari/English toggle and negative marking calculation.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl flex items-start space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Mistake Notebook Sync</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Mistakes made in any mock test automatically sync into your revision deck for focused re-testing.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CGSSBRecruitmentHub
+          bundles={cgssbBundles}
+          tests={tests}
+          onStartTest={onStartTest}
+          onExplorePass={onExplorePass}
+        />
       )}
 
       {/* ===================================================================== */}
