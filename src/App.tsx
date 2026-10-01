@@ -709,7 +709,8 @@ function MainApp() {
     timeTakenSeconds: number;
     responses: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
     questionStatuses: Record<string, QuestionPaletteStatus>;
-  }) => {
+    submissionId: string;
+  }): Promise<boolean> => {
     if (!activeExamTest) return;
     const currentTest = activeExamTest;
     const activeQuestionList = resolveQuestionsForTest(currentTest, questions);
@@ -770,7 +771,12 @@ function MainApp() {
     const normalizedTarget = String(targetExam).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
     const targetKey = authority + ':' + normalizedTarget + ':' + year;
     const seriesId = currentTest.bundleId || currentTest.id;
-    const attemptId = user?.id ? 'att-' + user.id + '-' + currentTest.id + '-' + Date.now() : 'att-guest-' + Date.now();
+    const safeSubmissionId = String(submission.submissionId || '').trim();
+    const fallbackSubmissionId = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const stableSubmissionId = safeSubmissionId || fallbackSubmissionId;
+    const attemptId = user?.id
+      ? 'att-' + encodeURIComponent(user.id + '-' + currentTest.id + '-' + stableSubmissionId)
+      : 'att-guest-' + encodeURIComponent(currentTest.id + '-' + stableSubmissionId);
 
     const newAttempt: TestAttempt = {
       id: attemptId,
@@ -798,27 +804,32 @@ function MainApp() {
       seriesId,
       targetKey,
       targetExam,
+      submissionId: stableSubmissionId,
     };
 
-    setAttempts(prev => [newAttempt, ...prev.filter(a => a.id !== newAttempt.id)]);
-    setActiveExamTest(null);
-    setActiveAttemptReview(newAttempt);
-    clearCachedTestBundle(currentTest.id);
-
+    let persistedAttempt = newAttempt;
     if (user?.id) {
       try {
-        await saveAttemptToFirestore(newAttempt);
-        const allMineAttempts = [newAttempt, ...attempts.filter(a => a.userId === user.id && a.id !== newAttempt.id)];
+        persistedAttempt = await saveAttemptToFirestore(newAttempt);
+        const allMineAttempts = [persistedAttempt, ...attempts.filter(a => a.userId === user.id && a.id !== persistedAttempt.id)];
         const profiles = buildLeaderboardProfilesForUser(user, allMineAttempts);
         await saveLeaderboardProfilesToFirestore(profiles);
       } catch (error) {
-        console.warn('Attempt saved locally but Firestore persistence failed:', error);
+        console.warn('Attempt persistence failed; keeping exam checkpoint for retry:', error);
+        return false;
       }
     }
+
+    setAttempts(prev => [persistedAttempt, ...prev.filter(a => a.id !== persistedAttempt.id)]);
+    setActiveExamTest(null);
+    setActiveExamQuestions([]);
+    setActiveAttemptReview(persistedAttempt);
+    clearCachedTestBundle(currentTest.id);
 
     const milestoneRes = recordTestCompletion();
     if (milestoneRes.unlockedBonus) setShowMilestoneCelebrationModal(true);
     if (!user && typeof window !== 'undefined') localStorage.setItem('cgtest_guest_test_completed', 'true');
+    return true;
   };
 
   // ADMIN QUESTION BANK ACTIONS
