@@ -218,22 +218,23 @@ service cloud.firestore {
       // A newly registered student may create exactly one free 30-day welcome entitlement.
       // Paid/manual entitlements remain admin-controlled.
       allow create: if isOwner(userId) &&
-        request.resource.data.planType == 'WELCOME_FREE' &&
+        request.resource.data.planType in ['WELCOME_FREE', 'FREE_CAMPAIGN'] &&
         request.resource.data.status == 'ACTIVE' &&
         request.resource.data.durationDays == 30 &&
-        request.resource.data.source == 'WELCOME_FREE' &&
+        request.resource.data.source in ['WELCOME_FREE', 'FREE_CAMPAIGN'] &&
         request.resource.data.userId == userId &&
         request.resource.data.keys().hasOnly([
           'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
           'durationDays', 'source', 'planName', 'boundDeviceId',
-          'boundDeviceName', 'updatedAt'
+          'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
+           'unlockedMilestoneBonus', 'campaignId'
         ]);
       allow update: if hasManagePayments() ||
         (isOwner(userId) &&
          request.resource.data.userId == userId &&
-         request.resource.data.source == 'CLIENT_CHECKOUT' &&
-         request.resource.data.status == 'ACTIVE' &&
-         request.resource.data.durationDays in [30, 365] &&
+         request.resource.data.source in ['CLIENT_CHECKOUT', 'FREE_CAMPAIGN'] &&
+         request.resource.data.status in ['ACTIVE', 'EXPIRED'] &&
+         request.resource.data.durationDays in [30, 90, 365] &&
          request.resource.data.keys().hasOnly([
            'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
            'durationDays', 'source', 'planName', 'boundDeviceId',
