@@ -344,6 +344,7 @@ function MainApp() {
   const [activeExamTest, setActiveExamTest] = useState<MockTest | null>(null);
   const [activeExamQuestions, setActiveExamQuestions] = useState<Question[]>([]);
   const [activeAttemptReview, setActiveAttemptReview] = useState<TestAttempt | null>(null);
+  const [attemptReviewReturnPath, setAttemptReviewReturnPath] = useState<string | null>(null);
 
   // Helper to deduplicate objects with an 'id' attribute
   function dedupeById<T extends { id: string }>(items: T[]): T[] {
@@ -1147,7 +1148,16 @@ function MainApp() {
           <SolutionsScreen
             attempt={activeAttemptReview}
             questions={resolvedQuestions}
-            onBackToDashboard={() => setActiveAttemptReview(null)}
+            onBackToDashboard={() => {
+              const returnPath = attemptReviewReturnPath;
+              setActiveAttemptReview(null);
+              setAttemptReviewReturnPath(null);
+              if (returnPath) {
+                window.history.pushState({}, '', returnPath);
+                window.dispatchEvent(new PopStateEvent('popstate'));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }}
             onOpenAuthModal={() => {
               setAuthModalInitialMode('signup');
               setIsAuthModalOpen(true);
@@ -1156,6 +1166,7 @@ function MainApp() {
               const test = tests.find(t => t.id === activeAttemptReview.testId);
               if (test) {
                 setActiveAttemptReview(null);
+                setAttemptReviewReturnPath(null);
                 handleStartTest(test);
               }
             }}
@@ -1491,7 +1502,10 @@ function MainApp() {
             tests={tests}
             attempts={attempts}
             onStartTest={handleStartTest}
-            onReviewAttempt={attempt => setActiveAttemptReview(attempt)}
+            onReviewAttempt={attempt => {
+              setAttemptReviewReturnPath(user ? `/u/${getStudentSlug(user)}/tests/${encodeURIComponent(attempt.testId)}` : null);
+              setActiveAttemptReview(attempt);
+            }}
             onBrowseSeries={() => setStudentActiveTab('tests')}
             onOpenAuthModal={() => {
               setAuthModalInitialMode('signin');
