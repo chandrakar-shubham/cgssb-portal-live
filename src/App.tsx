@@ -1144,7 +1144,7 @@ function MainApp() {
           }}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
         />
-        <main className="flex-1">
+        <main className="flex-1 pb-20 md:pb-8">
           <SolutionsScreen
             attempt={activeAttemptReview}
             questions={resolvedQuestions}
