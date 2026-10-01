@@ -3,8 +3,6 @@ import { Trophy, MapPin, RefreshCw, Play, Shield, Layers } from 'lucide-react';
 import { MockTest, LeaderboardProfileRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
 import {
-  countLeaderboardProfilesAboveScoreFromFirestore,
-  countLeaderboardProfilesFromFirestore,
   fetchLeaderboardProfilesFromFirestore,
   fetchMyLeaderboardProfileFromFirestore,
 } from '../firebase/firestoreService';
@@ -123,23 +121,24 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({ tests,
     if (!query.scopeKey) return;
     setLoading(true);
     try {
-      const [top, mine, total, above] = await Promise.all([
+      const [top, mine] = await Promise.all([
         fetchLeaderboardProfilesFromFirestore({ ...query, district, limitCount: 100 }),
         user?.id ? fetchMyLeaderboardProfileFromFirestore(user.id, query) : Promise.resolve(null),
-        countLeaderboardProfilesFromFirestore({ ...query, district }),
-        user?.id
-          ? fetchMyLeaderboardProfileFromFirestore(user.id, query).then(p =>
-              p ? countLeaderboardProfilesAboveScoreFromFirestore({ ...query, district }, p.averagePercentage) : 0
-            )
-          : Promise.resolve(0),
       ]);
       setProfiles(top);
       setMyProfile(mine);
-      setTotalCandidates(total);
+      const visibleCount = top.length;
+      setTotalCandidates(visibleCount);
       if (mine) {
-        const rank = above + 1;
-        setMyRank(rank);
-        setMyPercentile(total > 0 ? Number((((total - rank) / total) * 100).toFixed(2)) : 0);
+        const visibleIndex = top.findIndex(p => p.userId === mine.userId);
+        if (visibleIndex >= 0) {
+          const rank = visibleIndex + 1;
+          setMyRank(rank);
+          setMyPercentile(visibleCount > 0 ? Number((((visibleCount - rank) / visibleCount) * 100).toFixed(2)) : 0);
+        } else {
+          setMyRank(null);
+          setMyPercentile(null);
+        }
       } else {
         setMyRank(null);
         setMyPercentile(null);
@@ -237,7 +236,7 @@ export const LiveTestLeaderboard: React.FC<LiveTestLeaderboardProps> = ({ tests,
     <section className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"><RankingCard candidate={ranked[1]} place={2} /><RankingCard candidate={ranked[0]} place={1} /><RankingCard candidate={ranked[2]} place={3} /></section>
 
     <section className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
-      <div className="p-5 border-b border-slate-800 flex items-center justify-between"><div><h3 className="text-lg font-black text-white">Full Ranking</h3><p className="text-xs text-slate-500 mt-1">Top 100 profiles are loaded; your exact rank is calculated from Firestore aggregation counts.</p></div><div className="text-xs text-emerald-300 flex items-center gap-1"><Shield className="w-3.5 h-3.5" />Scalable profile index</div></div>
+      <div className="p-5 border-b border-slate-800 flex items-center justify-between"><div><h3 className="text-lg font-black text-white">Full Ranking</h3><p className="text-xs text-slate-500 mt-1">Top 100 profiles are loaded; ranking is calculated within the visible top-100 practice window.</p></div><div className="text-xs text-emerald-300 flex items-center gap-1"><Shield className="w-3.5 h-3.5" />Scalable profile index</div></div>
       {ranked.length ? <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-slate-950 text-[10px] uppercase text-slate-500"><tr><th className="px-5 py-3">Rank</th><th className="px-5 py-3">Aspirant</th><th className="px-5 py-3">District</th><th className="px-5 py-3">Score %</th><th className="px-5 py-3">Percentile</th><th className="px-5 py-3">Accuracy</th><th className="px-5 py-3">Tests</th></tr></thead><tbody className="divide-y divide-slate-800">{ranked.map(c => <tr key={c.id} className={c.userId === user?.id ? 'bg-emerald-500/10' : 'hover:bg-slate-800/30'}><td className="px-5 py-3 font-black text-white">#{c.rank}</td><td className="px-5 py-3"><div className="font-bold text-sm text-white">{c.candidateName}{c.userId === user?.id ? ' (You)' : ''}</div><div className="text-[10px] text-slate-500">{c.category || 'UR'}</div></td><td className="px-5 py-3 text-xs text-slate-400">{c.district || 'Chhattisgarh'}</td><td className="px-5 py-3 font-black text-emerald-300">{c.averagePercentage}%</td><td className="px-5 py-3 font-black text-amber-300">{c.percentile}</td><td className="px-5 py-3 text-xs text-slate-300">{c.averageAccuracy}%</td><td className="px-5 py-3 text-xs text-slate-300">{c.testsTaken}</td></tr>)}</tbody></table></div> : <div className="py-16 px-6 text-center"><Trophy className="w-10 h-10 mx-auto text-slate-700" /><h4 className="font-black text-white mt-3">No qualifying ranking data yet</h4><p className="text-xs text-slate-500 mt-2">Complete a qualifying test to create your practice ranking profile.</p><div className="flex justify-center gap-2 mt-5">{tests[0] && <button onClick={() => onStartTest(tests[0])} className="px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs cursor-pointer"><Play className="inline w-3.5 h-3.5 mr-1" />Attempt a Test</button>}{onExplorePass && <button onClick={onExplorePass} className="px-4 py-2.5 rounded-xl bg-slate-800 text-white font-bold text-xs border border-slate-700 cursor-pointer">View Pass</button>}</div></div>}
     </section>
   </div>;
