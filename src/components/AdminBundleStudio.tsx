@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   TestSeriesBundle,
   BundleTestItem,
@@ -27,6 +27,7 @@ import {
   TrashedItem,
 } from '../utils/bundleStore';
 import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPreviewModal';
+import { extractHierarchyFromApp } from '../utils/examHierarchy';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { saveBundleToFirestore } from '../firebase/firestoreService';
 import {
@@ -436,6 +437,10 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
       showToast(`Permanently purged "${title}".`);
     }
   };
+
+  const allHierarchyRecords = useMemo(() => {
+    return extractHierarchyFromApp(availableTests, [], availableQuestions);
+  }, [availableTests, availableQuestions]);
 
   const handleSaveBundle = () => {
     if (!editingBundle) return;
