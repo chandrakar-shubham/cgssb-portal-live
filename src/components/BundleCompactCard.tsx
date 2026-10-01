@@ -157,6 +157,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
           <span className="text-[10px] text-emerald-400 font-semibold mt-0.5">
             {hasEnrolled ? (isPassActive ? '✓ All Tests Unlocked' : 'Pass expired • Renew to continue') : isPassActive ? '✓ All Tests Unlocked' : `${bundle.freeTestsCount} Free Diagnostic Mocks`}
           </span>
+        </div>
 
         <div className="flex items-center space-x-2">
           <button
