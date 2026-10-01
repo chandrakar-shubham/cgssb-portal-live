@@ -15,7 +15,7 @@ import {
   Gift,
   Trophy
 } from 'lucide-react';
-import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalog';
+import { TestSeriesBundle } from '../data/bundleCatalog';
 import { findBundleBySlugOrId } from '../utils/bundleStore';
 import { MockTest, SliderBanner, SliderIconName } from '../types';
 import { getStoredSliderBanners, syncSliderFromFirestore } from '../utils/sliderStore';
@@ -57,7 +57,7 @@ export const HotSliderAndOffers: React.FC<HotSliderAndOffersProps> = ({
     return getStoredSliderBanners().filter(b => b.isPublished !== false);
   });
 
-  const teacherBundle = findBundleBySlugOrId('assistant-teacher-2026') || OFFICIAL_BUNDLES_CATALOG[0];
+  const teacherBundle = findBundleBySlugOrId('assistant-teacher-2026');
 
   useEffect(() => {
     const handleUpdate = (e: any) => {
