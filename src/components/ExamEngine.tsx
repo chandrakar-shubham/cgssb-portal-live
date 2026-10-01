@@ -169,6 +169,21 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   const [paletteMobileOpen, setPaletteMobileOpen] = useState(false);
   const [isSectionSidebarOpen, setIsSectionSidebarOpen] = useState(true);
   const [paletteViewMode, setPaletteViewMode] = useState<'grid' | 'sections'>('grid');
+  const fontScaleKey = `cgssb_exam_font_scale_${test.id}`;
+  const [examFontScale, setExamFontScale] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(fontScaleKey));
+      return saved >= 0.9 && saved <= 1.3 ? saved : 1;
+    } catch {
+      return 1;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(fontScaleKey, String(examFontScale));
+    } catch (_) {}
+  }, [fontScaleKey, examFontScale]);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -448,10 +463,10 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none"
+      className="h-dvh max-h-dvh min-h-0 overflow-hidden bg-slate-950 text-slate-100 flex flex-col select-none"
     >
       {/* 1. TOP BAR: Countdown, Sections, Controls, Submit */}
-      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-lg">
+      <header className="bg-slate-900 border-b border-slate-800 px-2 sm:px-6 py-1.5 sm:py-2.5 flex items-center justify-between shrink-0 z-50 shadow-lg">
         {/* Left: Brand & Test Name */}
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-extrabold text-sm">
@@ -504,24 +519,27 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
           </button>
 
           <button
-            onClick={() => setPaletteMobileOpen(!paletteMobileOpen)}
-            className="md:hidden px-2.5 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold"
+            onClick={() => setPaletteMobileOpen(true)}
+            className="md:hidden px-2 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1"
+            title="Open question palette"
           >
-            Palette
+            <LayoutGrid className="w-3.5 h-3.5" />
+            <span>Qs</span>
           </button>
 
           <button
             onClick={() => setShowSubmitModal(true)}
-            className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs sm:text-sm transition shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5 active:scale-95"
+            className="px-2.5 sm:px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-lg sm:rounded-xl text-[11px] sm:text-sm transition shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5 active:scale-95"
           >
             <Send className="w-3.5 h-3.5 fill-slate-950" />
-            <span>Submit Test</span>
+            <span className="hidden sm:inline">Submit Test</span>
+            <span className="sm:hidden">Submit</span>
           </button>
         </div>
       </header>
 
       {/* 2. SECTION SWITCHER SUB-HEADER */}
-      <div className="bg-slate-900/80 border-b border-slate-800 px-3 sm:px-6 py-2 flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+      <div className="bg-slate-900/80 border-b border-slate-800 px-2 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar shrink-0">
         <div className="flex items-center space-x-2 shrink-0">
           <button
             onClick={() => setIsSectionSidebarOpen(!isSectionSidebarOpen)}
@@ -576,7 +594,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
       </div>
 
       {/* 3. MAIN WORKSPACE + SECTION SIDEBAR + PALETTE LAYOUT */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden relative">
         {/* LEFT SECTION SUMMARY SIDEBAR (Collapsible Desktop) */}
         {isSectionSidebarOpen && (
           <aside className="w-72 bg-slate-900/95 backdrop-blur-md border-r border-slate-800 flex flex-col justify-between p-3.5 z-20 shrink-0 hidden lg:flex">
@@ -694,8 +712,11 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
         )}
 
         {/* Workspace: Question Content */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8 flex flex-col justify-between">
-          <div className="max-w-3xl mx-auto w-full space-y-6">
+        <main className="flex-1 min-h-0 min-w-0 overflow-hidden p-2 sm:p-4 lg:p-6 flex flex-col">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain max-w-4xl mx-auto w-full space-y-3 sm:space-y-4 pb-2 exam-question-viewport"
+            style={{ '--exam-font-scale': examFontScale } as React.CSSProperties}
+          >
             {/* Question Header meta with Unique IDs, Question Timer & Topper Benchmark */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -834,18 +855,53 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
               selectedOption={responses[activeQuestion.id]}
               onSelectOption={handleOptionSelect}
               showSolution={false}
+              compact
+              fontScale={examFontScale}
             />
           </div>
 
-          {/* Bottom Toolbar */}
-          <div className="max-w-3xl mx-auto w-full pt-6 mt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
+          {/* Fixed Exam Navigation: always visible on every viewport */}
+          <div className="max-w-4xl mx-auto w-full shrink-0 pt-2 sm:pt-3 mt-1 border-t border-slate-800/80 bg-slate-950/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-1.5 sm:gap-3 sticky bottom-0 z-20">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPaletteMobileOpen(true)}
+                className="md:hidden px-2.5 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 text-[11px] font-bold flex items-center gap-1.5"
+                title="Open question palette"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Questions</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setExamFontScale(prev => prev > 0.9 ? Math.max(0.9, Number((prev - 0.1).toFixed(1))) : prev)}
+                className="hidden sm:flex px-2 py-2 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-bold items-center gap-1"
+                title="Decrease exam font size"
+              >
+                A−
+              </button>
+              <button
+                type="button"
+                onClick={() => setExamFontScale(prev => 1)}
+                className="hidden sm:flex px-2 py-2 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-bold"
+                title="Reset exam font size"
+              >
+                A
+              </button>
+              <button
+                type="button"
+                onClick={() => setExamFontScale(prev => Math.min(1.3, Number((prev + 0.1).toFixed(1))))}
+                className="hidden sm:flex px-2 py-2 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-bold items-center gap-1"
+                title="Increase exam font size"
+              >
+                A+
+              </button>
               <button
                 onClick={handleMarkForReview}
                 className="px-3.5 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
               >
                 <Flag className="w-3.5 h-3.5 text-purple-400" />
-                <span>Mark for Review & Next</span>
+                <span className="hidden sm:inline">Review & Next</span><span className="sm:hidden">Review</span>
               </button>
               <button
                 onClick={handleClearResponse}
@@ -853,7 +909,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                 className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none text-slate-300 text-xs font-semibold transition border border-slate-700 flex items-center space-x-1.5 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear</span>
+                <span className="hidden sm:inline">Clear</span>
               </button>
             </div>
 
@@ -865,26 +921,44 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                   }
                 }}
                 disabled={currentQuestionIndex === 0}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none text-slate-300 text-xs font-bold transition border border-slate-700 flex items-center space-x-1 cursor-pointer"
+                className="px-2.5 sm:px-3 py-2 rounded-lg sm:rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none text-slate-300 text-[11px] sm:text-xs font-bold transition border border-slate-700 flex items-center space-x-1 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span>Previous</span>
+                <span className="hidden sm:inline">Previous</span><span className="sm:hidden">Prev</span>
               </button>
 
               <button
                 onClick={handleSaveAndNext}
-                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs sm:text-sm font-black transition shadow-md shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer"
+                className="px-3 sm:px-5 py-2 rounded-lg sm:rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] sm:text-sm font-black transition shadow-md shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer"
               >
-                <span>Save & Next</span>
+                <span className="hidden sm:inline">Save & Next</span>
+                <span className="sm:hidden">Next</span>
                 <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowSubmitModal(true)}
+                className="px-2.5 sm:px-4 py-2 rounded-lg sm:rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] sm:text-xs font-black transition shadow-md shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Submit</span>
               </button>
             </div>
           </div>
         </main>
 
         {/* 4. RIGHT-SIDE QUESTION PALETTE + SECTION SUMMARY SWITCHER */}
+        {paletteMobileOpen && (
+          <button
+            type="button"
+            aria-label="Close question palette"
+            onClick={() => setPaletteMobileOpen(false)}
+            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[1px] md:hidden"
+          />
+        )}
         <aside
-          className={`fixed md:static inset-y-0 right-0 z-40 w-80 bg-slate-900 border-l border-slate-800 p-4 flex flex-col justify-between transition-transform duration-300 md:translate-x-0 ${
+          className={`fixed md:static inset-y-0 right-0 z-40 w-[min(22rem,92vw)] bg-slate-900 border-l border-slate-800 p-3 sm:p-4 flex flex-col justify-between transition-transform duration-300 md:translate-x-0 ${
             paletteMobileOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:translate-x-0'
           }`}
         >
@@ -916,12 +990,38 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                 </button>
               </div>
 
-              <button
-                onClick={() => setPaletteMobileOpen(false)}
-                className="md:hidden text-slate-400 hover:text-white p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setExamFontScale(prev => Math.max(0.9, Number((prev - 0.1).toFixed(1))))}
+                  className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-black"
+                  title="Decrease font size"
+                >
+                  A−
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExamFontScale(1)}
+                  className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-black"
+                  title="Reset font size"
+                >
+                  A
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExamFontScale(prev => Math.min(1.3, Number((prev + 0.1).toFixed(1))))}
+                  className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-black"
+                  title="Increase font size"
+                >
+                  A+
+                </button>
+                <button
+                  onClick={() => setPaletteMobileOpen(false)}
+                  className="md:hidden text-slate-400 hover:text-white p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* TAB 1: QUESTION GRID VIEW */}
