@@ -168,13 +168,24 @@ export async function ensureCanonicalHierarchyForBundle(bundle: TestSeriesBundle
     createdAt: timestamp, updatedAt: timestamp
   };
   const isCgssbTeacherRecruitment = bundle.authority === 'CGSSB' && /teacher recruitment/i.test(programName);
+  const existingProgramSnap = db
+    ? await getDoc(doc(db, EXAM_CATALOG_COLLECTIONS.PROGRAMS, programId))
+    : null;
+  const existingProgram = existingProgramSnap?.exists() ? existingProgramSnap.data() as Partial<ExamProgram> : {};
   const program: ExamProgram = {
     id: programId, authorityId, name: programName,
     slug: slugifyCatalog(programName), year: bundle.targetYear,
     programType: inferProgramType(programName), status,
     hasPosts: Boolean(postName && !/^(exam aspirants|general cadre)$/i.test(postName)),
-    sortOrder: 0, createdAt: timestamp, updatedAt: timestamp,
-    ...(isCgssbTeacherRecruitment ? { totalVacancies: 4800, recruitmentLabel: 'CGSSB Teacher Recruitment 2026' } : {})
+    sortOrder: existingProgram.sortOrder ?? 0,
+    createdAt: existingProgram.createdAt || timestamp,
+    updatedAt: timestamp,
+    ...existingProgram,
+    authorityId,
+    name: existingProgram.name || programName,
+    year: existingProgram.year ?? bundle.targetYear,
+    ...(existingProgram.totalVacancies == null && isCgssbTeacherRecruitment ? { totalVacancies: 4800 } : {}),
+    ...(existingProgram.recruitmentLabel == null && isCgssbTeacherRecruitment ? { recruitmentLabel: 'CGSSB Teacher Recruitment 2026' } : {})
   };
   await saveExamAuthority(authority);
   await saveExamProgram(program);
@@ -182,11 +193,24 @@ export async function ensureCanonicalHierarchyForBundle(bundle: TestSeriesBundle
   let post: ExamPost | undefined;
   if (program.hasPosts) {
     const postId = bundle.postId || `post-${programId.replace(/^program-/, '')}-${slugifyCatalog(postName)}`;
-    const postMetadata = getKnownPostMetadata(programName, postName);
+    const existingPost = db
+      ? await getDoc(doc(db, EXAM_CATALOG_COLLECTIONS.POSTS, postId))
+      : null;
+    const existingPostData = existingPost?.exists() ? existingPost.data() as Partial<ExamPost> : {};
+    const inferredMetadata = getKnownPostMetadata(programName, postName);
+    // Migration is non-destructive: explicit Firestore metadata always wins.
+    // Inferred metadata is used only to fill fields that are genuinely absent.
     post = {
       id: postId, programId, name: postName, slug: slugifyCatalog(postName),
-      status, sortOrder: 0, createdAt: timestamp, updatedAt: timestamp,
-      ...postMetadata
+      status, sortOrder: existingPostData.sortOrder ?? 0,
+      createdAt: existingPostData.createdAt || timestamp,
+      updatedAt: timestamp,
+      ...existingPostData,
+      vacancies: existingPostData.vacancies ?? inferredMetadata.vacancies,
+      cadreBreakup: existingPostData.cadreBreakup ?? inferredMetadata.cadreBreakup,
+      payLevel: existingPostData.payLevel ?? inferredMetadata.payLevel,
+      salaryRange: existingPostData.salaryRange ?? inferredMetadata.salaryRange,
+      subjects: existingPostData.subjects ?? inferredMetadata.subjects
     };
     await saveExamPost(post);
   }
