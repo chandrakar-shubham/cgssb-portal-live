@@ -40,6 +40,7 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
   const { adminPermissions } = useAuth();
 
   const permissionByItem: Record<string, string | undefined> = {
+    'admin-exam-catalog': 'manageCMS',
     'admin-tests': 'manageTests',
     'admin-pyp': 'manageTests',
     'admin-chapters': 'manageTests',
@@ -72,6 +73,7 @@ export const AdminSubNav: React.FC<AdminSubNavProps> = ({
       groupName: 'Exams & Content',
       icon: Layers,
       items: [
+        { id: 'admin-exam-catalog', label: 'Exam & Recruitment Catalog', icon: Layers, badge: 'Core', desc: 'Canonical authority, recruitment, posts & series' },
         { id: 'admin-tests', label: 'Mock Test Catalog', icon: Layers, desc: 'Manage full-length timed exams' },
         { id: 'admin-pyp', label: 'PYP Manager', icon: FileText, desc: 'Previous year question papers' },
         { id: 'admin-chapters', label: 'Chapter Tests', icon: FolderTree, desc: 'Subject & topic-wise quizzes' },
