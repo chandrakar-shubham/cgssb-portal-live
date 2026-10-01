@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { StudentDashboard } from './components/StudentDashboard';
+import { StudentTestsPage, getStudentSlug } from './components/StudentTestsPage';
 import { PYPSection } from './components/PYPSection';
 import { AnalyticsHub } from './components/AnalyticsHub';
 import { ExamEngine } from './components/ExamEngine';
@@ -129,11 +130,15 @@ function MainApp() {
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   // Route & SEO State
-  const parseRouteFromLocation = (): { route: 'student' | 'admin'; tab: string; pageSlug?: string; postSlug?: string } => {
+  const parseRouteFromLocation = (): { route: 'student' | 'admin'; tab: string; pageSlug?: string; postSlug?: string; studentSlug?: string } => {
     if (typeof window === 'undefined') return { route: 'student', tab: 'tests' };
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
 
+    const studentTestsMatch = path.match(/^\/u\/([^/]+)\/tests(?:\/.*)?$/i);
+    if (studentTestsMatch) {
+      return { route: 'student', tab: 'student-tests', studentSlug: decodeURIComponent(studentTestsMatch[1]) };
+    }
     if (path.startsWith('/admin') || hash.startsWith('#/admin') || hash === '#admin') {
       return { route: 'admin', tab: 'admin-pyp' };
     }
@@ -260,7 +265,7 @@ function MainApp() {
       setStudentActiveTabState(tab);
       if (pageSlug) setActivePageSlug(pageSlug);
       if (postSlug) setActivePostSlug(postSlug);
-      document.title = route === 'admin' ? 'Admin Portal & CMS | cgtest.in' : getPageTitle(tab);
+      document.title = route === 'admin' ? 'Admin Portal & CMS | cgtest.in' : tab === 'student-tests' ? 'My Tests | cgtest.in' : getPageTitle(tab);
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -1480,6 +1485,20 @@ function MainApp() {
       />
 
       <main className="flex-1 pb-20 md:pb-8">
+        {!selectedSEOQuestion && studentActiveTab === 'student-tests' && (
+          <StudentTestsPage
+            tests={tests}
+            attempts={attempts}
+            onStartTest={handleStartTest}
+            onReviewAttempt={attempt => setActiveAttemptReview(attempt)}
+            onBrowseSeries={() => setStudentActiveTab('tests')}
+            onOpenAuthModal={() => {
+              setAuthModalInitialMode('signin');
+              setIsAuthModalOpen(true);
+            }}
+          />
+        )}
+
         {!selectedSEOQuestion && studentActiveTab === 'tests' && (
           <StudentDashboard
             tests={tests}
