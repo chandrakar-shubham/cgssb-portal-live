@@ -48,17 +48,17 @@ export async function fetchExamPrograms(authorityId?: string): Promise<ExamProgr
   if (!db) return [];
   const ref = collection(db, EXAM_CATALOG_COLLECTIONS.PROGRAMS);
   const snap = authorityId
-    ? await getDocs(query(ref, where('authorityId', '==', authorityId), orderBy('sortOrder', 'asc')))
-    : await getDocs(query(ref, orderBy('sortOrder', 'asc')));
-  return snap.docs.map(d => d.data() as ExamProgram);
+    ? await getDocs(query(ref, where('authorityId', '==', authorityId)))
+    : await getDocs(ref);
+  return snap.docs.map(d => d.data() as ExamProgram).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 export async function fetchExamPosts(programId?: string): Promise<ExamPost[]> {
   if (!db) return [];
   const ref = collection(db, EXAM_CATALOG_COLLECTIONS.POSTS);
   const snap = programId
-    ? await getDocs(query(ref, where('programId', '==', programId), orderBy('sortOrder', 'asc')))
-    : await getDocs(query(ref, orderBy('sortOrder', 'asc')));
-  return snap.docs.map(d => d.data() as ExamPost);
+    ? await getDocs(query(ref, where('programId', '==', programId)))
+    : await getDocs(ref);
+  return snap.docs.map(d => d.data() as ExamPost).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 export async function fetchExamTestSeries(programId?: string, postId?: string): Promise<ExamTestSeries[]> {
   if (!db) return [];
@@ -67,9 +67,9 @@ export async function fetchExamTestSeries(programId?: string, postId?: string): 
   if (programId) filters.push(where('programId', '==', programId));
   if (postId) filters.push(where('postId', '==', postId));
   const snap = filters.length
-    ? await getDocs(query(ref, ...filters, orderBy('sortOrder', 'asc')))
-    : await getDocs(query(ref, orderBy('sortOrder', 'asc')));
-  return snap.docs.map(d => d.data() as ExamTestSeries);
+    ? await getDocs(query(ref, ...filters))
+    : await getDocs(ref);
+  return snap.docs.map(d => d.data() as ExamTestSeries).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 export async function saveExamAuthority(record: ExamAuthority) {
   if (db) await setDoc(doc(db, EXAM_CATALOG_COLLECTIONS.AUTHORITIES, record.id), record, { merge: true });
