@@ -4,6 +4,9 @@ import {
   getDocs,
   query,
   where,
+  orderBy,
+  limit,
+  getCountFromServer,
   getDoc,
   setDoc,
   deleteDoc,
@@ -14,7 +17,7 @@ import {
 import { db, auth } from './config';
 import { signInAnonymously } from 'firebase/auth';
 import { api } from '../utils/apiClient';
-import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG, LeaderboardEntryRecord } from '../types';
+import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG, LeaderboardEntryRecord, LeaderboardProfileRecord } from '../types';
 import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../types/cms';
@@ -84,7 +87,8 @@ export const COLLECTIONS = {
   REMOTE_CONFIG: 'remoteConfig',
   REFERRALS: 'referrals',
   USER_ENTITLEMENTS: 'userEntitlements',
-  LEADERBOARD_ENTRIES: 'leaderboardEntries'
+  LEADERBOARD_ENTRIES: 'leaderboardEntries',
+  LEADERBOARD_PROFILES: 'leaderboardProfiles'
 } as const;
 
 /**
@@ -893,6 +897,111 @@ export async function fetchLeaderboardEntriesFromFirestore(): Promise<Leaderboar
     return [];
   }
 }
+
+export async function saveLeaderboardProfilesToFirestore(profiles: LeaderboardProfileRecord[]): Promise<void> {
+  if (!db || !auth.currentUser) return;
+  const owned = profiles.filter(p => p?.id && p.userId === auth.currentUser?.uid);
+  await Promise.all(owned.map(p => setDoc(doc(db, COLLECTIONS.LEADERBOARD_PROFILES, p.id), p, { merge: true })));
+}
+
+export interface LeaderboardProfileQuery {
+  scopeType: 'target' | 'series' | 'test';
+  scopeKey: string;
+  district?: string;
+  limitCount?: number;
+}
+
+export async function fetchLeaderboardProfilesFromFirestore(
+  options: LeaderboardProfileQuery
+): Promise<LeaderboardProfileRecord[]> {
+  if (!db || !options.scopeKey) return [];
+  try {
+    const constraints = [
+      where('scopeType', '==', options.scopeType),
+      where('scopeKey', '==', options.scopeKey),
+      orderBy('averagePercentage', 'desc'),
+      limit(Math.min(Math.max(options.limitCount || 100, 1), 100))
+    ];
+    const baseQuery = options.district && options.district !== 'All Districts'
+      ? query(
+          collection(db, COLLECTIONS.LEADERBOARD_PROFILES),
+          where('scopeType', '==', options.scopeType),
+          where('scopeKey', '==', options.scopeKey),
+          where('district', '==', options.district),
+          orderBy('averagePercentage', 'desc'),
+          limit(Math.min(Math.max(options.limitCount || 100, 1), 100))
+        )
+      : query(collection(db, COLLECTIONS.LEADERBOARD_PROFILES), ...constraints);
+    const snap = await withTimeout(getDocs(baseQuery), 5000);
+    return snap.docs.map(d => d.data() as LeaderboardProfileRecord);
+  } catch (err) {
+    console.warn('Error fetching bounded leaderboard profiles from Firestore:', err);
+    return [];
+  }
+}
+
+export async function fetchMyLeaderboardProfileFromFirestore(
+  userId: string,
+  options: LeaderboardProfileQuery
+): Promise<LeaderboardProfileRecord | null> {
+  if (!db || !userId || !options.scopeKey) return null;
+  try {
+    const ref = doc(db, COLLECTIONS.LEADERBOARD_PROFILES, leaderboardProfileId(userId, options.scopeType, options.scopeKey));
+    const snap = await withTimeout(getDoc(ref), 4000);
+    return snap.exists() ? (snap.data() as LeaderboardProfileRecord) : null;
+  } catch (err) {
+    console.warn('Error fetching own leaderboard profile:', err);
+    return null;
+  }
+}
+
+export async function countLeaderboardProfilesAboveScoreFromFirestore(
+  options: LeaderboardProfileQuery,
+  averagePercentage: number
+): Promise<number> {
+  if (!db || !options.scopeKey) return 0;
+  try {
+    const constraints = [
+      where('scopeType', '==', options.scopeType),
+      where('scopeKey', '==', options.scopeKey),
+      where('averagePercentage', '>', averagePercentage)
+    ];
+    if (options.district && options.district !== 'All Districts') {
+      constraints.push(where('district', '==', options.district));
+    }
+    const q = query(collection(db, COLLECTIONS.LEADERBOARD_PROFILES), ...constraints);
+    const snap = await withTimeout(getCountFromServer(q), 5000);
+    return snap.data().count;
+  } catch (err) {
+    console.warn('Error counting leaderboard profiles above score:', err);
+    return 0;
+  }
+}
+
+export async function countLeaderboardProfilesFromFirestore(options: LeaderboardProfileQuery): Promise<number> {
+  if (!db || !options.scopeKey) return 0;
+  try {
+    const constraints = [
+      where('scopeType', '==', options.scopeType),
+      where('scopeKey', '==', options.scopeKey)
+    ];
+    if (options.district && options.district !== 'All Districts') {
+      constraints.push(where('district', '==', options.district));
+    }
+    const q = query(collection(db, COLLECTIONS.LEADERBOARD_PROFILES), ...constraints);
+    const snap = await withTimeout(getCountFromServer(q), 5000);
+    return snap.data().count;
+  } catch (err) {
+    console.warn('Error counting leaderboard profiles:', err);
+    return 0;
+  }
+}
+
+export const leaderboardProfileId = (
+  userId: string,
+  scopeType: 'target' | 'series' | 'test',
+  scopeKey: string
+) => encodeURIComponent(userId + '__' + scopeType + '__' + scopeKey);
 
 export async function fetchLeaderboardFromFirestore(testId?: string): Promise<TestAttempt[]> {
   const entries = await fetchLeaderboardEntriesFromFirestore();
