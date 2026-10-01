@@ -674,6 +674,106 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
     )}
 
+    {/* Persistent Native Mobile Bottom Navigation Bar (Thumb Zone) */}
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/90 px-2 py-1 shadow-2xl safe-area-bottom">
+      <div className="flex items-center justify-around max-w-lg mx-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab('tests')}
+          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            activeTab === 'tests'
+              ? 'text-emerald-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200 font-medium'
+          }`}
+        >
+          <div className={`p-1 rounded-lg transition-colors ${activeTab === 'tests' ? 'bg-emerald-500/15' : ''}`}>
+            <BookOpen className="w-4.5 h-4.5" />
+          </div>
+          <span className="text-[9px] mt-0.5 tracking-tight">Mocks</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('pyp')}
+          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            activeTab === 'pyp'
+              ? 'text-emerald-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200 font-medium'
+          }`}
+        >
+          <div className={`p-1 rounded-lg transition-colors ${activeTab === 'pyp' ? 'bg-emerald-500/15' : ''}`}>
+            <FileText className="w-4.5 h-4.5" />
+          </div>
+          <span className="text-[9px] mt-0.5 tracking-tight">PYPs</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('mistakes')}
+          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all cursor-pointer min-w-[50px] relative ${
+            activeTab === 'mistakes'
+              ? 'text-rose-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200 font-medium'
+          }`}
+        >
+          <div className={`p-1 rounded-lg transition-colors relative ${activeTab === 'mistakes' ? 'bg-rose-500/15' : ''}`}>
+            <AlertTriangle className="w-4.5 h-4.5" />
+            {mistakesCount > 0 && (
+              <span className="absolute -top-1 -right-1 px-1 min-w-[13px] h-[13px] rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center leading-none">
+                {mistakesCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[9px] mt-0.5 tracking-tight">Mistakes</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('student-tests')}
+          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            activeTab === 'student-tests'
+              ? 'text-emerald-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200 font-medium'
+          }`}
+        >
+          <div className={`p-1 rounded-lg transition-colors ${activeTab === 'student-tests' ? 'bg-emerald-500/15' : ''}`}>
+            <CheckCircle2 className="w-4.5 h-4.5" />
+          </div>
+          <span className="text-[9px] mt-0.5 tracking-tight">My Tests</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('analytics')}
+          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            activeTab === 'analytics'
+              ? 'text-indigo-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200 font-medium'
+          }`}
+        >
+          <div className={`p-1 rounded-lg transition-colors ${activeTab === 'analytics' ? 'bg-indigo-500/15' : ''}`}>
+            <BarChart3 className="w-4.5 h-4.5" />
+          </div>
+          <span className="text-[9px] mt-0.5 tracking-tight">Analytics</span>
+        </button>
+
+        {/* Profile / Menu Drawer Trigger */}
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="flex flex-col items-center justify-center py-1 px-1.5 rounded-xl text-emerald-400 hover:text-emerald-300 font-medium transition-all cursor-pointer min-w-[50px]"
+          title="Open Profile & Menu Sidebar"
+        >
+          <div className="p-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
+            {user?.avatar ? (
+              <img src={user.avatar} alt="Avatar" className="w-4.5 h-4.5 rounded-full object-cover" />
+            ) : (
+              <UserIcon className="w-4.5 h-4.5 text-emerald-400" />
+            )}
+          </div>
+          <span className="text-[9px] mt-0.5 tracking-tight font-bold">Profile</span>
+        </button>
+      </div>
+    </div>
     </>
   );
 };
