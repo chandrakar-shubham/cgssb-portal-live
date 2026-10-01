@@ -1,6 +1,5 @@
 import { collection, doc, getDocs, getDoc, setDoc, query, where, orderBy } from 'firebase/firestore';
 import { db } from './config';
-import { TestSeriesBundle } from '../data/bundleCatalog';
 
 export type CatalogStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 
