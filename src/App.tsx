@@ -75,10 +75,6 @@ import { getAdminToken, api } from './utils/apiClient';
 import {
   cacheTestBundleForDevice,
   clearCachedTestBundle,
-  queueOfflineSubmission,
-  initOfflineAutoSync,
-  getPendingSubmissions,
-  syncPendingSubmissions,
 } from './utils/offlineExamManager';
 import {
   INITIAL_CMS_PAGES,
@@ -600,18 +596,7 @@ function MainApp() {
     }
     loadData();
 
-    // Initialize Auto-Sync for queued on-device exam attempts when internet reconnects
-    const unsubscribe = initOfflineAutoSync((syncedAttempt, solutions) => {
-      setAttempts(prev => dedupeById([syncedAttempt, ...prev]));
-      if (Array.isArray(solutions) && solutions.length > 0) {
-        setQuestions((prev: Question[]): Question[] => {
-          const solMap = new Map<string, Question>();
-          solutions.forEach((s: Question) => solMap.set(s.id, s));
-          return prev.map(q => solMap.get(q.id) || q);
-        });
-      }
-    });
-    return unsubscribe;
+
   }, []);
 
   // Hydrate the current student's attempts directly from Firestore.
