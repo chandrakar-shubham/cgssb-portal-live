@@ -2,28 +2,11 @@
  * Offline Exam Manager & Batch Transaction Engine
  * 
  * 1. Pre-loads test questions into student's device storage before exam starts
- * 2. 100% zero-network exam execution (saves every click locally, zero HTTP requests)
- * 3. Single-batch atomic submission to server
- * 4. Resilient Offline Submission Queue (syncs automatically when network reconnects)
+ * 2. Local checkpointing is handled by ExamEngine during the active session
+ * 3. Submission is committed directly to Firestore with a stable submission ID
  */
 
 import { MockTest, Question } from '../types';
-
-export interface PendingSubmission {
-  id: string;
-  testId: string;
-  testTitle: string;
-  userId: string;
-  userName: string;
-  timeTakenSeconds: number;
-  responses: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
-  questionStatuses: Record<string, QuestionPaletteStatus>;
-  timestamp: number;
-  synced: boolean;
-}
-
-const PENDING_QUEUE_KEY = 'cgssb_pending_exam_submissions';
-const CACHE_PREFIX = 'cgssb_offline_test_bundle_';
 
 /**
  * 1. Cache complete test structure and questions onto student device
