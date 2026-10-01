@@ -4,6 +4,7 @@ import { TestSeriesBundle } from '../data/bundleCatalog';
 import { getStoredBundles, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { useAuth } from '../context/AuthContext';
 import { CGSSBRecruitmentHub } from './CGSSBRecruitmentHub';
+import { BundleDetailPage } from './BundleDetailPage';
 import {
   Award,
   BookOpen,
