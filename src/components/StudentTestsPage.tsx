@@ -1,0 +1,110 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, BookOpen, CheckCircle2, ChevronRight, Eye, Lock, Play, RotateCcw, Sparkles, Target, TrendingUp, Trophy } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { MockTest, SeriesEnrollment, TestAttempt } from '../types';
+import { TestSeriesBundle } from '../data/bundleCatalog';
+import { findBundleBySlugOrId, getStoredBundles, syncBundlesFromFirestore } from '../utils/bundleStore';
+import { fetchMySeriesEnrollmentsFromFirestore } from '../firebase/firestoreService';
+import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
+
+export const getStudentSlug = (user?: { id: string; name?: string } | null): string => {
+  if (!user) return '';
+  const base = (user.name || 'student').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'student';
+  let hash = 0;
+  for (let i = 0; i < user.id.length; i++) hash = (hash * 31 + user.id.charCodeAt(i)) >>> 0;
+  return `${base}-${hash.toString(36).slice(0, 6)}`;
+};
+
+interface Props {
+  tests: MockTest[];
+  attempts?: TestAttempt[];
+  onStartTest: (test: MockTest) => void;
+  onReviewAttempt?: (attempt: TestAttempt) => void;
+  onBrowseSeries: () => void;
+  onOpenAuthModal?: () => void;
+}
+
+const go = (path: string) => {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStartTest, onReviewAttempt, onBrowseSeries, onOpenAuthModal }) => {
+  const { user } = useAuth();
+  const [enrollments, setEnrollments] = useState<SeriesEnrollment[]>([]);
+  const [bundles, setBundles] = useState<TestSeriesBundle[]>(() => getStoredBundles());
+  const [loading, setLoading] = useState(true);
+  const slug = getStudentSlug(user);
+  const requestedSlug = typeof window !== 'undefined' ? decodeURIComponent(window.location.pathname.match(/^\/u\/([^/]+)\/tests/i)?.[1] || '') : '';
+
+  useEffect(() => {
+    if (!user?.id) { setEnrollments([]); setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      fetchMySeriesEnrollmentsFromFirestore(user.id),
+      syncBundlesFromFirestore().catch(() => ({ list: [] as TestSeriesBundle[] }))
+    ]).then(([rows, synced]) => {
+      if (cancelled) return;
+      setEnrollments(rows);
+      if (synced.list?.length) setBundles(synced.list);
+    }).catch(() => { if (!cancelled) setEnrollments([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const active = useMemo(() => enrollments.filter(e => e.status === 'active'), [enrollments]);
+  const series = useMemo(() => active.map(e => {
+    const bundle = findBundleBySlugOrId(e.seriesId, bundles);
+    if (!bundle) return null;
+    const ids = new Set([...(bundle.testItems || []), ...(bundle.chapterTests || []), ...(bundle.pypTests || [])].map(x => x.id));
+    const list = tests.filter(t => ids.has(t.id) && t.isPublished !== false);
+    const completed = list.filter(t => attempts.some(a => a.testId === t.id)).length;
+    return { enrollment: e, bundle, tests: list, completed };
+  }).filter(Boolean) as Array<{ enrollment: SeriesEnrollment; bundle: TestSeriesBundle; tests: MockTest[]; completed: number }>, [active, bundles, tests, attempts]);
+
+  const enrolledTests = useMemo(() => {
+    const ids = new Set(series.flatMap(s => s.tests.map(t => t.id)));
+    return tests.filter(t => ids.has(t.id));
+  }, [series, tests]);
+  const completed = enrolledTests.filter(t => attempts.some(a => a.testId === t.id)).length;
+  const relevantAttempts = attempts.filter(a => enrolledTests.some(t => t.id === a.testId));
+  const average = relevantAttempts.length ? Math.round(relevantAttempts.reduce((n, a) => n + Number(a.percentage || 0), 0) / relevantAttempts.length) : null;
+  const next = series.flatMap(s => s.tests.map(test => ({ series: s, test }))).find(x => !attempts.some(a => a.testId === x.test.id));
+  const passActive = isUserPassActive(user);
+  const passDays = calculateDaysRemaining(user?.passExpiresAt);
+
+  if (!user) return <div className="min-h-[65vh] flex items-center justify-center px-4"><div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center"><Lock className="w-10 h-10 mx-auto text-emerald-400"/><h1 className="mt-4 text-xl font-black text-white">Your private test workspace</h1><p className="mt-2 text-sm text-slate-400">Sign in to access enrolled series, attempts and results.</p><button onClick={onOpenAuthModal} className="mt-6 w-full py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black text-sm">Sign In</button></div></div>;
+
+  if (requestedSlug && requestedSlug !== slug) { go(`/u/${slug}/tests`); return null; }
+
+  return <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 space-y-6">
+    <section className="relative overflow-hidden rounded-[28px] border border-emerald-500/20 bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-950 p-5 sm:p-8 shadow-2xl">
+      <div className="absolute -right-20 -top-20 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl"/>
+      <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+        <div><div className="flex items-center gap-2 text-emerald-400 text-xs font-black uppercase tracking-widest"><Sparkles className="w-4 h-4"/> Student Workspace</div><h1 className="mt-2 text-2xl sm:text-4xl font-black text-white">My Tests</h1><p className="mt-2 text-sm text-slate-300">Your enrolled preparation, progress and results — all in one place.</p></div>
+        <button onClick={onBrowseSeries} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 border border-white/10 text-white text-xs font-black">Browse Test Series <ArrowRight className="w-4 h-4"/></button>
+      </div>
+    </section>
+
+    <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {[[ 'Enrolled Series', active.length, BookOpen ],['Available Tests', enrolledTests.length, Target],['Completed', completed, CheckCircle2],['Average Score', average === null ? '—' : `${average}%`, TrendingUp]].map(([label,value,Icon]: any) => <div key={label} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4"><Icon className="w-4 h-4 text-emerald-400"/><div className="mt-3 text-xl sm:text-2xl font-black text-white">{value}</div><div className="text-[11px] text-slate-400">{label}</div></div>)}
+    </section>
+
+    {passActive && <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs"><span className="text-amber-200"><Trophy className="inline w-4 h-4 mr-2 text-amber-400"/><strong>All-Access Pass active</strong> · {passDays > 0 ? `${passDays} days remaining` : 'Active'}</span></div>}
+
+    {next && <section className="rounded-3xl border border-indigo-500/20 bg-gradient-to-r from-indigo-950/50 to-slate-900 p-5 sm:p-6"><div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Continue Preparation</div><div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div className="min-w-0"><h2 className="text-lg font-black text-white truncate">{next.test.title}</h2><p className="text-xs text-slate-400 mt-1">{next.series.bundle.title} · {next.test.questionCount} Questions · {next.test.durationMinutes} Minutes</p></div><button onClick={() => onStartTest(next.test)} className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500 text-slate-950 text-xs font-black"><Play className="w-4 h-4 fill-current"/> Start Next Test</button></div></section>}
+
+    <section><div className="mb-3"><h2 className="text-lg font-black text-white">My Test Series</h2><p className="text-xs text-slate-400 mt-1">Open a series to continue from its complete test list.</p></div>
+      {loading ? <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 text-center text-sm text-slate-400">Loading your test workspace…</div> :
+      !series.length ? <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 text-center"><BookOpen className="w-10 h-10 mx-auto text-slate-600"/><h3 className="mt-3 font-black text-white">No enrolled test series yet</h3><p className="mt-1 text-xs text-slate-400">Browse a series and enroll with your active pass.</p><button onClick={onBrowseSeries} className="mt-5 px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black">Explore Test Series</button></div> :
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">{series.map(s => { const pct=s.tests.length?Math.round(s.completed/s.tests.length*100):0; return <button key={s.enrollment.id} onClick={() => go(`/u/${slug}/tests/series/${s.bundle.slug}`)} className="text-left rounded-3xl border border-slate-800 bg-slate-900/90 hover:border-emerald-500/30 p-5 group"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-300">ENROLLED</span><h3 className="mt-3 text-base sm:text-lg font-black text-white group-hover:text-emerald-300 truncate">{s.bundle.title}</h3><p className="mt-1 text-xs text-slate-400 line-clamp-2">{s.bundle.shortDescription}</p></div><ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-emerald-400 shrink-0"/></div><div className="mt-5 flex items-center justify-between text-[11px] mb-1.5"><span className="text-slate-400">Preparation progress</span><span className="text-emerald-300 font-black">{pct}%</span></div><div className="h-2 rounded-full bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{width:`${pct}%`}}/></div><div className="mt-4 text-[11px] text-slate-500">{s.completed}/{s.tests.length} tests completed</div></button>})}</div>}
+    </section>
+
+    <section><div className="mb-3"><h2 className="text-lg font-black text-white">Your Tests</h2><p className="text-xs text-slate-400 mt-1">Quick access to tests from your enrolled series.</p></div>
+      {!enrolledTests.length && !loading ? <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">Tests will appear here once your enrolled series is available.</div> :
+      <div className="space-y-2">{enrolledTests.map(test => { const attempt=attempts.find(a=>a.testId===test.id); return <div key={test.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3.5 sm:p-4"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${attempt?'bg-emerald-500/10 text-emerald-300 border-emerald-500/20':'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'}`}>{attempt?'COMPLETED':'AVAILABLE'}</span><span className="text-[10px] text-slate-500">{test.questionCount} Q · {test.durationMinutes} min</span></div><h3 className="mt-1 text-sm font-bold text-white truncate">{test.title}</h3></div><div className="flex items-center gap-2">{attempt&&onReviewAttempt&&<button onClick={()=>onReviewAttempt(attempt)} className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-black inline-flex items-center gap-1.5"><Eye className="w-3.5 h-3.5"/> Result</button>}<button onClick={()=>onStartTest(test)} className="px-3.5 py-2 rounded-xl bg-emerald-500 text-slate-950 text-[10px] font-black inline-flex items-center gap-1.5">{attempt?<RotateCcw className="w-3.5 h-3.5"/>:<Play className="w-3.5 h-3.5 fill-current" />}{attempt?'Re-attempt':'Start'}</button></div></div>})}</div>}
+    </section>
+  </div>;
+};
