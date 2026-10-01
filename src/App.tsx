@@ -563,40 +563,14 @@ function MainApp() {
   }, []);
 
 
-  // Fetch initial production data from Firebase Firestore only
+  // Managers own their Firestore subscriptions. Keep App-level startup focused on
+  // data that is not already subscribed through a domain manager.
   useEffect(() => {
-    async function loadData() {
-      // Production invariant: an empty database is valid production state. Never seed demo/factory data from the client.
-      testConnection().catch(() => null);
+    // Production invariant: an empty database is valid production state.
+    testConnection().catch(() => null);
 
-      try {
-        const [firestoreTests, firestoreQuestions, firestorePyp] = await Promise.all([
-          fetchTestsFromFirestore().catch(() => []),
-          fetchQuestionsFromFirestore().catch(() => []),
-          fetchPypPapersFromFirestore().catch(() => [])
-        ]);
-
-        if (Array.isArray(firestoreTests)) {
-          setTests(firestoreTests);
-        }
-
-        if (Array.isArray(firestoreQuestions)) {
-          setQuestions(firestoreQuestions);
-        }
-
-        if (Array.isArray(firestorePyp)) {
-          setPypPapers(firestorePyp);
-        }
-
-        // Sync and refresh Test Series bundles from Cloud Firestore
-        await syncBundlesFromFirestore().catch(() => null);
-      } catch (err) {
-        console.error('Failed to load production data from Firestore:', err);
-      }
-    }
-    loadData();
-
-
+    // Test Series bundles are maintained separately from the test/question managers.
+    syncBundlesFromFirestore().catch(() => null);
   }, []);
 
   // Hydrate the current student's attempts directly from Firestore.
