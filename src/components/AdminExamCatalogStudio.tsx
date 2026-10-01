@@ -9,7 +9,7 @@ import {
 import { saveBundleToFirestore } from '../firebase/firestoreService';
 import { OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
 import { migrateBundlesToCanonicalExamCatalog } from '../firebase/examCatalogService';
-import { saveSingleBundle } from '../utils/bundleStore';
+import { saveSingleBundle, getStoredBundles } from '../utils/bundleStore';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 
 const now = () => new Date().toISOString();
@@ -124,7 +124,9 @@ export const AdminExamCatalogStudio: React.FC = () => {
         <button
           onClick={async () => {
             try {
-              const count = await migrateBundlesToCanonicalExamCatalog(OFFICIAL_BUNDLES_CATALOG);
+              const sourceBundles = getStoredBundles();
+              const merged = Array.from(new Map([...OFFICIAL_BUNDLES_CATALOG, ...sourceBundles].map(b => [b.id, b])).values());
+              const count = await migrateBundlesToCanonicalExamCatalog(merged);
               setMessage(`Migrated ${count} legacy test-series bundles into the canonical hierarchy.`);
               await load();
             } catch (e:any) {
