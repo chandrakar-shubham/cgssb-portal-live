@@ -22,13 +22,15 @@ import {
   Tag,
   Copy,
   Receipt,
-  ExternalLink
+  ExternalLink,
+  Gift
 } from 'lucide-react';
 import {
   getOrCreateDeviceId,
   calculateDaysRemaining,
   checkDeviceAuthorization,
-  isUserPassActive
+  isUserPassActive,
+  FREE_ACCESS_CAMPAIGN
 } from '../utils/devicePassManager';
 import { api } from '../utils/apiClient';
 
@@ -254,7 +256,7 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
 
   // Paid checkout is intentionally hidden during the free-launch growth campaign.
   // Keep the component route alive so we can restore paid plans later without changing navigation.
-  if (true) {
+  if (FREE_ACCESS_CAMPAIGN) {
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-16 font-sans">
         <section className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-slate-900 via-emerald-950/30 to-slate-900 p-6 sm:p-8 shadow-2xl">
