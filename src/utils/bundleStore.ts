@@ -1,4 +1,4 @@
-import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG, BundleTestItem } from '../data/bundleCatalog';
+import { TestSeriesBundle, BundleTestItem } from '../data/bundleCatalog';
 import { MockTest } from '../types';
 import {
   fetchBundlesFromFirestore,
@@ -172,16 +172,6 @@ export const toggleBundlePublish = (bundleId: string): { updatedList: TestSeries
   return { updatedList: updated, newStatus };
 };
 
-export const resetBundlesToDefault = (): TestSeriesBundle[] => {
-  if (!import.meta.env.DEV) {
-    console.warn('Factory bundle catalog restoration is disabled in production.');
-    return getStoredBundles();
-  }
-  saveStoredBundles(OFFICIAL_BUNDLES_CATALOG);
-  for (const b of OFFICIAL_BUNDLES_CATALOG) saveBundleToFirestore(b).catch(() => {});
-  return getStoredBundles();
-};
-
 export const cleanTestFromAllBundles = (testId: string): TestSeriesBundle[] => {
   const bundles = getStoredBundles();
   let modified = false;
@@ -245,18 +235,6 @@ export const purgeAllDemoDatabaseData = async (): Promise<{ purgedKeys: string[]
     purgedKeys: ['mockTests', 'questions', 'pypPapers', 'bundles'],
     timestamp: new Date().toISOString()
   };
-};
-
-/**
- * Restores factory default demo catalog directly into Cloud Firestore globally
- */
-export const restoreFactoryDemoData = async (): Promise<void> => {
-  if (!import.meta.env.DEV) {
-    console.warn('Factory demo bundle restoration is disabled in production.');
-    return;
-  }
-  saveStoredBundles(OFFICIAL_BUNDLES_CATALOG);
-  await Promise.all(OFFICIAL_BUNDLES_CATALOG.map(b => saveBundleToFirestore(b).catch(() => {})));
 };
 
 export interface TrashedItem {
