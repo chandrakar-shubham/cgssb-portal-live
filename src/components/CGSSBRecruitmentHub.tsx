@@ -24,6 +24,8 @@ export const CGSSBRecruitmentHub:React.FC<CGSSBRecruitmentHubProps> = ({bundles,
  const findSubjectBundle=(track:Track,subject:string)=>visibleBundles.find(b=>matchesTrack(b,track)&&matchesSubject(b,subject));
 
  if(selectedTrack && subjectSlug){
+   const trackBundles=visibleBundles.filter(b=>matchesTrack(b,selectedTrack));
+   if(selectedTrack.subjects.length===0 && trackBundles[0]) return <BundleDetailPage bundle={trackBundles[0]} availableTests={tests} onBack={()=>navigate('/cgssb/teacher-recruitment-2026')} onStartTest={onStartTest} onExplorePass={onExplorePass} isEnrolled={false} onEnrollSuccess={()=>undefined}/>;
    const subject=selectedTrack.subjects.find(s=>normalize(s).replace(/ /g,'-')===subjectSlug);
    const subjectBundle=subject?findSubjectBundle(selectedTrack,subject):undefined;
    if(subjectBundle) return <BundleDetailPage bundle={subjectBundle} availableTests={tests} onBack={()=>navigate('/cgssb/teacher-recruitment-2026')} onStartTest={onStartTest} onExplorePass={onExplorePass} isEnrolled={false} onEnrollSuccess={()=>undefined}/>;
