@@ -4,7 +4,7 @@ import { TestSeriesBundle } from '../data/bundleCatalog';
 import { isFirebaseConfigured } from '../firebase/config';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
 import { migrateAllLocalDataToFirestore, MigrationSummary } from '../firebase/firestoreService';
-import { getStoredBundles, purgeAllDemoDatabaseData, restoreFactoryDemoData, isDemoDataPurged, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
+import { getStoredBundles, purgeAllDemoDatabaseData, isDemoDataPurged, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 import { testConnection } from '../firebase/connectionTest';
 import {
@@ -314,31 +314,6 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
       setBackupMessage(`Thorough purge complete! Successfully purged demo data stores across browser and server at ${new Date(result.timestamp).toLocaleTimeString()}`);
     } catch (err: any) {
       setBackupMessage(`Purge note: ${err.message || 'Purge completed'}`);
-    } finally {
-      setIsPurging(false);
-    }
-  };
-
-  const handleRestoreDemoData = async () => {
-    const confirmed = window.confirm(
-      '🔄 RESTORE FACTORY DEMO CATALOG:\n\nRestore all built-in demo mock tests, PYQ fixtures, and question sets to the database?'
-    );
-    if (!confirmed) return;
-
-    setIsPurging(true);
-    try {
-      await restoreFactoryDemoData();
-      setTrueZero(false);
-      if (onRestoreSnapshot) {
-        onRestoreSnapshot({
-          tests: INITIAL_MOCK_TESTS,
-          questions: INITIAL_QUESTIONS,
-          pypPapers: INITIAL_PYP_PAPERS
-        });
-      }
-      setBackupMessage('Master factory demo catalog restored successfully!');
-    } catch (err: any) {
-      setBackupMessage(`Restore note: ${err.message || 'Restore completed'}`);
     } finally {
       setIsPurging(false);
     }
@@ -819,15 +794,6 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>{isPurging ? 'Purging Demo Data...' : 'Execute Full Demo Data Purge'}</span>
-                </button>
-
-                <button
-                  onClick={handleRestoreDemoData}
-                  disabled={isPurging}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition flex items-center space-x-2 border border-slate-700 cursor-pointer disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-4 h-4 text-sky-400 ${isPurging ? 'animate-spin' : ''}`} />
-                  <span>Restore Factory Demo Catalog</span>
                 </button>
 
                 <button
