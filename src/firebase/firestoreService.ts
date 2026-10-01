@@ -835,7 +835,7 @@ export interface UserEntitlement {
   issuedAt?: string;
   expiresAt?: string;
   durationDays: number;
-  source?: 'WELCOME_FREE' | 'CLIENT_CHECKOUT' | 'ADMIN' | 'PAYMENT';
+  source?: 'WELCOME_FREE' | 'CLIENT_CHECKOUT' | 'ADMIN' | 'PAYMENT' | 'FREE_CAMPAIGN';
   planName?: string;
   boundDeviceId?: string;
   boundDeviceName?: string;
