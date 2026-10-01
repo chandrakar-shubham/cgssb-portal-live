@@ -148,30 +148,45 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
     return initial;
   });
 
-  // Local auto-save checkpointing every 3 seconds for 100% zero-data-loss during live exams
+  // Local checkpointing protects live exams from refreshes, tab closes and
+  // background transitions. The normal 3-second save is supplemented by an
+  // immediate pagehide/visibility save so the latest candidate state is not
+  // left waiting for the next timer tick.
+  const persistCheckpoint = () => {
+    if (isSubmitting || secondsRemaining <= 0) return;
+    try {
+      const payload = {
+        testId: test.id,
+        sessionId,
+        secondsRemaining,
+        currentSectionIndex,
+        currentQuestionIndex,
+        responses,
+        questionStatuses,
+        questionTimes,
+        questionCount: questions.length,
+        questionIds: questions.map(q => q.id),
+        updatedAt: Date.now(),
+      };
+      localStorage.setItem(sessionKey, JSON.stringify(payload));
+    } catch (_) {}
+  };
+
   useEffect(() => {
-    const saveCheckpoint = () => {
-      try {
-        const payload = {
-          testId: test.id,
-          sessionId,
-          secondsRemaining,
-          currentSectionIndex,
-          currentQuestionIndex,
-          responses,
-          questionStatuses,
-          questionTimes,
-          questionCount: questions.length,
-          questionIds: questions.map(q => q.id),
-          updatedAt: Date.now(),
-        };
-        localStorage.setItem(sessionKey, JSON.stringify(payload));
-      } catch (_) {}
+    const timer = setTimeout(persistCheckpoint, 3000);
+    const handlePageHide = () => persistCheckpoint();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') persistCheckpoint();
     };
 
-    const timer = setTimeout(saveCheckpoint, 3000);
-    return () => clearTimeout(timer);
-  }, [sessionKey, test.id, sessionId, secondsRemaining, currentSectionIndex, currentQuestionIndex, responses, questionStatuses, questionTimes, questions.length]);
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [sessionKey, test.id, sessionId, secondsRemaining, currentSectionIndex, currentQuestionIndex, responses, questionStatuses, questionTimes, questions.length, isSubmitting]);
 
   // UI state
   const [showSubmitModal, setShowSubmitModal] = useState(false);
