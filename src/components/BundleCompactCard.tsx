@@ -67,7 +67,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
       {/* Top Header: Authority & Launch Badge */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center space-x-1.5 flex-wrap justify-end">
+          <div className="flex items-center space-x-1.5 flex-wrap">
             <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md border tracking-wider ${authorityBg}`}>
               {bundle.authority}
             </span>
@@ -76,7 +76,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center space-x-1.5">
+          <div className="flex items-center space-x-1.5 flex-wrap justify-end">
             {!isPublished && (
               <span className="text-[10px] font-black px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30">
                 Draft (Hidden)
@@ -157,7 +157,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             </div>
           )}
           <span className="text-[10px] text-emerald-400 font-semibold mt-0.5">
-            {hasEnrolled ? (isPassActive ? '✓ All Tests Unlocked' : 'Pass expired • Renew to continue') : isPassActive ? '✓ All Tests Unlocked' : `${bundle.freeTestsCount} Free Diagnostic Mocks`}
+            {hasEnrolled ? (isPassActive ? '✓ All Tests Unlocked' : 'Free pass expired') : isPassActive ? '✓ All Tests Unlocked' : `${bundle.freeTestsCount} Free Diagnostic Mocks`}
           </span>
         </div>
 
