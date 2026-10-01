@@ -1,5 +1,12 @@
 import { User } from '../types';
 
+// Growth campaign: paid pass checkout is intentionally disabled while the platform is in free-launch mode.
+// Every registered student receives 30 days, with +60 days unlocked after 5 completed tests.
+export const FREE_ACCESS_CAMPAIGN = true;
+export const FREE_ACCESS_CAMPAIGN_ID = 'free-launch-1plus2-2026';
+export const FREE_ACCESS_CAMPAIGN_DAYS = 30;
+export const FREE_ACCESS_MILESTONE_BONUS_DAYS = 60;
+
 export interface DeviceInfo {
   id: string;
   name: string;
