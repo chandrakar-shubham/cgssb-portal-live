@@ -8,13 +8,13 @@ import { ArrowRight, BookOpen, BriefcaseBusiness, CheckCircle2, ChevronRight, Gr
 interface CGSSBRecruitmentHubProps { bundles: TestSeriesBundle[]; tests: MockTest[]; onStartTest: (test: MockTest) => void; onExplorePass: () => void; }
 type Track = { key:string; slug:string; name:string; hindi:string; vacancies:number; description:string; subjects:string[]; keywords:string[]; cadreBreakup?:string; payLevel?:string; salaryRange?:string; };
 const FALLBACK_TRACKS: Track[] = [
- { key:'assistant-teacher', slug:'assistant-teacher', name:'Assistant Teacher', hindi:'सहायक शिक्षक', vacancies:2292, description:'Primary cadre preparation with full-length mocks, subject tests and previous-year papers.', subjects:[], keywords:['assistant teacher','sahayak shikshak','primary'] },
- { key:'teacher', slug:'teacher', name:'Teacher / TGT', hindi:'शिक्षक / टीजीटी', vacancies:1654, description:'Subject-wise preparation for the middle-school teacher recruitment examination.', subjects:['English','Hindi','Mathematics','Science','Social Science'], keywords:['subject teacher','teacher','tgt','middle school'] },
- { key:'lecturer', slug:'lecturer', name:'Lecturer / PGT', hindi:'व्याख्याता / पीजीटी', vacancies:854, description:'Postgraduate-level subject preparation with focused test series and mocks.', subjects:['English','Hindi','Mathematics','Physics','Chemistry','Biology'], keywords:['lecturer','vyakhyata','pgt'] },
+ { key:'assistant-teacher', slug:'assistant-teacher', name:'Assistant Teacher', hindi:'सहायक शिक्षक', vacancies:0, description:'Preparation resources for this recruitment post.', subjects:[], keywords:['assistant teacher','sahayak shikshak','primary'] },
+ { key:'teacher', slug:'teacher', name:'Teacher / TGT', hindi:'शिक्षक / टीजीटी', vacancies:0, description:'Preparation resources for this recruitment post.', subjects:[], keywords:['subject teacher','teacher','tgt','middle school'] },
+ { key:'lecturer', slug:'lecturer', name:'Lecturer / PGT', hindi:'व्याख्याता / पीजीटी', vacancies:0, description:'Preparation resources for this recruitment post.', subjects:[], keywords:['lecturer','vyakhyata','pgt'] },
 ];
 function toTrack(post: ExamPost): Track {
  const fallback = FALLBACK_TRACKS.find(t => post.slug.includes(t.slug) || t.keywords.some(k => normalize(post.name).includes(normalize(k))));
- return { key:post.slug, slug:post.slug, name:post.name, hindi:post.nameHindi || fallback?.hindi || '', vacancies:post.vacancies || fallback?.vacancies || 0, description:post.description || fallback?.description || 'Preparation resources for this recruitment post.', subjects:post.subjects || fallback?.subjects || [], keywords:[post.name,...(fallback?.keywords || [])], cadreBreakup:post.cadreBreakup || fallback?.cadreBreakup, payLevel:post.payLevel || fallback?.payLevel, salaryRange:post.salaryRange || fallback?.salaryRange };
+ return { key:post.slug, slug:post.slug, name:post.name, hindi:post.nameHindi || fallback?.hindi || '', vacancies:post.vacancies || 0, description:post.description || fallback?.description || 'Preparation resources for this recruitment post.', subjects:post.subjects || [], keywords:[post.name,...(fallback?.keywords || [])], cadreBreakup:post.cadreBreakup, payLevel:post.payLevel, salaryRange:post.salaryRange };
 }
 const normalize = (value:string) => value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 function matchesTrack(bundle:TestSeriesBundle, track:Track) { const text=normalize(bundle.targetPost || bundle.title); return track.keywords.some(k=>text.includes(normalize(k))); }
