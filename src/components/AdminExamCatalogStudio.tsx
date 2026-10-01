@@ -110,8 +110,8 @@ export const AdminExamCatalogStudio: React.FC = () => {
     await saveExamTestSeries(record);
     const bundle: TestSeriesBundle = {
       id: bundleId, slug:slugifyCatalog(name), title:name.trim(), titleHindi:name.trim(),
-      authority:authority.name, authorityId:selectedAuthority, programId:selectedProgram,
-      postId:selectedPost || undefined, targetPost, targetYear:program.year,
+      authorityId:selectedAuthority, programId:selectedProgram, postId:selectedPost || undefined,
+      seriesId:id,
       badge:'New Series', badgeColor:'emerald', shortDescription:`${name.trim()} test series for ${program.name}.`,
       fullDescription:'Draft series created from the canonical exam catalog. Add tests and syllabus before publishing.',
       price:0, originalPrice:0, isProOnly:false, totalTestsCount:0, freeTestsCount:0,
