@@ -19,7 +19,7 @@ import { db, auth } from './config';
 import { signInAnonymously } from 'firebase/auth';
 import { api } from '../utils/apiClient';
 import { MockTest, Question, TestAttempt, User, PreviousYearPaper, SliderBanner, AppRemoteConfig, DEFAULT_REMOTE_CONFIG, LeaderboardEntryRecord, LeaderboardProfileRecord } from '../types';
-import { TestSeriesBundle, OFFICIAL_BUNDLES_CATALOG } from '../data/bundleCatalog';
+import { TestSeriesBundle } from '../data/bundleCatalog';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../types/cms';
 import { INITIAL_CMS_PAGES, INITIAL_CMS_POSTS, INITIAL_CMS_SERIES_PACKS, INITIAL_CMS_SETTINGS } from '../defaultCmsData';
