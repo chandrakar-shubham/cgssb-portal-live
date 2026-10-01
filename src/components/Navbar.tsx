@@ -59,7 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       { id: 'practice', label: 'Practice Drills', icon: Zap, desc: 'Untimed daily MCQs with instant solutions', enabled: true },
     ];
     return items.filter(i => i.enabled);
-  }, [config.featureFlags]);
+  }, [config.featureFlags, user]);
 
   // Group 2: Dedicated Exam Portals
   const examItems = [
