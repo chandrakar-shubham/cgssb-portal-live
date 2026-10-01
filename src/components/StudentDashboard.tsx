@@ -40,6 +40,7 @@ import { OFFICIAL_BUNDLES_CATALOG, TestSeriesBundle } from '../data/bundleCatalo
 import { getStoredBundles, findBundleBySlugOrId, syncBundlesFromFirestore, reconcileAllTestsWithBundles } from '../utils/bundleStore';
 import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
+import { ExamRecruitmentExplorer } from './ExamRecruitmentExplorer';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
 import { ChangeTargetModal, TARGET_EXAM_OPTIONS, TargetExamOption } from './ChangeTargetModal';
 import { LiveTestLeaderboard } from './LiveTestLeaderboard';
@@ -1184,69 +1185,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             )}
           </div>
         ) : portalDisplayMode === 'bundles' ? (
-          <div className="space-y-4">
-            <div className="space-y-4 bg-slate-950/60 p-4 sm:p-5 rounded-3xl border border-slate-800/80">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-1 text-xs">
-                  <span className="text-slate-500 font-semibold mr-1 shrink-0">Filter Authority:</span>
-                  <button
-                    onClick={() => setBundleAuthorityFilter('ALL')}
-                    className={`px-3 py-1.5 rounded-xl font-bold transition whitespace-nowrap cursor-pointer ${
-                      bundleAuthorityFilter === 'ALL'
-                        ? 'bg-slate-800 text-white border border-slate-700'
-                        : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800/80'
-                    }`}
-                  >
-                    All Bundles ({visibleBundlesForViewer.length})
-                  </button>
-                  <button
-                    onClick={() => setBundleAuthorityFilter('CGSSB')}
-                    className={`px-3 py-1.5 rounded-xl font-bold transition whitespace-nowrap cursor-pointer flex items-center space-x-1.5 ${
-                      bundleAuthorityFilter === 'CGSSB'
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                        : 'text-slate-400 hover:text-emerald-400 bg-slate-900 border border-slate-800/80'
-                    }`}
-                  >
-                    <span>CGSSB / Vyapam ({visibleBundlesForViewer.filter(b => b.authority === 'CGSSB').length})</span>
-                  </button>
-                  <button
-                    onClick={() => setBundleAuthorityFilter('CGPSC')}
-                    className={`px-3 py-1.5 rounded-xl font-bold transition whitespace-nowrap cursor-pointer flex items-center space-x-1.5 ${
-                      bundleAuthorityFilter === 'CGPSC'
-                        ? 'bg-rose-950 text-rose-300 border border-rose-700'
-                        : 'text-slate-400 hover:text-rose-400 bg-slate-900 border border-slate-800/80'
-                    }`}
-                  >
-                    <span>CGPSC SSE ({visibleBundlesForViewer.filter(b => b.authority === 'CGPSC').length})</span>
-                  </button>
-                </div>
-
-                <span className="text-[11px] text-slate-400 hidden md:inline">
-                  Click any card to view syllabus & included tests
-                </span>
-              </div>
-
-              {/* Compact Bundles Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
-                {visibleBundlesForViewer.filter(b => bundleAuthorityFilter === 'ALL' || b.authority === bundleAuthorityFilter).map(bundle => (
-                  <BundleCompactCard
-                    key={bundle.id}
-                    bundle={bundle}
-                    onOpenBundle={handleOpenBundleDetail}
-                    onEnrollNow={handleEnrollBundle}
-                    onOpenMyTests={() => setPortalDisplayMode('my-tests')}
-                    onStartFreeTest={b => {
-                      const freeItem = b.testItems.find(t => t.isFreePreview) || b.testItems[0];
-                      if (freeItem) {
-                        const match = tests.find(t => t.id === freeItem.id) || tests[0];
-                        if (match) onStartTest(match);
-                      }
-                    }}
-                    hasEnrolled={enrolledBundleIds.includes(bundle.id)}
-                  />
-                ))}
-              </div>
-            </div>
+          <div className="space-y-5">
+            <ExamRecruitmentExplorer
+              bundles={visibleBundlesForViewer}
+              enrolledBundleIds={enrolledBundleIds}
+              onOpenBundle={handleOpenBundleDetail}
+              onEnrollNow={handleEnrollBundle}
+              onOpenMyTests={() => setPortalDisplayMode('my-tests')}
+              onStartFreeTest={b => {
+                const freeItem = b.testItems.find(t => t.isFreePreview) || b.testItems[0];
+                if (freeItem) {
+                  const match = tests.find(t => t.id === freeItem.id) || tests[0];
+                  if (match) onStartTest(match);
+                }
+              }}
+            />
 
             {/* Quick banner to switch to individual tests & leaderboard */}
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
