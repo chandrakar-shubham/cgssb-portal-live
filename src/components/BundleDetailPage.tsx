@@ -558,7 +558,15 @@ export const BundleDetailPage: React.FC<BundleDetailPageProps> = ({
               </div>
             )}
 
-            {!isAdmin && !isPassActive && !isEnrolled && (
+            {!isAdmin && !user && !isEnrolled && (
+              <button onClick={() => onOpenAuthModal?.()} className="px-6 py-3.5 rounded-2xl font-black text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-xl shadow-emerald-950/40 transition flex items-center space-x-2 cursor-pointer">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Sign In to Enroll</span>
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
+            )}
+
+            {!isAdmin && user && !isPassActive && !isEnrolled && (
               <button onClick={() => setIsPassModalOpen(true)} className="px-6 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 shadow-xl shadow-amber-950/50 hover:brightness-110 transition flex items-center space-x-2 cursor-pointer">
                 <Crown className="w-4 h-4 fill-slate-950" />
                 <span>Activate All-Access Pass to Enroll</span>
