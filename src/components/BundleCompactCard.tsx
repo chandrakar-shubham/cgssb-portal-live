@@ -25,6 +25,7 @@ interface BundleCompactCardProps {
   onOpenBundle: (bundle: TestSeriesBundle) => void;
   onEnrollNow?: (bundle: TestSeriesBundle) => void;
   onStartFreeTest?: (bundle: TestSeriesBundle) => void;
+  onOpenMyTests?: (bundle: TestSeriesBundle) => void;
   hasEnrolled?: boolean;
 }
 
@@ -33,6 +34,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
   onOpenBundle,
   onEnrollNow,
   onStartFreeTest,
+  onOpenMyTests,
   hasEnrolled = false,
 }) => {
   const { user } = useAuth();
@@ -131,7 +133,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
       </div>
 
       {/* Card Footer: Universal Pass Model Pricing & Action Buttons */}
-      <div className="pt-4 mt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
+      <div className="pt-4 mt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex flex-col">
           {hasEnrolled ? (
             <div className="flex items-center space-x-1.5 text-emerald-300">
@@ -164,13 +166,18 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenBundle(bundle);
+              if (hasEnrolled && onOpenMyTests) {
+                onOpenMyTests(bundle);
+              } else {
+                onOpenBundle(bundle);
+              }
             }}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center space-x-1.5 cursor-pointer"
-            title="View test series details, syllabus and included tests"
+            className="w-full sm:w-auto text-xs font-bold px-3 py-2 sm:py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center space-x-1.5 cursor-pointer"
+            title={hasEnrolled ? "Open your enrolled tests" : "View test series details, syllabus and included tests"}
           >
-            <span>View Details</span>
-            <ChevronRight className="w-3.5 h-3.5" />
+            {hasEnrolled ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <span>View Details</span>}
+            {hasEnrolled && <span>My Tests</span>}
+            {!hasEnrolled && <ChevronRight className="w-3.5 h-3.5" />}
           </button>
 
           <button
@@ -185,7 +192,7 @@ export const BundleCompactCard: React.FC<BundleCompactCardProps> = ({
                 onOpenBundle(bundle);
               }
             }}
-            className={`text-xs font-black px-3.5 py-1.5 rounded-xl shadow-md transition flex items-center space-x-1.5 cursor-pointer ${
+            className={`w-full sm:w-auto text-xs font-black px-3.5 py-2 sm:py-1.5 rounded-xl shadow-md transition flex items-center justify-center space-x-1.5 cursor-pointer ${
               hasEnrolled
                 ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-900/40'
                 : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-900/40'
