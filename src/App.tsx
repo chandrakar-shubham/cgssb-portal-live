@@ -9,7 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { StudentDashboard } from './components/StudentDashboard';
-import { StudentTestsPage } from './components/StudentTestsPage';
+import { StudentTestsPage, getStudentSlug } from './components/StudentTestsPage';
 import { PYPSection } from './components/PYPSection';
 import { AnalyticsHub } from './components/AnalyticsHub';
 import { ExamEngine } from './components/ExamEngine';
@@ -204,6 +204,7 @@ function MainApp() {
 
   const getTabPath = (tab: string) => {
     switch (tab) {
+      case 'student-tests': return user ? `/u/${getStudentSlug(user)}/tests` : '/';
       case 'tests': return '/';
       case 'chapters': return '/cgvyapam-cgssb/chapter-tests';
       case 'practice': return '/cgvyapam-cgssb/practice-drills';
