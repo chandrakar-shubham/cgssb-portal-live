@@ -8,6 +8,8 @@
 
 import { MockTest, Question } from '../types';
 
+const CACHE_PREFIX = 'cgssb_offline_test_bundle_';
+
 /**
  * 1. Cache complete test structure and questions onto student device
  */
