@@ -74,7 +74,23 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
   const completed = enrolledTests.filter(t => attempts.some(a => a.testId === t.id)).length;
   const relevantAttempts = attempts.filter(a => enrolledTests.some(t => t.id === a.testId));
   const average = relevantAttempts.length ? Math.round(relevantAttempts.reduce((n, a) => n + Number(a.percentage || 0), 0) / relevantAttempts.length) : null;
+  const checkpointKey = (testId: string) => `cgssb_exam_session_${testId}`;
+  const hasLiveCheckpointForTest = (test: MockTest): boolean => {
+    try {
+      const raw = localStorage.getItem(checkpointKey(test.id));
+      const parsed = raw ? JSON.parse(raw) : null;
+      const age = parsed?.updatedAt ? Math.max(0, Date.now() - Number(parsed.updatedAt)) : Infinity;
+      return parsed?.testId === test.id
+        && !!parsed?.sessionId
+        && Number(parsed.secondsRemaining) > 0
+        && Number(parsed.questionCount) === Number(test.questionCount)
+        && age < 1000 * 60 * 60 * 24 * 7;
+    } catch (_) {
+      return false;
+    }
+  };
   const next = series.flatMap(s => s.tests.map(test => ({ series: s, test }))).find(x => !attempts.some(a => a.testId === x.test.id));
+  const nextInProgress = series.flatMap(s => s.tests.map(test => ({ series: s, test }))).find(x => hasLiveCheckpointForTest(x.test));
   const passActive = isUserPassActive(user);
   const passDays = calculateDaysRemaining(user?.passExpiresAt);
 
@@ -204,7 +220,7 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
               </div>
               <div className="flex items-center gap-2 sm:justify-end">
                 {isCompleted && onReviewAttempt && <button onClick={() => onReviewAttempt(attempt)} className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-black inline-flex items-center justify-center gap-1.5"><Eye className="w-3.5 h-3.5"/> Result</button>}
-                <button onClick={() => onStartTest(test)} className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-black inline-flex items-center justify-center gap-1.5">{isCompleted ? <RotateCcw className="w-3.5 h-3.5"/> : <Play className="w-3.5 h-3.5 fill-current"/>}{isCompleted ? 'Re-attempt' : 'Start Test'}</button>
+                <button onClick={() => onStartTest(test)} className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-black inline-flex items-center justify-center gap-1.5">{isCompleted ? <RotateCcw className="w-3.5 h-3.5"/> : <Play className="w-3.5 h-3.5 fill-current"/>}{isCompleted ? 'Re-attempt' : isInProgress ? 'Continue' : 'Start Test'}</button>
               </div>
             </div>
           </div>;
@@ -228,7 +244,7 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
 
     {passActive && <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs"><span className="text-amber-200"><Trophy className="inline w-4 h-4 mr-2 text-amber-400"/><strong>All-Access Pass active</strong> · {passDays > 0 ? `${passDays} days remaining` : 'Active'}</span></div>}
 
-    {next && <section className="rounded-3xl border border-indigo-500/20 bg-gradient-to-r from-indigo-950/50 to-slate-900 p-5 sm:p-6"><div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Continue Preparation</div><div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div className="min-w-0"><h2 className="text-lg font-black text-white truncate">{next.test.title}</h2><p className="text-xs text-slate-400 mt-1">{next.series.bundle.title} · {next.test.questionCount} Questions · {next.test.durationMinutes} Minutes</p></div><button onClick={() => onStartTest(next.test)} className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500 text-slate-950 text-xs font-black"><Play className="w-4 h-4 fill-current"/> Start Next Test</button></div></section>}
+    {(nextInProgress || next) && (() => { const target = nextInProgress || next!; const inProgress = !!nextInProgress; return <section className="rounded-3xl border border-indigo-500/20 bg-gradient-to-r from-indigo-950/50 to-slate-900 p-5 sm:p-6"><div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">{inProgress ? 'Resume Preparation' : 'Continue Preparation'}</div><div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div className="min-w-0"><h2 className="text-lg font-black text-white truncate">{target.test.title}</h2><p className="text-xs text-slate-400 mt-1">{target.series.bundle.title} · {target.test.questionCount} Questions · {target.test.durationMinutes} Minutes</p></div><button onClick={() => onStartTest(target.test)} className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500 text-slate-950 text-xs font-black"><Play className="w-4 h-4 fill-current"/> {inProgress ? 'Continue Test' : 'Start Next Test'}</button></div></section>; })()}
 
     <section><div className="mb-3"><h2 className="text-lg font-black text-white">My Test Series</h2><p className="text-xs text-slate-400 mt-1">Open a series to continue from its complete test list.</p></div>
       {loading ? <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 text-center text-sm text-slate-400">Loading your test workspace…</div> :
