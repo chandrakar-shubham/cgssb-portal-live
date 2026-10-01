@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, AdminPermissions } from '../types';
-import { getOrCreateDeviceId, createPassTenure } from '../utils/devicePassManager';
+import {
+  getOrCreateDeviceId,
+  createPassTenure,
+  FREE_ACCESS_CAMPAIGN,
+  FREE_ACCESS_CAMPAIGN_ID,
+  FREE_ACCESS_CAMPAIGN_DAYS,
+  FREE_ACCESS_MILESTONE_BONUS_DAYS,
+} from '../utils/devicePassManager';
 import {
   syncUserProfileToFirestore,
   fetchUserProfileFromFirestore,
@@ -196,45 +203,109 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (ent) {
         const expiry = ent.expiresAt || baseUser.passExpiresAt;
         const active = ent.status === 'ACTIVE' && (!expiry || new Date(expiry).getTime() > Date.now());
+        if (active) {
+          return {
+            ...baseUser,
+            hasProPass: true,
+            proPassPlan: ent.planName || ent.planType || baseUser.proPassPlan,
+            passExpiresAt: expiry,
+            passDurationDays: ent.durationDays || baseUser.passDurationDays,
+            boundDeviceId: ent.boundDeviceId || baseUser.boundDeviceId,
+            boundDeviceName: ent.boundDeviceName || baseUser.boundDeviceName,
+            completedTestsCount: Number(ent.completedTestsCount ?? baseUser.completedTestsCount ?? 0),
+            freePassStage: ent.freePassStage || baseUser.freePassStage,
+            unlockedMilestoneBonus: Boolean(ent.unlockedMilestoneBonus ?? baseUser.unlockedMilestoneBonus),
+          };
+        }
+
+        // A new campaign replaces the old free/legacy state exactly once per campaign.
+        // Never extend an already-expired campaign repeatedly on page refresh.
+        if (FREE_ACCESS_CAMPAIGN && ent.campaignId !== FREE_ACCESS_CAMPAIGN_ID) {
+          const device = getOrCreateDeviceId();
+          const issuedAt = new Date().toISOString();
+          const expiresAt = new Date(Date.now() + FREE_ACCESS_CAMPAIGN_DAYS * 24 * 60 * 60 * 1000).toISOString();
+          const campaignEntitlement = {
+            userId: baseUser.id,
+            planType: 'FREE_CAMPAIGN',
+            status: 'ACTIVE' as const,
+            issuedAt,
+            expiresAt,
+            durationDays: FREE_ACCESS_CAMPAIGN_DAYS,
+            source: 'FREE_CAMPAIGN' as const,
+            planName: 'Free Launch Pass • 1 Month + 2 Month Milestone',
+            boundDeviceId: device.id,
+            boundDeviceName: device.name,
+            completedTestsCount: 0,
+            freePassStage: '1_month_active' as const,
+            unlockedMilestoneBonus: false,
+            campaignId: FREE_ACCESS_CAMPAIGN_ID,
+            updatedAt: issuedAt,
+          };
+          await saveUserEntitlementToFirestore(campaignEntitlement).catch(() => null);
+          return {
+            ...baseUser,
+            hasProPass: true,
+            proPassPlan: campaignEntitlement.planName,
+            passDurationDays: campaignEntitlement.durationDays,
+            passExpiresAt: campaignEntitlement.expiresAt,
+            boundDeviceId: device.id,
+            boundDeviceName: device.name,
+            completedTestsCount: 0,
+            freePassStage: '1_month_active',
+            unlockedMilestoneBonus: false,
+          };
+        }
+
         return {
           ...baseUser,
-          hasProPass: active,
-          proPassPlan: ent.planName || ent.planType || baseUser.proPassPlan,
+          hasProPass: false,
           passExpiresAt: expiry,
-          passDurationDays: ent.durationDays || baseUser.passDurationDays,
-          boundDeviceId: ent.boundDeviceId || baseUser.boundDeviceId,
-          boundDeviceName: ent.boundDeviceName || baseUser.boundDeviceName,
+          completedTestsCount: Number(ent.completedTestsCount ?? baseUser.completedTestsCount ?? 0),
+          freePassStage: ent.freePassStage || baseUser.freePassStage,
+          unlockedMilestoneBonus: Boolean(ent.unlockedMilestoneBonus ?? baseUser.unlockedMilestoneBonus),
+        };
+      }
+
+      // No entitlement document: issue the current free-launch campaign once.
+      if (FREE_ACCESS_CAMPAIGN) {
+        const device = getOrCreateDeviceId();
+        const issuedAt = new Date().toISOString();
+        const expiresAt = new Date(Date.now() + FREE_ACCESS_CAMPAIGN_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const campaignEntitlement = {
+          userId: baseUser.id,
+          planType: 'FREE_CAMPAIGN',
+          status: 'ACTIVE' as const,
+          issuedAt,
+          expiresAt,
+          durationDays: FREE_ACCESS_CAMPAIGN_DAYS,
+          source: 'FREE_CAMPAIGN' as const,
+          planName: 'Free Launch Pass • 1 Month + 2 Month Milestone',
+          boundDeviceId: device.id,
+          boundDeviceName: device.name,
+          completedTestsCount: 0,
+          freePassStage: '1_month_active' as const,
+          unlockedMilestoneBonus: false,
+          campaignId: FREE_ACCESS_CAMPAIGN_ID,
+          updatedAt: issuedAt,
+        };
+        await saveUserEntitlementToFirestore(campaignEntitlement).catch(() => null);
+        return {
+          ...baseUser,
+          hasProPass: true,
+          proPassPlan: campaignEntitlement.planName,
+          passDurationDays: campaignEntitlement.durationDays,
+          passExpiresAt: campaignEntitlement.expiresAt,
+          boundDeviceId: device.id,
+          boundDeviceName: device.name,
+          completedTestsCount: 0,
+          freePassStage: '1_month_active',
+          unlockedMilestoneBonus: false,
         };
       }
     } catch {
-      // Continue with the Firestore-backed legacy registration-date migration below.
+      // Fall through to legacy profile expiry handling.
     }
 
-    // Migration path for students who registered before the entitlement document
-    // was introduced. Their original 30-day welcome window is anchored to the
-    // stored registration date and is granted only while that window remains active.
-    if (baseUser.registeredAt) {
-      const registeredAtMs = new Date(baseUser.registeredAt).getTime();
-      if (Number.isFinite(registeredAtMs)) {
-        const welcomeExpiry = new Date(registeredAtMs + 30 * 24 * 60 * 60 * 1000).toISOString();
-        if (Date.now() < new Date(welcomeExpiry).getTime()) {
-          await saveUserEntitlementToFirestore({
-            userId: baseUser.id,
-            planType: 'WELCOME_FREE',
-            status: 'ACTIVE',
-            issuedAt: new Date(registeredAtMs).toISOString(),
-            expiresAt: welcomeExpiry,
-            durationDays: 30,
-            source: 'WELCOME_FREE',
-            planName: '1-Month Free Welcome Pass (30 Days)',
-            updatedAt: new Date().toISOString(),
-          }).catch(() => null);
-          return { ...baseUser, hasProPass: true, proPassPlan: '1-Month Free Welcome Pass (30 Days)', passDurationDays: 30, passExpiresAt: welcomeExpiry };
-        }
-      }
-    }
-
-    // Firebase-only architecture: never fall back to the retired HTTP API.
     if (baseUser.passExpiresAt && new Date(baseUser.passExpiresAt).getTime() <= Date.now()) {
       return { ...baseUser, hasProPass: false };
     }
@@ -249,7 +320,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const guestTookTest = typeof window !== 'undefined' && localStorage.getItem('cgtest_guest_test_completed') === 'true';
     return {
       hasProPass: true,
-      proPassPlan: '1-Month Free Welcome Pass (30 Days)',
+      proPassPlan: 'Free Launch Pass • 1 Month + 2 Month Milestone',
       passDurationDays: 30,
       passExpiresAt: thirtyDaysExpiry,
       boundDeviceId: device.id,
@@ -283,13 +354,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const welcomeExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await saveUserEntitlementToFirestore({
       userId: studentId,
-      planType: 'WELCOME_FREE',
+      planType: 'FREE_CAMPAIGN',
       status: 'ACTIVE',
       issuedAt: new Date().toISOString(),
       expiresAt: welcomeExpiry,
       durationDays: 30,
-      source: 'WELCOME_FREE',
-      planName: '1-Month Free Welcome Pass (30 Days)',
+      source: 'FREE_CAMPAIGN',
+      planName: 'Free Launch Pass • 1 Month + 2 Month Milestone',
+      completedTestsCount: 0,
+      freePassStage: '1_month_active',
+      unlockedMilestoneBonus: false,
+      campaignId: FREE_ACCESS_CAMPAIGN_ID,
       boundDeviceId: passDetails.boundDeviceId,
       boundDeviceName: passDetails.boundDeviceName,
       updatedAt: new Date().toISOString(),
@@ -421,21 +496,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { unlockedBonus: false, newCount: 1 };
     }
 
-    const currentCount = user.completedTestsCount || 0;
+    const currentCount = Number(user.completedTestsCount || 0);
     const newCount = currentCount + 1;
     const shouldUnlockBonus = newCount >= 5 && !user.unlockedMilestoneBonus;
 
     let updatedExpiresAt = user.passExpiresAt;
-    let updatedDurationDays = user.passDurationDays || 30;
-    let updatedPlan = user.proPassPlan || '1-Month Free Welcome Pass (30 Days)';
+    let updatedDurationDays = user.passDurationDays || FREE_ACCESS_CAMPAIGN_DAYS;
+    let updatedPlan = user.proPassPlan || 'Free Launch Pass • 1 Month + 2 Month Milestone';
     let updatedStage = user.freePassStage || '1_month_active';
 
     if (shouldUnlockBonus) {
       const baseTime = user.passExpiresAt ? new Date(user.passExpiresAt).getTime() : Date.now();
-      const extendedTime = Math.max(Date.now(), baseTime) + 60 * 24 * 60 * 60 * 1000; // +60 days (2 months)
+      const extendedTime = Math.max(Date.now(), baseTime) + FREE_ACCESS_MILESTONE_BONUS_DAYS * 24 * 60 * 60 * 1000;
       updatedExpiresAt = new Date(extendedTime).toISOString();
-      updatedDurationDays = updatedDurationDays + 60;
-      updatedPlan = '3-Month Milestone Pro Pass (90 Days Total)';
+      updatedDurationDays = FREE_ACCESS_CAMPAIGN_DAYS + FREE_ACCESS_MILESTONE_BONUS_DAYS;
+      updatedPlan = 'Free Launch Pass • 3 Months Unlocked';
       updatedStage = '3_months_unlocked';
     }
 
@@ -451,7 +526,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setUser(updatedUser);
-    void syncUserProfileToFirestore(updatedUser);
+
+    // Persist the milestone in the authoritative entitlement document so the
+    // bonus survives refresh/login instead of living only in React state.
+    void saveUserEntitlementToFirestore({
+      userId: user.id,
+      planType: 'FREE_CAMPAIGN',
+      status: updatedExpiresAt && new Date(updatedExpiresAt).getTime() > Date.now() ? 'ACTIVE' : 'EXPIRED',
+      issuedAt: user.registeredAt ? new Date(user.registeredAt).toISOString() : new Date().toISOString(),
+      expiresAt: updatedExpiresAt,
+      durationDays: updatedDurationDays,
+      source: 'FREE_CAMPAIGN',
+      planName: updatedPlan,
+      boundDeviceId: user.boundDeviceId,
+      boundDeviceName: user.boundDeviceName,
+      completedTestsCount: newCount,
+      freePassStage: updatedStage,
+      unlockedMilestoneBonus: Boolean(user.unlockedMilestoneBonus || shouldUnlockBonus),
+      campaignId: FREE_ACCESS_CAMPAIGN_ID,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => null);
+
     return { unlockedBonus: shouldUnlockBonus, newCount };
   };
 
