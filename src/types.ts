@@ -123,6 +123,11 @@ export interface Question {
   postName?: string;                 // e.g. "CG Lecturer 2026", "CG Teacher 2026"
   examName?: string;                 // e.g., "CG English Lecturer 2026"
   year?: number;                     // e.g., 2026
+  /** Canonical exam taxonomy IDs. */
+  authorityId?: string;
+  programId?: string;
+  postId?: string;
+  seriesId?: string;
   category: ExamCategory | string;   // e.g., "CG Lecturer" or "CGSSB"
   subject: string;                  // e.g., "General English"
   topic: string;                    // e.g., "Prepositions"
