@@ -181,10 +181,20 @@ service cloud.firestore {
         (isOwner(resource.data.userId));
       allow create: if hasManageStudents() ||
         (isOwner(request.resource.data.userId) &&
-         request.resource.data.testId is string);
-      allow update: if hasManageStudents() ||
-        (isOwner(resource.data.userId) &&
-         request.resource.data.userId == resource.data.userId);
+         request.resource.data.testId is string &&
+         request.resource.data.id is string &&
+         request.resource.data.submissionId is string &&
+         request.resource.data.responses is map &&
+         request.resource.data.questionStatuses is map &&
+         request.resource.data.correctCount is number &&
+         request.resource.data.incorrectCount is number &&
+         request.resource.data.unattemptedCount is number &&
+         request.resource.data.attemptedCount is number &&
+         request.resource.data.maxScore is number &&
+         request.resource.data.score is number);
+      // Student attempts are immutable after creation. This prevents a second
+      // client write from changing score/answers after the idempotent submission.
+      allow update: if hasManageStudents();
       allow delete: if hasManageStudents();
     }
 
