@@ -44,6 +44,8 @@ import { HotSliderAndOffers } from './HotSliderAndOffers';
 import { ChangeTargetModal, TARGET_EXAM_OPTIONS, TargetExamOption } from './ChangeTargetModal';
 import { LiveTestLeaderboard } from './LiveTestLeaderboard';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
+import { fetchMySeriesEnrollmentsFromFirestore } from '../firebase/firestoreService';
+import type { SeriesEnrollment } from '../types';
 
 export type TestSegment = 'ALL' | 'MOCK' | 'PYP' | 'PRO';
 
@@ -111,10 +113,38 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
     return null;
   });
-  const [portalDisplayMode, setPortalDisplayMode] = useState<'bundles' | 'individual' | 'leaderboard'>('bundles');
+  const [portalDisplayMode, setPortalDisplayMode] = useState<'bundles' | 'individual' | 'leaderboard' | 'my-tests'>('bundles');
   const [bundleAuthorityFilter, setBundleAuthorityFilter] = useState<'ALL' | 'CGSSB' | 'CGPSC'>('ALL');
   const [enrolledBundleIds, setEnrolledBundleIds] = useState<string[]>([]);
+  const [seriesEnrollments, setSeriesEnrollments] = useState<SeriesEnrollment[]>([]);
+  const [isEnrollmentLoading, setIsEnrollmentLoading] = useState(false);
   const [leaderboardSelectedTestId, setLeaderboardSelectedTestId] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) {
+      setSeriesEnrollments([]);
+      setEnrolledBundleIds([]);
+      return;
+    }
+    setIsEnrollmentLoading(true);
+    fetchMySeriesEnrollmentsFromFirestore(user.id)
+      .then(rows => {
+        if (cancelled) return;
+        setSeriesEnrollments(rows);
+        setEnrolledBundleIds(rows.filter(row => row.status === 'active').map(row => row.seriesId));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSeriesEnrollments([]);
+          setEnrolledBundleIds([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsEnrollmentLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   useEffect(() => {
     let initialList = getStoredBundles();
@@ -170,6 +200,26 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       window.history.pushState(null, '', '/test-series');
     }
   };
+  const handleEnrollBundle = (bundle: TestSeriesBundle) => {
+    if (!user) {
+      onOpenAuthModal?.();
+      return;
+    }
+    if (!isUserPassActive(user) || !user.passExpiresAt) {
+      onExplorePass?.();
+      return;
+    }
+    if (enrolledBundleIds.includes(bundle.id)) {
+      setPortalDisplayMode('my-tests');
+      return;
+    }
+    setSelectedBundle(bundle);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ bundleId: bundle.id }, '', `/series/${bundle.slug}`);
+    }
+  };
+
+
 
   // User Target Exam State
   const [userTarget, setUserTarget] = useState<string>(() => {
@@ -763,7 +813,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           onExplorePass={onExplorePass || (() => {})}
           isEnrolled={enrolledBundleIds.includes(selectedBundle.id)}
           attempts={attempts}
-          onEnrollSuccess={(bId) => setEnrolledBundleIds(prev => [...new Set([...prev, bId])])}
+          onOpenAuthModal={onOpenAuthModal}
+          onEnrollSuccess={(bId) => {
+            setEnrolledBundleIds(prev => [...new Set([...prev, bId])]);
+            setSelectedBundle(null);
+            setPortalDisplayMode('my-tests');
+            if (typeof window !== 'undefined') window.history.pushState(null, '', '/my-tests');
+          }}
         />
       </div>
     );
@@ -1007,6 +1063,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             <button
               type="button"
+              onClick={() => setPortalDisplayMode('my-tests')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 whitespace-nowrap cursor-pointer shrink-0 ${
+                portalDisplayMode === 'my-tests'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>My Tests{enrolledBundleIds.length ? ` (${enrolledBundleIds.length})` : ''}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setPortalDisplayMode('individual')}
               className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center space-x-1.5 whitespace-nowrap cursor-pointer shrink-0 ${
                 portalDisplayMode === 'individual'
@@ -1044,7 +1113,77 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
 
         {/* LAUNCHED BUNDLES VIEW (Clutter-Free with Dedicated Pages) */}
-        {portalDisplayMode === 'bundles' ? (
+        {portalDisplayMode === 'my-tests' ? (
+          <div className="space-y-5">
+            <div className="bg-slate-900/90 border border-emerald-500/20 rounded-3xl p-5 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <h2 className="text-lg font-black text-white">My Tests</h2>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">Your enrolled test series and the tests available through your active pass.</p>
+                </div>
+                <button type="button" onClick={() => setPortalDisplayMode('bundles')} className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold">Browse Test Series</button>
+              </div>
+            </div>
+
+            {isEnrollmentLoading ? (
+              <div className="p-10 rounded-3xl bg-slate-900 border border-slate-800 text-center text-sm text-slate-400">Loading your enrolled test series...</div>
+            ) : seriesEnrollments.filter(e => e.status === 'active').length === 0 ? (
+              <div className="p-10 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3">
+                <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
+                <h3 className="font-black text-white">No Test Series Enrolled</h3>
+                <p className="text-xs text-slate-400">Choose a test series and tap “Enroll Free” while your pass is active.</p>
+                <button type="button" onClick={() => setPortalDisplayMode('bundles')} className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs">Explore Test Series</button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {seriesEnrollments.filter(e => e.status === 'active').map(enrollment => {
+                  const bundle = findBundleBySlugOrId(enrollment.seriesId, bundles);
+                  if (!bundle) return null;
+                  const bundleTests = [...(bundle.testItems || []), ...(bundle.chapterTests || []), ...(bundle.pypTests || [])];
+                  const activeAccess = isUserPassActive(user) && (!enrollment.accessExpiresAt || new Date(enrollment.accessExpiresAt).getTime() > Date.now());
+                  return (
+                    <div key={enrollment.id} className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-black text-white text-sm sm:text-base">{bundle.title}</h3>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${activeAccess ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/10 text-rose-300 border-rose-500/30'}`}>
+                              {activeAccess ? `PASS ACTIVE • ${calculateDaysRemaining(enrollment.accessExpiresAt)}d left` : 'PASS EXPIRED'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1">{bundle.totalTestsCount} tests • {bundle.languageDisplay}</p>
+                        </div>
+                        <button type="button" onClick={() => handleOpenBundleDetail(bundle)} className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold">Open Series</button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {bundleTests.map(item => {
+                          const liveTest = tests.find(test => test.id === item.id);
+                          const attempted = hasAttemptedTest(item.id);
+                          const canStart = Boolean(liveTest) && (item.isFreePreview || activeAccess);
+                          return (
+                            <div key={item.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-white truncate">{item.title}</div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">{item.questionCount} Qs • {item.durationMinutes} min</div>
+                              </div>
+                              <button type="button" disabled={!canStart} onClick={() => liveTest && onStartTest(liveTest)} className={`shrink-0 px-3 py-1.5 rounded-xl text-[10px] font-black ${canStart ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
+                                {canStart ? (attempted ? 'Re-attempt' : 'Start Test') : 'Locked'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : portalDisplayMode === 'bundles' ? (
           <div className="space-y-4">
             <div className="space-y-4 bg-slate-950/60 p-4 sm:p-5 rounded-3xl border border-slate-800/80">
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1094,7 +1233,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     key={bundle.id}
                     bundle={bundle}
                     onOpenBundle={handleOpenBundleDetail}
-                    onEnrollNow={handleOpenBundleDetail}
+                    onEnrollNow={handleEnrollBundle}
                     onStartFreeTest={b => {
                       const freeItem = b.testItems.find(t => t.isFreePreview) || b.testItems[0];
                       if (freeItem) {
