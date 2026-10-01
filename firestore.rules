@@ -177,8 +177,14 @@ service cloud.firestore {
     // Attempts: authenticated students may create/read only their own attempts.
     // Admins can read/write for support and analytics.
     match /attempts/{attemptId} {
-      allow read: if hasManageStudents() ||
+      // The nonexistent-document branch is needed for the idempotent transaction
+      // that checks whether this submission ID has already been committed.
+      allow get: if hasManageStudents() ||
+        (isAuthenticated() && resource == null) ||
         (isOwner(resource.data.userId));
+      // Student attempt queries must be constrained to the authenticated owner.
+      allow list: if isPermanentUser() &&
+        resource.data.userId == request.auth.uid;
       allow create: if hasManageStudents() ||
         (isOwner(request.resource.data.userId) &&
          request.resource.data.testId is string &&
