@@ -97,6 +97,15 @@ for (const field of ['scopeType', 'scopeKey', 'averagePercentage']) {
 const attemptsStart = rules.indexOf('match /attempts/{attemptId}');
 const attemptsEnd = rules.indexOf('\n    // User-specific application state', attemptsStart);
 const attemptsBlock = rules.slice(attemptsStart, attemptsEnd);
+if (!attemptsBlock.includes('allow get: if hasManageStudents()')) {
+  throw new Error('Attempt get policy missing');
+}
+if (!attemptsBlock.includes('resource == null')) {
+  throw new Error('Idempotent nonexistent-attempt lookup policy missing');
+}
+if (!attemptsBlock.includes('allow list: if isPermanentUser()')) {
+  throw new Error('Student attempt list policy missing');
+}
 if (!attemptsBlock.includes('isOwner(request.resource.data.userId)')) {
   throw new Error('Attempt ownership rule missing');
 }
