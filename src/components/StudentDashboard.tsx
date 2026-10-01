@@ -43,7 +43,7 @@ import { BundleDetailPage } from './BundleDetailPage';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
 import { ChangeTargetModal, TARGET_EXAM_OPTIONS, TargetExamOption } from './ChangeTargetModal';
 import { LiveTestLeaderboard } from './LiveTestLeaderboard';
-import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
+import { calculateDaysRemaining, isUserPassActive, FREE_ACCESS_CAMPAIGN } from '../utils/devicePassManager';
 import { fetchMySeriesEnrollmentsFromFirestore } from '../firebase/firestoreService';
 import type { SeriesEnrollment } from '../types';
 
@@ -570,14 +570,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
             )}
-            {test.isPro && !isUserPassActive(user) && !isAdmin ? (
+            {test.isPro && !isUserPassActive(user) && !isAdmin && !FREE_ACCESS_CAMPAIGN ? (
               <button
                 type="button"
                 onClick={() => onExplorePass ? onExplorePass() : onStartTest(test)}
                 className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-xs flex items-center space-x-1 shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
               >
                 <Crown className="w-3 h-3 fill-slate-950" />
-                <span>Unlock</span>
+                <span>Free Pass</span>
               </button>
             ) : (
               <button
@@ -750,13 +750,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             {/* Primary Action Row: Start Test + View Leaderboard */}
             <div className="flex items-center gap-2">
-              {test.isPro && !isUserPassActive(user) && !isAdmin ? (
+              {test.isPro && !isUserPassActive(user) && !isAdmin && !FREE_ACCESS_CAMPAIGN ? (
                 <button
                   onClick={() => onExplorePass ? onExplorePass() : onStartTest(test)}
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-slate-950 font-black text-xs flex items-center justify-center space-x-1.5 transition shadow-sm active:scale-95 cursor-pointer"
                 >
                   <Crown className="w-3.5 h-3.5 fill-slate-950" />
-                  <span>Unlock with All-Access Pass</span>
+                  <span>Free Launch Access</span>
                 </button>
               ) : (
                 <button
