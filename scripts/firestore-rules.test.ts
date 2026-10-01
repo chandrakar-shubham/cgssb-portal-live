@@ -71,6 +71,29 @@ for (const privilegedField of ['credits', 'adminPermissions']) {
   }
 }
 
+const profileStart = rules.indexOf('match /leaderboardProfiles/{profileId}');
+if (profileStart === -1) throw new Error('Scalable leaderboard profile rule missing');
+const profileEnd = rules.indexOf('\n    // Referral records', profileStart);
+const profileBlock = rules.slice(profileStart, profileEnd);
+for (const required of [
+  'allow get: if true;',
+  'allow list: if request.query.limit <= 100;',
+  'isOwner(request.resource.data.userId)',
+  "'practice_summary'",
+  'affectedKeys().hasOnly'
+]) {
+  if (!profileBlock.includes(required)) {
+    throw new Error(`Leaderboard profile security policy missing: ${required}`);
+  }
+}
+
+const indexes = readFileSync('firestore.indexes.json', 'utf8');
+for (const field of ['scopeType', 'scopeKey', 'averagePercentage']) {
+  if (!indexes.includes(`"fieldPath": "${field}"`)) {
+    throw new Error(`Leaderboard index missing field: ${field}`);
+  }
+}
+
 const attemptsStart = rules.indexOf('match /attempts/{attemptId}');
 const attemptsEnd = rules.indexOf('\n    // User-specific application state', attemptsStart);
 const attemptsBlock = rules.slice(attemptsStart, attemptsEnd);
