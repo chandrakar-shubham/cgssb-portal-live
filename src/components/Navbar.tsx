@@ -510,6 +510,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               )}
 
+              {/* Account-level Pass destination: secondary on mobile, never a primary bottom-nav item */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('pass');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                  activeTab === 'pass'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                    : 'text-slate-300 hover:bg-slate-800/80 border border-slate-800'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Crown className={`w-4 h-4 ${activeTab === 'pass' ? 'text-slate-950 fill-slate-950' : 'text-amber-400 fill-amber-400'}`} />
+                  <span>{isUserPassActive(user) ? 'Pass & Access' : user?.passExpiresAt ? 'Renew Pass' : 'Get All-Access Pass'}</span>
+                </div>
+                <span className={`text-[10px] font-semibold ${activeTab === 'pass' ? 'text-slate-900' : 'text-amber-300'}`}>
+                  {isUserPassActive(user) ? `${calculateDaysRemaining(user.passExpiresAt)}d left` : '₹199'}
+                </span>
+              </button>
+
               {/* NAVIGABLE SECTIONS IN SIDEBAR */}
               <div className="space-y-4">
                 {/* Section 1: Tests & Practice */}
