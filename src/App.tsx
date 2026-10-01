@@ -110,6 +110,7 @@ import { extractHierarchyFromApp } from './utils/examHierarchy';
 import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
 import { auth } from './firebase/config';
 import { isUserPassActive } from './utils/devicePassManager';
+import { buildLeaderboardProfilesForUser } from './utils/leaderboardProfiles';
 import { testConnection } from './firebase/connectionTest';
 import {
   fetchTestsFromFirestore,
@@ -123,7 +124,7 @@ import {
   deletePypPaperFromFirestore,
   fetchMyAttemptsFromFirestore,
   saveAttemptToFirestore,
-  saveLeaderboardEntryToFirestore,
+  saveLeaderboardProfilesToFirestore,
 } from './firebase/firestoreService';
 
 function MainApp() {
@@ -807,27 +808,9 @@ function MainApp() {
     if (user?.id) {
       try {
         await saveAttemptToFirestore(newAttempt);
-        await saveLeaderboardEntryToFirestore({
-          id: newAttempt.id,
-          userId: newAttempt.userId,
-          candidateName: newAttempt.userName,
-          district: user.district,
-          category: user.categoryReservation,
-          targetKey,
-          targetExam,
-          seriesId,
-          testId: currentTest.id,
-          score: netScore,
-          maxScore,
-          percentage,
-          accuracy,
-          correctCount,
-          incorrectCount,
-          unattemptedCount,
-          timeTakenSeconds: submission.timeTakenSeconds,
-          submittedAt: newAttempt.submittedAt,
-          source: 'practice_attempt',
-        });
+        const allMineAttempts = [newAttempt, ...attempts.filter(a => a.userId === user.id && a.id !== newAttempt.id)];
+        const profiles = buildLeaderboardProfilesForUser(user, allMineAttempts);
+        await saveLeaderboardProfilesToFirestore(profiles);
       } catch (error) {
         console.warn('Attempt saved locally but Firestore persistence failed:', error);
       }
