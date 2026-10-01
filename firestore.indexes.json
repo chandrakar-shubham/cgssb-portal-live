@@ -57,6 +57,28 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "leaderboardProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "scopeType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "district",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "averagePercentage",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
