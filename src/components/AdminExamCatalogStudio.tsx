@@ -7,7 +7,7 @@ import {
   saveExamPost, saveExamTestSeries, slugifyCatalog
 } from '../firebase/examCatalogService';
 import { saveBundleToFirestore } from '../firebase/firestoreService';
-import { saveSingleBundle, getStoredBundles } from '../utils/bundleStore';
+import { saveSingleBundle, getStoredBundles, purgeAllDemoDatabaseData } from '../utils/bundleStore';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 
 const now = () => new Date().toISOString();
@@ -30,6 +30,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
   const [postSalaryRange, setPostSalaryRange] = useState('');
   const [postSubjects, setPostSubjects] = useState('');
   const [message, setMessage] = useState('');
+  const [purging, setPurging] = useState(false);
 
   const load = async () => {
     try {
@@ -125,6 +126,27 @@ export const AdminExamCatalogStudio: React.FC = () => {
     setName(''); setMessage('Draft test series created. Open it in Test Series Studio to add content.'); await load();
   };
 
+  const purgeDemoData = async () => {
+    if (!window.confirm('This will permanently delete demo content from Firestore: tests, questions, PYP papers, bundles, and the canonical exam catalog. User accounts, attempts, enrollments and leaderboard data will NOT be deleted. Continue?')) return;
+    setPurging(true);
+    setMessage('');
+    try {
+      await purgeAllDemoDatabaseData();
+      setSelectedAuthority('');
+      setSelectedProgram('');
+      setSelectedPost('');
+      setAuthorities([]);
+      setPrograms([]);
+      setPosts([]);
+      setSeries([]);
+      setMessage('Demo content and old exam-catalog data were purged. The production catalog is now clean.');
+    } catch (e:any) {
+      setMessage(e?.message || 'Demo-data purge failed.');
+    } finally {
+      setPurging(false);
+    }
+  };
+
   const section = (title:string, icon:React.ReactNode, children:React.ReactNode) => (
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-4 text-white font-black">{icon}<span>{title}</span></div>
@@ -139,7 +161,14 @@ export const AdminExamCatalogStudio: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-black text-white">Exam & Recruitment Catalog</h1>
           <p className="text-sm text-slate-400 mt-1">One canonical hierarchy for the student portal, Universal Ingestion Studio, SEO and all test content.</p>
         </div>
-
+        <button
+          type="button"
+          onClick={purgeDemoData}
+          disabled={purging}
+          className="shrink-0 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs font-black text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+        >
+          {purging ? 'Purging…' : 'Reset Demo Data'}
+        </button>
       </div>
     </div>
     {message && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div>}
