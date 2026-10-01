@@ -43,6 +43,7 @@ import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { QuestionRenderer } from './QuestionRenderer';
 import { saveQuestionsToFirestore, saveTestToFirestore, savePypPaperToFirestore } from '../firebase/firestoreService';
 import { ensureCanonicalHierarchyForBundle } from '../firebase/examCatalogService';
+import { CanonicalIngestionSelector } from './CanonicalIngestionSelector';
 
 export type IngestionContentType = 'MOCK_TEST' | 'PYP' | 'CHAPTER_TEST' | 'QUESTION_BANK';
 export type IngestionInputTab = 'SMART_PASTE' | 'JSON_EDITOR' | 'AI_GEMINI';
@@ -898,52 +899,19 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
                 </div>
               </div>
 
-              {/* Hierarchy: Authority, Exam Name, Cadre */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    1. Exam Authority / Board
-                  </label>
-                  <select
-                    value={authority}
-                    onChange={e => setAuthority(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:border-indigo-500 focus:outline-none"
-                  >
-                    <option value="CGSSB">CGSSB (CG Vyapam)</option>
-                    <option value="CGPSC">CGPSC (State Service Commission)</option>
-                    <option value="POLICE">CG Police Recruitment Board</option>
-                    <option value="TEACHER">CG Teacher Recruitment Board</option>
-                    <option value="SWAMI_ATMANAND">Swami Atmanand Recruitment</option>
-                    <option value="CENTRAL_EXAMS">Central Govt Exams (SSC/RRB)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    2. Exam Name / Recruitment Cycle
-                  </label>
-                  <input
-                    type="text"
-                    value={examName}
-                    onChange={e => setExamName(e.target.value)}
-                    placeholder="e.g. CG Teacher Recruitment 2026"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    3. Cadre / Target Post
-                  </label>
-                  <input
-                    type="text"
-                    value={cadre}
-                    onChange={e => setCadre(e.target.value)}
-                    placeholder="e.g. Assistant Teacher (Sahayak Shikshak)"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-              </div>
+              {/* Canonical hierarchy — single source of truth */}
+              <CanonicalIngestionSelector
+                authority={authority}
+                examName={examName}
+                cadre={cadre}
+                targetBundleId={targetBundleId}
+                onChange={({ authority: nextAuthority, examName: nextExamName, cadre: nextCadre, targetBundleId: nextSeriesId }) => {
+                  setAuthority(nextAuthority);
+                  setExamName(nextExamName);
+                  setCadre(nextCadre);
+                  setTargetBundleId(nextSeriesId);
+                }}
+              />
 
               {/* Test Details & Optional Bundle Linkage */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
