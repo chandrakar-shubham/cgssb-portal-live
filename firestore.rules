@@ -110,6 +110,24 @@ service cloud.firestore {
       allow delete: if hasManageStudents();
     }
 
+    // Canonical exam taxonomy. Public reads; admin-managed mutations.
+    match /examAuthorities/{authorityId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /examPrograms/{programId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /examPosts/{postId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /examTestSeries/{seriesId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+
     // Public exam/catalog content. Admin-only mutations.
     match /mockTests/{testId} {
       allow read: if true;
