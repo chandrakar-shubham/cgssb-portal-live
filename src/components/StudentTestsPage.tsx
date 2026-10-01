@@ -80,10 +80,12 @@ export const StudentTestsPage: React.FC<Props> = ({ tests, attempts = [], onStar
       const raw = localStorage.getItem(checkpointKey(test.id));
       const parsed = raw ? JSON.parse(raw) : null;
       const age = parsed?.updatedAt ? Math.max(0, Date.now() - Number(parsed.updatedAt)) : Infinity;
+      const savedRemaining = Number(parsed?.secondsRemaining);
+      const effectiveRemaining = savedRemaining - (Number.isFinite(age) ? Math.floor(age / 1000) : Infinity);
       return parsed?.testId === test.id
         && !!parsed?.sessionId
-        && Number(parsed.secondsRemaining) > 0
-        && Number(parsed.questionCount) === Number(test.questionCount)
+        && effectiveRemaining > 0
+        && Number(parsed?.questionCount) === Number(test.questionCount)
         && age < 1000 * 60 * 60 * 24 * 7;
     } catch (_) {
       return false;
