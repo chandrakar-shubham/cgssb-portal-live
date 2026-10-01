@@ -332,7 +332,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
                 <span>
                   {calculateDaysRemaining(user.passExpiresAt) > 0
-                    ? `${calculateDaysRemaining(user.passExpiresAt)}d Left`
+                    ? `${user.proPassPlan?.toLowerCase().includes('welcome') || user.freePassStage ? 'Free Pass' : 'Pass'} · ${calculateDaysRemaining(user.passExpiresAt)}d`
                     : 'Pass Active'}
                 </span>
               </button>
@@ -470,7 +470,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                       <span className={isUserPassActive(user) ? 'text-amber-300' : 'text-slate-400'}>
                         {isUserPassActive(user)
-                          ? `${calculateDaysRemaining(user.passExpiresAt)}d Pass Active`
+                          ? `${user.proPassPlan?.toLowerCase().includes('welcome') || user.freePassStage ? 'Free Pass' : 'All-Access Pass'} · ${calculateDaysRemaining(user.passExpiresAt)}d left`
                           : user.passExpiresAt
                             ? 'Pass Expired'
                             : 'Free Access Tier'}
