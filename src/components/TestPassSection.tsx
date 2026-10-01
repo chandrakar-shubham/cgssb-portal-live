@@ -252,6 +252,98 @@ export const TestPassSection: React.FC<TestPassSectionProps> = ({ onExploreTests
     printWindow.print();
   };
 
+  // Paid checkout is intentionally hidden during the free-launch growth campaign.
+  // Keep the component route alive so we can restore paid plans later without changing navigation.
+  if (true) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 pb-16 font-sans">
+        <section className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-slate-900 via-emerald-950/30 to-slate-900 p-6 sm:p-8 shadow-2xl">
+          <div className="text-center space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-black">
+              <Gift className="w-4 h-4" />
+              <span>FREE LAUNCH CAMPAIGN</span>
+            </div>
+            <h1 className="text-3xl sm:text-5xl font-black text-white">
+              All-Access Practice is <span className="text-emerald-400">FREE</span>
+            </h1>
+            <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
+              Every registered aspirant gets <strong className="text-white">1 month free</strong>.
+              Complete <strong className="text-white">5 tests</strong> and unlock an additional
+              <strong className="text-amber-300"> 2 months free</strong>.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4">
+                <div className="text-2xl font-black text-emerald-400">30 Days</div>
+                <div className="text-xs text-slate-400 mt-1">Free on registration</div>
+              </div>
+              <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4">
+                <div className="text-2xl font-black text-amber-300">+60 Days</div>
+                <div className="text-xs text-slate-400 mt-1">After 5 completed tests</div>
+              </div>
+              <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4">
+                <div className="text-2xl font-black text-white">3 Months</div>
+                <div className="text-xs text-slate-400 mt-1">Maximum free access</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {user ? (
+          <section className="rounded-3xl bg-slate-900/90 border border-slate-800 p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  <h2 className="text-lg font-black text-white">Your Free All-Access Pass</h2>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  {isPassActive
+                    ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining • Complete ${Math.max(0, 5 - Number(user.completedTestsCount || 0))} more test${Math.max(0, 5 - Number(user.completedTestsCount || 0)) === 1 ? '' : 's'} to unlock the 2-month bonus.`
+                    : 'Your free campaign pass has expired.'}
+                </p>
+              </div>
+              <div className="shrink-0 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-black text-sm">
+                {isPassActive ? `${daysLeft}d Free Access` : 'Expired'}
+              </div>
+            </div>
+
+            <div className="mt-5 h-3 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-amber-400 transition-all"
+                style={{ width: `${Math.min(100, (Number(user.completedTestsCount || 0) / 5) * 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-2 text-[11px] font-bold text-slate-500">
+              <span>{Math.min(5, Number(user.completedTestsCount || 0))}/5 tests completed</span>
+              <span>{user.unlockedMilestoneBonus ? '3-month bonus unlocked' : '5 tests → +2 months'}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={onExploreTests}
+              className="mt-5 w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition shadow-lg shadow-emerald-500/20"
+            >
+              <span>Start Practicing — All Tests Free</span>
+            </button>
+          </section>
+        ) : (
+          <section className="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 text-center">
+            <h2 className="text-xl font-black text-white">Create your free account</h2>
+            <p className="text-sm text-slate-400 mt-2">Register to activate the 30-day All-Access launch pass.</p>
+          </section>
+        )}
+
+        <section className="rounded-3xl bg-slate-900/70 border border-slate-800 p-5 text-center">
+          <p className="text-xs text-slate-500">
+            Paid All-Access plans are temporarily unavailable during the free-launch campaign.
+            We will introduce paid plans later.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-10 pb-16 font-sans selection:bg-amber-400 selection:text-slate-950">
       
