@@ -3139,15 +3139,6 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
               <CloudDownload className={`w-4 h-4 text-indigo-400 ${isSyncingCloud ? 'animate-bounce' : ''}`} />
               <span>{isSyncingCloud ? 'Syncing...' : 'Sync Cloud / Pull Updates'}</span>
             </button>
-            <button
-
-            <button
-              onClick={handleCreateNewBundle}
-              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-xs shadow-xl shadow-indigo-600/30 flex items-center space-x-2 transition active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Test Series</span>
-            </button>
           </div>
         </div>
 
