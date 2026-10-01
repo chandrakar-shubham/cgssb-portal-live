@@ -62,7 +62,7 @@ export async function fetchExamPosts(programId?: string): Promise<ExamPost[]> {
 export async function fetchExamTestSeries(programId?: string, postId?: string): Promise<ExamTestSeries[]> {
   if (!db) return [];
   const ref = collection(db, EXAM_CATALOG_COLLECTIONS.SERIES);
-  const filters = [];
+  const filters: any[] = [];
   if (programId) filters.push(where('programId', '==', programId));
   if (postId) filters.push(where('postId', '==', postId));
   const snap = filters.length
