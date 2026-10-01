@@ -528,7 +528,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>{isUserPassActive(user) ? 'Pass & Access' : user?.passExpiresAt ? 'Renew Pass' : 'Get All-Access Pass'}</span>
                 </div>
                 <span className={`text-[10px] font-semibold ${activeTab === 'pass' ? 'text-slate-900' : 'text-amber-300'}`}>
-                  {isUserPassActive(user) ? `${calculateDaysRemaining(user.passExpiresAt)}d left` : '₹199'}
+                  {isUserPassActive(user) && user?.passExpiresAt ? `${calculateDaysRemaining(user.passExpiresAt)}d left` : '₹199'}
                 </span>
               </button>
 
