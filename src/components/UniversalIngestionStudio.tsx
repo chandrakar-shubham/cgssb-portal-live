@@ -464,6 +464,13 @@ export const UniversalIngestionStudio: React.FC<UniversalIngestionStudioProps> =
       setStatusMessage({ type: 'error', text: 'No questions to publish!' });
       return;
     }
+    if (!targetBundleId) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Select a canonical Test Series before publishing. Create a new recruitment/post/series in Admin → Exam & Recruitment Catalog if needed.'
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     setStatusMessage(null);
