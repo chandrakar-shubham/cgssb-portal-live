@@ -57,7 +57,6 @@ interface AdminDatabaseViewProps {
   questions: Question[];
   pypPapers: PreviousYearPaper[];
   attempts: TestAttempt[];
-  onRestoreSnapshot?: (data: { tests: MockTest[]; questions: Question[]; pypPapers: PreviousYearPaper[] }) => void;
   onOpenToolsModal?: () => void;
 }
 
@@ -449,7 +448,6 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   questions,
   pypPapers,
   attempts,
-  onRestoreSnapshot,
   onOpenToolsModal,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'audit' | 'collections' | 'rules'>('analytics');
@@ -578,9 +576,6 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
     const nextState = !trueZero;
     setTrueZero(nextState);
     setTrueZeroDataMode(nextState);
-    if (nextState && onRestoreSnapshot) {
-      onRestoreSnapshot({ tests: [], questions: [], pypPapers: [] });
-    }
     setBackupMessage(nextState ? 'True 0 Data Mode enabled: demo catalogs suppressed.' : 'Default catalog mode restored.');
     setTimeout(() => setBackupMessage(null), 3500);
   };
