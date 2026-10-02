@@ -31,10 +31,20 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     try {
       const authorityList = await fetchExamAuthorities();
       setAuthorities(authorityList);
-      const matchedAuthority = authorityList.find(
-        a => a.name === authority || a.shortName === authority || a.id === authority
-      );
-      const nextAuthorityId = matchedAuthority?.id || authorityList[0]?.id || '';
+
+      // Resolve the canonical series FIRST when a bundle/series target is already known.
+      // Display labels are not identifiers and must never be used to infer the hierarchy.
+      const allSeries = await fetchExamTestSeries();
+      const canonicalTarget = targetBundleId
+        ? allSeries.find(s => s.id === targetBundleId || s.bundleId === targetBundleId)
+        : undefined;
+
+      const matchedAuthority = canonicalTarget
+        ? authorityList.find(a => a.id === canonicalTarget.authorityId)
+        : authorityList.find(
+            a => a.name === authority || a.shortName === authority || a.id === authority
+          );
+      const nextAuthorityId = canonicalTarget?.authorityId || matchedAuthority?.id || authorityList[0]?.id || '';
       setAuthorityId(nextAuthorityId);
 
       if (!nextAuthorityId) {
@@ -46,8 +56,10 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
 
       const programList = await fetchExamPrograms(nextAuthorityId);
       setPrograms(programList);
-      const matchedProgram = programList.find(p => p.name === examName || p.id === examName);
-      const nextProgramId = matchedProgram?.id || programList[0]?.id || '';
+      const matchedProgram = canonicalTarget
+        ? programList.find(p => p.id === canonicalTarget.programId)
+        : programList.find(p => p.name === examName || p.id === examName);
+      const nextProgramId = canonicalTarget?.programId || matchedProgram?.id || programList[0]?.id || '';
       setProgramId(nextProgramId);
 
       if (!nextProgramId) {
@@ -58,8 +70,10 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
 
       const postList = await fetchExamPosts(nextProgramId);
       setPosts(postList);
-      const matchedPost = postList.find(p => p.name === cadre || p.id === cadre);
-      const nextPostId = matchedPost?.id || '';
+      const matchedPost = canonicalTarget
+        ? postList.find(p => p.id === canonicalTarget.postId)
+        : postList.find(p => p.name === cadre || p.id === cadre);
+      const nextPostId = canonicalTarget?.postId || matchedPost?.id || '';
       setPostId(nextPostId);
 
       // Critical integrity rule: when a recruitment has posts and a post is selected,
@@ -67,7 +81,9 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
       const seriesList = await fetchExamTestSeries(nextProgramId, nextPostId || undefined);
       setSeries(seriesList);
 
-      const selected = seriesList.find(s => s.id === targetBundleId || s.bundleId === targetBundleId);
+      const selected = canonicalTarget
+        ? seriesList.find(s => s.id === canonicalTarget.id)
+        : seriesList.find(s => s.id === targetBundleId || s.bundleId === targetBundleId);
       setSelectedSeriesId(selected?.id || '');
     } catch {
       setAuthorities([]);
