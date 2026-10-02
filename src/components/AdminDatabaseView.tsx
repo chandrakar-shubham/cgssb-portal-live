@@ -6,8 +6,10 @@ import { APP_BUILD_INFO } from '../utils/buildInfo';
 import {
   fetchDatabaseObservability,
   runDatabaseIntegrityAudit,
+  fetchOrphanedSeriesRecords,
   DatabaseObservabilitySnapshot,
-  DatabaseIntegrityAudit
+  DatabaseIntegrityAudit,
+  OrphanedSeriesRecord
 } from '../firebase/firestoreService';
 import { getStoredBundles, purgeAllDemoDatabaseData, isDemoDataPurged, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
@@ -460,6 +462,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [isPurging, setIsPurging] = useState(false);
   const [liveObservability, setLiveObservability] = useState<DatabaseObservabilitySnapshot | null>(null);
   const [liveIntegrity, setLiveIntegrity] = useState<DatabaseIntegrityAudit | null>(null);
+  const [orphanedSeries, setOrphanedSeries] = useState<OrphanedSeriesRecord[]>([]);
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
 
@@ -471,12 +474,14 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
     setIsAuditing(true);
     setAuditError(null);
     try {
-      const [observability, integrity] = await Promise.all([
+      const [observability, integrity, orphaned] = await Promise.all([
         fetchDatabaseObservability(100),
-        runDatabaseIntegrityAudit(500)
+        runDatabaseIntegrityAudit(500),
+        fetchOrphanedSeriesRecords(500)
       ]);
       setLiveObservability(observability);
       setLiveIntegrity(integrity);
+      setOrphanedSeries(orphaned);
     } catch (error) {
       setAuditError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -893,6 +898,72 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 Audit mode: <strong className="text-slate-300">{liveIntegrity.mode}</strong> · up to {liveIntegrity.sampleLimit} documents per audited collection.
               </div>
             )}
+          </div>
+
+          {/* Orphaned Canonical Series Inspector */}
+          <div className="bg-slate-900 border border-amber-900/40 rounded-3xl p-6 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-black text-amber-300 flex items-center space-x-2">
+                  <FolderTree className="w-4 h-4 text-amber-400" />
+                  <span>Orphaned Canonical Series Inspector</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  These are canonical <code className="text-amber-300">examTestSeries</code> records whose linked Bundle document is missing.
+                  This inspector is read-only: it will not delete or recreate production data.
+                </p>
+              </div>
+              <div className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-black">
+                {orphanedSeries.length} orphan{orphanedSeries.length === 1 ? '' : 's'}
+              </div>
+            </div>
+
+            {orphanedSeries.length === 0 ? (
+              <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-4 text-xs text-emerald-300">
+                No orphaned canonical Test Series were found in the current audit scope.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {orphanedSeries.map(series => (
+                  <div key={series.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-black text-white">{series.name}</span>
+                          {series.nameHindi && <span className="text-xs text-slate-400">{series.nameHindi}</span>}
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                            {series.reason === 'bundleId_missing' ? 'bundleId missing' : 'bundle missing'}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1 text-[11px] font-mono">
+                          <div><span className="text-slate-500">Series ID:</span> <span className="text-slate-300">{series.id}</span></div>
+                          <div><span className="text-slate-500">Bundle ID:</span> <span className="text-slate-300">{series.bundleId || '—'}</span></div>
+                          <div><span className="text-slate-500">Type:</span> <span className="text-slate-300">{series.seriesType}</span></div>
+                          <div><span className="text-slate-500">Authority:</span> <span className="text-slate-300">{series.authorityId || '—'}</span></div>
+                          <div><span className="text-slate-500">Program:</span> <span className="text-slate-300">{series.programId || '—'}</span></div>
+                          <div><span className="text-slate-500">Post:</span> <span className="text-slate-300">{series.postId || '—'}</span></div>
+                          <div><span className="text-slate-500">Status:</span> <span className="text-slate-300">{series.status || '—'}</span></div>
+                          <div><span className="text-slate-500">Slug:</span> <span className="text-slate-300">{series.slug || '—'}</span></div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void navigator.clipboard?.writeText(JSON.stringify(series, null, 2))}
+                        className="shrink-0 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700"
+                      >
+                        <Copy className="inline w-3.5 h-3.5 mr-1.5" />
+                        Copy Record
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-[11px] text-slate-500 border-t border-slate-800 pt-3">
+              Safe next step: inspect these records and determine whether each Bundle was accidentally deleted or the Series is obsolete.
+              No automatic repair is performed because the original Bundle content cannot be safely reconstructed from a Series metadata record alone.
+            </div>
           </div>
 
           {/* Database Control & Demo Purge Command Center */}
