@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 import {
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { getBookmarks } from '../utils/bookmarkStorage';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
+import { fetchExamPrograms, type ExamProgram } from '../firebase/examCatalogService';
 
 interface StudentProfileModalProps {
   isOpen: boolean;
@@ -64,17 +65,7 @@ const CG_DISTRICTS = [
   'Sakti',
 ];
 
-const TARGET_EXAMS = [
-  'CGPSC State Service Prelims & Mains (Civil Services)',
-  'CG Vyapam Hostel Warden (छात्रवास अधीक्षक)',
-  'CG Vyapam Patwari / Revenue Inspector (RI)',
-  'CG Teacher Recruitment 2026 (शिक्षक / सहायक शिक्षक)',
-  'CG Assistant Professor / Lecturer 2026',
-  'CG Police Sub-Inspector (SI) / Constable',
-  'CG Forest Service (ACF / Forest Ranger)',
-  'Swami Atmanand English Medium Schools (SAGES)',
-  'CG Apex Bank / Sahkari Bank Recruitment',
-];
+
 
 const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
@@ -92,12 +83,31 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 }) => {
   const { user, updateUserProfile } = useAuth();
   const bookmarkCount = getBookmarks().length;
+  const [canonicalPrograms, setCanonicalPrograms] = useState<ExamProgram[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchExamPrograms()
+      .then(programs => {
+        if (cancelled) return;
+        setCanonicalPrograms(
+          programs
+            .filter(program => program.status === 'PUBLISHED')
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setCanonicalPrograms([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    targetExam: user?.targetExam || TARGET_EXAMS[0],
+    targetExam: user?.targetExam || '',
+    targetProgramId: user?.targetProgramId || '',
     targetYear: user?.targetYear || 2026,
     district: user?.district || 'Raipur',
     categoryReservation: (user?.categoryReservation || 'OBC') as 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS',
@@ -113,6 +123,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   if (!isOpen || !user) return null;
 
+  // Backward compatibility: keep the legacy display label until the user selects
+  // a canonical published program. Do not invent a canonical record in the UI.
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     updateUserProfile({
@@ -120,6 +132,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       email: formData.email.trim(),
       phone: formData.phone.trim(),
       targetExam: formData.targetExam,
+      targetProgramId: formData.targetProgramId || undefined,
       targetYear: Number(formData.targetYear),
       district: formData.district,
       categoryReservation: formData.categoryReservation,
@@ -329,15 +342,29 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   Primary Target Exam (मुख्य लक्ष्य परीक्षा)
                 </label>
                 <select
-                  value={formData.targetExam}
-                  onChange={e => setFormData({ ...formData, targetExam: e.target.value })}
+                  value={formData.targetProgramId}
+                  onChange={e => {
+                    const programId = e.target.value;
+                    const program = canonicalPrograms.find(item => item.id === programId);
+                    setFormData({
+                      ...formData,
+                      targetProgramId: programId,
+                      targetExam: program?.name || formData.targetExam,
+                      targetYear: program?.year || formData.targetYear,
+                    });
+                  }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  disabled={canonicalPrograms.length === 0}
                 >
-                  {TARGET_EXAMS.map(ex => (
-                    <option key={ex} value={ex}>
-                      {ex}
-                    </option>
-                  ))}
+                  {canonicalPrograms.length > 0 ? (
+                    canonicalPrograms.map(program => (
+                      <option key={program.id} value={program.id}>
+                        {program.name}{program.year ? ` — ${program.year}` : ''}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No published exam targets available</option>
+                  )}
                 </select>
               </div>
 
