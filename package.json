@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "./node_modules/.bin/tsc --noEmit",
-    "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\"",
+    "load:phase8": "node scripts/phase8-load-test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
