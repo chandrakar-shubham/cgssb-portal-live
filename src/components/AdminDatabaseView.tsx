@@ -1122,21 +1122,50 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
       {/* SUBTAB 3: COLLECTIONS INSPECTOR */}
       {activeSubTab === 'collections' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FIRESTORE_COLLECTIONS.map(col => (
-              <div key={col.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-white font-mono">{col.name}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    {col.documentCount} docs
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 line-clamp-2">{col.description}</p>
-                <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-500 font-mono">
-                  Primary Key: {col.primaryKey}
-                </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-lg font-black text-white">Live Firestore Collections</h2>
+                <p className="text-xs text-slate-400">Counts come from Firestore aggregation queries; payload size is a bounded sample estimate.</p>
               </div>
-            ))}
+              <button
+                onClick={() => void refreshDatabaseAudit()}
+                disabled={isAuditing}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 disabled:opacity-50"
+              >
+                <RefreshCw className={`inline w-3.5 h-3.5 mr-1.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                {isAuditing ? 'Auditing...' : 'Refresh'}
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="py-3 px-4">Collection</th>
+                    <th className="py-3 px-4">Documents</th>
+                    <th className="py-3 px-4">Sample</th>
+                    <th className="py-3 px-4">Payload</th>
+                    <th className="py-3 px-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-mono">
+                  {(liveObservability?.collections || []).map(col => (
+                    <tr key={col.name} className="hover:bg-slate-800/40">
+                      <td className="py-2.5 px-4 text-white font-bold">{col.name}</td>
+                      <td className="py-2.5 px-4 text-indigo-300">{col.count === null ? '—' : col.count.toLocaleString()}</td>
+                      <td className="py-2.5 px-4 text-slate-400">{col.sampleCount}</td>
+                      <td className="py-2.5 px-4 text-slate-300">{(col.estimatedBytes / 1024).toFixed(1)} KB</td>
+                      <td className="py-2.5 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${col.status === 'error' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}`}>
+                          {col.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!liveObservability && <div className="text-xs text-slate-500 py-6 text-center">Waiting for live Firestore audit…</div>}
           </div>
         </div>
       )}
