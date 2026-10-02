@@ -204,6 +204,8 @@ export interface DatabaseIntegrityAudit {
   invalidQuestionDocuments: number;
   invalidTestDocuments: number;
   invalidBundleDocuments: number;
+  schemaEvaluatedDocuments: number;
+  schemaValidDocuments: number;
   sampleLimit: number;
   mode: 'full' | 'sampled';
 }
@@ -278,6 +280,12 @@ export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<Data
     if (!b?.seriesId || !series.has(String(b.seriesId))) bundlesWithoutSeries++;
   });
 
+  const schemaEvaluatedDocuments = testsSnap.size + questionsSnap.size + bundlesSnap.size;
+  const schemaValidDocuments =
+    (testsSnap.size - invalidTestDocuments) +
+    (questionsSnap.size - invalidQuestionDocuments) +
+    (bundlesSnap.size - invalidBundleDocuments);
+
   return {
     checkedAt: new Date().toISOString(),
     seriesWithoutBundle,
@@ -289,6 +297,8 @@ export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<Data
     invalidQuestionDocuments,
     invalidTestDocuments,
     invalidBundleDocuments,
+    schemaEvaluatedDocuments,
+    schemaValidDocuments,
     sampleLimit,
     mode: (
       testsSnap.size < sampleLimit &&
