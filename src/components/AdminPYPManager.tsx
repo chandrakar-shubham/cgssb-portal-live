@@ -39,6 +39,7 @@ import {
 import { getBaseTestTitle } from '../utils/testDeduplication';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { AdminCompleteTestEditorModal } from './AdminCompleteTestEditorModal';
+import { ExamProgram, ExamPost, ExamTestSeries, fetchExamPrograms, fetchExamPosts, fetchExamTestSeries } from '../firebase/examCatalogService';
 
 const REQUIRED_BULK_KEYS = [
   'S.No.',
@@ -98,6 +99,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   const [builderInitialQuestions, setBuilderInitialQuestions] = useState<Question[]>([]);
   const [convertedNotice, setConvertedNotice] = useState<string | null>(null);
   const [editingTest, setEditingTest] = useState<MockTest | null>(null);
+  const [canonicalPrograms, setCanonicalPrograms] = useState<ExamProgram[]>([]);
+  const [canonicalPosts, setCanonicalPosts] = useState<ExamPost[]>([]);
+  const [canonicalSeries, setCanonicalSeries] = useState<ExamTestSeries[]>([]);
+  const [canonicalLoading, setCanonicalLoading] = useState(false);
 
   // Bulk Ingestion State (Universal Question Pipeline)
   const [previewQuestions, setPreviewQuestions] = useState<Question[]>([]);
@@ -156,6 +161,13 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    setCanonicalLoading(true);
+    fetchExamPrograms().then(programs => { if (active) setCanonicalPrograms(programs.filter(p => p.status === 'PUBLISHED')); }).catch(() => {}).finally(() => { if (active) setCanonicalLoading(false); });
+    return () => { active = false; };
+  }, []);
+
   const [formData, setFormData] = useState<{
     title: string;
     authority: string;
@@ -169,6 +181,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     negativeMarkingRatio: string;
     paperSummary: string;
     subjectsWeightage: { subject: string; questionCount: number; percentage: number }[];
+    authorityId?: string;
+    programId?: string;
+    postId?: string;
+    seriesId?: string;
   }>({
     title: '',
     authority: 'CGSSB',
@@ -181,6 +197,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
     marks: 100,
     negativeMarkingRatio: '1/3rd (0.333)',
     paperSummary: '',
+    authorityId: '',
+    programId: '',
+    postId: '',
+    seriesId: '',
     subjectsWeightage: [
       { subject: 'Chhattisgarh General Studies', questionCount: 25, percentage: 25 },
       { subject: 'India General Studies', questionCount: 20, percentage: 20 },
@@ -191,6 +211,17 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
       { subject: 'Computer Knowledge', questionCount: 10, percentage: 10 },
     ],
   });
+
+  useEffect(() => {
+    if (!formData.programId) { setCanonicalPosts([]); setCanonicalSeries([]); return; }
+    let active = true;
+    Promise.all([fetchExamPosts(formData.programId), fetchExamTestSeries(formData.programId, formData.postId || undefined)]).then(([posts, series]) => {
+      if (!active) return;
+      setCanonicalPosts(posts.filter(p => p.status === 'PUBLISHED'));
+      setCanonicalSeries(series.filter(s => s.status === 'PUBLISHED' && Boolean(s.bundleId)));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [formData.programId, formData.postId]);
 
   const handleQuickIndexHierarchyChange = (val: ExamHierarchyValue, matchedRecord?: HierarchyRecord) => {
     setFormData(prev => ({
@@ -214,6 +245,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
 
     onAddPYP({
       ...formData,
+      authorityId: formData.authorityId || undefined,
+      programId: formData.programId || undefined,
+      postId: formData.postId || undefined,
+      seriesId: formData.seriesId || undefined,
       title: finalTitle,
       isOfficialPaper: true,
       downloadFileName: `${finalTitle.replace(/\s+/g, '_')}_Official.pdf`,
@@ -956,6 +991,16 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
                   <span className="text-[10px] text-slate-400">Searchable dropdowns with auto-population</span>
                 </div>
 
+                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between"><label className="text-xs font-bold text-slate-200">Canonical Exam Catalog *</label>{canonicalLoading && <span className="text-[10px] text-slate-500">Loading catalog...</span>}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <select required value={formData.programId || ''} onChange={e => { const p = canonicalPrograms.find(x => x.id === e.target.value); setFormData({ ...formData, authorityId: p?.authorityId || '', programId: e.target.value, postId: '', seriesId: '' }); }} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"><option value="">Select published recruitment / exam</option>{canonicalPrograms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                    <select value={formData.postId || ''} onChange={e => setFormData({ ...formData, postId: e.target.value, seriesId: '' })} disabled={!formData.programId} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"><option value="">All posts / no specific post</option>{canonicalPosts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                    <select value={formData.seriesId || ''} onChange={e => setFormData({ ...formData, seriesId: e.target.value })} disabled={!formData.programId} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"><option value="">Select published test series</option>{canonicalSeries.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                  </div>
+                  {!formData.programId && <p className="text-[10px] text-amber-300">Production PYP records must be linked to a canonical published exam. Legacy hierarchy below remains descriptive only.</p>}
+                </div>
+
                 <ExamHierarchySelector
                   value={{
                     authority: formData.authority,
@@ -1034,7 +1079,14 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
 
             // 1. Add questions to bank
             if (qList.length > 0 && onQuestionsAdded) {
-              onQuestionsAdded(qList);
+              const canonicalQuestions = qList.map((q: any) => ({
+                ...q,
+                authorityId: formData.authorityId || q.authorityId,
+                programId: formData.programId || q.programId,
+                postId: formData.postId || q.postId,
+                seriesId: formData.seriesId || q.seriesId,
+              }));
+              onQuestionsAdded(canonicalQuestions);
             }
 
             // 2. Add to PYP Papers vault
@@ -1049,6 +1101,10 @@ export const AdminPYPManager: React.FC<AdminPYPManagerProps> = ({
               negativeMarkingRatio: paper.category.includes('CGPSC') ? '1/3rd (0.67)' : '1/3rd (0.333)',
               paperSummary: `Comprehensive ${paper.totalQuestions}-question paper aligned with official CG syllabus. Includes full bilingual explanations.`,
               linkedQuestionIds: qList.map((q: any) => q.id),
+              authorityId: formData.authorityId || undefined,
+              programId: formData.programId || undefined,
+              postId: formData.postId || undefined,
+              seriesId: formData.seriesId || undefined,
               linkedMockTestId: testId,
               subjectsWeightage: [
                 { subject: 'Chhattisgarh General Studies', questionCount: Math.round((paper.totalQuestions || qList.length) * 0.4), percentage: 40 },
