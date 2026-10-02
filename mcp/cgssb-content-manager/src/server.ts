@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { applicationDefault, cert, initializeApp, getApps } from 'firebase-admin/app';
+import { applicationDefault, cert, getApp, initializeApp, getApps, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
@@ -15,13 +15,16 @@ if (!PROJECT_ID) throw new Error('FIREBASE_PROJECT_ID is required');
 if (!MCP_TOKEN) throw new Error('MCP_BEARER_TOKEN is required');
 
 function initializeFirebase(): Firestore {
-  if (getApps().length === 0) {
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    initializeApp(serviceAccountJson
-      ? { credential: cert(JSON.parse(serviceAccountJson)), projectId: PROJECT_ID }
-      : { credential: applicationDefault(), projectId: PROJECT_ID });
-  }
-  return DATABASE_ID ? getFirestore(DATABASE_ID) : getFirestore();
+  const app: App = getApps().length === 0
+    ? (() => {
+        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        return initializeApp(serviceAccountJson
+          ? { credential: cert(JSON.parse(serviceAccountJson)), projectId: PROJECT_ID }
+          : { credential: applicationDefault(), projectId: PROJECT_ID });
+      })()
+    : getApp();
+
+  return DATABASE_ID ? getFirestore(app, DATABASE_ID) : getFirestore(app);
 }
 
 const db = initializeFirebase();
