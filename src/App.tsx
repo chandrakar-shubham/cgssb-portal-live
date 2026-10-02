@@ -1095,13 +1095,6 @@ function MainApp() {
     setActiveExamTest(test);
   };
 
-  // RESTORE SNAPSHOT HANDLER
-  const handleRestoreSnapshot = (data: { tests: MockTest[]; questions: Question[]; pypPapers: PreviousYearPaper[] }) => {
-    if (data.tests) setTests(dedupeById(data.tests));
-    if (data.questions) setQuestions(dedupeById(data.questions.map(migrateLegacyQuestion)));
-    if (data.pypPapers) setPypPapers(dedupeById(data.pypPapers));
-  };
-
   // LIVE UNRESOLVED MISTAKES COUNT FOR NAVBAR BADGE
   const unresolvedMistakesCount = React.useMemo(() => {
     const qMap = new Map(questions.map(q => [q.id, q]));
@@ -1271,7 +1264,6 @@ function MainApp() {
                 questions={questions}
                 pypPapers={pypPapers}
                 attempts={attempts}
-                onRestoreSnapshot={handleRestoreSnapshot}
                 onOpenToolsModal={() => setIsAdminToolsModalOpen(true)}
               />
             )}
@@ -1409,7 +1401,6 @@ function MainApp() {
               questions={questions}
               pypPapers={pypPapers}
               attempts={attempts}
-              onRestoreSnapshot={handleRestoreSnapshot}
             />
 
             <UniversalIngestionStudio
@@ -1956,7 +1947,6 @@ function MainApp() {
         questions={questions}
         pypPapers={pypPapers}
         attempts={attempts}
-        onRestoreSnapshot={handleRestoreSnapshot}
       />
 
       {/* Universal Ingestion Studio (Universal Master Engine) */}
