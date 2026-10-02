@@ -644,11 +644,17 @@ function MainApp() {
       return;
     }
 
-    const relevantQs = questions.filter(q => q.category === paper.examCategory);
+    const relevantQs = paper.programId
+      ? questions.filter(q => String(q.programId || '') === String(paper.programId))
+      : questions.filter(q => q.category === paper.examCategory);
     const pypTest: MockTest = {
       id: `pyp-test-${paper.id}`,
       title: `${paper.title} (Real Exam Simulation)`,
       category: paper.examCategory,
+      authorityId: paper.authorityId,
+      programId: paper.programId,
+      postId: paper.postId,
+      seriesId: paper.seriesId,
       isPYP: true,
       originType: 'pyq',
       pypYear: paper.year,
@@ -810,6 +816,10 @@ function MainApp() {
       subtopic: qData.subtopic || 'General',
       difficulty: qData.difficulty || 'Medium',
       category: qData.category || 'CGSSB',
+      authorityId: qData.authorityId,
+      programId: qData.programId,
+      postId: qData.postId,
+      seriesId: qData.seriesId,
       questionText: qData.questionText || '',
       questionHindi: qData.questionHindi || '',
       options: qData.options || [],
@@ -871,6 +881,10 @@ function MainApp() {
       id: paperId,
       title: pypData.title || 'Official Exam Paper',
       examCategory: pypData.examCategory || 'CGSSB',
+      authorityId: pypData.authorityId,
+      programId: pypData.programId,
+      postId: pypData.postId,
+      seriesId: pypData.seriesId,
       year: pypData.year || 2024,
       totalQuestions: pypData.totalQuestions || 100,
       durationMinutes: pypData.durationMinutes || 120,
@@ -906,6 +920,10 @@ function MainApp() {
       id: testId,
       title: `${pyp.title} (Official Mock Test)`,
       category: pyp.examCategory,
+      authorityId: pyp.authorityId,
+      programId: pyp.programId,
+      postId: pyp.postId,
+      seriesId: pyp.seriesId,
       description: `Official past paper simulation. Converted from archived examination ${pyp.year}.`,
       durationMinutes: pyp.durationMinutes,
       questionCount: pyp.totalQuestions,
@@ -915,7 +933,10 @@ function MainApp() {
         {
           id: `sec-${pyp.id}`,
           name: 'Official Exam Paper',
-          questionIds: questions.filter(q => q.category === pyp.examCategory).map(q => q.id),
+          questionIds: (pyp.programId
+            ? questions.filter(q => String(q.programId || '') === String(pyp.programId))
+            : questions.filter(q => q.category === pyp.examCategory)
+          ).map(q => q.id),
         },
       ],
       difficultyDistribution: { easy: 40, medium: 40, hard: 20 },
@@ -991,6 +1012,10 @@ function MainApp() {
       id: newTest.id || `test-${Date.now()}`,
       title: newTest.title || 'New Mock Test',
       category: newTest.category || 'CGSSB',
+      authorityId: newTest.authorityId,
+      programId: newTest.programId,
+      postId: newTest.postId,
+      seriesId: newTest.seriesId,
       description: newTest.description || '',
       durationMinutes: newTest.durationMinutes || 120,
       questionCount: newTest.questionCount || 100,
