@@ -281,8 +281,8 @@ service cloud.firestore {
         (isAuthenticated() && resource == null) ||
         (isOwner(resource.data.userId));
       // Student attempt queries must be constrained to the authenticated owner.
-      allow list: if isPermanentUser() &&
-        resource.data.userId == request.auth.uid;
+      allow list: if hasManageStudents() ||
+        (isPermanentUser() && resource.data.userId == request.auth.uid);
       allow create: if hasManageStudents() ||
         (isOwner(request.resource.data.userId) &&
          request.resource.data.testId is string &&
@@ -346,7 +346,8 @@ service cloud.firestore {
     // entitlement for pass-based test access; this collection organizes My Tests.
     match /seriesEnrollments/{enrollmentId} {
       allow get: if isOwner(resource.data.userId) || isAdmin();
-      allow list: if isPermanentUser() && resource.data.userId == request.auth.uid;
+      allow list: if hasManageStudents() ||
+        (isPermanentUser() && resource.data.userId == request.auth.uid);
       allow create: if isOwner(request.resource.data.userId) &&
         request.resource.data.seriesId is string &&
         request.resource.data.status == 'active' &&
@@ -373,7 +374,7 @@ service cloud.firestore {
     // New production rankings use compact per-student profile documents below.
     match /leaderboardEntries/{entryId} {
       allow get: if true;
-      allow list: if request.query.limit <= 100;
+      allow list: if hasManageStudents() || request.query.limit <= 100;
       allow create: if isOwner(request.resource.data.userId) &&
         request.resource.data.source == 'practice_attempt' &&
         request.resource.data.keys().hasOnly([
@@ -397,7 +398,7 @@ service cloud.firestore {
     // writes are restricted to the owning authenticated student.
     match /leaderboardProfiles/{profileId} {
       allow get: if true;
-      allow list: if request.query.limit <= 100;
+      allow list: if hasManageStudents() || request.query.limit <= 100;
       allow create: if isOwner(request.resource.data.userId) &&
         request.resource.data.source == 'practice_summary' &&
         request.resource.data.keys().hasOnly([
