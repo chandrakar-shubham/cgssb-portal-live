@@ -1,6 +1,7 @@
 import type { MockTest } from '../types.ts';
 
 export interface BundleSyllabusSection {
+  subjectId?: string;
   subject: string;
   subjectHindi: string;
   marks: number;
