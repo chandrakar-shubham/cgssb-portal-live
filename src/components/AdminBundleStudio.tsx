@@ -30,7 +30,7 @@ import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPrevie
 import { extractHierarchyFromApp } from '../utils/examHierarchy';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { saveBundleToFirestore } from '../firebase/firestoreService';
-import { ExamSubject, fetchExamSubjects, saveExamSubject, slugifyCatalog } from '../firebase/examCatalogService';
+import { ExamSubject, fetchExamSubjects, saveExamSubject, slugifyCatalog, fetchExamTestSeriesById, saveExamTestSeries } from '../firebase/examCatalogService';
 import {
   Crown,
   Plus,
@@ -517,6 +517,33 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
       isDraft: !isPub,
     };
 
+    // Keep the canonical examTestSeries document and its content bundle synchronized.
+    if (bundleToSave.seriesId) {
+      const canonicalSeries = await fetchExamTestSeriesById(bundleToSave.seriesId);
+      if (!canonicalSeries) {
+        showToast('Save blocked: linked canonical Test Series record is missing.');
+        return;
+      }
+      if (
+        canonicalSeries.authorityId !== bundleToSave.authorityId ||
+        canonicalSeries.programId !== bundleToSave.programId ||
+        canonicalSeries.postId !== bundleToSave.postId ||
+        canonicalSeries.bundleId !== bundleToSave.id
+      ) {
+        showToast('Save blocked: canonical Test Series ↔ Bundle linkage is inconsistent.');
+        return;
+      }
+      await saveExamTestSeries({
+        ...canonicalSeries,
+        name: bundleToSave.title,
+        nameHindi: bundleToSave.titleHindi,
+        slug: bundleToSave.slug,
+        seriesType: bundleToSave.seriesType || canonicalSeries.seriesType,
+        status: isPub ? 'PUBLISHED' : 'DRAFT',
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
     const updatedList = saveSingleBundle(bundleToSave);
     setBundles(updatedList);
     setEditingBundle(null);
@@ -656,6 +683,21 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     finalQuestions: Question[]
   ) => {
     if (!editingBundle || finalQuestions.length === 0) return;
+
+    // Ingestion is a write into one canonical series aggregate. Never allow the
+    // paper metadata to silently point at another recruitment/post/series.
+    const canonicalMatchesBundle =
+      paperConfig.canonicalBundleId === editingBundle.id &&
+      paperConfig.canonicalSeriesId === editingBundle.seriesId &&
+      paperConfig.canonicalAuthorityId === editingBundle.authorityId &&
+      paperConfig.canonicalProgramId === editingBundle.programId &&
+      paperConfig.canonicalPostId === editingBundle.postId;
+
+    if (!canonicalMatchesBundle) {
+      showToast('Blocked: selected canonical hierarchy does not match the Test Series being edited.');
+      return;
+    }
+
     setIsIngesting(true);
 
     try {
@@ -669,9 +711,9 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
         ...q,
         authority: paperConfig.authority || editingBundle.authority,
         category: paperConfig.examCategory,
-        subCategory: paperConfig.subCategory || editingBundle.targetPost,
+        subCategory: paperConfig.subCategory || editingBundle.programId,
         postName: paperConfig.postName || editingBundle.targetPost,
-        examName: paperConfig.examName || paperConfig.title,
+        examName: paperConfig.examName || editingBundle.title,
         year: paperConfig.year || editingBundle.targetYear,
       }));
 
@@ -682,9 +724,9 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
         description: paperConfig.paperSummary || `${paperConfig.title} - Official simulation test.`,
         authority: paperConfig.authority || editingBundle.authority,
         category: paperConfig.examCategory,
-        subCategory: paperConfig.subCategory,
-        postName: paperConfig.postName,
-        examName: paperConfig.examName,
+        subCategory: paperConfig.subCategory || editingBundle.programId,
+        postName: paperConfig.postName || editingBundle.targetPost,
+        examName: paperConfig.examName || editingBundle.title,
         durationMinutes: duration,
         totalMarks: marks,
         marksPerQuestion: 1.0,
@@ -904,6 +946,13 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
           isImporting={isIngesting}
           allRecords={allHierarchyRecords}
           existingTests={availableTests}
+          canonicalTarget={{
+            authority: editingBundle.authority,
+            examName: editingBundle.targetPost || editingBundle.title,
+            cadre: editingBundle.targetPost,
+            bundleId: editingBundle.id,
+            seriesId: editingBundle.seriesId,
+          }}
         />
 
         {/* ================================================================= */}
