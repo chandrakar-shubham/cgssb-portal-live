@@ -33,6 +33,13 @@ export function useTestManager() {
 
 
   const addTest = useCallback((newTest: Partial<MockTest>) => {
+    // Production tests must enter through the canonical catalog hierarchy.
+    // Legacy callers without canonical Program + Series linkage are rejected
+    // instead of creating orphan tests that cannot be discovered reliably.
+    if (!import.meta.env.DEV && (!newTest.programId || !newTest.seriesId)) {
+      console.error('Rejected production test creation: canonical programId and seriesId are required.');
+      return;
+    }
     const testObj: MockTest = {
       id: newTest.id || `test-custom-${Date.now()}`,
       title: newTest.title || 'Untitled Test',
