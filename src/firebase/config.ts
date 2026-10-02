@@ -40,3 +40,6 @@ try {
 export const db = firestoreDb;
 
 export const isFirebaseConfigured = Boolean(firebaseConfigData.apiKey && firebaseConfigData.projectId);
+
+export const firebaseProjectId = firebaseConfigData.projectId || '';
+export const firestoreDatabaseId = firebaseConfigData.firestoreDatabaseId || '(default)';

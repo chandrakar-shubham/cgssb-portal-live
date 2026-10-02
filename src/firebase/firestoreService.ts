@@ -73,6 +73,242 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 // Collection Names
+export const OBSERVABILITY_COLLECTIONS = [
+  'users',
+  'mockTests',
+  'questions',
+  'bundles',
+  'attempts',
+  'pypPapers',
+  'pages',
+  'posts',
+  'seriesPacks',
+  'cmsSettings',
+  'slider_banners',
+  'remoteConfig',
+  'referrals',
+  'userEntitlements',
+  'leaderboardEntries',
+  'leaderboardProfiles',
+  'seriesEnrollments',
+  'examAuthorities',
+  'examPrograms',
+  'examPosts',
+  'examTestSeries',
+  'examSubjects',
+  'currentAffairsSources',
+  'currentAffairsTopics',
+  'currentAffairsQuestions',
+  'dailyEditions',
+  'monthlyEditions',
+  '_connection_check_'
+] as const;
+
+export interface DatabaseCollectionHealth {
+  name: string;
+  count: number | null;
+  sampleCount: number;
+  estimatedBytes: number;
+  status: 'healthy' | 'warning' | 'error';
+  error?: string;
+}
+
+export interface DatabaseObservabilitySnapshot {
+  checkedAt: string;
+  collections: DatabaseCollectionHealth[];
+  totalDocuments: number | null;
+  estimatedBytes: number;
+  successfulCollections: number;
+  failedCollections: number;
+  sampleLimit: number;
+}
+
+export async function fetchDatabaseObservability(sampleLimit = 100): Promise<DatabaseObservabilitySnapshot> {
+  if (!db) {
+    return {
+      checkedAt: new Date().toISOString(),
+      collections: OBSERVABILITY_COLLECTIONS.map(name => ({
+        name,
+        count: null,
+        sampleCount: 0,
+        estimatedBytes: 0,
+        status: 'error' as const,
+        error: 'Firestore is not configured'
+      })),
+      totalDocuments: null,
+      estimatedBytes: 0,
+      successfulCollections: 0,
+      failedCollections: OBSERVABILITY_COLLECTIONS.length,
+      sampleLimit
+    };
+  }
+
+  const results = await Promise.all(OBSERVABILITY_COLLECTIONS.map(async (name): Promise<DatabaseCollectionHealth> => {
+    try {
+      const ref = collection(db, name);
+      const [countSnap, sampleSnap] = await Promise.all([
+        withTimeout(getCountFromServer(ref), 7000),
+        withTimeout(getDocs(query(ref, limit(sampleLimit))), 7000)
+      ]);
+      const estimatedBytes = sampleSnap.docs.reduce((sum, d) => {
+        try {
+          return sum + new TextEncoder().encode(JSON.stringify(d.data())).length;
+        } catch {
+          return sum;
+        }
+      }, 0);
+      return {
+        name,
+        count: countSnap.data().count,
+        sampleCount: sampleSnap.size,
+        estimatedBytes,
+        status: 'healthy'
+      };
+    } catch (error) {
+      return {
+        name,
+        count: null,
+        sampleCount: 0,
+        estimatedBytes: 0,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }));
+
+  const successfulCollections = results.filter(r => r.status !== 'error').length;
+  const failedCollections = results.length - successfulCollections;
+  const totalDocuments = results.every(r => r.count !== null)
+    ? results.reduce((sum, r) => sum + (r.count || 0), 0)
+    : null;
+
+  return {
+    checkedAt: new Date().toISOString(),
+    collections: results,
+    totalDocuments,
+    estimatedBytes: results.reduce((sum, r) => sum + r.estimatedBytes, 0),
+    successfulCollections,
+    failedCollections,
+    sampleLimit
+  };
+}
+
+export interface DatabaseIntegrityAudit {
+  checkedAt: string;
+  seriesWithoutBundle: number;
+  bundlesWithoutSeries: number;
+  mismatchedSeriesBundles: number;
+  testsWithMissingQuestions: number;
+  testsWithZeroQuestions: number;
+  bundlesWithZeroTests: number;
+  invalidQuestionDocuments: number;
+  invalidTestDocuments: number;
+  invalidBundleDocuments: number;
+  schemaEvaluatedDocuments: number;
+  schemaValidDocuments: number;
+  sampleLimit: number;
+  mode: 'full' | 'sampled';
+}
+
+export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<DatabaseIntegrityAudit> {
+  if (!db) throw new Error('Firestore is not configured');
+
+  const [testsSnap, questionsSnap, bundlesSnap, seriesSnap] = await Promise.all([
+    getDocs(query(collection(db, COLLECTIONS.TESTS), limit(sampleLimit))),
+    getDocs(query(collection(db, COLLECTIONS.QUESTIONS), limit(sampleLimit))),
+    getDocs(query(collection(db, COLLECTIONS.BUNDLES), limit(sampleLimit))),
+    getDocs(query(collection(db, 'examTestSeries'), limit(sampleLimit)))
+  ]);
+
+  const questions = new Set(questionsSnap.docs.map(d => String(d.id || d.data()?.id || '')));
+  const bundles = new Map(bundlesSnap.docs.map(d => [String(d.id), d.data() as any]));
+  const series = new Map(seriesSnap.docs.map(d => [String(d.id), d.data() as any]));
+
+  let testsWithMissingQuestions = 0;
+  let testsWithZeroQuestions = 0;
+  let invalidTestDocuments = 0;
+
+  testsSnap.docs.forEach(d => {
+    const t = d.data() as any;
+    if (!t?.id || !t?.title || typeof t?.durationMinutes !== 'number') invalidTestDocuments++;
+    const ids = Array.isArray(t?.sections)
+      ? t.sections.flatMap((s: any) => Array.isArray(s?.questionIds) ? s.questionIds : [])
+      : [];
+    if (ids.length === 0 && Number(t?.questionCount || 0) === 0) testsWithZeroQuestions++;
+    if (ids.some((id: string) => !questions.has(String(id)))) testsWithMissingQuestions++;
+  });
+
+  let invalidQuestionDocuments = 0;
+  questionsSnap.docs.forEach(d => {
+    const q = d.data() as any;
+    if (!q?.id || !(q?.question || q?.questionText) || !q?.subject) invalidQuestionDocuments++;
+  });
+
+  let invalidBundleDocuments = 0;
+  let bundlesWithZeroTests = 0;
+  bundles.forEach((b: any) => {
+    if (!b?.id || !b?.slug || !b?.title) invalidBundleDocuments++;
+    const hasTests = Boolean(
+      Number(b?.totalTestsCount || 0) > 0 ||
+      b?.testItems?.length ||
+      b?.chapterTests?.length ||
+      b?.pypTests?.length
+    );
+    if (!hasTests) bundlesWithZeroTests++;
+  });
+
+  let seriesWithoutBundle = 0;
+  let mismatchedSeriesBundles = 0;
+  series.forEach((s: any) => {
+    const b = s?.bundleId ? bundles.get(String(s.bundleId)) : undefined;
+    if (!b) {
+      seriesWithoutBundle++;
+      return;
+    }
+    if (
+      String(b.seriesId || '') !== String(s.id) ||
+      String(b.authorityId || '') !== String(s.authorityId || '') ||
+      String(b.programId || '') !== String(s.programId || '') ||
+      String(b.postId || '') !== String(s.postId || '')
+    ) {
+      mismatchedSeriesBundles++;
+    }
+  });
+
+  let bundlesWithoutSeries = 0;
+  bundles.forEach((b: any) => {
+    if (!b?.seriesId || !series.has(String(b.seriesId))) bundlesWithoutSeries++;
+  });
+
+  const schemaEvaluatedDocuments = testsSnap.size + questionsSnap.size + bundlesSnap.size;
+  const schemaValidDocuments =
+    (testsSnap.size - invalidTestDocuments) +
+    (questionsSnap.size - invalidQuestionDocuments) +
+    (bundlesSnap.size - invalidBundleDocuments);
+
+  return {
+    checkedAt: new Date().toISOString(),
+    seriesWithoutBundle,
+    bundlesWithoutSeries,
+    mismatchedSeriesBundles,
+    testsWithMissingQuestions,
+    testsWithZeroQuestions,
+    bundlesWithZeroTests,
+    invalidQuestionDocuments,
+    invalidTestDocuments,
+    invalidBundleDocuments,
+    schemaEvaluatedDocuments,
+    schemaValidDocuments,
+    sampleLimit,
+    mode: (
+      testsSnap.size < sampleLimit &&
+      questionsSnap.size < sampleLimit &&
+      bundlesSnap.size < sampleLimit &&
+      seriesSnap.size < sampleLimit
+    ) ? 'full' : 'sampled'
+  };
+}
+
 export const COLLECTIONS = {
   USERS: 'users',
   TESTS: 'mockTests',
@@ -1057,38 +1293,28 @@ export async function fetchLeaderboardFromFirestore(testId?: string): Promise<Te
   } as TestAttempt));
 }
 
-export async function purgeFirestoreDemoData(): Promise<void> {
-  if (!db) return;
-  try {
-    const testSnap = await getDocs(collection(db, COLLECTIONS.TESTS)).catch(() => null);
-    if (testSnap && !testSnap.empty) {
-      await Promise.allSettled(testSnap.docs.map(d => deleteDoc(d.ref)));
-    }
+export async function purgeFirestoreDemoData(): Promise<string[]> {
+  if (!db) return [];
 
-    const qSnap = await getDocs(collection(db, COLLECTIONS.QUESTIONS)).catch(() => null);
-    if (qSnap && !qSnap.empty) {
-      await Promise.allSettled(qSnap.docs.map(d => deleteDoc(d.ref)));
-    }
+  // Production safety invariant:
+  // demo purge may only delete documents explicitly marked isDemo === true.
+  // Never infer demo status from collection name, title, id, or emptiness.
+  const purgeableCollections = [
+    COLLECTIONS.TESTS,
+    COLLECTIONS.QUESTIONS,
+    COLLECTIONS.PYP_PAPERS,
+    COLLECTIONS.BUNDLES
+  ];
 
-    const pypSnap = await getDocs(collection(db, COLLECTIONS.PYP_PAPERS)).catch(() => null);
-    if (pypSnap && !pypSnap.empty) {
-      await Promise.allSettled(pypSnap.docs.map(d => deleteDoc(d.ref)));
+  const deleted: string[] = [];
+  for (const collectionName of purgeableCollections) {
+    try {
+      const snap = await getDocs(query(collection(db, collectionName), where('isDemo', '==', true)));
+      await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+      if (!snap.empty) deleted.push(`${collectionName}:${snap.size}`);
+    } catch (err) {
+      console.warn(`Demo purge skipped for ${collectionName}:`, err);
     }
-
-    const bundleSnap = await getDocs(collection(db, COLLECTIONS.BUNDLES)).catch(() => null);
-    if (bundleSnap && !bundleSnap.empty) {
-      await Promise.allSettled(bundleSnap.docs.map(d => deleteDoc(d.ref)));
-    }
-
-    // Phase 7 reset: the previous demo taxonomy is disposable too.
-    // Clear canonical catalog records so the production catalog starts clean.
-    for (const collectionName of ['examTestSeries', 'examSubjects', 'examPosts', 'examPrograms', 'examAuthorities']) {
-      const snap = await getDocs(collection(db, collectionName)).catch(() => null);
-      if (snap && !snap.empty) {
-        await Promise.allSettled(snap.docs.map(d => deleteDoc(d.ref)));
-      }
-    }
-  } catch (err) {
-    console.warn('Error purging Firestore demo data:', err);
   }
+  return deleted;
 }
