@@ -322,7 +322,6 @@ interface AdminDatabaseViewProps {
             </div>
           </div>
 
-          </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
             <h3 className="text-base font-black text-white flex items-center space-x-2">
