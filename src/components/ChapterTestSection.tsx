@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MockTest, Question, ExamCategory } from '../types';
+import { MockTest, Question } from '../types';
 import {
   BookOpen,
   Search,
@@ -19,7 +19,7 @@ interface ChapterTestSectionProps {
   tests: MockTest[];
   questions: Question[];
   onStartTest: (test: MockTest) => void;
-  selectedCategory?: ExamCategory | 'ALL';
+  selectedCategory?: string | 'ALL';
 }
 
 export const ChapterTestSection: React.FC<ChapterTestSectionProps> = ({
@@ -51,6 +51,10 @@ export const ChapterTestSection: React.FC<ChapterTestSectionProps> = ({
                             t.title.toLowerCase().includes('quiz') ||
                             t.sections.some(s => s.name.toLowerCase().includes('chapter') || s.name.toLowerCase().includes('topic') || s.name.toLowerCase().includes('quiz'));
       
+      const matchesProgram = selectedCategory === 'ALL' ||
+        (t.programId && String(t.programId) === String(selectedCategory)) ||
+        (!t.programId && String(t.category || '') === String(selectedCategory));
+      
       const matchesSearch = !searchQuery.trim() ||
                             t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -62,9 +66,9 @@ export const ChapterTestSection: React.FC<ChapterTestSectionProps> = ({
                              (t.subject && t.subject.toLowerCase() === activeSubject.toLowerCase()) ||
                              t.sections.some(s => s.name.toLowerCase().includes(activeSubject.toLowerCase()));
 
-      return isChapterType && matchesSearch && matchesSubject;
+      return isChapterType && matchesProgram && matchesSearch && matchesSubject;
     });
-  }, [tests, searchQuery, activeSubject]);
+  }, [tests, searchQuery, activeSubject, selectedCategory]);
 
   return (
     <div className="space-y-6">
