@@ -4,6 +4,7 @@ import {
   ExamAuthority, ExamProgram, ExamPost, ExamTestSeries,
   fetchExamAuthorities, fetchExamPrograms, fetchExamPosts, fetchExamTestSeries
 } from '../firebase/examCatalogService';
+import { fetchBundlesFromFirestore } from '../firebase/firestoreService';
 
 interface Props {
   authority: string;
@@ -11,10 +12,11 @@ interface Props {
   cadre: string;
   targetBundleId: string;
   onChange: (value: { authority: string; examName: string; cadre: string; targetBundleId: string }) => void;
+  onCanonicalChange?: (series: ExamTestSeries | null) => void;
 }
 
 export const CanonicalIngestionSelector: React.FC<Props> = ({
-  authority, examName, cadre, targetBundleId, onChange
+  authority, examName, cadre, targetBundleId, onChange, onCanonicalChange
 }) => {
   const [authorities, setAuthorities] = useState<ExamAuthority[]>([]);
   const [programs, setPrograms] = useState<ExamProgram[]>([]);
@@ -31,10 +33,35 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     try {
       const authorityList = await fetchExamAuthorities();
       setAuthorities(authorityList);
-      const matchedAuthority = authorityList.find(
-        a => a.name === authority || a.shortName === authority || a.id === authority
-      );
-      const nextAuthorityId = matchedAuthority?.id || authorityList[0]?.id || '';
+
+      // Resolve the canonical series FIRST when a bundle/series target is already known.
+      // Display labels are not identifiers and must never be used to infer the hierarchy.
+      const [allSeries, allBundles] = await Promise.all([
+        fetchExamTestSeries(),
+        fetchBundlesFromFirestore(),
+      ]);
+      const bundleById = new Map(allBundles.map(b => [b.id, b]));
+      const activeSeries = allSeries.filter(s => {
+        const b = s.bundleId ? bundleById.get(s.bundleId) : undefined;
+        return Boolean(
+          b &&
+          b.seriesId === s.id &&
+          b.authorityId === s.authorityId &&
+          b.programId === s.programId &&
+          (b.postId || undefined) === (s.postId || undefined) &&
+          s.status !== 'ARCHIVED'
+        );
+      });
+      const canonicalTarget = targetBundleId
+        ? activeSeries.find(s => s.id === targetBundleId || s.bundleId === targetBundleId)
+        : undefined;
+
+      const matchedAuthority = canonicalTarget
+        ? authorityList.find(a => a.id === canonicalTarget.authorityId)
+        : authorityList.find(
+            a => a.name === authority || a.shortName === authority || a.id === authority
+          );
+      const nextAuthorityId = canonicalTarget?.authorityId || matchedAuthority?.id || authorityList[0]?.id || '';
       setAuthorityId(nextAuthorityId);
 
       if (!nextAuthorityId) {
@@ -46,8 +73,10 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
 
       const programList = await fetchExamPrograms(nextAuthorityId);
       setPrograms(programList);
-      const matchedProgram = programList.find(p => p.name === examName || p.id === examName);
-      const nextProgramId = matchedProgram?.id || programList[0]?.id || '';
+      const matchedProgram = canonicalTarget
+        ? programList.find(p => p.id === canonicalTarget.programId)
+        : programList.find(p => p.name === examName || p.id === examName);
+      const nextProgramId = canonicalTarget?.programId || matchedProgram?.id || programList[0]?.id || '';
       setProgramId(nextProgramId);
 
       if (!nextProgramId) {
@@ -58,17 +87,34 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
 
       const postList = await fetchExamPosts(nextProgramId);
       setPosts(postList);
-      const matchedPost = postList.find(p => p.name === cadre || p.id === cadre);
-      const nextPostId = matchedPost?.id || '';
+      const matchedPost = canonicalTarget
+        ? postList.find(p => p.id === canonicalTarget.postId)
+        : postList.find(p => p.name === cadre || p.id === cadre);
+      const nextPostId = canonicalTarget?.postId || matchedPost?.id || '';
       setPostId(nextPostId);
 
       // Critical integrity rule: when a recruitment has posts and a post is selected,
       // only series belonging to that exact post are eligible for ingestion.
-      const seriesList = await fetchExamTestSeries(nextProgramId, nextPostId || undefined);
+      const seriesList = activeSeries.filter(s => s.programId === nextProgramId && (!nextPostId || s.postId === nextPostId));
       setSeries(seriesList);
 
-      const selected = seriesList.find(s => s.id === targetBundleId || s.bundleId === targetBundleId);
+      const selected = canonicalTarget
+        ? seriesList.find(s => s.id === canonicalTarget.id)
+        : seriesList.find(s => s.id === targetBundleId || s.bundleId === targetBundleId);
       setSelectedSeriesId(selected?.id || '');
+      onCanonicalChange?.(selected || null);
+
+      if (selected) {
+        const selectedAuthority = authorityList.find(a => a.id === selected.authorityId);
+        const selectedProgram = programList.find(p => p.id === selected.programId);
+        const selectedPost = postList.find(p => p.id === selected.postId);
+        onChange({
+          authority: selectedAuthority?.name || selectedAuthority?.shortName || authority,
+          examName: selectedProgram?.name || examName,
+          cadre: selectedPost?.name || '',
+          targetBundleId: selected.bundleId || '',
+        });
+      }
     } catch {
       setAuthorities([]);
       setPrograms([]);
@@ -105,6 +151,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     setPostId('');
     setSelectedSeriesId('');
     setSeries([]);
+    onCanonicalChange?.(null);
     onChange({ authority: a?.name || '', examName: '', cadre: '', targetBundleId: '' });
   };
 
@@ -114,6 +161,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     setPostId('');
     setSelectedSeriesId('');
     setSeries([]);
+    onCanonicalChange?.(null);
     onChange({
       authority: authorities.find(a => a.id === authorityId)?.name || authority,
       examName: p?.name || '',
@@ -127,6 +175,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     setPostId(id);
     setSelectedSeriesId('');
     setSeries([]);
+    onCanonicalChange?.(null);
     onChange({
       authority: authorities.find(a => a.id === authorityId)?.name || authority,
       examName: programs.find(x => x.id === programId)?.name || examName,
@@ -139,6 +188,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     const s = visibleSeries.find(x => x.id === id);
     if (!s || s.status === 'ARCHIVED') return;
     setSelectedSeriesId(s.id);
+    onCanonicalChange?.(s);
     onChange({
       authority: authorities.find(a => a.id === s.authorityId)?.name || authority,
       examName: programs.find(p => p.id === s.programId)?.name || examName,
