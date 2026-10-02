@@ -73,6 +73,232 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 // Collection Names
+export const OBSERVABILITY_COLLECTIONS = [
+  'users',
+  'mockTests',
+  'questions',
+  'bundles',
+  'attempts',
+  'pypPapers',
+  'pages',
+  'posts',
+  'seriesPacks',
+  'cmsSettings',
+  'slider_banners',
+  'remoteConfig',
+  'referrals',
+  'userEntitlements',
+  'leaderboardEntries',
+  'leaderboardProfiles',
+  'seriesEnrollments',
+  'examAuthorities',
+  'examPrograms',
+  'examPosts',
+  'examTestSeries',
+  'examSubjects',
+  'currentAffairsSources',
+  'currentAffairsTopics',
+  'currentAffairsQuestions',
+  'dailyEditions',
+  'monthlyEditions',
+  '_connection_check_'
+] as const;
+
+export interface DatabaseCollectionHealth {
+  name: string;
+  count: number | null;
+  sampleCount: number;
+  estimatedBytes: number;
+  status: 'healthy' | 'warning' | 'error';
+  error?: string;
+}
+
+export interface DatabaseObservabilitySnapshot {
+  checkedAt: string;
+  collections: DatabaseCollectionHealth[];
+  totalDocuments: number | null;
+  estimatedBytes: number;
+  successfulCollections: number;
+  failedCollections: number;
+  sampleLimit: number;
+}
+
+export async function fetchDatabaseObservability(sampleLimit = 100): Promise<DatabaseObservabilitySnapshot> {
+  if (!db) {
+    return {
+      checkedAt: new Date().toISOString(),
+      collections: OBSERVABILITY_COLLECTIONS.map(name => ({
+        name,
+        count: null,
+        sampleCount: 0,
+        estimatedBytes: 0,
+        status: 'error' as const,
+        error: 'Firestore is not configured'
+      })),
+      totalDocuments: null,
+      estimatedBytes: 0,
+      successfulCollections: 0,
+      failedCollections: OBSERVABILITY_COLLECTIONS.length,
+      sampleLimit
+    };
+  }
+
+  const results = await Promise.all(OBSERVABILITY_COLLECTIONS.map(async (name): Promise<DatabaseCollectionHealth> => {
+    try {
+      const ref = collection(db, name);
+      const [countSnap, sampleSnap] = await Promise.all([
+        withTimeout(getCountFromServer(ref), 7000),
+        withTimeout(getDocs(query(ref, limit(sampleLimit))), 7000)
+      ]);
+      const estimatedBytes = sampleSnap.docs.reduce((sum, d) => {
+        try {
+          return sum + new TextEncoder().encode(JSON.stringify(d.data())).length;
+        } catch {
+          return sum;
+        }
+      }, 0);
+      return {
+        name,
+        count: countSnap.data().count,
+        sampleCount: sampleSnap.size,
+        estimatedBytes,
+        status: 'healthy'
+      };
+    } catch (error) {
+      return {
+        name,
+        count: null,
+        sampleCount: 0,
+        estimatedBytes: 0,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }));
+
+  const successfulCollections = results.filter(r => r.status !== 'error').length;
+  const failedCollections = results.length - successfulCollections;
+  const totalDocuments = results.every(r => r.count !== null)
+    ? results.reduce((sum, r) => sum + (r.count || 0), 0)
+    : null;
+
+  return {
+    checkedAt: new Date().toISOString(),
+    collections: results,
+    totalDocuments,
+    estimatedBytes: results.reduce((sum, r) => sum + r.estimatedBytes, 0),
+    successfulCollections,
+    failedCollections,
+    sampleLimit
+  };
+}
+
+export interface DatabaseIntegrityAudit {
+  checkedAt: string;
+  seriesWithoutBundle: number;
+  bundlesWithoutSeries: number;
+  mismatchedSeriesBundles: number;
+  testsWithMissingQuestions: number;
+  testsWithZeroQuestions: number;
+  bundlesWithZeroTests: number;
+  invalidQuestionDocuments: number;
+  invalidTestDocuments: number;
+  invalidBundleDocuments: number;
+  sampleLimit: number;
+  mode: 'full' | 'sampled';
+}
+
+export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<DatabaseIntegrityAudit> {
+  if (!db) throw new Error('Firestore is not configured');
+
+  const [testsSnap, questionsSnap, bundlesSnap, seriesSnap] = await Promise.all([
+    getDocs(query(collection(db, COLLECTIONS.TESTS), limit(sampleLimit))),
+    getDocs(query(collection(db, COLLECTIONS.QUESTIONS), limit(sampleLimit))),
+    getDocs(query(collection(db, COLLECTIONS.BUNDLES), limit(sampleLimit))),
+    getDocs(query(collection(db, 'examTestSeries'), limit(sampleLimit)))
+  ]);
+
+  const questions = new Set(questionsSnap.docs.map(d => String(d.id || d.data()?.id || '')));
+  const bundles = new Map(bundlesSnap.docs.map(d => [String(d.id), d.data() as any]));
+  const series = new Map(seriesSnap.docs.map(d => [String(d.id), d.data() as any]));
+
+  let testsWithMissingQuestions = 0;
+  let testsWithZeroQuestions = 0;
+  let invalidTestDocuments = 0;
+
+  testsSnap.docs.forEach(d => {
+    const t = d.data() as any;
+    if (!t?.id || !t?.title || typeof t?.durationMinutes !== 'number') invalidTestDocuments++;
+    const ids = Array.isArray(t?.sections)
+      ? t.sections.flatMap((s: any) => Array.isArray(s?.questionIds) ? s.questionIds : [])
+      : [];
+    if (ids.length === 0 && Number(t?.questionCount || 0) === 0) testsWithZeroQuestions++;
+    if (ids.some((id: string) => !questions.has(String(id)))) testsWithMissingQuestions++;
+  });
+
+  let invalidQuestionDocuments = 0;
+  questionsSnap.docs.forEach(d => {
+    const q = d.data() as any;
+    if (!q?.id || !(q?.question || q?.questionText) || !q?.subject) invalidQuestionDocuments++;
+  });
+
+  let invalidBundleDocuments = 0;
+  let bundlesWithZeroTests = 0;
+  bundles.forEach((b: any) => {
+    if (!b?.id || !b?.slug || !b?.title) invalidBundleDocuments++;
+    const hasTests = Boolean(
+      Number(b?.totalTestsCount || 0) > 0 ||
+      b?.testItems?.length ||
+      b?.chapterTests?.length ||
+      b?.pypTests?.length
+    );
+    if (!hasTests) bundlesWithZeroTests++;
+  });
+
+  let seriesWithoutBundle = 0;
+  let mismatchedSeriesBundles = 0;
+  series.forEach((s: any) => {
+    const b = s?.bundleId ? bundles.get(String(s.bundleId)) : undefined;
+    if (!b) {
+      seriesWithoutBundle++;
+      return;
+    }
+    if (
+      String(b.seriesId || '') !== String(s.id) ||
+      String(b.authorityId || '') !== String(s.authorityId || '') ||
+      String(b.programId || '') !== String(s.programId || '') ||
+      String(b.postId || '') !== String(s.postId || '')
+    ) {
+      mismatchedSeriesBundles++;
+    }
+  });
+
+  let bundlesWithoutSeries = 0;
+  bundles.forEach((b: any) => {
+    if (!b?.seriesId || !series.has(String(b.seriesId))) bundlesWithoutSeries++;
+  });
+
+  return {
+    checkedAt: new Date().toISOString(),
+    seriesWithoutBundle,
+    bundlesWithoutSeries,
+    mismatchedSeriesBundles,
+    testsWithMissingQuestions,
+    testsWithZeroQuestions,
+    bundlesWithZeroTests,
+    invalidQuestionDocuments,
+    invalidTestDocuments,
+    invalidBundleDocuments,
+    sampleLimit,
+    mode: (
+      testsSnap.size < sampleLimit &&
+      questionsSnap.size < sampleLimit &&
+      bundlesSnap.size < sampleLimit &&
+      seriesSnap.size < sampleLimit
+    ) ? 'full' : 'sampled'
+  };
+}
+
 export const COLLECTIONS = {
   USERS: 'users',
   TESTS: 'mockTests',
