@@ -11,8 +11,6 @@ on:
         description: "Duration in seconds"
         required: true
         default: "30"
-  push:
-    branches: [main]
 
 jobs:
   load:
