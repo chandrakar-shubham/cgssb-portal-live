@@ -87,6 +87,18 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
         : seriesList.find(s => s.id === targetBundleId || s.bundleId === targetBundleId);
       setSelectedSeriesId(selected?.id || '');
       onCanonicalChange?.(selected || null);
+
+      if (selected) {
+        const selectedAuthority = authorityList.find(a => a.id === selected.authorityId);
+        const selectedProgram = programList.find(p => p.id === selected.programId);
+        const selectedPost = postList.find(p => p.id === selected.postId);
+        onChange({
+          authority: selectedAuthority?.name || selectedAuthority?.shortName || authority,
+          examName: selectedProgram?.name || examName,
+          cadre: selectedPost?.name || '',
+          targetBundleId: selected.bundleId || '',
+        });
+      }
     } catch {
       setAuthorities([]);
       setPrograms([]);
