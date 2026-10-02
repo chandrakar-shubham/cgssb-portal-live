@@ -9,6 +9,7 @@ import {
 import { fetchBundlesFromFirestore, saveBundleToFirestore } from '../firebase/firestoreService';
 import { saveSingleBundle, getStoredBundles, purgeAllDemoDatabaseData } from '../utils/bundleStore';
 import { TestSeriesBundle } from '../data/bundleCatalog';
+import { CatalogPackageImporter } from './CatalogPackageImporter';
 
 const now = () => new Date().toISOString();
 
@@ -32,6 +33,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
   const [postSubjects, setPostSubjects] = useState('');
   const [message, setMessage] = useState('');
   const [purging, setPurging] = useState(false);
+  const [showCatalogImporter, setShowCatalogImporter] = useState(false);
 
   const load = async () => {
     try {
@@ -555,6 +557,13 @@ export const AdminExamCatalogStudio: React.FC = () => {
         </div>
         <button
           type="button"
+          onClick={() => setShowCatalogImporter(true)}
+          className="shrink-0 rounded-xl border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-xs font-black text-cyan-200 hover:bg-cyan-500/20"
+        >
+          Import Catalog JSON
+        </button>
+        <button
+          type="button"
           onClick={createProductionCatalog}
           className="shrink-0 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-black text-cyan-300 hover:bg-cyan-500/20"
         >
@@ -585,6 +594,18 @@ export const AdminExamCatalogStudio: React.FC = () => {
       </div>
     </div>
     {message && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div>}
+    {showCatalogImporter && (
+      <div className="fixed inset-0 z-[120] overflow-y-auto bg-slate-950/85 backdrop-blur-md p-3 sm:p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-end mb-2">
+            <button type="button" onClick={() => setShowCatalogImporter(false)} className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold flex items-center gap-2">
+              Close <span>×</span>
+            </button>
+          </div>
+          <CatalogPackageImporter onImported={async () => { setShowCatalogImporter(false); await load(); }} />
+        </div>
+      </div>
+    )}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {section('1. Exam Authority', <Building2 className="w-4 h-4 text-cyan-400" />, <>
         <div className="flex gap-2"><select value={selectedAuthority} onChange={e=>setSelectedAuthority(e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm">{authorities.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
