@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Building2, ChevronRight, GraduationCap, Layers3 } from 'lucide-react';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 import { BundleCompactCard } from './BundleCompactCard';
-import { fetchExamPrograms, fetchExamPosts, ExamProgram, ExamPost } from '../firebase/examCatalogService';
+import { fetchExamPrograms, fetchExamPosts, fetchExamAuthorities, ExamProgram, ExamPost, ExamAuthority } from '../firebase/examCatalogService';
 
 interface Props {
   bundles: TestSeriesBundle[];
@@ -47,9 +47,18 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
   const [postKey, setPostKey] = useState<string | null>(null);
   const [canonicalPrograms, setCanonicalPrograms] = useState<ExamProgram[]>([]);
   const [canonicalPosts, setCanonicalPosts] = useState<ExamPost[]>([]);
+  const [canonicalAuthorities, setCanonicalAuthorities] = useState<ExamAuthority[]>([]);
 
   React.useEffect(() => {
-    fetchExamPrograms().then(setCanonicalPrograms).catch(() => setCanonicalPrograms([]));
+    Promise.all([fetchExamAuthorities(), fetchExamPrograms()])
+      .then(([authorities, programs]) => {
+        setCanonicalAuthorities(authorities.filter(a => a.status === 'PUBLISHED'));
+        setCanonicalPrograms(programs.filter(p => p.status === 'PUBLISHED'));
+      })
+      .catch(() => {
+        setCanonicalAuthorities([]);
+        setCanonicalPrograms([]);
+      });
   }, []);
   React.useEffect(() => {
     if (!programKey) { setCanonicalPosts([]); return; }
@@ -57,19 +66,33 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
   }, [programKey]);
 
   const visible = bundles.filter(b => b.isPublished !== false && !b.isDraft);
+  const canonicalProgramMap = useMemo(() => new Map(canonicalPrograms.map(program => [program.id, program])), [canonicalPrograms]);
+  const canonicalAuthorityMap = useMemo(() => new Map(canonicalAuthorities.map(item => [item.id, item])), [canonicalAuthorities]);
+
   const programs = useMemo<ProgramGroup[]>(() => {
     const map = new Map<string, ProgramGroup>();
-    visible.filter(b => authority === 'ALL' || b.authority === authority).forEach(b => {
-      const p = programFor(b);
-      const canonical = b.programId ? canonicalPrograms.find(x => x.id === b.programId) : undefined;
-      const key = canonical?.id || p.key;
-      const name = canonical?.name || p.name;
-      const existing = map.get(key);
-      if (existing) existing.bundles.push(b);
-      else map.set(key, { key, authority:b.authority || 'Unknown', name, year:b.targetYear || new Date().getFullYear(), bundles:[b] });
+    visible.forEach(bundle => {
+      if (!bundle.programId) return;
+      const canonical = canonicalProgramMap.get(bundle.programId);
+      if (!canonical) return;
+      const authorityRecord = canonicalAuthorityMap.get(canonical.authorityId);
+      const authorityName = authorityRecord?.shortName || authorityRecord?.name || canonical.authorityId;
+      if (authority !== 'ALL' && authority !== canonical.authorityId && authority !== authorityName) return;
+      const existing = map.get(canonical.id);
+      if (existing) {
+        existing.bundles.push(bundle);
+      } else {
+        map.set(canonical.id, {
+          key: canonical.id,
+          authority: authorityName,
+          name: canonical.name,
+          year: canonical.year,
+          bundles: [bundle],
+        });
+      }
     });
-    return Array.from(map.values()).sort((a,b)=>a.name.localeCompare(b.name));
-  }, [visible, authority, canonicalPrograms]);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [visible, canonicalProgramMap, canonicalAuthorityMap, authority]);
 
   const program = programs.find(p=>p.key===programKey) || null;
   const posts = useMemo(() => {
@@ -103,7 +126,7 @@ export const ExamRecruitmentExplorer: React.FC<Props> = ({
         </p>
       </div>
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-        {['ALL', ...Array.from(new Set(visible.map(b=>b.authority)))].map(a=><button key={a} onClick={()=>{setAuthority(String(a));setProgramKey(null);setPostKey(null)}} className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${authority===a?'bg-emerald-500 text-slate-950 border-emerald-400':'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}>{a==='ALL'?'All':a}</button>)}
+        {['ALL', ...canonicalAuthorities.map(a => a.id)].map(a =><button key={a} onClick={()=>{setAuthority(String(a));setProgramKey(null);setPostKey(null)}} className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${authority===a?'bg-emerald-500 text-slate-950 border-emerald-400':'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}>{a === 'ALL' ? 'All' : (canonicalAuthorityMap.get(String(a))?.shortName || canonicalAuthorityMap.get(String(a))?.name || a)}</button>)}
       </div>
     </div>
 
