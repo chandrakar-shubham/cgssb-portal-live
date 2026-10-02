@@ -10,19 +10,49 @@ import {
 import {
   deleteExamTestSeries,
   fetchExamTestSeriesById,
+  fetchExamTestSeries,
   saveExamTestSeries,
   ExamTestSeries
 } from '../firebase/examCatalogService';
 
 let bundleCache: TestSeriesBundle[] = [];
 
+/**
+ * Canonical integrity gate for the bundle catalog.
+ * A bundle is active only when its linked examTestSeries exists and every
+ * hierarchy identifier agrees. Legacy/free-text labels are never used here.
+ */
+const filterCanonicalBundles = async (bundles: TestSeriesBundle[]): Promise<TestSeriesBundle[]> => {
+  const series = await fetchExamTestSeries();
+  const byId = new Map(series.map(s => [s.id, s]));
+  return bundles.filter(bundle => {
+    if (!bundle.seriesId) return false;
+    const canonical = byId.get(bundle.seriesId);
+    if (!canonical) return false;
+    if (canonical.bundleId !== bundle.id) return false;
+    if (canonical.authorityId !== bundle.authorityId) return false;
+    if (canonical.programId !== bundle.programId) return false;
+    if ((canonical.postId || undefined) !== (bundle.postId || undefined)) return false;
+    if (canonical.status === 'ARCHIVED') return false;
+    return true;
+  });
+};
+
 // Automatic real-time cross-browser Firestore subscription for bundles.
 // This is an in-memory UI cache only; Firestore/API remains authoritative.
 if (typeof window !== 'undefined') {
   try {
     subscribeToBundles((firestoreBundles) => {
-      bundleCache = Array.isArray(firestoreBundles) ? firestoreBundles : [];
-      window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
+      filterCanonicalBundles(Array.isArray(firestoreBundles) ? firestoreBundles : [])
+        .then(validBundles => {
+          bundleCache = validBundles;
+          window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
+        })
+        .catch(() => {
+          // Do not surface unverified legacy bundles as active catalog content.
+          bundleCache = [];
+          window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
+        });
     });
   } catch {}
 }
@@ -110,11 +140,11 @@ export const saveStoredBundles = (bundles: TestSeriesBundle[]): void => {
  */
 export const syncBundlesFromFirestore = async (_customUrl?: string): Promise<{ list: TestSeriesBundle[]; count: number; source: string }> => {
   const response = await fetchBundlesFromFirestore();
-  bundleCache = Array.isArray(response) ? response : [];
+  bundleCache = await filterCanonicalBundles(Array.isArray(response) ? response : []);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
   }
-  return { list: [...bundleCache], count: bundleCache.length, source: 'api' };
+  return { list: [...bundleCache], count: bundleCache.length, source: 'api-canonical' };
 };
 
 export const findBundleBySlugOrId = (identifier: string, bundles?: TestSeriesBundle[]): TestSeriesBundle | undefined => {
