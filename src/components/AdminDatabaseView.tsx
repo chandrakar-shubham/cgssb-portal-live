@@ -66,6 +66,155 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   onRestoreSnapshot,
   onOpenToolsModal,
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'audit' | 'collections' | 'rules'>('analytics');
+  const [copiedRules, setCopiedRules] = useState(false);
+  const [backupMessage, setBackupMessage] = useState<string | null>(null);
+  const [trueZero, setTrueZero] = useState<boolean>(getTrueZeroDataMode());
+
+  const [isPinging, setIsPinging] = useState(false);
+  const [pingResult, setPingResult] = useState<{ status: 'idle' | 'success' | 'offline'; time?: number }>({ status: 'idle' });
+
+  const [isPurging, setIsPurging] = useState(false);
+  const [liveObservability, setLiveObservability] = useState<DatabaseObservabilitySnapshot | null>(null);
+  const [liveIntegrity, setLiveIntegrity] = useState<DatabaseIntegrityAudit | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  const refreshDatabaseAudit = async () => {
+    if (!isFirebaseConfigured) {
+      setAuditError('Firebase is not configured.');
+      return;
+    }
+    setIsAuditing(true);
+    setAuditError(null);
+    try {
+      const [observability, integrity] = await Promise.all([
+        fetchDatabaseObservability(100),
+        runDatabaseIntegrityAudit(500)
+      ]);
+      setLiveObservability(observability);
+      setLiveIntegrity(integrity);
+    } catch (error) {
+      setAuditError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDatabaseAudit();
+  }, []);
+
+  const analytics = useMemo(() => {
+    const totalDocs = liveObservability?.totalDocuments ?? null;
+    const estimatedKB = liveObservability ? (liveObservability.estimatedBytes / 1024).toFixed(1) : null;
+    const evaluated = liveIntegrity?.schemaEvaluatedDocuments || 0;
+    const valid = liveIntegrity?.schemaValidDocuments || 0;
+    const schemaComplianceRate = evaluated > 0 ? Math.round((valid / evaluated) * 100) : null;
+
+    const collectionBreakdown = liveObservability?.collections.map(col => ({
+      name: col.name,
+      count: col.count,
+      sizeKB: (col.estimatedBytes / 1024).toFixed(1),
+      primaryKey: col.name === 'users' ? 'uid' : 'id',
+      status: col.status === 'error' ? 'Error' : 'Healthy'
+    })) || [];
+
+    return {
+      totalDocs,
+      totalKB: estimatedKB,
+      schemaComplianceRate,
+      brokenQuestionRefsCount: liveIntegrity?.testsWithMissingQuestions ?? null,
+      emptyTestsCount: liveIntegrity?.testsWithZeroQuestions ?? null,
+      emptyBundlesCount: liveIntegrity?.bundlesWithZeroTests ?? null,
+      canonicalIntegrityIssues: liveIntegrity
+        ? liveIntegrity.seriesWithoutBundle + liveIntegrity.bundlesWithoutSeries + liveIntegrity.mismatchedSeriesBundles
+        : null,
+      collectionBreakdown
+    };
+  }, [liveObservability, liveIntegrity]);
+
+  const handleTestConnection = async () => {
+    setIsPinging(true);
+    const start = performance.now();
+    try {
+      await testConnection();
+      setPingResult({ status: 'success', time: Math.round(performance.now() - start) });
+    } catch {
+      setPingResult({ status: 'offline' });
+    } finally {
+      setIsPinging(false);
+    }
+  };
+
+  const handlePurgeAllDemoData = async () => {
+    const confirmation = window.prompt(
+      'Production safety: this action only deletes Firestore documents explicitly marked isDemo=true.\\n\\nType PURGE MARKED DEMO to continue.'
+    );
+    if (confirmation !== 'PURGE MARKED DEMO') return;
+
+    setIsPurging(true);
+    try {
+      const result = await purgeAllDemoDatabaseData();
+      const deleted = result.purgedKeys.length ? result.purgedKeys.join(', ') : 'no marked demo documents';
+      setBackupMessage('Safe demo purge completed: ' + deleted + '.');
+      await refreshDatabaseAudit();
+    } catch (err: any) {
+      setBackupMessage('Demo purge failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
+  const handleToggleTrueZero = () => {
+    const nextState = !trueZero;
+    setTrueZero(nextState);
+    setTrueZeroDataMode(nextState);
+    if (nextState && onRestoreSnapshot) {
+      onRestoreSnapshot({ tests: [], questions: [], pypPapers: [] });
+    }
+    setBackupMessage(nextState ? 'True 0 Data Mode enabled: demo catalogs suppressed.' : 'Default catalog mode restored.');
+    setTimeout(() => setBackupMessage(null), 3500);
+  };
+
+  const handleCopyRules = () => {
+    navigator.clipboard.writeText(FIRESTORE_RULES_TEXT);
+    setCopiedRules(true);
+    setTimeout(() => setCopiedRules(false), 2500);
+  };
+
+  const handleDownloadSnapshot = () => {
+    const auditSnapshot = {
+      version: APP_BUILD_INFO.version,
+      exportedAt: new Date().toISOString(),
+      platform: 'CGSSB Portal — Firestore Audit Snapshot',
+      firestore: {
+        projectId: firebaseProjectId,
+        databaseId: firestoreDatabaseId,
+        observability: liveObservability,
+        integrity: liveIntegrity,
+      },
+      appState: {
+        testsCount: tests.length,
+        questionsCount: questions.length,
+        pypCount: pypPapers.length,
+        attemptsCount: attempts.length,
+      },
+    };
+
+    const blob = new Blob([JSON.stringify(auditSnapshot, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cgssb-firestore-audit-' + new Date().toISOString().split('T')[0] + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setBackupMessage('Live Firestore audit snapshot exported.');
+    setTimeout(() => setBackupMessage(null), 3500);
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
