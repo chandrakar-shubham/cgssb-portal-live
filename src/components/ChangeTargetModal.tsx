@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Target,
   X,
@@ -13,6 +13,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { ExamCategory } from '../types';
+import { fetchExamPrograms, type ExamProgram } from '../firebase/examCatalogService';
 
 export interface TargetExamOption {
   id: string;
@@ -27,80 +28,27 @@ export interface TargetExamOption {
   badgeColor: string;
 }
 
-export const TARGET_EXAM_OPTIONS: TargetExamOption[] = [
-  {
-    id: 'cg-teacher-2026',
-    name: 'CG Teacher 2026',
-    cadreTitle: 'CG शिक्षक भर्ती 2026 (All 3 Cadres)',
-    description: 'सहायक शिक्षक (कक्षा 1-5), शिक्षक (कक्षा 6-8) एवं व्याख्याता (कक्षा 9-12)। 150 प्रश्न एवं -¼ निगेटिव मार्किंग।',
-    vacancies: '5,000+ Posts',
-    authority: 'CG Vyapam / DPI',
-    category: 'TEACHER_RECRUITMENT',
-    subtitle: 'Full practice suite for CG Teacher Recruitment (All 3 Cadres), complete syllabus & subject tests.',
-    icon: GraduationCap,
-    badgeColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  },
-  {
-    id: 'cgpsc-pre-2026',
-    name: 'CGPSC SSE Prelims 2026',
-    cadreTitle: 'CGPSC State Service Prelims 2026',
-    description: 'डिप्टी कलेक्टर, डीएसपी, नायब तहसीलदार। Paper 1 GS (छत्तीसगढ़ विशेष) + Paper 2 CSAT (-0.667 निगेटिव मार्किंग)।',
-    vacancies: '242+ Posts',
-    authority: 'CGPSC',
-    category: 'CGPSC',
-    subtitle: 'Complete GS Paper 1 & CSAT Paper 2 test series with official -0.667 negative marking.',
-    icon: Award,
-    badgeColor: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-  },
-  {
-    id: 'cgssb-general-2026',
-    name: 'CGSSB Vyapam 2026',
-    cadreTitle: 'CGSSB Vyapam (Hostel Warden, Patwari & RI)',
-    description: 'छात्रावास अधीक्षक (कंप्यूटर 50 प्रश्न अनिवार्य), पटवारी, राजस्व निरीक्षक (RI), एवं सहायक ग्रेड-3।',
-    vacancies: '300+ Posts',
-    authority: 'CGSSB / Vyapam',
-    category: 'CGSSB',
-    subtitle: 'Dedicated mock test bank with Computer 50 Qs mandatory qualifying rules and Vyapam PYPs.',
-    icon: Briefcase,
-    badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  },
-  {
-    id: 'cg-police-si-2026',
-    name: 'CG Police SI 2026',
-    cadreTitle: 'CG Police Sub-Inspector (SI) 2026',
-    description: 'सूबेदार, उपनिरीक्षक (SI), एवं प्लाटून कमांडर। 100 प्रश्न (300 अंक), 50 प्रश्न छत्तीसगढ़ सामान्य ज्ञान विशेष।',
-    vacancies: '975+ Posts',
-    authority: 'CG Police / Vyapam',
-    category: 'CGSSB',
-    subtitle: '300 Marks mock tests featuring 50 Qs Chhattisgarh GK special section and full syllabus.',
-    icon: Shield,
-    badgeColor: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
-  },
-  {
-    id: 'swami-atmanand-sages',
-    name: 'Swami Atmanand (SAGES)',
-    cadreTitle: 'Swami Atmanand Excellence Schools',
-    description: 'स्वामी आत्मानंद अंग्रेजी एवं हिंदी माध्यम विद्यालय शिक्षक भर्ती एवं संविदा पद।',
-    vacancies: 'District Cadre',
-    authority: 'Education Dept',
-    category: 'SWAMI_ATMANAND',
-    subtitle: 'Subject pedagogy, English proficiency, and school curriculum assessment tests.',
-    icon: BookOpen,
-    badgeColor: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
-  },
-  {
-    id: 'central-exams',
-    name: 'Central Exams (SSC & RRB)',
-    cadreTitle: 'Railway NTPC / SSC CGL / CHSL',
-    description: 'रेलवे एनटीपीसी, ग्रुप डी, एसएससी सीजीएल/सीएचएसएल एवं बैंकिंग भर्ती परीक्षाएं।',
-    vacancies: 'National Level',
-    authority: 'Central Govt',
-    category: 'CENTRAL_EXAMS',
-    subtitle: 'National CBT pattern simulations, quantitative aptitude, reasoning & English.',
-    icon: Zap,
-    badgeColor: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-  },
-];
+export const TARGET_EXAM_OPTIONS: TargetExamOption[] = [];
+
+function legacyCategoryForProgram(program: ExamProgram): ExamCategory | 'ALL' {
+  const key = `${program.name} ${program.slug || ''}`.toLowerCase();
+  if (key.includes('teacher') || key.includes('shikshak')) return 'TEACHER_RECRUITMENT';
+  if (key.includes('cgpsc') || key.includes('state service')) return 'CGPSC';
+  if (key.includes('cgssb') || key.includes('vyapam')) return 'CGSSB';
+  if (key.includes('atmanand') || key.includes('sages')) return 'SWAMI_ATMANAND';
+  if (key.includes('ssc') || key.includes('rail') || key.includes('rrb') || key.includes('bank')) return 'CENTRAL_EXAMS';
+  return 'ALL';
+}
+
+function iconForProgram(program: ExamProgram): React.ElementType {
+  const key = program.name.toLowerCase();
+  if (key.includes('teacher') || key.includes('shikshak')) return GraduationCap;
+  if (key.includes('police')) return Shield;
+  if (key.includes('cgpsc') || key.includes('state service')) return Award;
+  if (key.includes('atmanand') || key.includes('sages')) return BookOpen;
+  if (key.includes('ssc') || key.includes('rail') || key.includes('rrb')) return Zap;
+  return Briefcase;
+}
 
 interface ChangeTargetModalProps {
   isOpen: boolean;
@@ -115,6 +63,22 @@ export const ChangeTargetModal: React.FC<ChangeTargetModalProps> = ({
   currentTargetName,
   onSelectTarget,
 }) => {
+  const [programs, setPrograms] = useState<ExamProgram[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetchExamPrograms()
+      .then(rows => {
+        if (!cancelled) {
+          setPrograms(rows.filter(program => program.status === 'PUBLISHED')
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)));
+        }
+      })
+      .catch(() => { if (!cancelled) setPrograms([]); });
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -153,7 +117,19 @@ export const ChangeTargetModal: React.FC<ChangeTargetModalProps> = ({
 
         {/* Options List (Scrollable) */}
         <div className="overflow-y-auto space-y-2.5 pr-1 flex-1">
-          {TARGET_EXAM_OPTIONS.map(opt => {
+          {programs.map(program => {
+            const opt: TargetExamOption = {
+              id: program.id,
+              name: program.name,
+              cadreTitle: program.name,
+              description: program.description || 'Published examination program.',
+              vacancies: program.totalPosts ? `${program.totalPosts} Posts` : 'See official notification',
+              authority: program.authorityName || 'Official Examination Authority',
+              category: legacyCategoryForProgram(program),
+              subtitle: program.description || 'Practice tests, syllabus and preparation resources.',
+              icon: iconForProgram(program),
+              badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+            };
             const isSelected = opt.name.toLowerCase() === currentTargetName.toLowerCase() ||
               opt.id.toLowerCase() === currentTargetName.toLowerCase();
             const Icon = opt.icon;
