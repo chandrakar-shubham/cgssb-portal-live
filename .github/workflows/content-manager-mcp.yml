@@ -1,6 +1,7 @@
 name: CGSSB Content Manager MCP CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
