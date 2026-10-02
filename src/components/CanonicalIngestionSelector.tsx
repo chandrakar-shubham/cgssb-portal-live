@@ -4,6 +4,7 @@ import {
   ExamAuthority, ExamProgram, ExamPost, ExamTestSeries,
   fetchExamAuthorities, fetchExamPrograms, fetchExamPosts, fetchExamTestSeries
 } from '../firebase/examCatalogService';
+import { fetchBundlesFromFirestore } from '../firebase/firestoreService';
 
 interface Props {
   authority: string;
@@ -35,9 +36,24 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
 
       // Resolve the canonical series FIRST when a bundle/series target is already known.
       // Display labels are not identifiers and must never be used to infer the hierarchy.
-      const allSeries = await fetchExamTestSeries();
+      const [allSeries, allBundles] = await Promise.all([
+        fetchExamTestSeries(),
+        fetchBundlesFromFirestore(),
+      ]);
+      const bundleById = new Map(allBundles.map(b => [b.id, b]));
+      const activeSeries = allSeries.filter(s => {
+        const b = s.bundleId ? bundleById.get(s.bundleId) : undefined;
+        return Boolean(
+          b &&
+          b.seriesId === s.id &&
+          b.authorityId === s.authorityId &&
+          b.programId === s.programId &&
+          (b.postId || undefined) === (s.postId || undefined) &&
+          s.status !== 'ARCHIVED'
+        );
+      });
       const canonicalTarget = targetBundleId
-        ? allSeries.find(s => s.id === targetBundleId || s.bundleId === targetBundleId)
+        ? activeSeries.find(s => s.id === targetBundleId || s.bundleId === targetBundleId)
         : undefined;
 
       const matchedAuthority = canonicalTarget
@@ -79,7 +95,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
 
       // Critical integrity rule: when a recruitment has posts and a post is selected,
       // only series belonging to that exact post are eligible for ingestion.
-      const seriesList = await fetchExamTestSeries(nextProgramId, nextPostId || undefined);
+      const seriesList = activeSeries.filter(s => s.programId === nextProgramId && (!nextPostId || s.postId === nextPostId));
       setSeries(seriesList);
 
       const selected = canonicalTarget
