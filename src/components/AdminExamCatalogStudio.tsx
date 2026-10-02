@@ -24,6 +24,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [status, setStatus] = useState<'DRAFT'|'PUBLISHED'>('DRAFT');
   const [programType, setProgramType] = useState<'recruitment'|'examination'>('recruitment');
+  const [seriesType, setSeriesType] = useState<'full_mock'|'chapter_test'|'subject_test'|'pyp'|'live_test'|'practice'|'mixed'>('full_mock');
   const [postVacancies, setPostVacancies] = useState('');
   const [postCadreBreakup, setPostCadreBreakup] = useState('');
   const [postPayLevel, setPostPayLevel] = useState('');
@@ -158,7 +159,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
     const targetPost = posts.find(p=>p.id===selectedPost)?.name || 'General';
     const record: ExamTestSeries = {
       id, authorityId:selectedAuthority, programId:selectedProgram, postId:selectedPost || undefined,
-      name:name.trim(), slug:slugifyCatalog(name), seriesType:'mixed', bundleId,
+      name:name.trim(), slug:slugifyCatalog(name), seriesType, bundleId,
       status, sortOrder:series.length, createdAt:now(), updatedAt:now()
     };
     await saveExamTestSeries(record);
@@ -172,7 +173,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
       enrolledStudentsCount:0, rating:0, validity:'Till Exam Date', languageDisplay:'Bilingual',
       examPattern:{ totalQuestions:0,totalMarks:0,durationMinutes:0,markingScheme:'',negativeMarkPenalty:'',language:'Bilingual',cadre:targetPost,keyRules:[] },
       syllabusBreakdown:[], features:[], testItems:[], faqs:[], isDraft:true, isPublished:false,
-      seriesType:'mixed'
+      seriesType
     };
     await saveBundleToFirestore(bundle);
     saveSingleBundle(bundle);
@@ -263,7 +264,19 @@ export const AdminExamCatalogStudio: React.FC = () => {
         <select value={selectedProgram} onChange={e=>setSelectedProgram(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm">{programs.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
         <select value={selectedPost} onChange={e=>setSelectedPost(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"><option value="">Direct exam / no post</option>{posts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
       </div>
-      <div className="flex gap-2 mt-3"><input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Assistant Teacher 2026 Full Mock Series" className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/><button onClick={createSeries} className="px-4 rounded-xl bg-purple-500 text-white font-black flex items-center gap-2"><Save className="w-4 h-4"/>Create Draft Series</button></div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-3">
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Assistant Teacher 2026 Full Mock Series" className="md:col-span-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm"/>
+        <select value={seriesType} onChange={e=>setSeriesType(e.target.value as any)} className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <option value="full_mock">Full Mock</option>
+          <option value="chapter_test">Chapter Test</option>
+          <option value="subject_test">Subject Test</option>
+          <option value="pyp">Previous Year Paper</option>
+          <option value="live_test">Live Test</option>
+          <option value="practice">Practice</option>
+          <option value="mixed">Mixed</option>
+        </select>
+        <button onClick={createSeries} className="px-4 rounded-xl bg-purple-500 text-white font-black flex items-center justify-center gap-2"><Save className="w-4 h-4"/>Create Draft Series</button>
+      </div>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{series.map(s=><div key={s.id} className="rounded-xl bg-slate-950/80 border border-slate-800 p-3"><div className="text-xs text-slate-500">{s.seriesType}</div><div className="font-bold text-white">{s.name}</div><div className="text-xs text-slate-500 mt-1">{s.status}</div></div>)}</div>
     </>)}
     <button onClick={load} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5"/>Refresh catalog</button>
