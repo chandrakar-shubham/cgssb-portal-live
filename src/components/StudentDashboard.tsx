@@ -46,6 +46,7 @@ import { ChangeTargetModal, TARGET_EXAM_OPTIONS, TargetExamOption } from './Chan
 import { LiveTestLeaderboard } from './LiveTestLeaderboard';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
 import { fetchMySeriesEnrollmentsFromFirestore } from '../firebase/firestoreService';
+import { fetchExamPrograms, type ExamProgram } from '../firebase/examCatalogService';
 import type { SeriesEnrollment } from '../types';
 
 export type TestSegment = 'ALL' | 'MOCK' | 'PYP' | 'PRO';
@@ -99,6 +100,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [testSegment, setTestSegment] = useState<TestSegment>('ALL');
+  const [canonicalPrograms, setCanonicalPrograms] = useState<ExamProgram[]>([]);
+  const [selectedProgramId, setSelectedProgramId] = useState<string>('');
 
   // Bundle Portal View & State
   const [bundles, setBundles] = useState<TestSeriesBundle[]>(() => getStoredBundles());
@@ -253,14 +256,58 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const categories: { id: ExamCategory | 'ALL'; label: string }[] = [
+  // Canonical student discovery is driven by published exam programs.
+  // Legacy ExamCategory values remain only for backwards-compatible filtering of older tests.
+  useEffect(() => {
+    let cancelled = false;
+    fetchExamPrograms()
+      .then(programs => {
+        if (cancelled) return;
+        const published = programs
+          .filter(program => program.status === 'PUBLISHED')
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+        setCanonicalPrograms(published);
+        if (selectedProgramId && !published.some(program => program.id === selectedProgramId)) {
+          setSelectedProgramId('');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCanonicalPrograms([]);
+      });
+    return () => { cancelled = true; };
+  }, [selectedProgramId]);
+
+  const categories: Array<{ id: 'ALL' | string; label: string; program?: ExamProgram }> = [
     { id: 'ALL', label: 'All Exams' },
-    { id: 'TEACHER_RECRUITMENT', label: 'CG शिक्षक भर्ती 2026' },
-    { id: 'CGSSB', label: 'CGSSB / Vyapam' },
-    { id: 'CGPSC', label: 'CGPSC SSE Prelims' },
-    { id: 'SWAMI_ATMANAND', label: 'Swami Atmanand' },
-    { id: 'CENTRAL_EXAMS', label: 'Central (Rail, SSC, Bank)' },
+    ...canonicalPrograms.map(program => ({
+      id: program.id,
+      label: program.name,
+      program,
+    })),
   ];
+
+  const legacyCategoryForProgram = (program?: ExamProgram): ExamCategory | 'ALL' => {
+    if (!program) return 'ALL';
+    const text = (program.authorityId + ' ' + program.name + ' ' + program.slug).toLowerCase();
+    if (text.includes('teacher') || text.includes('shikshak')) return 'TEACHER_RECRUITMENT';
+    if (text.includes('cgpsc') || text.includes('state service')) return 'CGPSC';
+    if (text.includes('cgssb') || text.includes('vyapam')) return 'CGSSB';
+    if (text.includes('atmanand') || text.includes('sages')) return 'SWAMI_ATMANAND';
+    if (text.includes('rail') || text.includes('ssc') || text.includes('bank')) return 'CENTRAL_EXAMS';
+    return 'ALL';
+  };
+
+  const handleCanonicalCategorySelect = (categoryId: string) => {
+    if (categoryId === 'ALL') {
+      setSelectedProgramId('');
+      onSelectCategory('ALL');
+      return;
+    }
+    const program = canonicalPrograms.find(item => item.id === categoryId);
+    if (!program) return;
+    setSelectedProgramId(program.id);
+    onSelectCategory(legacyCategoryForProgram(program));
+  };
 
   // For students: deduplicate automatically and hide drafts
   // For admins: deduplicate or show all tests with draft/published controls
@@ -344,22 +391,25 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       const testCat = String(test.category || 'CGSSB').toUpperCase().trim();
       const selCat = String(selectedCategory || 'ALL').toUpperCase().trim();
+      const matchesProgram = !selectedProgramId || String(test.programId || '') === selectedProgramId;
       const matchesCategory =
-        selCat === 'ALL' ||
-        testCat === selCat ||
-        (selCat === 'TEACHER_RECRUITMENT' && (
-          testCat.includes('TEACHER') ||
-          testCat.includes('SHIKSHAK') ||
-          testCat.includes('LECTURER') ||
-          testCat.includes('ASST') ||
-          (test.subCategory && test.subCategory.toLowerCase().includes('teacher')) ||
-          (test.postName && test.postName.toLowerCase().includes('teacher')) ||
-          (test.postName && test.postName.toLowerCase().includes('lecturer'))
-        )) ||
-        (selCat === 'CGPSC' && testCat.includes('PSC')) ||
-        (selCat === 'CGSSB' && (testCat.includes('SSB') || testCat.includes('VYAPAM') || testCat.includes('PATWARI') || testCat.includes('WARDEN'))) ||
-        (selCat === 'SWAMI_ATMANAND' && (testCat.includes('ATMANAND') || testCat.includes('SAGES'))) ||
-        (selCat === 'CENTRAL_EXAMS' && (testCat.includes('CENTRAL') || testCat.includes('SSC') || testCat.includes('RAIL')));
+        matchesProgram && (
+          selCat === 'ALL' ||
+          testCat === selCat ||
+          (selCat === 'TEACHER_RECRUITMENT' && (
+            testCat.includes('TEACHER') ||
+            testCat.includes('SHIKSHAK') ||
+            testCat.includes('LECTURER') ||
+            testCat.includes('ASST') ||
+            (test.subCategory && test.subCategory.toLowerCase().includes('teacher')) ||
+            (test.postName && test.postName.toLowerCase().includes('teacher')) ||
+            (test.postName && test.postName.toLowerCase().includes('lecturer'))
+          )) ||
+          (selCat === 'CGPSC' && testCat.includes('PSC')) ||
+          (selCat === 'CGSSB' && (testCat.includes('SSB') || testCat.includes('VYAPAM') || testCat.includes('PATWARI') || testCat.includes('WARDEN'))) ||
+          (selCat === 'SWAMI_ATMANAND' && (testCat.includes('ATMANAND') || testCat.includes('SAGES'))) ||
+          (selCat === 'CENTRAL_EXAMS' && (testCat.includes('CENTRAL') || testCat.includes('SSC') || testCat.includes('RAIL')))
+        );
       const s = deferredSearchTerm.toLowerCase().trim();
       const matchesSearch =
         !s ||
@@ -367,7 +417,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         test.description.toLowerCase().includes(s);
       return matchesCategory && matchesSearch;
     });
-  }, [tests, processedTests, isAdmin, adminPublishFilter, testSegment, selectedCategory, deferredSearchTerm]);
+  }, [tests, processedTests, isAdmin, adminPublishFilter, testSegment, selectedCategory, selectedProgramId, deferredSearchTerm]);
 
   // Admin stats
   const totalPublishedCount = useMemo(() => {
@@ -1241,11 +1291,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <div className="space-y-4">
             <div className="flex overflow-x-auto no-scrollbar touch-scroll gap-1.5 sm:gap-2 pb-1">
               {categories.map(cat => {
-                const isSelected = selectedCategory === cat.id;
+                const isSelected = cat.id === 'ALL' ? selectedCategory === 'ALL' && !selectedProgramId : selectedProgramId === cat.id;
                 return (
                   <button
                     key={cat.id}
-                    onClick={() => onSelectCategory(cat.id as any)}
+                    onClick={() => handleCanonicalCategorySelect(cat.id)}
                     className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
