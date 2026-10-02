@@ -42,7 +42,7 @@ import { BundleCompactCard } from './BundleCompactCard';
 import { BundleDetailPage } from './BundleDetailPage';
 import { ExamRecruitmentExplorer } from './ExamRecruitmentExplorer';
 import { HotSliderAndOffers } from './HotSliderAndOffers';
-import { ChangeTargetModal, TARGET_EXAM_OPTIONS, TargetExamOption } from './ChangeTargetModal';
+import { ChangeTargetModal, TargetExamOption } from './ChangeTargetModal';
 import { LiveTestLeaderboard } from './LiveTestLeaderboard';
 import { calculateDaysRemaining, isUserPassActive } from '../utils/devicePassManager';
 import { fetchMySeriesEnrollmentsFromFirestore } from '../firebase/firestoreService';
@@ -236,18 +236,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     : null;
 
   const targetSubtitle = useMemo(() => {
-    const match = TARGET_EXAM_OPTIONS.find(
-      o => o.name.toLowerCase() === userTarget.toLowerCase() || o.id.toLowerCase() === userTarget.toLowerCase()
+    const match = canonicalPrograms.find(
+      program => program.name.toLowerCase() === userTarget.toLowerCase() || program.id.toLowerCase() === userTarget.toLowerCase()
     );
-    return match?.subtitle || 'Full practice suite for CG Teacher Recruitment (All 3 Cadres), CGPSC SSE Prelims & Vyapam exams.';
-  }, [userTarget]);
+    return match?.description || 'Select a published examination program to personalize your preparation.';
+  }, [userTarget, canonicalPrograms]);
 
   const handleSelectTarget = (target: TargetExamOption) => {
     setUserTarget(target.name);
-    localStorage.setItem('cgssb_user_target', target.name);
+    localStorage.setItem('cgssb_user_target', target.id);
     if (target.category && target.category !== 'ALL') {
       onSelectCategory(target.category);
     }
+    setSelectedProgramId(target.id);
     showToast(`Target exam updated to "${target.name}"!`);
   };
 
