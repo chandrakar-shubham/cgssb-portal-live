@@ -166,13 +166,20 @@ export const saveSingleBundle = (bundle: TestSeriesBundle): TestSeriesBundle[] =
   return updated;
 };
 
-export const deleteStoredBundle = (bundleId: string): TestSeriesBundle[] => {
-  const updated = getStoredBundles().filter(b => b.id !== bundleId && b.slug !== bundleId);
-  saveStoredBundles(updated);
-  deleteBundleFromFirestore(bundleId).catch(err => {
-    console.warn('Bundle API delete failed; authoritative state was not changed:', err);
-  });
-  return updated;
+/**
+ * Canonical bundle deletion entry point.
+ *
+ * TestSeriesBundle + examTestSeries form one production aggregate. Never delete
+ * the Bundle alone: doing so leaves an orphaned canonical Series. Route every
+ * bundle deletion through the transactional-ish trash workflow so both sides
+ * are captured and removed together.
+ */
+export const deleteStoredBundle = async (bundleId: string): Promise<TestSeriesBundle[]> => {
+  const target = getStoredBundles().find(b => b.id === bundleId || b.slug === bundleId);
+  if (!target) return getStoredBundles();
+
+  await moveToTrashBundle(target);
+  return getStoredBundles();
 };
 
 export const toggleBundlePublish = (bundleId: string): { updatedList: TestSeriesBundle[]; newStatus: boolean } => {
