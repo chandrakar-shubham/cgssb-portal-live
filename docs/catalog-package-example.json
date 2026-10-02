@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "1.0",
+  "packageId": "cgssb-teacher-recruitment-2026",
+  "mode": "upsert",
+  "catalog": {
+    "authority": {
+      "name": "CGSSB",
+      "shortName": "CGSSB",
+      "slug": "cgssb"
+    },
+    "recruitment": {
+      "name": "CGSSB Teacher Recruitment 2026",
+      "nameHindi": "सीजीएसएसबी शिक्षक भर्ती 2026",
+      "slug": "cgssb-teacher-recruitment-2026",
+      "year": 2026,
+      "programType": "recruitment",
+      "hasPosts": true,
+      "totalVacancies": 4800,
+      "recruitmentLabel": "4,800 Vacancies"
+    },
+    "posts": [
+      {
+        "name": "Assistant Teacher",
+        "slug": "assistant-teacher",
+        "vacancies": 2292,
+        "payLevel": "Level-06",
+        "salaryRange": "₹35,400–₹1,12,400",
+        "cadreBreakup": "795 E-Cadre + 1,497 T-Cadre"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "General Knowledge",
+        "nameHindi": "सामान्य ज्ञान",
+        "slug": "general-knowledge",
+        "topics": [
+          "Indian Polity",
+          "History",
+          "Geography",
+          "Economy",
+          "General Science",
+          "Chhattisgarh GK"
+        ]
+      }
+    ],
+    "testSeries": [
+      {
+        "name": "Assistant Teacher 2026 — Full Mock Series",
+        "slug": "assistant-teacher-2026-full-mock-series",
+        "seriesType": "full_mock",
+        "postName": "Assistant Teacher",
+        "description": "Full-length mock test series.",
+        "bundle": {
+          "title": "Assistant Teacher 2026 — Full Mock Series",
+          "titleHindi": "सहायक शिक्षक 2026 — फुल मॉक सीरीज",
+          "shortDescription": "Full mock test series for Assistant Teacher 2026.",
+          "fullDescription": "Draft test-series bundle. Tests will be added separately through Universal Ingestion Studio.",
+          "badge": "Full Mock",
+          "badgeColor": "emerald",
+          "validity": "Till Exam Date",
+          "languageDisplay": "Bilingual",
+          "features": [
+            "Full-length simulated tests",
+            "Bilingual questions",
+            "Detailed solutions"
+          ]
+        },
+        "examPattern": {
+          "totalQuestions": 100,
+          "totalMarks": 100,
+          "durationMinutes": 120,
+          "markingScheme": "+1 per question",
+          "negativeMarkPenalty": "-0.25 per wrong answer",
+          "language": "Bilingual",
+          "cadre": "Assistant Teacher",
+          "keyRules": [
+            "Tests are imported separately through Universal Ingestion Studio."
+          ]
+        },
+        "syllabus": [
+          {
+            "subject": "General Knowledge",
+            "marks": 100,
+            "questionCount": 100,
+            "topics": [
+              "Indian Polity",
+              "History",
+              "Geography",
+              "Economy",
+              "General Science",
+              "Chhattisgarh GK"
+            ]
+          }
+        ],
+        "officialLinks": {
+          "officialWebsiteUrl": "https://vyapamcg.cgstate.gov.in/"
+        }
+      }
+    ]
+  }
+}
