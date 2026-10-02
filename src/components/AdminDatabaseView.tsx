@@ -79,103 +79,384 @@ interface FirestoreCollectionMeta {
 const FIRESTORE_RULES_TEXT = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Default-deny catch-all to prevent unmapped collection access
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+
+    function isPermanentUser() {
+      return isAuthenticated() &&
+        request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
-    
+
+    function isBootstrapAdmin() {
+      return isAuthenticated() &&
+        request.auth.uid == 'VOynxZyDOJR4lg2x4va2U3qF5m72';
+    }
+
+    function isAdminEmail() {
+      return isAuthenticated() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'admin@cgtest.in';
+    }
+
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == 'coolboy171717@gmail.com' ||
-        (request.auth.token.email_verified == true && request.auth.token.email == 'coolboy171717@gmail.com') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-      );
+      return isBootstrapAdmin() ||
+        isAdminEmail() ||
+        (isAuthenticated() &&
+         exists(/databases/$(database)/documents/adminMembers/$(request.auth.uid)));
     }
 
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+    function isDelegatedAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/adminMembers/$(request.auth.uid));
     }
 
-    // User Profiles
+    function hasManageStudents() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageStudents == true);
+    }
+
+    function hasManageAdmins() {
+      return isBootstrapAdmin();
+    }
+
+    function hasManageTests() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageTests == true);
+    }
+
+    function hasManageQuestions() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageQuestions == true);
+    }
+
+    function hasManageCMS() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageCMS == true);
+    }
+
+    function hasManagePayments() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.managePayments == true);
+    }
+
+    function hasManageSystem() {
+      return isBootstrapAdmin() ||
+        (isDelegatedAdmin() &&
+         get(/databases/$(database)/documents/adminMembers/$(request.auth.uid)).data.adminPermissions.manageSystem == true);
+    }
+
+    function isOwner(userId) {
+      return isPermanentUser() && request.auth.uid == userId;
+    }
+
+    // User profile. Client can edit only non-privileged profile fields.
+    // Admins can manage profiles from the admin portal.
     match /users/{userId} {
-      allow read: if true;
-      allow create: if isValidId(userId) && (
-        isAdmin() ||
-        (isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == 'student'))
-      );
-      allow update: if isValidId(userId) && (
-        isAdmin() ||
-        (isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])))
-      );
-      allow delete: if isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if (isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
+          'lastLoginAt', 'targetExam', 'targetYear', 'district',
+          'categoryReservation', 'gender', 'education', 'medium', 'bio',
+          'dailyGoalQuestions', 'referralCode', 'referredBy', 'lastSyncedAt'
+        ])) ||
+        (hasManageStudents() &&
+         request.resource.data.keys().hasOnly([
+          'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
+          'lastLoginAt', 'targetExam', 'targetYear', 'district',
+          'categoryReservation', 'gender', 'education', 'medium', 'bio',
+          'dailyGoalQuestions', 'referralCode', 'referredBy',
+          'lastSyncedAt', 'role', 'status', 'isBlocked', 'completedTestsCount',
+          'hasProPass', 'proPassPlan', 'passDurationDays', 'passExpiresAt',
+          'boundDeviceId', 'boundDeviceName', 'freePassStage',
+          'unlockedMilestoneBonus', 'referralCount', 'referralBonusMonths'
+        ]));
+      allow update: if hasManageStudents() ||
+        (isOwner(userId) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'email', 'phone', 'avatar', 'lastLoginAt',
+          'targetExam', 'targetYear', 'district', 'categoryReservation',
+          'gender', 'education', 'medium', 'bio', 'dailyGoalQuestions',
+          'lastSyncedAt'
+         ]));
+      allow delete: if hasManageStudents();
     }
-    
-    // Mock Tests Catalog - Public read for aspirants, modifications restricted strictly to Admin
+
+    // Canonical exam taxonomy. Public reads; admin-managed mutations.
+    match /examAuthorities/{authorityId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /examPrograms/{programId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /examPosts/{postId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /examTestSeries/{seriesId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /examSubjects/{subjectId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+
+    // Public exam/catalog content. Admin-only mutations.
     match /mockTests/{testId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageTests();
     }
-    
-    // Question Bank - Public read, write operations restricted to Admin
     match /questions/{questionId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageQuestions();
     }
-
-    // Previous Year Papers (PYP) Repository
     match /pypPapers/{paperId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageTests();
     }
-    
-    // Test Series Bundles & Syllabus
     match /bundles/{bundleId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageCMS() || hasManageTests();
     }
-    
-    // Student Test Attempts & Leaderboard
-    match /attempts/{attemptId} {
+    match /pages/{pageId} {
       allow read: if true;
-      allow create: if isValidId(attemptId) && (
-        isAdmin() ||
-        (isAuthenticated() ? request.resource.data.userId == request.auth.uid : true)
-      );
-      allow update, delete: if isValidId(attemptId) && (
-        isAdmin() ||
-        (isAuthenticated() && resource.data.userId == request.auth.uid)
-      );
+      allow write: if hasManageCMS();
+    }
+    match /posts/{postId} {
+      allow read: if true;
+      allow write: if hasManageCMS();
+    }
+    match /seriesPacks/{packId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageTests();
+    }
+    match /cmsSettings/{settingsId} {
+      allow read: if true;
+      allow write: if hasManageCMS();
+    }
+    match /slider_banners/{bannerId} {
+      allow read: if true;
+      allow write: if hasManageCMS() || hasManageSystem();
     }
 
-    // Connection Diagnostics & Health Ping Check Collection
-    match /_connection_check_/{docId} {
-      allow read, write: if true;
+    // Current-affairs public content. Admin-only mutations.
+    match /currentAffairsSources/{docId} {
+      allow read: if true;
+      allow write: if hasManageQuestions();
+    }
+    match /currentAffairsTopics/{docId} {
+      allow read: if true;
+      allow write: if hasManageQuestions();
+    }
+    match /currentAffairsQuestions/{docId} {
+      allow read: if true;
+      allow write: if hasManageQuestions();
+    }
+    match /dailyEditions/{docId} {
+      allow read: if true;
+      allow write: if hasManageQuestions();
+    }
+    match /monthlyEditions/{docId} {
+      allow read: if true;
+      allow write: if hasManageQuestions();
+    }
+    match /monthlyEditions/{docId}/sections/{sectionId} {
+      allow read: if true;
+      allow write: if hasManageQuestions();
     }
 
-    // Global Server-Driven Remote Config & Feature Flags
+    // Attempts: authenticated students may create/read only their own attempts.
+    // Admins can read/write for support and analytics.
+    match /attempts/{attemptId} {
+      // The nonexistent-document branch is needed for the idempotent transaction
+      // that checks whether this submission ID has already been committed.
+      allow get: if hasManageStudents() ||
+        (isAuthenticated() && resource == null) ||
+        (isOwner(resource.data.userId));
+      // Student attempt queries must be constrained to the authenticated owner.
+      allow list: if isPermanentUser() &&
+        resource.data.userId == request.auth.uid;
+      allow create: if hasManageStudents() ||
+        (isOwner(request.resource.data.userId) &&
+         request.resource.data.testId is string &&
+         request.resource.data.id is string &&
+         request.resource.data.submissionId is string &&
+         request.resource.data.responses is map &&
+         request.resource.data.questionStatuses is map &&
+         request.resource.data.correctCount is number &&
+         request.resource.data.incorrectCount is number &&
+         request.resource.data.unattemptedCount is number &&
+         request.resource.data.attemptedCount is number &&
+         request.resource.data.maxScore is number &&
+         request.resource.data.score is number);
+      // Student attempts are immutable after creation. This prevents a second
+      // client write from changing score/answers after the idempotent submission.
+      allow update: if hasManageStudents();
+      allow delete: if hasManageStudents();
+    }
+
+    // User-specific application state.
+    match /userBookmarks/{userId} {
+      allow read, write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    match /userMistakes/{userId} {
+      allow read, write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    match /userEntitlements/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      // A newly registered student may create exactly one free 30-day welcome entitlement.
+      // Paid/manual entitlements remain admin-controlled.
+      allow create: if isOwner(userId) &&
+        request.resource.data.planType in ['WELCOME_FREE', 'FREE_CAMPAIGN'] &&
+        request.resource.data.status == 'ACTIVE' &&
+        request.resource.data.durationDays == 30 &&
+        request.resource.data.source in ['WELCOME_FREE', 'FREE_CAMPAIGN'] &&
+        request.resource.data.userId == userId &&
+        request.resource.data.keys().hasOnly([
+          'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
+          'durationDays', 'source', 'planName', 'boundDeviceId',
+          'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
+           'unlockedMilestoneBonus', 'campaignId'
+        ]);
+      allow update: if hasManagePayments() ||
+        (isOwner(userId) &&
+         request.resource.data.userId == userId &&
+         request.resource.data.source in ['CLIENT_CHECKOUT', 'FREE_CAMPAIGN'] &&
+         request.resource.data.status in ['ACTIVE', 'EXPIRED'] &&
+         request.resource.data.durationDays in [30, 90, 365] &&
+         request.resource.data.keys().hasOnly([
+           'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
+           'durationDays', 'source', 'planName', 'boundDeviceId',
+           'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
+           'unlockedMilestoneBonus', 'campaignId'
+         ]));
+      allow delete: if hasManagePayments();
+    }
+
+    // Student test-series enrollments. The active pass remains the authoritative
+    // entitlement for pass-based test access; this collection organizes My Tests.
+    match /seriesEnrollments/{enrollmentId} {
+      allow get: if isOwner(resource.data.userId) || isAdmin();
+      allow list: if isPermanentUser() && resource.data.userId == request.auth.uid;
+      allow create: if isOwner(request.resource.data.userId) &&
+        request.resource.data.seriesId is string &&
+        request.resource.data.status == 'active' &&
+        request.resource.data.accessType == 'PASS' &&
+        request.resource.data.amountPaid == 0 &&
+        request.resource.data.price is number &&
+        request.resource.data.enrolledAt is string &&
+        request.resource.data.accessExpiresAt is string &&
+        request.resource.data.updatedAt is string &&
+        request.resource.data.keys().hasOnly([
+          'id', 'userId', 'seriesId', 'status', 'accessType',
+          'enrolledAt', 'accessExpiresAt', 'price', 'amountPaid', 'updatedAt'
+        ]);
+      allow update: if isOwner(resource.data.userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.seriesId == resource.data.seriesId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'accessExpiresAt', 'updatedAt'
+        ]);
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // Legacy per-attempt leaderboard entries remain readable for migration only.
+    // New production rankings use compact per-student profile documents below.
+    match /leaderboardEntries/{entryId} {
+      allow get: if true;
+      allow list: if request.query.limit <= 100;
+      allow create: if isOwner(request.resource.data.userId) &&
+        request.resource.data.source == 'practice_attempt' &&
+        request.resource.data.keys().hasOnly([
+          'id', 'userId', 'candidateName', 'district', 'category',
+          'targetKey', 'targetExam', 'seriesId', 'testId', 'score', 'maxScore',
+          'percentage', 'accuracy', 'correctCount', 'incorrectCount',
+          'unattemptedCount', 'timeTakenSeconds', 'submittedAt', 'source'
+        ]);
+      allow update: if isOwner(resource.data.userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'candidateName', 'district', 'category', 'targetKey', 'targetExam',
+          'seriesId', 'testId', 'score', 'maxScore', 'percentage', 'accuracy',
+          'correctCount', 'incorrectCount', 'unattemptedCount', 'timeTakenSeconds',
+          'submittedAt', 'source'
+        ]);
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // Compact per-student ranking summaries. Public reads are bounded to 100 rows;
+    // writes are restricted to the owning authenticated student.
+    match /leaderboardProfiles/{profileId} {
+      allow get: if true;
+      allow list: if request.query.limit <= 100;
+      allow create: if isOwner(request.resource.data.userId) &&
+        request.resource.data.source == 'practice_summary' &&
+        request.resource.data.keys().hasOnly([
+          'id', 'userId', 'scopeType', 'scopeKey', 'targetKey', 'targetExam',
+          'seriesId', 'testId', 'candidateName', 'district', 'category',
+          'score', 'maxScore', 'averagePercentage', 'averageAccuracy',
+          'testsTaken', 'averageTimeSeconds', 'updatedAt', 'source'
+        ]);
+      allow update: if isOwner(resource.data.userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.scopeType == resource.data.scopeType &&
+        request.resource.data.scopeKey == resource.data.scopeKey &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'candidateName', 'district', 'category', 'score', 'maxScore',
+          'averagePercentage', 'averageAccuracy', 'testsTaken',
+          'averageTimeSeconds', 'updatedAt', 'targetExam', 'targetKey',
+          'seriesId', 'testId', 'source'
+        ]);
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // Referral records may be read only by an admin in Spark mode.
+    // This avoids exposing cross-user referral relationships to clients.
+    match /referrals/{referralId} {
+      allow read, write: if hasManageStudents();
+    }
+
+    // Admin/member/coupon management.
+    match /adminMembers/{memberId} {
+      // Only the bootstrap Super Admin may create, edit, or revoke delegated admin roles.
+      // Other admins can read their roster but cannot self-escalate privileges.
+      allow read: if isAdmin();
+      allow create, update, delete: if hasManageAdmins();
+    }
+    match /discountCoupons/{couponId} {
+      allow read, write: if hasManagePayments();
+    }
+
+    // Content Manager audit trail. Only authenticated admins may create/read audit records.
+    match /aiContentManagerAudit/{auditId} {
+      allow read: if isAdmin();
+      allow create: if hasManageCMS() || hasManageTests() || hasManageQuestions();
+      allow update, delete: if isBootstrapAdmin();
+    }
+
+    // Public configuration.
     match /remoteConfig/{configId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if hasManageSystem();
     }
 
-    // Dynamic Pages, Posts, Series Packs, and Site Settings
-    match /pages/{pageId} { allow read: if true; allow write: if isAdmin(); }
-    match /posts/{postId} { allow read: if true; allow write: if isAdmin(); }
-    match /seriesPacks/{packId} { allow read: if true; allow write: if isAdmin(); }
-    match /cmsSettings/{settingsId} { allow read: if true; allow write: if isAdmin(); }
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
-}`;
+}
+`;
 
 export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   tests,
@@ -369,39 +650,36 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   };
 
   const handleDownloadSnapshot = () => {
-    const dbSnapshot = {
+    const auditSnapshot = {
       version: APP_BUILD_INFO.version,
       exportedAt: new Date().toISOString(),
-      platform: 'CGSSB & CGPSC Portal (Cloud Firestore Edition)',
-      firestoreDatabaseId: 'ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089',
-      projectId: 'gen-lang-client-0783153446',
-      stats: {
+      platform: 'CGSSB Portal — Firestore Audit Snapshot',
+      firestore: {
+        projectId: firebaseProjectId,
+        databaseId: firestoreDatabaseId,
+        observability: liveObservability,
+        integrity: liveIntegrity,
+      },
+      appCache: {
         testsCount: tests.length,
         questionsCount: questions.length,
         pypCount: pypPapers.length,
         attemptsCount: attempts.length,
         bundlesCount: storedBundles.length,
       },
-      collections: {
-        mockTests: tests,
-        questions: questions,
-        previousYearPapers: pypPapers,
-        attempts: attempts,
-        bundles: storedBundles,
-      },
     };
 
-    const blob = new Blob([JSON.stringify(dbSnapshot, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(auditSnapshot, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cgssb-database-snapshot-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `cgssb-firestore-audit-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    setBackupMessage('Database JSON snapshot exported successfully!');
+    setBackupMessage('Live Firestore audit snapshot exported.');
     setTimeout(() => setBackupMessage(null), 3500);
   };
 
@@ -503,7 +781,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 FAANG Database Engineer Suite
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Zero Data Integrity Errors
+                Audit Pending
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center space-x-2">
@@ -511,7 +789,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
               <span>Database Observability & Architecture</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Real-time telemetry, schema compliance validator, referential integrity audit, and one-click demo data purge for production deployment.
+              Live Firestore telemetry, bounded schema validation, canonical referential-integrity auditing, and production-safe demo-data controls.
             </p>
           </div>
 
@@ -523,7 +801,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
             >
               <Zap className={`w-3.5 h-3.5 ${isPinging ? 'animate-spin text-amber-400' : 'text-emerald-400'}`} />
-              <span>{isPinging ? 'Testing Ping...' : 'Ping Test'}</span>
+              <span>{isPinging ? 'Pinging Firestore...' : 'Ping Firestore'}</span>
             </button>
 
             <button
@@ -547,8 +825,8 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
         {/* Live Diagnostics Pill Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-indigo-900/40 text-xs">
           <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
-            <div className="text-[11px] text-slate-400 font-medium">Active Database ID</div>
-            <div className="text-white font-mono font-bold text-xs truncate mt-0.5">{firestoreDatabaseId}</div>
+            <div className="text-[11px] text-slate-400 font-medium">Firestore Database</div>
+            <div className="text-white font-mono font-bold text-xs truncate mt-0.5">{firestoreDatabaseId}</div><div className="text-[10px] text-slate-500 truncate mt-1">{firebaseProjectId}</div>
           </div>
           <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
             <div className="text-[11px] text-slate-400 font-medium">Schema Compliance</div>
