@@ -462,7 +462,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     return extractHierarchyFromApp(availableTests, [], availableQuestions);
   }, [availableTests, availableQuestions]);
 
-  const handleSaveBundle = () => {
+  const handleSaveBundle = async () => {
     if (!editingBundle) return;
     
     // Calculate total counts
