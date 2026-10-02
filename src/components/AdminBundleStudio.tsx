@@ -550,11 +550,17 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     showToast(`Test Series "${bundleToSave.title}" saved successfully!`);
   };
 
-  const handleDelete = (bundleId: string, title: string) => {
-    if (window.confirm(`Are you sure you want to delete "${title}"?`)) {
-      const updated = deleteStoredBundle(bundleId);
+  const handleDelete = async (bundleId: string, title: string) => {
+    if (!window.confirm(
+      `Delete "${title}" from the canonical catalog? Its linked Test Series record and Bundle will be moved together to Trash Bin.`
+    )) return;
+
+    try {
+      const updated = await deleteStoredBundle(bundleId);
       setBundles(updated);
-      showToast(`Test Series "${title}" removed.`);
+      showToast(`Test Series "${title}" and its canonical catalog record moved to Trash Bin.`);
+    } catch (error: any) {
+      showToast(error?.message || `Unable to delete "${title}". No catalog changes were completed.`);
     }
   };
 
