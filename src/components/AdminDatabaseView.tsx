@@ -4,8 +4,6 @@ import { TestSeriesBundle } from '../data/bundleCatalog';
 import { isFirebaseConfigured, firebaseProjectId, firestoreDatabaseId } from '../firebase/config';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
 import {
-  migrateAllLocalDataToFirestore,
-  MigrationSummary,
   fetchDatabaseObservability,
   runDatabaseIntegrityAudit,
   DatabaseObservabilitySnapshot,
@@ -480,10 +478,6 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [pingResult, setPingResult] = useState<{ status: 'idle' | 'success' | 'offline'; time?: number }>({ status: 'idle' });
 
   // Cloud Migration state
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
-  const [migrationProgress, setMigrationProgress] = useState<{ current: number; total: number } | null>(null);
-  const [migrationResult, setMigrationResult] = useState<MigrationSummary | null>(null);
 
   const [storedBundles, setStoredBundles] = useState<TestSeriesBundle[]>(() => getStoredBundles());
 
@@ -601,45 +595,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
     setTimeout(() => setBackupMessage(null), 3500);
   };
 
-  const handleMigrateToFirebase = async () => {
-    if (!isFirebaseConfigured) {
-      alert('Firebase is not configured yet. Please check your firebase-applet-config.json file.');
-      return;
-    }
-    const confirmed = window.confirm(
-      `Sync all ${questions.length} questions, ${tests.length} tests, ${pypPapers.length} PYP papers, and ${storedBundles.length} bundles directly to Cloud Firestore (database: ai-studio-cgssbtest-ed944dbb-7a88-46c1-8fe0-4ad38fcd1089)?`
-    );
-    if (!confirmed) return;
 
-    setIsMigrating(true);
-    setMigrationResult(null);
-    setMigrationStatus('Connecting to Cloud Firestore collections...');
-
-    try {
-      const result = await migrateAllLocalDataToFirestore({
-        questions,
-        tests,
-        bundles: storedBundles,
-        pypPapers,
-        attempts,
-        onProgress: (msg, current, total) => {
-          setMigrationStatus(msg);
-          setMigrationProgress({ current, total });
-        },
-      });
-
-      setMigrationResult(result);
-      if (result.success) {
-        setBackupMessage(`Successfully synced ${result.questionsCount} questions, ${result.testsCount} tests, ${result.pypCount || 0} PYPs, and ${result.bundlesCount} bundles to Cloud Firestore!`);
-        setTimeout(() => setBackupMessage(null), 5000);
-      }
-    } catch (err: any) {
-      console.error('Migration error:', err);
-      setMigrationStatus(`Migration error: ${err?.message || 'Failed'}`);
-    } finally {
-      setIsMigrating(false);
-    }
-  };
 
   const handleCopyRules = () => {
     navigator.clipboard.writeText(FIRESTORE_RULES_TEXT);
