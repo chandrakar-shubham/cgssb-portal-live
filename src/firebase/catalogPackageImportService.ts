@@ -346,6 +346,12 @@ export async function previewCatalogPackage(input: CatalogPackageInput): Promise
 
 export async function importCatalogPackage(input: CatalogPackageInput, preview?: CatalogImportPreview): Promise<CatalogImportResult> {
   if (!db) throw new Error('Firestore is not configured.');
+  if (input.mode === 'create' && preview) {
+    const existingCount = Number(preview.existing.authority) + Number(preview.existing.program) + preview.existing.posts + preview.existing.subjects + preview.existing.series + preview.existing.bundles;
+    if (existingCount > 0) {
+      throw new Error(`Create mode is strict: ${existingCount} matching catalog record(s) already exist. Use mode=upsert to update an existing catalog.`);
+    }
+  }
 
   const authoritySlug = input.catalog.authority.slug || slugifyCatalog(input.catalog.authority.name);
   const programSlug = input.catalog.recruitment.slug || slugifyCatalog(input.catalog.recruitment.name);
