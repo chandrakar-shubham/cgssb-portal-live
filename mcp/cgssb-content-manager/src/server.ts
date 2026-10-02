@@ -13,6 +13,7 @@ const ALLOWED_ORIGIN = process.env.MCP_ALLOWED_ORIGIN || '';
 
 if (!PROJECT_ID) throw new Error('FIREBASE_PROJECT_ID is required');
 if (!MCP_TOKEN) throw new Error('MCP_BEARER_TOKEN is required');
+if (MCP_TOKEN.length < 32) throw new Error('MCP_BEARER_TOKEN must be at least 32 characters');
 
 function initializeFirebase(): Firestore {
   const app: App = getApps().length === 0
