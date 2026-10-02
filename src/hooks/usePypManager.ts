@@ -40,6 +40,11 @@ export function usePypManager() {
 
 
   const addPypPaper = useCallback((newPaper: Partial<PreviousYearPaper>) => {
+    // New production PYP records must be linked to the canonical exam catalog.
+    if (!import.meta.env.DEV && !newPaper.programId) {
+      console.error('Rejected production PYP creation: canonical programId is required.');
+      return;
+    }
     const paper: PreviousYearPaper = {
       id: newPaper.id || `pyp-custom-${Date.now()}`,
       title: newPaper.title || 'Official Exam Paper',
