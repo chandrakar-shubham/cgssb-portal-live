@@ -1,9 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MockTest, Question, PreviousYearPaper, TestAttempt } from '../types';
 import { TestSeriesBundle } from '../data/bundleCatalog';
-import { isFirebaseConfigured } from '../firebase/config';
+import { isFirebaseConfigured, firebaseProjectId, firestoreDatabaseId } from '../firebase/config';
 import { APP_BUILD_INFO } from '../utils/buildInfo';
-import { migrateAllLocalDataToFirestore, MigrationSummary } from '../firebase/firestoreService';
+import {
+  migrateAllLocalDataToFirestore,
+  MigrationSummary,
+  fetchDatabaseObservability,
+  runDatabaseIntegrityAudit,
+  DatabaseObservabilitySnapshot,
+  DatabaseIntegrityAudit
+} from '../firebase/firestoreService';
 import { getStoredBundles, purgeAllDemoDatabaseData, isDemoDataPurged, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 import { testConnection } from '../firebase/connectionTest';
@@ -207,79 +214,64 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
     return () => window.removeEventListener('cgssb-bundles-updated', handleUpdate);
   }, []);
 
-  // Compute FAANG Database Analytics
+  const [liveObservability, setLiveObservability] = useState<DatabaseObservabilitySnapshot | null>(null);
+  const [liveIntegrity, setLiveIntegrity] = useState<DatabaseIntegrityAudit | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  const refreshDatabaseAudit = async () => {
+    if (!isFirebaseConfigured) {
+      setAuditError('Firebase is not configured.');
+      return;
+    }
+    setIsAuditing(true);
+    setAuditError(null);
+    try {
+      const [observability, integrity] = await Promise.all([
+        fetchDatabaseObservability(100),
+        runDatabaseIntegrityAudit(500)
+      ]);
+      setLiveObservability(observability);
+      setLiveIntegrity(integrity);
+    } catch (error) {
+      setAuditError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDatabaseAudit();
+  }, []);
+
   const analytics = useMemo(() => {
-    const totalDocs = tests.length + questions.length + pypPapers.length + attempts.length + storedBundles.length;
-    
-    // Estimate payload size in KB
-    const testsSize = JSON.stringify(tests).length;
-    const questionsSize = JSON.stringify(questions).length;
-    const pypSize = JSON.stringify(pypPapers).length;
-    const attemptsSize = JSON.stringify(attempts).length;
-    const bundlesSize = JSON.stringify(storedBundles).length;
-    const totalBytes = testsSize + questionsSize + pypSize + attemptsSize + bundlesSize;
-    const totalKB = (totalBytes / 1024).toFixed(1);
-    const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+    const totalDocs = liveObservability?.totalDocuments ?? null;
+    const estimatedKB = liveObservability ? (liveObservability.estimatedBytes / 1024).toFixed(1) : null;
+    const evaluated = liveIntegrity?.schemaEvaluatedDocuments || 0;
+    const valid = liveIntegrity?.schemaValidDocuments || 0;
+    const schemaComplianceRate = evaluated > 0 ? Math.round((valid / evaluated) * 100) : null;
 
-    // Schema Compliance Check
-    let validTests = 0;
-    let validQuestions = 0;
-    let validBundles = 0;
-
-    tests.forEach(t => {
-      if (t.id && t.title && t.category && typeof t.durationMinutes === 'number') validTests++;
-    });
-
-    questions.forEach(q => {
-      if (q.id && (q.question || (q as any).questionText) && q.subject) validQuestions++;
-    });
-
-    storedBundles.forEach(b => {
-      if (b.id && b.slug && b.title && b.authority) validBundles++;
-    });
-
-    const totalEvaluated = tests.length + questions.length + storedBundles.length;
-    const totalValid = validTests + validQuestions + validBundles;
-    const schemaComplianceRate = totalEvaluated > 0 ? Math.round((totalValid / totalEvaluated) * 100) : 100;
-
-    // Orphan & Referential Integrity Check
-    const questionIdSet = new Set(questions.map(q => q.id));
-    let brokenQuestionRefsCount = 0;
-    let emptyTestsCount = 0;
-
-    tests.forEach(t => {
-      let qCount = 0;
-      t.sections?.forEach(s => {
-        s.questionIds?.forEach(qid => {
-          qCount++;
-          if (!questionIdSet.has(qid)) brokenQuestionRefsCount++;
-        });
-      });
-      if (qCount === 0 && (!t.questionCount || t.questionCount === 0)) {
-        emptyTestsCount++;
-      }
-    });
-
-    // Bundles with 0 tests
-    const emptyBundles = storedBundles.filter(b => (b.totalTestsCount || 0) === 0 || (!b.testItems?.length && !b.chapterTests?.length && !b.pypTests?.length));
+    const collectionBreakdown = liveObservability?.collections.map(col => ({
+      name: col.name,
+      count: col.count,
+      sizeKB: (col.estimatedBytes / 1024).toFixed(1),
+      primaryKey: ['users'].includes(col.name) ? 'uid' : 'id',
+      status: col.status === 'error' ? 'Error' : 'Healthy'
+    })) || [];
 
     return {
       totalDocs,
-      totalKB,
-      totalMB,
+      totalKB: estimatedKB,
       schemaComplianceRate,
-      brokenQuestionRefsCount,
-      emptyTestsCount,
-      emptyBundlesCount: emptyBundles.length,
-      collectionBreakdown: [
-        { name: 'mockTests', count: tests.length, sizeKB: (testsSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
-        { name: 'questions', count: questions.length, sizeKB: (questionsSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
-        { name: 'bundles', count: storedBundles.length, sizeKB: (bundlesSize / 1024).toFixed(1), primaryKey: 'id / slug', status: 'Healthy' },
-        { name: 'pypPapers', count: pypPapers.length, sizeKB: (pypSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
-        { name: 'attempts', count: attempts.length, sizeKB: (attemptsSize / 1024).toFixed(1), primaryKey: 'id', status: 'Healthy' },
-      ]
+      brokenQuestionRefsCount: liveIntegrity?.testsWithMissingQuestions ?? null,
+      emptyTestsCount: liveIntegrity?.testsWithZeroQuestions ?? null,
+      emptyBundlesCount: liveIntegrity?.bundlesWithZeroTests ?? null,
+      canonicalIntegrityIssues: liveIntegrity
+        ? liveIntegrity.seriesWithoutBundle + liveIntegrity.bundlesWithoutSeries + liveIntegrity.mismatchedSeriesBundles
+        : null,
+      collectionBreakdown
     };
-  }, [tests, questions, pypPapers, attempts, storedBundles]);
+  }, [liveObservability, liveIntegrity]);
 
   const handleTestConnection = async () => {
     setIsPinging(true);
