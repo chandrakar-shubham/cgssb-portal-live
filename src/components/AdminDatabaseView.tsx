@@ -571,22 +571,20 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [isPurging, setIsPurging] = useState(false);
 
   const handlePurgeAllDemoData = async () => {
-    const confirmed = window.confirm(
-      '⚠️ TOTAL DATABASE PURGE CONFIRMATION:\n\nAre you sure you want to thoroughly purge ALL demo mock tests, demo PYQs, dummy questions, and clear test caches from the database?\n\nThis will permanently wipe demo data across local browser cache, backend server storage, and Cloud Firestore.\n\nYour database will be left 100% clean and ready for production exam ingestion.'
+    const confirmation = window.prompt(
+      'Production safety: this action only deletes Firestore documents explicitly marked isDemo=true.\n\nType PURGE MARKED DEMO to continue.'
     );
-    if (!confirmed) return;
+    if (confirmation !== 'PURGE MARKED DEMO') return;
 
     setIsPurging(true);
     try {
       const result = await purgeAllDemoDatabaseData();
       setPurgeResult(result);
-      setTrueZero(true);
-      if (onRestoreSnapshot) {
-        onRestoreSnapshot({ tests: [], questions: [], pypPapers: [] });
-      }
-      setBackupMessage(`Thorough purge complete! Successfully purged demo data stores across browser and server at ${new Date(result.timestamp).toLocaleTimeString()}`);
+      const deleted = result.purgedKeys.length ? result.purgedKeys.join(', ') : 'no marked demo documents';
+      setBackupMessage('Safe demo purge completed: ' + deleted + '.');
+      await refreshDatabaseAudit();
     } catch (err: any) {
-      setBackupMessage(`Purge note: ${err.message || 'Purge completed'}`);
+      setBackupMessage('Demo purge failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setIsPurging(false);
     }
@@ -955,14 +953,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 <h2 className="text-lg font-black text-white">Collection Granular Breakdown</h2>
                 <p className="text-xs text-slate-400">Live document counts, sampled payload size, and query health</p>
               </div>
-              <button
-                onClick={handleMigrateToFirebase}
-                disabled={isMigrating}
-                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-md cursor-pointer"
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>{isMigrating ? 'Pushing to Cloud...' : 'Dual-Sync to Cloud Firestore'}</span>
-              </button>
+
               <button
                 onClick={() => void refreshDatabaseAudit()}
                 disabled={isAuditing}
@@ -1073,22 +1064,22 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
               <div>
                 <h3 className="text-base font-black text-rose-300 flex items-center space-x-2">
                   <Trash2 className="w-4 h-4 text-rose-400" />
-                  <span>Total Demo Data Purge & Reset Engine</span>
+                  <span>Production-Safe Demo Data Purge</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Completely wipes all demo mock tests, demo PYQs, dummy questions, and local test cache so that only your genuine content exists.
+                  Deletes only documents explicitly tagged isDemo=true. Production documents, canonical taxonomy, and local caches are never deleted.
                 </p>
               </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-900/40 space-y-3">
               <div className="text-xs text-rose-200">
-                Clicking <strong>Purge All Demo Data</strong> will:
+                Clicking <strong>Purge Marked Demo Data</strong> will:
                 <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-400">
-                  <li>Clear all demo mock test records (<code className="text-rose-300">cgssb_tests</code>, <code className="text-rose-300">cgssb_custom_mock_tests</code>)</li>
-                  <li>Clear all demo PYQ papers (<code className="text-rose-300">cgssb_pyp_papers</code>)</li>
-                  <li>Clear all bundled test items across all test series packs</li>
-                  <li>Leave the database structure 100% pristine for production questions</li>
+                  <li>Delete only <code className="text-rose-300">isDemo=true</code> documents from mockTests, questions, pypPapers, and bundles</li>
+                  <li>Never delete canonical examAuthorities, examPrograms, examPosts, or examTestSeries</li>
+                  <li>Never clear production local caches or student data</li>
+                  <li>Refresh the live observability audit after deletion</li>
                 </ul>
               </div>
 
@@ -1099,7 +1090,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                   className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition shadow-lg shadow-rose-600/30 flex items-center space-x-2 cursor-pointer disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>{isPurging ? 'Purging Demo Data...' : 'Execute Full Demo Data Purge'}</span>
+                  <span>{isPurging ? 'Purging Marked Demo...' : 'Purge Marked Demo Data'}</span>
                 </button>
 
                 <button
