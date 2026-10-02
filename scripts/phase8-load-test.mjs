@@ -97,7 +97,7 @@ const result = {
     p50: Number(percentile(samples, 0.50).toFixed(1)),
     p95: Number(percentile(samples, 0.95).toFixed(1)),
     p99: Number(percentile(samples, 0.99).toFixed(1)),
-    max: Number((Math.max(...samples, 0)).toFixed(1))
+    max: Number((samples.length ? Math.max(...samples) : 0).toFixed(1))
   }
 };
 console.log(JSON.stringify(result, null, 2));
