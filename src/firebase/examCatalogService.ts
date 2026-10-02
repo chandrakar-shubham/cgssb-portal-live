@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, getDoc, setDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
 import { db } from './config';
 
 export type CatalogStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
@@ -97,6 +97,17 @@ export async function saveExamPost(record: ExamPost) {
 }
 export async function saveExamTestSeries(record: ExamTestSeries) {
   if (db) await setDoc(doc(db, EXAM_CATALOG_COLLECTIONS.SERIES, record.id), record, { merge: true });
+}
+
+export async function fetchExamTestSeriesById(seriesId: string): Promise<ExamTestSeries | null> {
+  if (!db || !seriesId) return null;
+  const snap = await getDoc(doc(db, EXAM_CATALOG_COLLECTIONS.SERIES, seriesId));
+  return snap.exists() ? snap.data() as ExamTestSeries : null;
+}
+
+export async function deleteExamTestSeries(seriesId: string): Promise<void> {
+  if (!db || !seriesId) return;
+  await deleteDoc(doc(db, EXAM_CATALOG_COLLECTIONS.SERIES, seriesId));
 }
 export async function getExamProgram(programId: string): Promise<ExamProgram | null> {
   if (!db) return null;

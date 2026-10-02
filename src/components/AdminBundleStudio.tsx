@@ -424,21 +424,28 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   };
 
   // Soft-delete bundle (Moves to Trash Bin)
-  const handleDeleteBundle = (bundleId: string, title: string) => {
+  const handleDeleteBundle = async (bundleId: string, title: string) => {
     const target = bundles.find(b => b.id === bundleId);
     if (!target) return;
 
-    moveToTrashBundle(target);
-    const updated = getStoredBundles();
-    setBundles(updated);
-    showToast(`Test Series "${title}" moved to Trash Bin.`);
+    try {
+      await moveToTrashBundle(target);
+      setBundles(getStoredBundles());
+      showToast(`Test Series "${title}" and its canonical catalog record moved to Trash Bin.`);
+    } catch (error: any) {
+      showToast(error?.message || `Unable to delete "${title}". No catalog changes were completed.`);
+    }
   };
 
-  const handleRestoreBundle = (bundleId: string) => {
-    const restored = restoreBundleFromTrash(bundleId);
-    if (restored) {
-      setBundles(getStoredBundles());
-      showToast(`Restored "${restored.title}" back to active Test Series!`);
+  const handleRestoreBundle = async (bundleId: string) => {
+    try {
+      const restored = await restoreBundleFromTrash(bundleId);
+      if (restored) {
+        setBundles(getStoredBundles());
+        showToast(`Restored "${restored.title}" and its canonical Test Series record.`);
+      }
+    } catch (error: any) {
+      showToast(error?.message || 'Unable to restore the test series.');
     }
   };
 

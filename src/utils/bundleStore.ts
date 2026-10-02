@@ -7,6 +7,12 @@ import {
   purgeFirestoreDemoData,
   subscribeToBundles
 } from '../firebase/firestoreService';
+import {
+  deleteExamTestSeries,
+  fetchExamTestSeriesById,
+  saveExamTestSeries,
+  ExamTestSeries
+} from '../firebase/examCatalogService';
 
 let bundleCache: TestSeriesBundle[] = [];
 
@@ -245,6 +251,9 @@ export interface TrashedItem {
   deletedAt: string;
   deletedBy?: string;
   data: any;
+  /** Canonical examTestSeries record removed together with a bundle. */
+  seriesData?: ExamTestSeries;
+  seriesId?: string;
 }
 
 const TRASH_STORAGE_KEY = 'cgssb_trash_items_v1';
@@ -267,8 +276,21 @@ export const saveTrashItems = (items: TrashedItem[]): void => {
   } catch {}
 };
 
-export const moveToTrashBundle = (bundle: TestSeriesBundle): void => {
+export const moveToTrashBundle = async (bundle: TestSeriesBundle): Promise<void> => {
   const current = getTrashItems();
+  const seriesId = bundle.seriesId;
+  let seriesData: ExamTestSeries | undefined;
+
+  // A TestSeriesBundle and examTestSeries are one canonical aggregate.
+  // Capture the canonical series before removing it so Restore can put both records back.
+  if (seriesId) {
+    try {
+      seriesData = (await fetchExamTestSeriesById(seriesId)) || undefined;
+    } catch (error) {
+      console.warn('Unable to read canonical test series before trashing bundle:', error);
+    }
+  }
+
   const newItem: TrashedItem = {
     id: `trash-bundle-${bundle.id}-${Date.now()}`,
     originalId: bundle.id,
@@ -277,17 +299,59 @@ export const moveToTrashBundle = (bundle: TestSeriesBundle): void => {
     deletedAt: new Date().toISOString(),
     deletedBy: 'Admin',
     data: bundle,
+    seriesId,
+    seriesData,
   };
+  // Remove both sides first. If the canonical series deletion fails, restore the bundle
+  // so we never intentionally leave a half-deleted aggregate.
+  try {
+    await deleteBundleFromFirestore(bundle.id);
+    if (seriesId) await deleteExamTestSeries(seriesId);
+  } catch (error) {
+    try { await saveBundleToFirestore(bundle); } catch {}
+    throw error;
+  }
+
+  saveStoredBundles(getStoredBundles().filter(b => b.id !== bundle.id && b.slug !== bundle.id));
   saveTrashItems([newItem, ...current]);
-  deleteStoredBundle(bundle.id);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cgssb-exam-catalog-updated'));
+  }
 };
 
-export const restoreBundleFromTrash = (trashId: string): TestSeriesBundle | null => {
+export const moveToTrashTestSeries = async (series: ExamTestSeries): Promise<void> => {
+  const bundles = await fetchBundlesFromFirestore();
+  const linkedBundle = bundles.find(
+    b => b.id === series.bundleId || b.seriesId === series.id
+  );
+
+  if (linkedBundle) {
+    await moveToTrashBundle(linkedBundle);
+    return;
+  }
+
+  // Repair an already-orphaned canonical series instead of leaving it visible.
+  await deleteExamTestSeries(series.id);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cgssb-exam-catalog-updated'));
+  }
+};
+
+export const restoreBundleFromTrash = async (trashId: string): Promise<TestSeriesBundle | null> => {
   const current = getTrashItems();
   const item = current.find(i => i.id === trashId);
   if (!item || (item.type !== 'bundle' && item.type !== 'BUNDLE')) return null;
+
   saveSingleBundle(item.data);
+  if (item.seriesData) {
+    await saveExamTestSeries(item.seriesData);
+  }
   saveTrashItems(current.filter(i => i.id !== trashId));
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cgssb-exam-catalog-updated'));
+  }
   return item.data;
 };
 

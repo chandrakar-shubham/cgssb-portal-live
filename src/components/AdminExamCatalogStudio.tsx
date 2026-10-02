@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, FolderTree, Plus, Save, RefreshCw, Layers3, ChevronRight } from 'lucide-react';
+import { Building2, FolderTree, Plus, Save, RefreshCw, Layers3, ChevronRight, Trash2 } from 'lucide-react';
 import {
   ExamAuthority, ExamProgram, ExamPost, ExamTestSeries, ExamSubject,
   fetchExamAuthorities, fetchExamPrograms, fetchExamPosts,
@@ -7,7 +7,7 @@ import {
   saveExamPost, saveExamTestSeries, saveExamSubject, slugifyCatalog
 } from '../firebase/examCatalogService';
 import { fetchBundlesFromFirestore, saveBundleToFirestore } from '../firebase/firestoreService';
-import { saveSingleBundle, getStoredBundles, purgeAllDemoDatabaseData } from '../utils/bundleStore';
+import { saveSingleBundle, getStoredBundles, purgeAllDemoDatabaseData, moveToTrashTestSeries } from '../utils/bundleStore';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 import { CatalogPackageImporter } from './CatalogPackageImporter';
 
@@ -55,7 +55,12 @@ export const AdminExamCatalogStudio: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, [selectedAuthority, selectedProgram, selectedPost]);
+  useEffect(() => {
+    load();
+    const handleCatalogUpdate = () => { load(); };
+    window.addEventListener('cgssb-exam-catalog-updated', handleCatalogUpdate);
+    return () => window.removeEventListener('cgssb-exam-catalog-updated', handleCatalogUpdate);
+  }, [selectedAuthority, selectedProgram, selectedPost]);
 
   const createProductionCatalog = async () => {
     const timestamp = now();
@@ -494,6 +499,10 @@ export const AdminExamCatalogStudio: React.FC = () => {
     const program = programs.find(p=>p.id===selectedProgram);
     const authority = authorities.find(a=>a.id===selectedAuthority);
     if (!program || !authority) return;
+    if (program.hasPosts && !selectedPost) {
+      setMessage('Select the canonical Post before creating a Test Series for this recruitment.');
+      return;
+    }
     const id = `series-${selectedProgram.replace(/^program-/, '')}-${slugifyCatalog(name)}`;
     const bundleId = `bundle-${id}`;
     const targetPost = posts.find(p=>p.id===selectedPost)?.name || 'General';
@@ -518,6 +527,22 @@ export const AdminExamCatalogStudio: React.FC = () => {
     await saveBundleToFirestore(bundle);
     saveSingleBundle(bundle);
     setName(''); setMessage('Draft test series created. Open it in Test Series Studio to add content.'); await load();
+  };
+
+  const handleDeleteSeries = async (record: ExamTestSeries) => {
+    const linkedBundleId = record.bundleId;
+    const confirmed = window.confirm(
+      `Delete "${record.name}" from the canonical catalog? This will also move its linked Test Series Bundle to Trash and remove it from Universal Ingestion.\n\nYou can restore the pair from Test Series & Bundle Studio → Trash Bin.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await moveToTrashTestSeries(record);
+      setMessage(`"${record.name}" and linked bundle ${linkedBundleId ? 'were' : 'was'} moved out of the active catalog.`);
+      await load();
+    } catch (error: any) {
+      setMessage(error?.message || `Unable to delete "${record.name}".`);
+    }
   };
 
   const purgeDemoData = async () => {
@@ -650,7 +675,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
         </select>
         <button onClick={createSeries} className="px-4 rounded-xl bg-purple-500 text-white font-black flex items-center justify-center gap-2"><Save className="w-4 h-4"/>Create Draft Series</button>
       </div>
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{series.map(s=><div key={s.id} className="rounded-xl bg-slate-950/80 border border-slate-800 p-3"><div className="text-xs text-slate-500">{s.seriesType}</div><div className="font-bold text-white">{s.name}</div><div className="text-xs text-slate-500 mt-1">{s.status}</div></div>)}</div>
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{series.map(s=><div key={s.id} className="rounded-xl bg-slate-950/80 border border-slate-800 p-3"><div className="flex items-start justify-between gap-2"><div><div className="text-xs text-slate-500">{s.seriesType}</div><div className="font-bold text-white">{s.name}</div><div className="text-xs text-slate-500 mt-1">{s.status} · {s.postId ? (posts.find(p => p.id === s.postId)?.name || 'Post') : 'Direct exam'}</div></div><button type="button" onClick={() => handleDeleteSeries(s)} className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20" title="Move Test Series + linked Bundle to Trash"><Trash2 className="w-4 h-4"/></button></div></div>)}</div>
     </>)}
     <button onClick={load} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5"/>Refresh catalog</button>
   </div>;
