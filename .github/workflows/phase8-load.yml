@@ -1,16 +1,19 @@
 name: Phase 8 External Read Load
 
 on:
+  push:
+    paths:
+      - ".github/workflows/phase8-load.yml"
   workflow_dispatch:
     inputs:
       vus:
         description: "Virtual users"
         required: true
-        default: "25"
+        default: "100"
       duration_sec:
         description: "Duration in seconds"
         required: true
-        default: "30"
+        default: "60"
 
 jobs:
   load:
@@ -26,6 +29,6 @@ jobs:
       - name: Run read-only load test
         env:
           BASE_URL: https://gen-lang-client-0783153446.web.app
-          VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.vus || '25' }}
-          DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || '30' }}
+          VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.vus || '100' }}
+          DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || '60' }}
         run: node scripts/phase8-load-test.mjs
