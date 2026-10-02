@@ -216,26 +216,26 @@ export async function fetchOrphanedSeriesRecords(sampleLimit = 500): Promise<Orp
   ]);
 
   const bundleIds = new Set(bundlesSnap.docs.map(d => String(d.id)));
-  return seriesSnap.docs
-    .map(d => {
-      const s = d.data() as any;
-      const bundleId = s?.bundleId ? String(s.bundleId) : undefined;
-      if (bundleId && bundleIds.has(bundleId)) return null;
-      return {
-        id: String(d.id),
-        name: String(s?.name || 'Unnamed Test Series'),
-        nameHindi: s?.nameHindi ? String(s.nameHindi) : undefined,
-        slug: String(s?.slug || ''),
-        authorityId: String(s?.authorityId || ''),
-        programId: String(s?.programId || ''),
-        postId: s?.postId ? String(s.postId) : undefined,
-        bundleId,
-        seriesType: String(s?.seriesType || 'unknown'),
-        status: s?.status ? String(s.status) : undefined,
-        reason: bundleId ? 'bundle_missing' : 'bundleId_missing'
-      } satisfies OrphanedSeriesRecord;
-    })
-    .filter((record): record is OrphanedSeriesRecord => record !== null);
+  const records: OrphanedSeriesRecord[] = [];
+  seriesSnap.docs.forEach(d => {
+    const s = d.data() as any;
+    const bundleId = s?.bundleId ? String(s.bundleId) : undefined;
+    if (bundleId && bundleIds.has(bundleId)) return;
+    records.push({
+      id: String(d.id),
+      name: String(s?.name || 'Unnamed Test Series'),
+      ...(s?.nameHindi ? { nameHindi: String(s.nameHindi) } : {}),
+      slug: String(s?.slug || ''),
+      authorityId: String(s?.authorityId || ''),
+      programId: String(s?.programId || ''),
+      ...(s?.postId ? { postId: String(s.postId) } : {}),
+      ...(bundleId ? { bundleId } : {}),
+      seriesType: String(s?.seriesType || 'unknown'),
+      ...(s?.status ? { status: String(s.status) } : {}),
+      reason: bundleId ? 'bundle_missing' : 'bundleId_missing'
+    });
+  });
+  return records;
 }
 
 export interface DatabaseIntegrityAudit {
