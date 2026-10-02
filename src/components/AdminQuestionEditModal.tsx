@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Question, DifficultyLevel, ExamCategory, PYQAppearance } from '../types';
 import { HIERARCHY_TREE } from '../mockData';
 import { ExamHierarchySelector, ExamHierarchyValue } from './ExamHierarchySelector';
+import { ExamProgram, ExamPost, ExamTestSeries, fetchExamPrograms, fetchExamPosts, fetchExamTestSeries } from '../firebase/examCatalogService';
 import {
   HierarchyRecord,
   mapAuthorityToExamCategory,
@@ -90,6 +91,10 @@ export const AdminQuestionEditModal: React.FC<AdminQuestionEditModalProps> = ({
     finalAmendedKey?: 'A' | 'B' | 'C' | 'D' | '';
     isCancelled?: boolean;
     imageUrl?: string;
+    authorityId?: string;
+    programId?: string;
+    postId?: string;
+    seriesId?: string;
   }>({
     id: '',
     originType: defaultOrigin,
@@ -121,7 +126,35 @@ export const AdminQuestionEditModal: React.FC<AdminQuestionEditModalProps> = ({
     finalAmendedKey: '',
     isCancelled: false,
     imageUrl: '',
+    authorityId: '',
+    programId: '',
+    postId: '',
+    seriesId: '',
   });
+
+  const [canonicalPrograms, setCanonicalPrograms] = useState<ExamProgram[]>([]);
+  const [canonicalPosts, setCanonicalPosts] = useState<ExamPost[]>([]);
+  const [canonicalSeries, setCanonicalSeries] = useState<ExamTestSeries[]>([]);
+  const [canonicalLoading, setCanonicalLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    setCanonicalLoading(true);
+    fetchExamPrograms().then(programs => { if (active) setCanonicalPrograms(programs.filter(p => p.status === 'PUBLISHED')); }).catch(() => {}).finally(() => { if (active) setCanonicalLoading(false); });
+    return () => { active = false; };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!formData.programId) { setCanonicalPosts([]); setCanonicalSeries([]); return; }
+    let active = true;
+    Promise.all([fetchExamPosts(formData.programId), fetchExamTestSeries(formData.programId, formData.postId || undefined)]).then(([posts, series]) => {
+      if (!active) return;
+      setCanonicalPosts(posts.filter(p => p.status === 'PUBLISHED'));
+      setCanonicalSeries(series.filter(s => s.status === 'PUBLISHED' && Boolean(s.bundleId)));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [formData.programId, formData.postId]);
 
   // Re-sync local formData only when modal opens or target question changes
   useEffect(() => {
@@ -167,6 +200,10 @@ export const AdminQuestionEditModal: React.FC<AdminQuestionEditModalProps> = ({
         finalAmendedKey: (editingQuestion.finalAmendedKey as any) || '',
         isCancelled: Boolean(editingQuestion.isCancelled),
         imageUrl: editingQuestion.imageUrl || '',
+        authorityId: editingQuestion.authorityId || '',
+        programId: editingQuestion.programId || '',
+        postId: editingQuestion.postId || '',
+        seriesId: editingQuestion.seriesId || '',
       });
     } else {
       setFormData({
@@ -195,6 +232,10 @@ export const AdminQuestionEditModal: React.FC<AdminQuestionEditModalProps> = ({
         negativeMarks: 0.333,
         explanation: '',
         explanationHindi: '',
+        authorityId: '',
+        programId: '',
+        postId: '',
+        seriesId: '',
         pypAppearances: defaultOrigin === 'pyq' ? [
           {
             examName: 'CGPSC State Service Prelims (Paper-I GS)',
@@ -291,6 +332,10 @@ export const AdminQuestionEditModal: React.FC<AdminQuestionEditModalProps> = ({
       finalAmendedKey: (formData.finalAmendedKey as any) || undefined,
       isCancelled: formData.isCancelled,
       imageUrl: formData.imageUrl?.trim() || undefined,
+      authorityId: formData.authorityId || undefined,
+      programId: formData.programId || undefined,
+      postId: formData.postId || undefined,
+      seriesId: formData.seriesId || undefined,
       pypSource: formData.pypAppearances.length > 0
         ? `${formData.pypAppearances[0].examName} ${formData.pypAppearances[0].year}`
         : (formData.examName || ''),
@@ -378,6 +423,16 @@ export const AdminQuestionEditModal: React.FC<AdminQuestionEditModalProps> = ({
           </div>
 
           {/* Unique ID & Multi-Level Exam Hierarchy */}
+          <div className="bg-slate-950/70 p-3.5 rounded-xl border border-emerald-500/20 space-y-3">
+            <div className="flex items-center justify-between"><label className="text-slate-200 font-bold">Canonical Exam Catalog *</label>{canonicalLoading && <span className="text-[10px] text-slate-500">Loading catalog...</span>}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <select required value={formData.programId || ''} onChange={e => { const p = canonicalPrograms.find(x => x.id === e.target.value); setFormData({ ...formData, authorityId: p?.authorityId || '', programId: e.target.value, postId: '', seriesId: '' }); }} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"><option value="">Select published recruitment / exam</option>{canonicalPrograms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+              <select value={formData.postId || ''} onChange={e => setFormData({ ...formData, postId: e.target.value, seriesId: '' })} disabled={!formData.programId} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"><option value="">All posts / no specific post</option>{canonicalPosts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+              <select value={formData.seriesId || ''} onChange={e => setFormData({ ...formData, seriesId: e.target.value })} disabled={!formData.programId} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"><option value="">Select published test series</option>{canonicalSeries.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+            </div>
+            {!formData.programId && <p className="text-[10px] text-amber-300">Production questions must be linked to a canonical published exam. Legacy hierarchy below is retained only for descriptive metadata.</p>}
+          </div>
+
           <div className="bg-slate-850 p-3.5 rounded-xl border border-slate-800 space-y-3">
             <div>
               <div className="flex items-center justify-between mb-1">
