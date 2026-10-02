@@ -104,7 +104,6 @@ export const AdminWorkspaceLayout: React.FC<AdminWorkspaceLayoutProps> = ({
       domainTitle: 'Examination Studio',
       items: [
         { id: 'admin-exam-catalog', label: 'Exam & Recruitment Catalog', icon: Layers, badge: 'Core' },
-        { id: 'admin-content-import', label: 'Content Manager Import', icon: FileJson, badge: 'DRAFT' },
         { id: 'admin-tests', label: 'Mock Test Catalog', icon: Layers, badge: 'CBT' },
         { id: 'admin-questions', label: 'Question Bank', icon: FolderTree, badge: '1,200+' },
         { id: 'admin-pyp', label: 'PYP Solved Archives', icon: FileText },
