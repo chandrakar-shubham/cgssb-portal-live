@@ -77,7 +77,7 @@ const profileEnd = rules.indexOf('\n    // Referral records', profileStart);
 const profileBlock = rules.slice(profileStart, profileEnd);
 for (const required of [
   'allow get: if true;',
-  'allow list: if request.query.limit <= 100;',
+  'allow list: if hasManageStudents() || request.query.limit <= 100;',
   'isOwner(request.resource.data.userId)',
   "'practice_summary'",
   'affectedKeys().hasOnly'
@@ -103,7 +103,7 @@ if (!attemptsBlock.includes('allow get: if hasManageStudents()')) {
 if (!attemptsBlock.includes('resource == null')) {
   throw new Error('Idempotent nonexistent-attempt lookup policy missing');
 }
-if (!attemptsBlock.includes('allow list: if isPermanentUser()')) {
+if (!attemptsBlock.includes('allow list: if hasManageStudents() ||')) {
   throw new Error('Student attempt list policy missing');
 }
 if (!attemptsBlock.includes('isOwner(request.resource.data.userId)')) {
