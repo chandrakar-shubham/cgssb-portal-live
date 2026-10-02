@@ -238,6 +238,52 @@ export async function fetchOrphanedSeriesRecords(sampleLimit = 500): Promise<Orp
   return records;
 }
 
+/**
+ * Finalize deletion of a canonical Series that is already orphaned.
+ *
+ * This is intentionally narrower than normal Series deletion: it refuses to
+ * delete anything when the referenced Bundle exists or when another Bundle
+ * still points at the Series. It is intended only for cleanup of Series that
+ * an administrator already deleted from the Bundle Studio while the old
+ * lifecycle left the Series behind.
+ */
+export async function deleteOrphanedSeriesRecord(seriesId: string): Promise<void> {
+  if (!db) throw new Error('Firestore is not configured');
+  if (!seriesId) throw new Error('Series ID is required');
+
+  const seriesRef = doc(db, 'examTestSeries', seriesId);
+  const seriesSnap = await getDoc(seriesRef);
+  if (!seriesSnap.exists()) return;
+
+  const seriesData = seriesSnap.data() as any;
+  const bundleId = seriesData?.bundleId ? String(seriesData.bundleId) : '';
+
+  // Preflight: never delete if any Bundle still references this Series.
+  const linkedBundles = await getDocs(
+    query(collection(db, COLLECTIONS.BUNDLES), where('seriesId', '==', seriesId), limit(5))
+  );
+  if (linkedBundles.docs.length > 0) {
+    throw new Error('Refusing cleanup: a Bundle still references this Series. Use canonical Bundle deletion instead.');
+  }
+
+  // Re-check the exact referenced Bundle inside an atomic transaction.
+  await runTransaction(db, async transaction => {
+    const currentSeries = await transaction.get(seriesRef);
+    if (!currentSeries.exists()) return;
+
+    const currentBundleId = currentSeries.data()?.bundleId ? String(currentSeries.data().bundleId) : '';
+    if (currentBundleId) {
+      const bundleRef = doc(db, COLLECTIONS.BUNDLES, currentBundleId);
+      const bundleSnap = await transaction.get(bundleRef);
+      if (bundleSnap.exists()) {
+        throw new Error('Refusing cleanup: the referenced Bundle now exists. Use canonical Bundle deletion instead.');
+      }
+    }
+
+    transaction.delete(seriesRef);
+  });
+}
+
 export interface DatabaseIntegrityAudit {
   checkedAt: string;
   seriesWithoutBundle: number;
