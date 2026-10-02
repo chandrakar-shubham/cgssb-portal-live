@@ -11,10 +11,11 @@ interface Props {
   cadre: string;
   targetBundleId: string;
   onChange: (value: { authority: string; examName: string; cadre: string; targetBundleId: string }) => void;
+  onCanonicalChange?: (series: ExamTestSeries | null) => void;
 }
 
 export const CanonicalIngestionSelector: React.FC<Props> = ({
-  authority, examName, cadre, targetBundleId, onChange
+  authority, examName, cadre, targetBundleId, onChange, onCanonicalChange
 }) => {
   const [authorities, setAuthorities] = useState<ExamAuthority[]>([]);
   const [programs, setPrograms] = useState<ExamProgram[]>([]);
@@ -85,6 +86,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
         ? seriesList.find(s => s.id === canonicalTarget.id)
         : seriesList.find(s => s.id === targetBundleId || s.bundleId === targetBundleId);
       setSelectedSeriesId(selected?.id || '');
+      onCanonicalChange?.(selected || null);
     } catch {
       setAuthorities([]);
       setPrograms([]);
@@ -121,6 +123,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     setPostId('');
     setSelectedSeriesId('');
     setSeries([]);
+    onCanonicalChange?.(null);
     onChange({ authority: a?.name || '', examName: '', cadre: '', targetBundleId: '' });
   };
 
@@ -130,6 +133,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     setPostId('');
     setSelectedSeriesId('');
     setSeries([]);
+    onCanonicalChange?.(null);
     onChange({
       authority: authorities.find(a => a.id === authorityId)?.name || authority,
       examName: p?.name || '',
@@ -143,6 +147,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     setPostId(id);
     setSelectedSeriesId('');
     setSeries([]);
+    onCanonicalChange?.(null);
     onChange({
       authority: authorities.find(a => a.id === authorityId)?.name || authority,
       examName: programs.find(x => x.id === programId)?.name || examName,
@@ -155,6 +160,7 @@ export const CanonicalIngestionSelector: React.FC<Props> = ({
     const s = visibleSeries.find(x => x.id === id);
     if (!s || s.status === 'ARCHIVED') return;
     setSelectedSeriesId(s.id);
+    onCanonicalChange?.(s);
     onChange({
       authority: authorities.find(a => a.id === s.authorityId)?.name || authority,
       examName: programs.find(p => p.id === s.programId)?.name || examName,
