@@ -32,3 +32,5 @@ jobs:
           VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.vus || '100' }}
           DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || '60' }}
         run: node scripts/phase8-load-test.mjs
+
+# Phase 8 execution marker: rerun 100-VU load after stack-safe aggregation fix.
