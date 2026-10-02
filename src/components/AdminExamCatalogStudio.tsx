@@ -4,7 +4,7 @@ import {
   ExamAuthority, ExamProgram, ExamPost, ExamTestSeries, ExamSubject,
   fetchExamAuthorities, fetchExamPrograms, fetchExamPosts,
   fetchExamTestSeries, saveExamAuthority, saveExamProgram,
-  saveExamPost, saveExamTestSeries, fetchExamSubjects, saveExamSubject, slugifyCatalog
+  saveExamPost, saveExamTestSeries, saveExamSubject, slugifyCatalog
 } from '../firebase/examCatalogService';
 import { fetchBundlesFromFirestore, saveBundleToFirestore } from '../firebase/firestoreService';
 import { saveSingleBundle, getStoredBundles, purgeAllDemoDatabaseData } from '../utils/bundleStore';
@@ -415,7 +415,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
           'Objective multiple-choice question paper',
           'Each question carries 1 mark',
           'One-fourth (1/4) mark is deducted for an incorrect answer',
-          'Two hours are provided to solve the paper',
+          'The detailed evaluation instructions state 2 hours; the notification schedule header lists 10:00–12:15',
           'Questions are answered on the OMR answer sheet'
         ]
       },
