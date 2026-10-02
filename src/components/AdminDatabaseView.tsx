@@ -147,7 +147,7 @@ service cloud.firestore {
       allow create: if (isOwner(userId) &&
         request.resource.data.keys().hasOnly([
           'id', 'name', 'email', 'phone', 'avatar', 'registeredAt',
-          'lastLoginAt', 'targetExam', 'targetYear', 'district',
+          'lastLoginAt', 'targetExam', 'targetProgramId', 'targetYear', 'district',
           'categoryReservation', 'gender', 'education', 'medium', 'bio',
           'dailyGoalQuestions', 'referralCode', 'referredBy', 'lastSyncedAt'
         ])) ||
@@ -166,7 +166,7 @@ service cloud.firestore {
         (isOwner(userId) &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'email', 'phone', 'avatar', 'lastLoginAt',
-          'targetExam', 'targetYear', 'district', 'categoryReservation',
+          'targetExam', 'targetProgramId', 'targetYear', 'district', 'categoryReservation',
           'gender', 'education', 'medium', 'bio', 'dailyGoalQuestions',
           'lastSyncedAt'
          ]));
