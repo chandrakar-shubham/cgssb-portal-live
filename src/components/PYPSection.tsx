@@ -42,8 +42,13 @@ export const PYPSection: React.FC<PYPSectionProps> = ({
       if (!paper || !paper.id) return false;
       if (seen.has(paper.id)) return false;
       seen.add(paper.id);
-      const paperCat = String(paper.examCategory || 'CGSSB').toUpperCase().trim();
+      const paperCat = String(paper.examCategory || '').toUpperCase().trim();
       const selCat = String(selectedCategory || 'ALL').toUpperCase().trim();
+      // Canonical taxonomy is preferred; ExamCategory remains a compatibility fallback
+      // for historical PYP records that have not yet been migrated.
+      const canonicalMatch = selCat === 'ALL' ||
+        (paper.programId && String(paper.programId).toLowerCase() === String(selectedCategory || '').toLowerCase());
+      if (paper.programId && selectedCategory !== 'ALL') return Boolean(canonicalMatch);
       return (
         selCat === 'ALL' ||
         paperCat === selCat ||
