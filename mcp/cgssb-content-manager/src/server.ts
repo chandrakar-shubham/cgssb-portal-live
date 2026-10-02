@@ -438,6 +438,34 @@ function createServerInstance() {
   );
 
   server.registerTool(
+    'cgssb_get_audit_log',
+    {
+      title: 'Get content manager audit log',
+      description: 'Use this to inspect recent AI Content Manager changes for a series or other target before continuing work.',
+      inputSchema: z.object({
+        seriesId: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(25)
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+    },
+    async ({ seriesId, limit }) => {
+      try {
+        const snapshot = await db.collection(COLLECTIONS.AUDIT).orderBy('createdAt', 'desc').limit(limit).get();
+        const entries = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(entry => !seriesId || (entry.target as Record<string, unknown> | undefined)?.seriesId === seriesId);
+
+        return ok(
+          { entries },
+          `Found ${entries.length} recent Content Manager audit entr${entries.length === 1 ? 'y' : 'ies'}.`
+        );
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error));
+      }
+    }
+  );
+
+  server.registerTool(
     'cgssb_publish_series',
     {
       title: 'Publish test series',
