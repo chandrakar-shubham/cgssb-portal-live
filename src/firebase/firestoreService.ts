@@ -295,6 +295,9 @@ export interface DatabaseIntegrityAudit {
   invalidQuestionDocuments: number;
   invalidTestDocuments: number;
   invalidBundleDocuments: number;
+  testsMissingCanonicalProgram: number;
+  questionsMissingCanonicalProgram: number;
+  pypMissingCanonicalProgram: number;
   schemaEvaluatedDocuments: number;
   schemaValidDocuments: number;
   sampleLimit: number;
@@ -304,11 +307,12 @@ export interface DatabaseIntegrityAudit {
 export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<DatabaseIntegrityAudit> {
   if (!db) throw new Error('Firestore is not configured');
 
-  const [testsSnap, questionsSnap, bundlesSnap, seriesSnap] = await Promise.all([
+  const [testsSnap, questionsSnap, bundlesSnap, seriesSnap, pypSnap] = await Promise.all([
     getDocs(query(collection(db, COLLECTIONS.TESTS), limit(sampleLimit))),
     getDocs(query(collection(db, COLLECTIONS.QUESTIONS), limit(sampleLimit))),
     getDocs(query(collection(db, COLLECTIONS.BUNDLES), limit(sampleLimit))),
-    getDocs(query(collection(db, 'examTestSeries'), limit(sampleLimit)))
+    getDocs(query(collection(db, 'examTestSeries'), limit(sampleLimit))),
+    getDocs(query(collection(db, COLLECTIONS.PYP_PAPERS), limit(sampleLimit)))
   ]);
 
   const questions = new Set(questionsSnap.docs.map(d => String(d.id || d.data()?.id || '')));
@@ -318,10 +322,12 @@ export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<Data
   let testsWithMissingQuestions = 0;
   let testsWithZeroQuestions = 0;
   let invalidTestDocuments = 0;
+  let testsMissingCanonicalProgram = 0;
 
   testsSnap.docs.forEach(d => {
     const t = d.data() as any;
     if (!t?.id || !t?.title || typeof t?.durationMinutes !== 'number') invalidTestDocuments++;
+    if (!t?.programId) testsMissingCanonicalProgram++;
     const ids = Array.isArray(t?.sections)
       ? t.sections.flatMap((s: any) => Array.isArray(s?.questionIds) ? s.questionIds : [])
       : [];
@@ -330,12 +336,15 @@ export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<Data
   });
 
   let invalidQuestionDocuments = 0;
+  let questionsMissingCanonicalProgram = 0;
   questionsSnap.docs.forEach(d => {
     const q = d.data() as any;
     if (!q?.id || !(q?.question || q?.questionText) || !q?.subject) invalidQuestionDocuments++;
+    if (!q?.programId) questionsMissingCanonicalProgram++;
   });
 
   let invalidBundleDocuments = 0;
+  let pypMissingCanonicalProgram = 0;
   let bundlesWithZeroTests = 0;
   bundles.forEach((b: any) => {
     if (!b?.id || !b?.slug || !b?.title) invalidBundleDocuments++;
@@ -346,6 +355,11 @@ export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<Data
       b?.pypTests?.length
     );
     if (!hasTests) bundlesWithZeroTests++;
+  });
+
+  pypSnap.docs.forEach(d => {
+    const p = d.data() as any;
+    if (!p?.programId) pypMissingCanonicalProgram++;
   });
 
   let seriesWithoutBundle = 0;
@@ -388,6 +402,9 @@ export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<Data
     invalidQuestionDocuments,
     invalidTestDocuments,
     invalidBundleDocuments,
+    testsMissingCanonicalProgram,
+    questionsMissingCanonicalProgram,
+    pypMissingCanonicalProgram,
     schemaEvaluatedDocuments,
     schemaValidDocuments,
     sampleLimit,
@@ -395,7 +412,8 @@ export async function runDatabaseIntegrityAudit(sampleLimit = 500): Promise<Data
       testsSnap.size < sampleLimit &&
       questionsSnap.size < sampleLimit &&
       bundlesSnap.size < sampleLimit &&
-      seriesSnap.size < sampleLimit
+      seriesSnap.size < sampleLimit &&
+      pypSnap.size < sampleLimit
     ) ? 'full' : 'sampled'
   };
 }
@@ -442,7 +460,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 4000): Promise<T>
 // device binding and admin permissions remain server-authoritative.
 const CLIENT_USER_PROFILE_FIELDS = [
   'name', 'email', 'phone', 'avatar', 'lastLoginAt',
-  'targetExam', 'targetYear', 'district', 'categoryReservation',
+  'targetExam', 'targetProgramId', 'targetYear', 'district', 'categoryReservation',
   'gender', 'education', 'medium', 'bio', 'dailyGoalQuestions'
 ] as const;
 
