@@ -58,6 +58,15 @@ interface AdminDatabaseViewProps {
   onOpenToolsModal?: () => void;
 }
 
+export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
+  tests,
+  questions,
+  pypPapers,
+  attempts,
+  onRestoreSnapshot,
+  onOpenToolsModal,
+}) => {
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Top Banner: FAANG Database Engineering Header */}
