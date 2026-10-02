@@ -21,7 +21,7 @@ function initializeFirebase(): Firestore {
       ? { credential: cert(JSON.parse(serviceAccountJson)), projectId: PROJECT_ID }
       : { credential: applicationDefault(), projectId: PROJECT_ID });
   }
-  return DATABASE_ID ? getFirestore(undefined, DATABASE_ID) : getFirestore();
+  return DATABASE_ID ? getFirestore(DATABASE_ID) : getFirestore();
 }
 
 const db = initializeFirebase();
