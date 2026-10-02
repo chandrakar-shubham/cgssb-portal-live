@@ -95,14 +95,11 @@ import {
 import {
   INITIAL_MOCK_TESTS,
   INITIAL_QUESTIONS,
-  INITIAL_PYP_PAPERS,
-  INITIAL_ATTEMPTS
+  INITIAL_PYP_PAPERS
 } from './mockData';
 import {
   normalizeSubjectName,
-  migrateLegacyQuestion,
-  migrateLegacyAttempt,
-  runTaxonomyMigration
+  migrateLegacyQuestion
 } from './utils/taxonomyMigration';
 import { extractHierarchyFromApp } from './utils/examHierarchy';
 import { Shield, Lock, ExternalLink, Smartphone } from 'lucide-react';
@@ -527,8 +524,6 @@ function MainApp() {
 
   // Run taxonomy migration on initial mount
   useEffect(() => {
-    runTaxonomyMigration(INITIAL_QUESTIONS, INITIAL_ATTEMPTS);
-
     // Listen for governance events (Test restore, Cascade publish, Data Purge/Restore)
     const handleRestored = (e: any) => {
       if (e.detail && e.detail.id) {
