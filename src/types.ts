@@ -40,7 +40,8 @@ export interface User {
   referralCount?: number;          // Total friends joined
   referralBonusMonths?: number;    // Total bonus months earned via referrals
   // Extended Student Profile Fields
-  targetExam?: string;             // e.g. "CG Teacher 2026", "CGPSC State Service", "CG Police SI"
+  targetExam?: string;             // Backward-compatible display label
+  targetProgramId?: string;       // Canonical examPrograms document ID
   targetYear?: number;             // e.g. 2026
   district?: string;               // e.g. "Raipur", "Bilaspur", "Durg", "Bastar", "Surguja"
   categoryReservation?: 'UR' | 'OBC' | 'SC' | 'ST' | 'EWS';
