@@ -780,8 +780,8 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 FAANG Database Engineer Suite
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Audit Pending
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${liveIntegrity ? (analytics.canonicalIntegrityIssues === 0 && analytics.brokenQuestionRefsCount === 0 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border-rose-500/30') : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
+                {liveIntegrity ? (analytics.canonicalIntegrityIssues === 0 && analytics.brokenQuestionRefsCount === 0 ? 'Integrity Healthy' : 'Integrity Issues Found') : 'Audit Pending'}
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center space-x-2">
