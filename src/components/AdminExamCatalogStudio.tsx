@@ -575,7 +575,7 @@ export const AdminExamCatalogStudio: React.FC = () => {
       setPrograms([]);
       setPosts([]);
       setSeries([]);
-      setMessage('Demo content and old exam-catalog data were purged. The production catalog is now clean.');
+      setMessage('Marked demo content was purged. Canonical production catalog records were not inferred or recreated.');
     } catch (e:any) {
       setMessage(e?.message || 'Demo-data purge failed.');
     } finally {
@@ -606,32 +606,11 @@ export const AdminExamCatalogStudio: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={createProductionCatalog}
-          className="shrink-0 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-black text-cyan-300 hover:bg-cyan-500/20"
-        >
-          Create CGSSB 2026 Catalog
-        </button>
-        <button
-          type="button"
-          onClick={createProductionSeries}
-          className="shrink-0 rounded-xl border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs font-black text-purple-300 hover:bg-purple-500/20"
-        >
-          Create 3 Full Mock Series
-        </button>
-        <button
-          type="button"
-          onClick={populateEnglishLecturerContent}
-          className="shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-black text-emerald-300 hover:bg-emerald-500/20"
-        >
-          Populate English Lecturer
-        </button>
-        <button
-          type="button"
           onClick={purgeDemoData}
           disabled={purging}
           className="shrink-0 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs font-black text-red-300 hover:bg-red-500/20 disabled:opacity-50"
         >
-          {purging ? 'Purging…' : 'Reset Demo Data'}
+          {purging ? 'Purging…' : 'Purge Marked Demo Data'}
         </button>
       </div>
     </div>
