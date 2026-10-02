@@ -1,0 +1,33 @@
+name: Phase 8 External Read Load
+
+on:
+  workflow_dispatch:
+    inputs:
+      vus:
+        description: "Virtual users"
+        required: true
+        default: "25"
+      duration_sec:
+        description: "Duration in seconds"
+        required: true
+        default: "30"
+  push:
+    branches: [main]
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run read-only load test
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.vus || '25' }}
+          DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || '30' }}
+        run: node scripts/phase8-load-test.mjs
