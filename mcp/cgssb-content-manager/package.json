@@ -1,0 +1,26 @@
+{
+  "name": "@cgssb/content-manager-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Secure MCP bridge for the CGSSBTest Content Manager.",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.2.0",
+    "firebase-admin": "^14.5.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2"
+  }
+}
