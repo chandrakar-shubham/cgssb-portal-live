@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Question, ExamCategory } from '../types';
+import { Question } from '../types';
 import {
   Zap,
   Search,
@@ -16,7 +16,7 @@ import { getQuestionSeoUrl } from '../utils/seoUrlHelper';
 interface PracticeSetSectionProps {
   questions: Question[];
   onViewQuestionSEO?: (q: Question) => void;
-  selectedCategory?: ExamCategory | 'ALL';
+  selectedCategory?: string | 'ALL';
 }
 
 export const PracticeSetSection: React.FC<PracticeSetSectionProps> = ({
@@ -38,6 +38,10 @@ export const PracticeSetSection: React.FC<PracticeSetSectionProps> = ({
 
   const filteredQuestions = useMemo(() => {
     return questions.filter(q => {
+      const matchesProgram = selectedCategory === 'ALL' ||
+        (q.programId && String(q.programId) === String(selectedCategory)) ||
+        (!q.programId && String(q.category || '') === String(selectedCategory));
+
       const matchSearch =
         (q.questionHindi && q.questionHindi.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (q.questionText && q.questionText.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -45,9 +49,9 @@ export const PracticeSetSection: React.FC<PracticeSetSectionProps> = ({
 
       const matchSubject = selectedSubject === 'ALL' || q.subject === selectedSubject;
 
-      return matchSearch && matchSubject;
+      return matchesProgram && matchSearch && matchSubject;
     });
-  }, [questions, searchQuery, selectedSubject]);
+  }, [questions, searchQuery, selectedSubject, selectedCategory]);
 
   const toggleReveal = (id: string) => {
     setRevealedAnswers(prev => ({ ...prev, [id]: !prev[id] }));
