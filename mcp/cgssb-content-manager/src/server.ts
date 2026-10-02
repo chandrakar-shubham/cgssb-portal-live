@@ -52,10 +52,15 @@ interface SubjectInput {
   isMandatoryQualifying?: boolean;
 }
 
-interface SyllabusSection extends SubjectInput {
+interface SyllabusSection {
   subjectId: string;
+  subject: string;
   subjectHindi: string;
+  marks: number;
+  questionCount: number;
   weightagePercentage: number;
+  topics: string[];
+  isMandatoryQualifying?: boolean;
 }
 
 function slugify(value: string): string {
@@ -241,7 +246,7 @@ function createServerInstance() {
             topics: subject.topics,
             ...(subject.isMandatoryQualifying === undefined ? {} : { isMandatoryQualifying: subject.isMandatoryQualifying }),
             _sortOrder: index
-          } as SyllabusSection & { _sortOrder: number };
+          };
         });
 
         const merged = replaceAll
@@ -454,7 +459,15 @@ function createServerInstance() {
         const snapshot = await db.collection(COLLECTIONS.AUDIT).orderBy('createdAt', 'desc').limit(Math.min(limit * 10, 500)).get();
         const entries = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(entry => !seriesId || (entry.target as Record<string, unknown> | undefined)?.seriesId === seriesId)
+          .filter(entry => {
+            const target = (entry as { target?: unknown }).target;
+            return !seriesId || (
+              typeof target === 'object' &&
+              target !== null &&
+              'seriesId' in target &&
+              (target as { seriesId?: unknown }).seriesId === seriesId
+            );
+          })
           .slice(0, limit);
 
         return ok(
