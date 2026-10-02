@@ -22,6 +22,11 @@ export interface ExamPost {
   vacancies?: number; cadreBreakup?: string; payLevel?: string; salaryRange?: string; subjects?: string[];
 }
 export type TestSeriesType = 'full_mock' | 'chapter_test' | 'subject_test' | 'pyp' | 'live_test' | 'practice' | 'mixed';
+export interface ExamSubject {
+  id: string; authorityId: string; programId: string; name: string; nameHindi?: string;
+  slug: string; topics: string[]; status: CatalogStatus; sortOrder: number;
+  createdAt: string; updatedAt: string;
+}
 export interface ExamTestSeries {
   id: string; authorityId: string; programId: string; postId?: string;
   name: string; nameHindi?: string; slug: string; seriesType: TestSeriesType;
@@ -30,7 +35,7 @@ export interface ExamTestSeries {
 }
 export const EXAM_CATALOG_COLLECTIONS = {
   AUTHORITIES: 'examAuthorities', PROGRAMS: 'examPrograms',
-  POSTS: 'examPosts', SERIES: 'examTestSeries'
+  POSTS: 'examPosts', SERIES: 'examTestSeries', SUBJECTS: 'examSubjects'
 } as const;
 
 export function slugifyCatalog(value: string): string {
@@ -71,6 +76,16 @@ export async function fetchExamTestSeries(programId?: string, postId?: string): 
     : await getDocs(ref);
   return snap.docs.map(d => d.data() as ExamTestSeries).sort((a, b) => a.sortOrder - b.sortOrder);
 }
+export async function fetchExamSubjects(programId?: string): Promise<ExamSubject[]> {
+  if (!db) return [];
+  const ref = collection(db, EXAM_CATALOG_COLLECTIONS.SUBJECTS);
+  const snap = programId ? await getDocs(query(ref, where('programId', '==', programId))) : await getDocs(ref);
+  return snap.docs.map(d => d.data() as ExamSubject).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+export async function saveExamSubject(record: ExamSubject) {
+  if (db) await setDoc(doc(db, EXAM_CATALOG_COLLECTIONS.SUBJECTS, record.id), record, { merge: true });
+}
+
 export async function saveExamAuthority(record: ExamAuthority) {
   if (db) await setDoc(doc(db, EXAM_CATALOG_COLLECTIONS.AUTHORITIES, record.id), record, { merge: true });
 }
