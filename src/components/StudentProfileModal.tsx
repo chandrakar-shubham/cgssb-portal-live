@@ -102,6 +102,21 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!canonicalPrograms.length || formData.targetProgramId) return;
+    const legacyMatch = canonicalPrograms.find(
+      program => program.name.trim().toLowerCase() === String(formData.targetExam || '').trim().toLowerCase()
+    );
+    if (legacyMatch) {
+      setFormData(prev => ({
+        ...prev,
+        targetProgramId: legacyMatch.id,
+        targetExam: legacyMatch.name,
+        targetYear: legacyMatch.year || prev.targetYear,
+      }));
+    }
+  }, [canonicalPrograms]);
+
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
