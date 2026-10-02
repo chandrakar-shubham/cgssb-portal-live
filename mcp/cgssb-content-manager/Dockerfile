@@ -3,10 +3,11 @@ FROM node:22-alpine
 WORKDIR /app
 
 COPY package.json tsconfig.json ./
-RUN npm install --omit=dev
+RUN npm install --no-audit --no-fund
 
 COPY src ./src
-RUN npx tsc -p tsconfig.json
+RUN npm run build
+RUN npm prune --omit=dev
 
 ENV NODE_ENV=production
 ENV PORT=8787
