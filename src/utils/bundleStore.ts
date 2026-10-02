@@ -302,13 +302,18 @@ export const moveToTrashBundle = async (bundle: TestSeriesBundle): Promise<void>
     seriesId,
     seriesData,
   };
-  saveTrashItems([newItem, ...current]);
-
-  // Remove both sides of the 1:1 relationship from active catalogs.
-  await deleteStoredBundle(bundle.id);
-  if (seriesId) {
-    await deleteExamTestSeries(seriesId);
+  // Remove both sides first. If the canonical series deletion fails, restore the bundle
+  // so we never intentionally leave a half-deleted aggregate.
+  try {
+    await deleteBundleFromFirestore(bundle.id);
+    if (seriesId) await deleteExamTestSeries(seriesId);
+  } catch (error) {
+    try { await saveBundleToFirestore(bundle); } catch {}
+    throw error;
   }
+
+  saveStoredBundles(getStoredBundles().filter(b => b.id !== bundle.id && b.slug !== bundle.id));
+  saveTrashItems([newItem, ...current]);
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('cgssb-exam-catalog-updated'));
