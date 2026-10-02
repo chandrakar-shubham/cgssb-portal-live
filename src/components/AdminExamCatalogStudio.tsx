@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Building2, FolderTree, Plus, Save, RefreshCw, Layers3, ChevronRight } from 'lucide-react';
 import {
-  ExamAuthority, ExamProgram, ExamPost, ExamTestSeries,
+  ExamAuthority, ExamProgram, ExamPost, ExamTestSeries, ExamSubject,
   fetchExamAuthorities, fetchExamPrograms, fetchExamPosts,
   fetchExamTestSeries, saveExamAuthority, saveExamProgram,
-  saveExamPost, saveExamTestSeries, slugifyCatalog
+  saveExamPost, saveExamTestSeries, fetchExamSubjects, saveExamSubject, slugifyCatalog
 } from '../firebase/examCatalogService';
-import { saveBundleToFirestore } from '../firebase/firestoreService';
+import { fetchBundlesFromFirestore, saveBundleToFirestore } from '../firebase/firestoreService';
 import { saveSingleBundle, getStoredBundles, purgeAllDemoDatabaseData } from '../utils/bundleStore';
 import { TestSeriesBundle } from '../data/bundleCatalog';
 
@@ -147,6 +147,305 @@ export const AdminExamCatalogStudio: React.FC = () => {
     await load();
   };
 
+  const populateEnglishLecturerContent = async () => {
+    const authorityId = 'authority-cgssb';
+    const programId = 'program-cgssb-teacher-recruitment-2026';
+    const postId = 'post-cgssb-teacher-recruitment-2026-lecturer-pgt';
+    const seriesId = 'series-cgssb-teacher-recruitment-2026-lecturer-pgt-full-mock';
+    const bundleId = 'bundle-' + seriesId;
+    const timestamp = now();
+
+    const subjectDefinitions: Array<{
+      id: string;
+      name: string;
+      nameHindi: string;
+      marks: number;
+      topics: string[];
+      mandatory?: boolean;
+    }> = [
+      {
+        id: 'subject-cgssb-lecturer-english-grammar',
+        name: 'Grammar Based Questions',
+        nameHindi: 'व्याकरण आधारित प्रश्न',
+        marks: 15,
+        topics: [
+          'Determiners',
+          'Modals',
+          'Question tag',
+          'Finite and Non-finite verbs',
+          'Phrasal Verbs',
+          'Agreement between subject and verbs',
+          'Tenses (kinds and transformation)',
+          'Identifying clauses: relative clause (defining and non-defining), adverb clause, noun clause, non-finite clause',
+          'Transformation of sentences: simple, compound and complex',
+          'Speech: Direct and Indirect',
+          'Sentence structure: employing inversion and cleft sentences',
+          'Conditional sentences',
+          'Elliptical sentence pattern'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-vocabulary',
+        name: 'Vocabulary Based Questions',
+        nameHindi: 'शब्दावली आधारित प्रश्न',
+        marks: 15,
+        topics: [
+          'Word formation: root words and affixes',
+          'Polysemy and homophones',
+          'Collocations',
+          'Word class conversion from one grammatical category to another',
+          'Lexical bundles',
+          'Idiomaticity and opacity',
+          'Figure of speech'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-reading',
+        name: 'Reading Comprehension',
+        nameHindi: 'पठन बोध',
+        marks: 15,
+        topics: [
+          'Two or three unseen passages from different genres: prose, poetry, drama, articles, editorials, scientific and literary extracts',
+          'Comprehension',
+          'Inference',
+          'Vocabulary in context',
+          'Tone',
+          'Rhetorical devices',
+          'Logical sequencing'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-pedagogy',
+        name: 'Pedagogy of Language Development',
+        nameHindi: 'भाषा विकास की शिक्षाशास्त्र',
+        marks: 15,
+        topics: [
+          'Language learning and acquisition',
+          'Different approaches/theories of language learning/teaching',
+          'Linguistic system of languages',
+          'Language skills',
+          'Role of listening and speaking in language learning and function of language',
+          'Critical perspective on the role of grammar in learning a language for communicating ideas verbally and in written form',
+          'Methods of teaching second language with reference to English language teaching',
+          'Challenges of teaching language in a diverse classroom; linguistic difficulties in language learning and performance errors',
+          'Teaching-learning materials: textbook, multimedia materials, multilingual resource of the classroom',
+          'Remedial teaching in context of language teaching'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-education',
+        name: 'Educational Psychology, Assessment & Evaluation, Pedagogy and Teaching Aptitude',
+        nameHindi: 'शैक्षिक मनोविज्ञान, आकलन एवं मूल्यांकन, शिक्षण शास्त्र एवं शैक्षिक अभिवृत्ति',
+        marks: 15,
+        topics: [
+          'Educational Psychology: learning approaches, human development, physical, mental, emotional, social and moral development, adolescence and its problems, guidance and counselling, achievement, factors affecting achievement, principles of learning, intelligence, creativity, special needs children, individual differences, personality, personality theories, motivation',
+          'Assessment and Evaluation in Education: meaning and definition, types of assessment techniques, bases of assessment, functions of assessment, assessment vs evaluation, formative and summative assessment',
+          'Subject-based learning assessment: assessment tools and strategies, assignments and their types, construction and classification of available tests, planning, construction and steps',
+          'Teacher competency in developing appropriate tools: design of assessment tools, use of class and subject-specific tools, characteristics and types of tests, purposes and types of appropriate evaluation standards, standards and their use, types of feedback, student file/portfolio/rubrics',
+          'Testing: types and classification of tests, essential qualities of a good test, administration, tests available in different subjects',
+          'Pedagogy: nature of subjects and disciplines, conceptual understanding, history, subject-specific pedagogy and logical validity of subject-specific claims',
+          'Student exploration: assessment of student preparation, connecting learning with real life, opportunities for independent problem solving, group-learning strategies, promoting classroom dialogue',
+          'Objectives and learning outcomes: National Curriculum Framework 2005 and 2023, objectives of education, learning outcomes, broad objectives in school education and subject-specific broad objectives',
+          'Curriculum: principles of curriculum construction, curriculum at different levels of school, State curriculum framework',
+          'Lesson planning and teaching-learning methods: different teaching methods and lesson plans, learning resources, including textbooks, audio-visual and multimedia materials',
+          'Pedagogical attitudes: knowledge and learning, teaching as a profession, understanding the teaching-learning process, constructivist teaching-learning process, professional development of teachers, gender perspective in education'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-general-hindi',
+        name: 'General Hindi',
+        nameHindi: 'सामान्य हिन्दी',
+        marks: 5,
+        topics: [
+          'स्वर, व्यंजन, वर्तनी',
+          'लिंग, वचन, काल',
+          'संज्ञा, सर्वनाम, विशेषण, क्रिया, क्रिया विशेषण, कारक',
+          'समास रचना एवं प्रकार',
+          'सीधे-स्वर, व्यंजन एवं विसर्ग संधि',
+          'व्याकरणिक अशुद्धियाँ',
+          'शब्द रचना: उपसर्ग एवं प्रत्यय',
+          'शब्द प्रकार: तत्सम, तद्भव, देशज, विदेशी',
+          'पर्यायवाची, विलोम शब्द, अनेकार्थी शब्द, अनेकार्थक शब्दों/वाक्यांशों के लिए एक शब्द'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-general-english',
+        name: 'General English',
+        nameHindi: 'सामान्य अंग्रेजी',
+        marks: 5,
+        topics: [
+          'Number, Gender, Articles',
+          'Noun, Pronoun, Adjectives, Verb, Adverb',
+          'Preposition and Conjunctions',
+          'Synonyms, Antonyms, Homonyms',
+          'One word substitution',
+          'Spellings, Prefixes, Suffixes',
+          'Proverb and Idioms',
+          'Active/Passive Voice',
+          'Sentences: Declarative, Negative, Interrogative, Imperative, Exclamatory',
+          'Punctuations'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-mental-ability',
+        name: 'General Mental Ability',
+        nameHindi: 'सामान्य मानसिक योग्यता',
+        marks: 5,
+        topics: [
+          'Reasoning',
+          'Relationships and analogies',
+          'Arithmetical ability',
+          'Spatial relationships',
+          'Classification',
+          'Number series and letter series',
+          'Number and symbol coding',
+          'Hidden figures',
+          'Mathematical operations',
+          'Figure matching',
+          'Various number patterns'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-computer',
+        name: 'Computer Education',
+        nameHindi: 'कम्प्यूटर शिक्षा',
+        marks: 5,
+        topics: [
+          'Introduction to computers: meaning, uses in daily life, importance and limitations, general characteristics',
+          'Major parts of computer: hardware and software, CPU, ALU, CU, memory, input/output devices',
+          'Types of printers: inkjet, laser, dot matrix, thermal and other modern printers',
+          'Operating systems: MS-DOS, Windows, macOS, Linux and other operating systems',
+          'Microsoft Office: MS Word, MS Excel and MS PowerPoint',
+          'Internet and email: inbox, outbox, CC, BCC, attachments, online document search and government websites',
+          'Antivirus and computer security: viruses, types, harms, antivirus software and security measures',
+          'Multimedia: audio, video and text; multimedia applications',
+          'Storage devices: primary/secondary storage, hard disk, pen drive, CD/DVD and cloud storage',
+          'Search engines and online platforms: Google, YouTube, search engine basics, finding information and safe/effective search techniques'
+        ]
+      },
+      {
+        id: 'subject-cgssb-lecturer-english-gk',
+        name: 'General Knowledge',
+        nameHindi: 'सामान्य ज्ञान',
+        marks: 5,
+        topics: [
+          'Main constitutional provisions, Fundamental Duties, Indian political system and constitutional rights, Right to Information, cultural and national symbols, Lok Sabha, Rajya Sabha and State Legislature',
+          'Indian history: important historical events, personalities and cultural events; Indian independence history from 1857 to 1947 and post-1947 developments',
+          'Geography: general geography, geography of India and the world',
+          'Indian economy: social and economic development, demographic perspective, gross national product and per capita income, Five Year Plans, agriculture and rural development, industrial development and current economic events',
+          'General Science: basic knowledge related to physics, chemistry, biology and botany',
+          'General knowledge of Chhattisgarh: history, geography, political system, economy, government schemes, awards and honours, traditions, folk music, important personalities and other important Chhattisgarh-related topics',
+          'National Education Policy 2020 (School Education)'
+        ]
+      }
+    ];
+
+    const bundles = await fetchBundlesFromFirestore();
+    const existing = bundles.find(b => b.id === bundleId);
+
+    const baseBundle: TestSeriesBundle = existing || {
+      id: bundleId,
+      slug: 'lecturer-pgt-2026-full-mock-series',
+      title: 'Lecturer / PGT 2026 — English Full Mock Series',
+      titleHindi: 'व्याख्याता / PGT 2026 — English Full Mock Series',
+      authorityId, programId, postId, seriesId,
+      badge: 'Full Mock',
+      badgeColor: 'emerald',
+      shortDescription: 'English Lecturer / PGT 2026 full mock preparation series.',
+      fullDescription: 'English Lecturer / PGT 2026 test series based on the supplied CGSSB syllabus and examination directions.',
+      price: 0, originalPrice: 0, isProOnly: false, totalTestsCount: 0, freeTestsCount: 0,
+      enrolledStudentsCount: 0, rating: 0, validity: 'Till Exam Date', languageDisplay: 'Bilingual',
+      examPattern: { totalQuestions: 100, totalMarks: 100, durationMinutes: 120, markingScheme: '+1 mark per question', negativeMarkPenalty: '-0.25 mark per wrong answer', language: 'Bilingual', cadre: 'Lecturer / PGT — English', keyRules: [] },
+      syllabusBreakdown: [], features: [], testItems: [], faqs: [],
+      isDraft: true, isPublished: false, seriesType: 'full_mock'
+    };
+
+    const syllabusBreakdown = subjectDefinitions.map((subject, index) => ({
+      subjectId: subject.id,
+      subject: subject.name,
+      subjectHindi: subject.nameHindi,
+      marks: subject.marks,
+      questionCount: subject.marks,
+      weightagePercentage: subject.marks,
+      topics: subject.topics,
+      ...(subject.mandatory ? { isMandatoryQualifying: true } : {})
+    }));
+
+    for (let index = 0; index < subjectDefinitions.length; index++) {
+      const subject = subjectDefinitions[index];
+      const record: ExamSubject = {
+        id: subject.id,
+        authorityId,
+        programId,
+        name: subject.name,
+        nameHindi: subject.nameHindi,
+        slug: slugifyCatalog(subject.name),
+        topics: subject.topics,
+        status: 'PUBLISHED',
+        sortOrder: index,
+        createdAt: existing?.syllabusBreakdown?.find(s => s.subjectId === subject.id)?.subjectId ? (existing as any).createdAt || timestamp : timestamp,
+        updatedAt: timestamp
+      };
+      await saveExamSubject(record);
+    }
+
+    const populatedBundle: TestSeriesBundle = {
+      ...baseBundle,
+      authorityId,
+      programId,
+      postId,
+      seriesId,
+      seriesType: 'full_mock',
+      title: 'Lecturer / PGT 2026 — English Full Mock Series',
+      titleHindi: 'व्याख्याता / PGT 2026 — English Full Mock Series',
+      targetPost: 'Lecturer / PGT — English',
+      targetYear: 2026,
+      authority: 'CGSSB',
+      shortDescription: 'English Lecturer / PGT 2026 full mock preparation series.',
+      fullDescription: 'English Lecturer / PGT 2026 test series based on the supplied CGSSB syllabus and examination directions.',
+      examPattern: {
+        totalQuestions: 100,
+        totalMarks: 100,
+        durationMinutes: 120,
+        markingScheme: '+1 mark per question',
+        negativeMarkPenalty: '-0.25 mark per wrong answer',
+        language: 'Bilingual',
+        cadre: 'Lecturer / PGT — English',
+        keyRules: [
+          'Objective multiple-choice question paper',
+          'Each question carries 1 mark',
+          'One-fourth (1/4) mark is deducted for an incorrect answer',
+          'Two hours are provided to solve the paper',
+          'Questions are answered on the OMR answer sheet'
+        ]
+      },
+      syllabusBreakdown,
+      importantDates: {
+        formStartDate: '2026-09-29',
+        formEndDate: '2026-10-26',
+        correctionLastDate: '2026-10-29',
+        examDate: '2026-11-29',
+        admitCardDate: '2026-11-23',
+        status: 'upcoming'
+      },
+      officialLinks: {
+        syllabusPdfUrl: 'https://vyapamcg.cgstate.gov.in/uploads/pdfs/7d2d68da-3383-419c-8b5a-f3ac2cb7eb6a.pdf',
+        notificationPdfUrl: 'https://vyapamcg.cgstate.gov.in/uploads/pdfs/64c01caa-f23b-4f56-ba74-346e73078581.pdf',
+        officialWebsiteUrl: 'https://vyapamcg.cgstate.gov.in/'
+      },
+      isDraft: true,
+      isPublished: false
+    };
+
+    await saveBundleToFirestore(populatedBundle);
+    saveSingleBundle(populatedBundle);
+    setSelectedAuthority(authorityId);
+    setSelectedProgram(programId);
+    setSelectedPost(postId);
+    setMessage('English Lecturer 2026 content populated: 100 questions / 100 marks, 10 reusable syllabus subjects, official dates and exam rules. The series remains DRAFT for review.');
+    await load();
+  };
+
   const createAuthority = async () => {
     if (!name.trim()) return;
     const id = `authority-${slugifyCatalog(name)}`;
@@ -267,6 +566,13 @@ export const AdminExamCatalogStudio: React.FC = () => {
           className="shrink-0 rounded-xl border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs font-black text-purple-300 hover:bg-purple-500/20"
         >
           Create 3 Full Mock Series
+        </button>
+        <button
+          type="button"
+          onClick={populateEnglishLecturerContent}
+          className="shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-black text-emerald-300 hover:bg-emerald-500/20"
+        >
+          Populate English Lecturer
         </button>
         <button
           type="button"
