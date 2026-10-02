@@ -5,7 +5,6 @@ import { getStoredBundles, purgeAllDemoDatabaseData } from '../utils/bundleStore
 import {
   Database,
   Download,
-  Upload,
   Printer,
   Search,
   AlertTriangle,
@@ -40,7 +39,6 @@ interface AdminToolsAndBackupsModalProps {
   questions: Question[];
   pypPapers: PreviousYearPaper[];
   attempts: TestAttempt[];
-  onRestoreSnapshot?: (data: { tests: MockTest[]; questions: Question[]; pypPapers: PreviousYearPaper[] }) => void;
 }
 
 export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps> = ({
@@ -50,7 +48,6 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
   questions,
   pypPapers,
   attempts,
-  onRestoreSnapshot,
 }) => {
   const [activeTab, setActiveTab] = useState<'backup' | 'schema' | 'pdf' | 'quality' | 'audit'>('audit');
   const [selectedSchemaCollection, setSelectedSchemaCollection] = useState<string>('all');
@@ -98,34 +95,6 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
 
     setBackupSuccessMessage('Snapshot downloaded successfully!');
     setTimeout(() => setBackupSuccessMessage(null), 3000);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string);
-        if (parsed.data && parsed.data.tests && parsed.data.questions) {
-          if (onRestoreSnapshot) {
-            onRestoreSnapshot({
-              tests: parsed.data.tests,
-              questions: parsed.data.questions,
-              pypPapers: parsed.data.pypPapers || [],
-            });
-            setBackupSuccessMessage('Database restored successfully from backup!');
-            setTimeout(() => setBackupSuccessMessage(null), 3000);
-          }
-        } else {
-          alert('Invalid backup file schema. Missing test or question tables.');
-        }
-      } catch (err) {
-        alert('Failed to parse JSON file.');
-      }
-    };
-    reader.readAsText(file);
   };
 
   // -------------------------------------------------------------
@@ -856,8 +825,8 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
               <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-white">Full Platform Snapshot (One-Click Backup)</h3>
-                    <p className="text-xs text-slate-400">Download a full JSON image of all tests, questions, previous year papers, and student attempt histories.</p>
+                    <h3 className="text-sm font-bold text-white">Firestore Audit Snapshot (Export Only)</h3>
+                    <p className="text-xs text-slate-400">Download a point-in-time client audit snapshot for inspection. This is not a production Firestore backup and cannot restore or overwrite production data.</p>
                   </div>
                   <button
                     onClick={handleDownloadSnapshot}
@@ -888,36 +857,22 @@ export const AdminToolsAndBackupsModal: React.FC<AdminToolsAndBackupsModalProps>
                 </div>
               </div>
 
-              {/* Restore & Purge Section */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 space-y-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Restore & Local Storage Options</h3>
-                  <p className="text-xs text-slate-400">Restore database from a previously downloaded JSON snapshot file or purge local browser storage to reload defaults.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <label className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 cursor-pointer transition space-x-2">
-                    <Upload className="w-4 h-4" />
-                    <span>Select Snapshot File (.json)</span>
-                    <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
-                  </label>
-
-                  <button
-                    onClick={async () => {
-                      if (window.confirm('⚠️ TOTAL DATABASE PURGE:\n\nWipe ALL demo mock tests, demo PYQs, and dummy questions from database and server storage? This will leave your database 100% clean.')) {
-                        await purgeAllDemoDatabaseData();
-                        if (onRestoreSnapshot) {
-                          onRestoreSnapshot({ tests: [], questions: [], pypPapers: [] });
-                        }
-                        alert('Demo data successfully purged. Database is clean for production.');
-                      }
-                    }}
-                    className="inline-flex items-center px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition space-x-2 cursor-pointer shadow-lg shadow-rose-600/30"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Purge All Demo Data (Clean Slate)</span>
-                  </button>
-
-                </div>
+              {/* Production safety: no client-side restore path. */}
+              <div className="bg-amber-950/20 border border-amber-900/50 rounded-2xl p-5 space-y-2">
+                <h3 className="text-sm font-bold text-amber-200">Production Recovery Safety</h3>
+                <p className="text-xs text-amber-100/70">Client-side snapshot restore is intentionally disabled. Production Firestore recovery must be performed through an authorized, validated server-side recovery workflow so a stale browser file cannot overwrite canonical catalog, questions, attempts, or student data.</p>
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Purge only documents explicitly marked isDemo=true? Production and canonical records will not be inferred or deleted.')) {
+                      await purgeAllDemoDatabaseData();
+                      alert('Marked demo-data purge completed. Refresh Database Observability to verify the live Firestore audit.');
+                    }
+                  }}
+                  className="inline-flex items-center px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition space-x-2 cursor-pointer shadow-lg shadow-rose-600/30"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Purge Marked Demo Data</span>
+                </button>
               </div>
 
               {/* Architecture & Specs Banner */}
