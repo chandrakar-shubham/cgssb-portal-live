@@ -359,6 +359,47 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
   const programId = stableId('program', input.catalog.recruitment.id, authoritySlug, programSlug);
   const timestamp = new Date().toISOString();
 
+  const postIdsForRead = (input.catalog.posts || []).map(p => stableId('post', p.id, programSlug, p.slug || p.name));
+  const subjectIdsForRead = (input.catalog.subjects || []).map(s => stableId('subject', s.id, programSlug, s.slug || s.name));
+  const seriesIdsForRead = input.catalog.testSeries.map(s => stableId('series', s.id, programSlug, s.slug || s.name));
+  const bundleIdsForRead = seriesIdsForRead.map(id => `bundle-${id}`);
+  const existingRefs = [
+    doc(db, EXAM_CATALOG_COLLECTIONS.AUTHORITIES, authorityId),
+    doc(db, EXAM_CATALOG_COLLECTIONS.PROGRAMS, programId),
+    ...postIdsForRead.map(id => doc(db, EXAM_CATALOG_COLLECTIONS.POSTS, id)),
+    ...subjectIdsForRead.map(id => doc(db, EXAM_CATALOG_COLLECTIONS.SUBJECTS, id)),
+    ...seriesIdsForRead.map(id => doc(db, EXAM_CATALOG_COLLECTIONS.SERIES, id)),
+    ...bundleIdsForRead.map(id => doc(db, 'bundles', id)),
+  ];
+  const existingSnapshots = await Promise.all(existingRefs.map(getDoc));
+  let existingCursor = 0;
+  const existingAuthority = existingSnapshots[existingCursor++].exists()
+    ? existingSnapshots[existingCursor - 1].data() as Partial<ExamAuthority>
+    : undefined;
+  const existingProgram = existingSnapshots[existingCursor++].exists()
+    ? existingSnapshots[existingCursor - 1].data() as Partial<ExamProgram>
+    : undefined;
+  const existingPosts = new Map<string, Record<string, any>>();
+  for (const id of postIdsForRead) {
+    const snap = existingSnapshots[existingCursor++];
+    if (snap.exists()) existingPosts.set(id, snap.data() as Record<string, any>);
+  }
+  const existingSubjects = new Map<string, Record<string, any>>();
+  for (const id of subjectIdsForRead) {
+    const snap = existingSnapshots[existingCursor++];
+    if (snap.exists()) existingSubjects.set(id, snap.data() as Record<string, any>);
+  }
+  const existingSeries = new Map<string, Record<string, any>>();
+  for (const id of seriesIdsForRead) {
+    const snap = existingSnapshots[existingCursor++];
+    if (snap.exists()) existingSeries.set(id, snap.data() as Record<string, any>);
+  }
+  const existingBundles = new Map<string, TestSeriesBundle>();
+  for (const id of bundleIdsForRead) {
+    const snap = existingSnapshots[existingCursor++];
+    if (snap.exists()) existingBundles.set(id, snap.data() as TestSeriesBundle);
+  }
+
   const authority: ExamAuthority = {
     id: authorityId,
     name: input.catalog.authority.name,
@@ -366,9 +407,9 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
     slug: authoritySlug,
     description: input.catalog.authority.description,
     logoUrl: input.catalog.authority.logoUrl,
-    status: 'DRAFT',
-    sortOrder: 0,
-    createdAt: timestamp,
+    status: existingAuthority?.status || 'DRAFT',
+    sortOrder: existingAuthority?.sortOrder ?? 0,
+    createdAt: existingAuthority?.createdAt || timestamp,
     updatedAt: timestamp,
   };
 
@@ -381,12 +422,12 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
     year: input.catalog.recruitment.year,
     programType: input.catalog.recruitment.programType || 'recruitment',
     description: input.catalog.recruitment.description,
-    status: 'DRAFT',
+    status: existingProgram?.status || 'DRAFT',
     hasPosts: input.catalog.recruitment.hasPosts !== false,
-    sortOrder: 0,
-    totalVacancies: input.catalog.recruitment.totalVacancies,
-    recruitmentLabel: input.catalog.recruitment.recruitmentLabel,
-    createdAt: timestamp,
+    sortOrder: existingProgram?.sortOrder ?? 0,
+    totalVacancies: input.catalog.recruitment.totalVacancies ?? existingProgram?.totalVacancies,
+    recruitmentLabel: input.catalog.recruitment.recruitmentLabel ?? existingProgram?.recruitmentLabel,
+    createdAt: existingProgram?.createdAt || timestamp,
     updatedAt: timestamp,
   };
 
@@ -398,9 +439,9 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
     slug: post.slug || slugifyCatalog(post.name),
     shortName: post.shortName,
     description: post.description,
-    status: 'DRAFT',
-    sortOrder: index,
-    createdAt: timestamp,
+    status: existingPosts.get(stableId('post', post.id, programSlug, post.slug || post.name))?.status || 'DRAFT',
+    sortOrder: existingPosts.get(stableId('post', post.id, programSlug, post.slug || post.name))?.sortOrder ?? index,
+    createdAt: existingPosts.get(stableId('post', post.id, programSlug, post.slug || post.name))?.createdAt || timestamp,
     updatedAt: timestamp,
     vacancies: post.vacancies,
     cadreBreakup: post.cadreBreakup,
@@ -420,9 +461,9 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
     nameHindi: subject.nameHindi,
     slug: subject.slug || slugifyCatalog(subject.name),
     topics: Array.isArray(subject.topics) ? subject.topics : [],
-    status: 'DRAFT',
-    sortOrder: index,
-    createdAt: timestamp,
+    status: existingSubjects.get(stableId('subject', subject.id, programSlug, subject.slug || subject.name))?.status || 'DRAFT',
+    sortOrder: existingSubjects.get(stableId('subject', subject.id, programSlug, subject.slug || subject.name))?.sortOrder ?? index,
+    createdAt: existingSubjects.get(stableId('subject', subject.id, programSlug, subject.slug || subject.name))?.createdAt || timestamp,
     updatedAt: timestamp,
   }));
 
@@ -460,13 +501,15 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
       seriesType,
       bundleId,
       description: source.description,
-      status: 'DRAFT',
-      sortOrder: index,
-      createdAt: timestamp,
+      status: existingSeries.get(seriesId)?.status || 'DRAFT',
+      sortOrder: existingSeries.get(seriesId)?.sortOrder ?? index,
+      createdAt: existingSeries.get(seriesId)?.createdAt || timestamp,
       updatedAt: timestamp,
     };
 
+    const existingBundle = existingBundles.get(bundleId);
     const bundle: TestSeriesBundle = {
+      ...(existingBundle || {}),
       id: bundleId,
       slug: source.slug || slugifyCatalog(source.name),
       title: source.bundle?.title || source.name,
@@ -480,13 +523,13 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
       badgeColor: source.bundle?.badgeColor || 'emerald',
       shortDescription: source.bundle?.shortDescription || source.description || `${source.name} — draft test series.`,
       fullDescription: source.bundle?.fullDescription || source.description || '',
-      price: numberOr(source.bundle?.price),
-      originalPrice: numberOr(source.bundle?.originalPrice),
-      isProOnly: source.bundle?.isProOnly === true,
-      totalTestsCount: 0,
-      freeTestsCount: 0,
-      enrolledStudentsCount: 0,
-      rating: 0,
+      price: source.bundle?.price != null ? numberOr(source.bundle.price) : (existingBundle?.price ?? 0),
+      originalPrice: source.bundle?.originalPrice != null ? numberOr(source.bundle.originalPrice) : (existingBundle?.originalPrice ?? 0),
+      isProOnly: source.bundle?.isProOnly != null ? source.bundle.isProOnly === true : (existingBundle?.isProOnly ?? false),
+      totalTestsCount: existingBundle?.totalTestsCount ?? 0,
+      freeTestsCount: existingBundle?.freeTestsCount ?? 0,
+      enrolledStudentsCount: existingBundle?.enrolledStudentsCount ?? 0,
+      rating: existingBundle?.rating ?? 0,
       validity: source.bundle?.validity || 'Till Exam Date',
       languageDisplay: source.bundle?.languageDisplay || String(pattern.language || 'Bilingual'),
       examPattern: {
@@ -504,15 +547,15 @@ export async function importCatalogPackage(input: CatalogPackageInput, preview?:
         ...row,
         weightagePercentage: row.weightagePercentage
       })),
-      features: Array.isArray(source.bundle?.features) ? source.bundle.features : [],
-      testItems: [],
-      faqs: Array.isArray(source.bundle?.faqs) ? source.bundle.faqs : [],
-      importantDates: source.importantDates,
-      eligibility: source.eligibility,
-      officialLinks: source.officialLinks,
-      seoMeta: source.seoMeta,
-      isDraft: true,
-      isPublished: false,
+      features: Array.isArray(source.bundle?.features) ? source.bundle.features : (existingBundle?.features || []),
+      testItems: existingBundle?.testItems || [],
+      faqs: Array.isArray(source.bundle?.faqs) ? source.bundle.faqs : (existingBundle?.faqs || []),
+      importantDates: source.importantDates || existingBundle?.importantDates,
+      eligibility: source.eligibility || existingBundle?.eligibility,
+      officialLinks: source.officialLinks || existingBundle?.officialLinks,
+      seoMeta: source.seoMeta || existingBundle?.seoMeta,
+      isDraft: existingBundle ? (existingBundle.isDraft ?? false) : true,
+      isPublished: existingBundle ? (existingBundle.isPublished ?? false) : false,
     };
 
     seriesRecords.push(seriesRecord);
