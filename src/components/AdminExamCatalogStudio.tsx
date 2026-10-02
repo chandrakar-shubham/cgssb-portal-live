@@ -49,7 +49,24 @@ export const AdminExamCatalogStudio: React.FC = () => {
       setPosts(po);
       const postId = selectedPost && po.some(x=>x.id===selectedPost) ? selectedPost : '';
       if (postId !== selectedPost) setSelectedPost(postId);
-      setSeries(await fetchExamTestSeries(programId || undefined, postId || undefined));
+
+      const [rawSeries, bundles] = await Promise.all([
+        fetchExamTestSeries(programId || undefined, postId || undefined),
+        fetchBundlesFromFirestore(),
+      ]);
+      const bundleById = new Map(bundles.map(b => [b.id, b]));
+      const validSeries = rawSeries.filter(s => {
+        const b = s.bundleId ? bundleById.get(s.bundleId) : undefined;
+        return Boolean(
+          b &&
+          b.seriesId === s.id &&
+          b.authorityId === s.authorityId &&
+          b.programId === s.programId &&
+          (b.postId || undefined) === (s.postId || undefined) &&
+          s.status !== 'ARCHIVED'
+        );
+      });
+      setSeries(validSeries);
     } catch (e:any) {
       setMessage(e?.message || 'Unable to load exam catalog.');
     }
