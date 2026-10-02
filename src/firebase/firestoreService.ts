@@ -1293,38 +1293,28 @@ export async function fetchLeaderboardFromFirestore(testId?: string): Promise<Te
   } as TestAttempt));
 }
 
-export async function purgeFirestoreDemoData(): Promise<void> {
-  if (!db) return;
-  try {
-    const testSnap = await getDocs(collection(db, COLLECTIONS.TESTS)).catch(() => null);
-    if (testSnap && !testSnap.empty) {
-      await Promise.allSettled(testSnap.docs.map(d => deleteDoc(d.ref)));
-    }
+export async function purgeFirestoreDemoData(): Promise<string[]> {
+  if (!db) return [];
 
-    const qSnap = await getDocs(collection(db, COLLECTIONS.QUESTIONS)).catch(() => null);
-    if (qSnap && !qSnap.empty) {
-      await Promise.allSettled(qSnap.docs.map(d => deleteDoc(d.ref)));
-    }
+  // Production safety invariant:
+  // demo purge may only delete documents explicitly marked isDemo === true.
+  // Never infer demo status from collection name, title, id, or emptiness.
+  const purgeableCollections = [
+    COLLECTIONS.TESTS,
+    COLLECTIONS.QUESTIONS,
+    COLLECTIONS.PYP_PAPERS,
+    COLLECTIONS.BUNDLES
+  ];
 
-    const pypSnap = await getDocs(collection(db, COLLECTIONS.PYP_PAPERS)).catch(() => null);
-    if (pypSnap && !pypSnap.empty) {
-      await Promise.allSettled(pypSnap.docs.map(d => deleteDoc(d.ref)));
+  const deleted: string[] = [];
+  for (const collectionName of purgeableCollections) {
+    try {
+      const snap = await getDocs(query(collection(db, collectionName), where('isDemo', '==', true)));
+      await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+      if (!snap.empty) deleted.push(`${collectionName}:${snap.size}`);
+    } catch (err) {
+      console.warn(`Demo purge skipped for ${collectionName}:`, err);
     }
-
-    const bundleSnap = await getDocs(collection(db, COLLECTIONS.BUNDLES)).catch(() => null);
-    if (bundleSnap && !bundleSnap.empty) {
-      await Promise.allSettled(bundleSnap.docs.map(d => deleteDoc(d.ref)));
-    }
-
-    // Phase 7 reset: the previous demo taxonomy is disposable too.
-    // Clear canonical catalog records so the production catalog starts clean.
-    for (const collectionName of ['examTestSeries', 'examSubjects', 'examPosts', 'examPrograms', 'examAuthorities']) {
-      const snap = await getDocs(collection(db, collectionName)).catch(() => null);
-      if (snap && !snap.empty) {
-        await Promise.allSettled(snap.docs.map(d => deleteDoc(d.ref)));
-      }
-    }
-  } catch (err) {
-    console.warn('Error purging Firestore demo data:', err);
   }
+  return deleted;
 }
