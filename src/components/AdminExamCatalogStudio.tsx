@@ -108,6 +108,45 @@ export const AdminExamCatalogStudio: React.FC = () => {
     await load();
   };
 
+  const createProductionSeries = async () => {
+    const authorityId = 'authority-cgssb';
+    const programId = 'program-cgssb-teacher-recruitment-2026';
+    const postSeries = [
+      { postId: 'post-cgssb-teacher-recruitment-2026-assistant-teacher', name: 'Assistant Teacher 2026 — Full Mock Series' },
+      { postId: 'post-cgssb-teacher-recruitment-2026-teacher-tgt', name: 'Teacher / TGT 2026 — Full Mock Series' },
+      { postId: 'post-cgssb-teacher-recruitment-2026-lecturer-pgt', name: 'Lecturer / PGT 2026 — Full Mock Series' }
+    ];
+    const timestamp = now();
+    for (let index = 0; index < postSeries.length; index++) {
+      const item = postSeries[index];
+      const seriesId = `series-cgssb-teacher-recruitment-2026-${item.postId.split('-').slice(-2).join('-')}-full-mock`;
+      const bundleId = `bundle-${seriesId}`;
+      const record: ExamTestSeries = {
+        id: seriesId, authorityId, programId, postId: item.postId,
+        name: item.name, slug: slugifyCatalog(item.name), seriesType: 'full_mock',
+        bundleId, status: 'DRAFT', sortOrder: index, createdAt: timestamp, updatedAt: timestamp
+      };
+      await saveExamTestSeries(record);
+      const post = posts.find(p => p.id === item.postId);
+      const bundle: TestSeriesBundle = {
+        id: bundleId, slug: slugifyCatalog(item.name), title: item.name, titleHindi: item.name,
+        authorityId, programId, postId: item.postId, seriesId,
+        badge: 'Full Mock', badgeColor: 'emerald',
+        shortDescription: `${item.name} for CGSSB Teacher Recruitment 2026.`,
+        fullDescription: 'Draft production series. Add syllabus, tests and questions before publishing.',
+        price: 0, originalPrice: 0, isProOnly: false, totalTestsCount: 0, freeTestsCount: 0,
+        enrolledStudentsCount: 0, rating: 0, validity: 'Till Exam Date', languageDisplay: 'Bilingual',
+        examPattern: { totalQuestions: 0, totalMarks: 0, durationMinutes: 0, markingScheme: '', negativeMarkPenalty: '', language: 'Bilingual', cadre: post?.name || '', keyRules: [] },
+        syllabusBreakdown: [], features: [], testItems: [], faqs: [],
+        isDraft: true, isPublished: false, seriesType: 'full_mock'
+      };
+      await saveBundleToFirestore(bundle);
+      saveSingleBundle(bundle);
+    }
+    setMessage('Three production Full Mock Series were created as drafts and linked to the canonical posts.');
+    await load();
+  };
+
   const createAuthority = async () => {
     if (!name.trim()) return;
     const id = `authority-${slugifyCatalog(name)}`;
@@ -221,6 +260,13 @@ export const AdminExamCatalogStudio: React.FC = () => {
           className="shrink-0 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-black text-cyan-300 hover:bg-cyan-500/20"
         >
           Create CGSSB 2026 Catalog
+        </button>
+        <button
+          type="button"
+          onClick={createProductionSeries}
+          className="shrink-0 rounded-xl border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs font-black text-purple-300 hover:bg-purple-500/20"
+        >
+          Create 3 Full Mock Series
         </button>
         <button
           type="button"
