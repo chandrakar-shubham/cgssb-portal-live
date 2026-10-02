@@ -539,7 +539,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
               className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition flex items-center space-x-1.5 shadow-lg shadow-rose-600/20 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Purge All Demo Data</span>
+              <span>Purge Demo Data</span>
             </button>
           </div>
         </div>
@@ -548,23 +548,23 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-indigo-900/40 text-xs">
           <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
             <div className="text-[11px] text-slate-400 font-medium">Active Database ID</div>
-            <div className="text-white font-mono font-bold text-xs truncate mt-0.5">ai-studio-cgssbtest-...</div>
+            <div className="text-white font-mono font-bold text-xs truncate mt-0.5">{firestoreDatabaseId}</div>
           </div>
           <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
             <div className="text-[11px] text-slate-400 font-medium">Schema Compliance</div>
             <div className="text-emerald-400 font-bold text-xs mt-0.5 flex items-center space-x-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{analytics.schemaComplianceRate}% Validated</span>
+              <span>{analytics.schemaComplianceRate === null ? 'Audit pending' : `${analytics.schemaComplianceRate}% validated`}</span>
             </div>
           </div>
           <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
             <div className="text-[11px] text-slate-400 font-medium">Total Live Documents</div>
-            <div className="text-indigo-300 font-bold text-xs mt-0.5">{analytics.totalDocs} Records (~{analytics.totalKB} KB)</div>
+            <div className="text-indigo-300 font-bold text-xs mt-0.5">{analytics.totalDocs === null ? 'Audit pending' : `${analytics.totalDocs.toLocaleString()} docs`}</div>
           </div>
           <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
             <div className="text-[11px] text-slate-400 font-medium">Query Latency</div>
             <div className="text-amber-300 font-bold text-xs mt-0.5">
-              {pingResult.status === 'success' ? `${pingResult.time} ms (Excellent)` : pingResult.status === 'offline' ? 'Offline' : 'Ready to Benchmark'}
+              {pingResult.status === 'success' ? `${pingResult.time} ms` : pingResult.status === 'offline' ? 'Offline' : 'Not measured'}
             </div>
           </div>
         </div>
@@ -639,16 +639,16 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 <Server className="w-4 h-4 text-indigo-400" />
               </div>
               <div className="text-3xl font-black text-white">{analytics.totalDocs}</div>
-              <div className="text-[11px] text-slate-400">Across 5 primary Firestore collections</div>
+              <div className="text-[11px] text-slate-400">Across {liveObservability?.collections.length || 0} monitored collections</div>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-xs font-bold uppercase tracking-wider">Storage Footprint</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Sampled Payload</span>
                 <HardDrive className="w-4 h-4 text-blue-400" />
               </div>
               <div className="text-3xl font-black text-white">{analytics.totalKB} <span className="text-sm font-normal text-slate-400">KB</span></div>
-              <div className="text-[11px] text-emerald-400 font-semibold">Under 1% of Spark quota</div>
+              <div className="text-[11px] text-slate-400 font-semibold">Sample estimate; not billed Firestore storage</div>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
@@ -657,7 +657,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 <CheckSquare2 className="w-4 h-4 text-emerald-400" />
               </div>
               <div className="text-3xl font-black text-emerald-400">{analytics.schemaComplianceRate}%</div>
-              <div className="text-[11px] text-slate-400">100% strict JSON Schema validation</div>
+              <div className="text-[11px] text-slate-400">{liveIntegrity?.mode === 'sampled' ? `Sampled audit (${liveIntegrity.sampleLimit}/collection)` : 'Full audit of evaluated documents'}</div>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
@@ -675,7 +675,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-black text-white">Collection Granular Breakdown</h2>
-                <p className="text-xs text-slate-400">Live storage footprint and document indexing health</p>
+                <p className="text-xs text-slate-400">Live document counts, sampled payload size, and query health</p>
               </div>
               <button
                 onClick={handleMigrateToFirebase}
@@ -684,6 +684,14 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
               >
                 <Cloud className="w-3.5 h-3.5" />
                 <span>{isMigrating ? 'Pushing to Cloud...' : 'Dual-Sync to Cloud Firestore'}</span>
+              </button>
+              <button
+                onClick={() => void refreshDatabaseAudit()}
+                disabled={isAuditing}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                <span>{isAuditing ? 'Auditing...' : 'Refresh Audit'}</span>
               </button>
             </div>
 
@@ -694,7 +702,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                     <th className="py-3 px-4">Collection</th>
                     <th className="py-3 px-4">Primary Key</th>
                     <th className="py-3 px-4">Document Count</th>
-                    <th className="py-3 px-4">Storage Footprint</th>
+                    <th className="py-3 px-4">Sampled Payload</th>
                     <th className="py-3 px-4">Status</th>
                   </tr>
                 </thead>
@@ -735,22 +743,50 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
               <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-1">
                 <div className="text-xs font-bold text-slate-400">Orphan Broken Question Refs</div>
-                <div className="text-2xl font-black text-white">{analytics.brokenQuestionRefsCount}</div>
-                <div className="text-[11px] text-emerald-400">Zero dangling references</div>
+                <div className={`text-2xl font-black ${analytics.brokenQuestionRefsCount === 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{analytics.brokenQuestionRefsCount === null ? '—' : analytics.brokenQuestionRefsCount}</div>
+                <div className="text-[11px] text-slate-400">{analytics.brokenQuestionRefsCount === 0 ? 'No broken refs in audit scope' : 'Broken question references detected'}</div>
               </div>
 
               <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-1">
                 <div className="text-xs font-bold text-slate-400">Empty Mock Tests</div>
-                <div className="text-2xl font-black text-white">{analytics.emptyTestsCount}</div>
+                <div className="text-2xl font-black text-white">{analytics.emptyTestsCount === null ? '—' : analytics.emptyTestsCount}</div>
                 <div className="text-[11px] text-slate-400">Tests with 0 questions</div>
               </div>
 
               <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-1">
                 <div className="text-xs font-bold text-slate-400">Bundles with 0 Tests</div>
-                <div className="text-2xl font-black text-white">{analytics.emptyBundlesCount}</div>
-                <div className="text-[11px] text-slate-400">Accurately preserved without auto-resurrection</div>
+                <div className="text-2xl font-black text-white">{analytics.emptyBundlesCount === null ? '—' : analytics.emptyBundlesCount}</div>
+                <div className="text-[11px] text-slate-400">Bundles with no linked tests</div>
               </div>
             </div>
+          </div>
+
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+            <h3 className="text-base font-black text-white flex items-center space-x-2">
+              <FolderTree className="w-4 h-4 text-indigo-400" />
+              <span>Canonical Series ↔ Bundle Integrity</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl">
+                <div className="text-xs text-slate-400">Series without Bundle</div>
+                <div className="text-2xl font-black text-rose-300">{liveIntegrity?.seriesWithoutBundle ?? '—'}</div>
+              </div>
+              <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl">
+                <div className="text-xs text-slate-400">Bundle without Series</div>
+                <div className="text-2xl font-black text-rose-300">{liveIntegrity?.bundlesWithoutSeries ?? '—'}</div>
+              </div>
+              <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl">
+                <div className="text-xs text-slate-400">Hierarchy Mismatches</div>
+                <div className="text-2xl font-black text-rose-300">{liveIntegrity?.mismatchedSeriesBundles ?? '—'}</div>
+              </div>
+            </div>
+            {liveIntegrity && (
+              <div className="text-[11px] text-slate-500">
+                Audit mode: <strong className="text-slate-300">{liveIntegrity.mode}</strong> · up to {liveIntegrity.sampleLimit} documents per audited collection.
+              </div>
+            )}
           </div>
 
           {/* Database Control & Demo Purge Command Center */}
