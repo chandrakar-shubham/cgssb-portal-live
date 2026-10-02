@@ -253,13 +253,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const categories: { id: ExamCategory | 'ALL'; label: string; badge?: string }[] = [
+  const categories: { id: ExamCategory | 'ALL'; label: string }[] = [
     { id: 'ALL', label: 'All Exams' },
-    { id: 'TEACHER_RECRUITMENT', label: 'CG शिक्षक भर्ती 2026', badge: 'All 3 Cadres • 150 Qs • -¼' },
-    { id: 'CGSSB', label: 'CGSSB / Vyapam', badge: '100 Qs • +1 • -⅓' },
-    { id: 'CGPSC', label: 'CGPSC SSE Prelims', badge: '100 Qs • +2 • -⅓' },
-    { id: 'SWAMI_ATMANAND', label: 'Swami Atmanand', badge: '100 Qs • +1 • -⅓' },
-    { id: 'CENTRAL_EXAMS', label: 'Central (Rail, SSC, Bank)', badge: 'Coming Soon' },
+    { id: 'TEACHER_RECRUITMENT', label: 'CG शिक्षक भर्ती 2026' },
+    { id: 'CGSSB', label: 'CGSSB / Vyapam' },
+    { id: 'CGPSC', label: 'CGPSC SSE Prelims' },
+    { id: 'SWAMI_ATMANAND', label: 'Swami Atmanand' },
+    { id: 'CENTRAL_EXAMS', label: 'Central (Rail, SSC, Bank)' },
   ];
 
   // For students: deduplicate automatically and hide drafts
@@ -1253,19 +1253,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     }`}
                   >
                     <span>{cat.label}</span>
-                    {cat.badge && (
-                      <span
-                        className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                          isSelected
-                            ? 'bg-slate-950/20 text-slate-950'
-                            : cat.badge === 'Coming Soon'
-                            ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                            : 'bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {cat.badge}
-                      </span>
-                    )}
+
                   </button>
                 );
               })}
