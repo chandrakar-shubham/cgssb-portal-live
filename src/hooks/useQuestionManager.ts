@@ -36,6 +36,13 @@ export function useQuestionManager() {
 
 
   const addQuestions = useCallback((newQuestions: Question[]) => {
+    // New production questions must be linked to the canonical exam catalog.
+    // Legacy taxonomy-only records remain readable/editable for migration, but
+    // cannot be created as new production content.
+    if (!import.meta.env.DEV && newQuestions.some(q => !q?.programId)) {
+      console.error('Rejected production question creation: canonical programId is required.');
+      return;
+    }
     setQuestions(prev => {
       const map = new Map(prev.map(q => [q.id, q]));
       newQuestions.forEach(q => map.set(q.id, migrateLegacyQuestion(q)));
