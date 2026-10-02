@@ -315,6 +315,24 @@ export const moveToTrashBundle = async (bundle: TestSeriesBundle): Promise<void>
   }
 };
 
+export const moveToTrashTestSeries = async (series: ExamTestSeries): Promise<void> => {
+  const bundles = await fetchBundlesFromFirestore();
+  const linkedBundle = bundles.find(
+    b => b.id === series.bundleId || b.seriesId === series.id
+  );
+
+  if (linkedBundle) {
+    await moveToTrashBundle(linkedBundle);
+    return;
+  }
+
+  // Repair an already-orphaned canonical series instead of leaving it visible.
+  await deleteExamTestSeries(series.id);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cgssb-exam-catalog-updated'));
+  }
+};
+
 export const restoreBundleFromTrash = async (trashId: string): Promise<TestSeriesBundle | null> => {
   const current = getTrashItems();
   const item = current.find(i => i.id === trashId);
