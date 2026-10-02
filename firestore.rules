@@ -322,7 +322,7 @@ service cloud.firestore {
     // writes are restricted to the owning authenticated student.
     match /leaderboardProfiles/{profileId} {
       allow get: if true;
-      allow list: if request.query.limit <= 100;
+      allow list: if hasManageStudents() || request.query.limit <= 100;
       allow create: if isOwner(request.resource.data.userId) &&
         request.resource.data.source == 'practice_summary' &&
         request.resource.data.keys().hasOnly([
