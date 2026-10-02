@@ -252,23 +252,20 @@ export const cleanTestFromAllBundles = (testId: string): TestSeriesBundle[] => {
  * Purges demo and custom data directly from Cloud Firestore globally
  */
 export const purgeAllDemoDatabaseData = async (): Promise<{ purgedKeys: string[]; timestamp: string }> => {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('cgssb_tests');
-    localStorage.removeItem('cgssb_questions');
-    localStorage.removeItem('cgssb_pyp');
-  }
-
-  await purgeFirestoreDemoData();
+  const deleted = await purgeFirestoreDemoData();
 
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: [] }));
-    window.dispatchEvent(new CustomEvent('cgssb-tests-updated', { detail: [] }));
-    window.dispatchEvent(new CustomEvent('cgssb-questions-updated', { detail: [] }));
-    window.dispatchEvent(new CustomEvent('cgssb-pyp-updated', { detail: [] }));
+    // Do not clear production/local content caches. Only refresh active views after
+    // explicitly marked demo documents have been deleted from Firestore.
+    window.dispatchEvent(new CustomEvent('cgssb-bundles-updated'));
+    window.dispatchEvent(new CustomEvent('cgssb-tests-updated'));
+    window.dispatchEvent(new CustomEvent('cgssb-questions-updated'));
+    window.dispatchEvent(new CustomEvent('cgssb-pyp-updated'));
+    window.dispatchEvent(new CustomEvent('cgssb-exam-catalog-updated'));
   }
 
   return {
-    purgedKeys: ['mockTests', 'questions', 'pypPapers', 'bundles'],
+    purgedKeys: deleted,
     timestamp: new Date().toISOString()
   };
 };
