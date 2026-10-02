@@ -302,6 +302,11 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
           <span>{backupMessage}</span>
         </div>
       )}
+      {auditError && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-bold">
+          Live Firestore audit warning: {auditError}
+        </div>
+      )}
 
       {/* Navigation Sub-Tabs */}
       <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
@@ -379,10 +384,10 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-xs font-bold uppercase tracking-wider">Schema Conformance</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Core Schema Conformance</span>
                 <CheckSquare2 className="w-4 h-4 text-emerald-400" />
               </div>
-              <div className="text-3xl font-black text-emerald-400">{analytics.schemaComplianceRate}%</div>
+              <div className="text-3xl font-black text-emerald-400">{analytics.schemaComplianceRate === null ? '—' : `${analytics.schemaComplianceRate}%`}</div>
               <div className="text-[11px] text-slate-400">{liveIntegrity?.mode === 'sampled' ? `Sampled audit (${liveIntegrity.sampleLimit}/collection)` : 'Full audit of evaluated documents'}</div>
             </div>
 
@@ -391,8 +396,8 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 <span className="text-xs font-bold uppercase tracking-wider">Auto-Link Governance</span>
                 <Shield className="w-4 h-4 text-purple-400" />
               </div>
-              <div className="text-xl font-black text-purple-300">Deterministic</div>
-              <div className="text-[11px] text-slate-400">Implicit auto-linking disabled</div>
+              <div className={`text-xl font-black ${analytics.canonicalIntegrityIssues === null ? 'text-amber-300' : analytics.canonicalIntegrityIssues === 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{analytics.canonicalIntegrityIssues === null ? 'Audit pending' : analytics.canonicalIntegrityIssues === 0 ? 'Healthy' : `${analytics.canonicalIntegrityIssues} issues`}</div>
+              <div className="text-[11px] text-slate-400">Canonical Series ↔ Bundle integrity</div>
             </div>
           </div>
 
