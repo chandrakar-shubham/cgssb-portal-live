@@ -275,7 +275,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         if (!cancelled) setCanonicalPrograms([]);
       });
     return () => { cancelled = true; };
-  }, [selectedProgramId]);
+  }, []);
 
   const categories: Array<{ id: 'ALL' | string; label: string; program?: ExamProgram }> = [
     { id: 'ALL', label: 'All Exams' },
