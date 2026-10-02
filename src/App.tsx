@@ -48,7 +48,6 @@ const AdminCMSThemeCustomizer = lazyWithRetry(() => import('./components/AdminCM
 const AdminWorkspaceLayout = lazyWithRetry(() => import('./components/AdminWorkspaceLayout').then(m => ({ default: m.AdminWorkspaceLayout })));
 const AdminBundleStudio = lazyWithRetry(() => import('./components/AdminBundleStudio').then(m => ({ default: m.AdminBundleStudio })));
 const AdminExamCatalogStudio = lazyWithRetry(() => import('./components/AdminExamCatalogStudio').then(m => ({ default: m.AdminExamCatalogStudio })));
-const AdminContentDraftImporter = lazyWithRetry(() => import('./components/AdminContentDraftImporter').then(m => ({ default: m.AdminContentDraftImporter })));
 import { UniversalIngestionStudio, IngestionContentType } from './components/UniversalIngestionStudio';
 import { ChapterTestSection } from './components/ChapterTestSection';
 import { PracticeSetSection } from './components/PracticeSetSection';
@@ -1254,9 +1253,6 @@ function MainApp() {
 
             {adminActiveTab === 'admin-exam-catalog' && (
               <AdminExamCatalogStudio />
-            )}
-            {adminActiveTab === 'admin-content-import' && (
-              <AdminContentDraftImporter />
             )}
             {adminActiveTab === 'admin-cms-series' && (
               <AdminBundleStudio
