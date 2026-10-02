@@ -7,6 +7,7 @@ import {
   fetchDatabaseObservability,
   runDatabaseIntegrityAudit,
   fetchOrphanedSeriesRecords,
+  deleteOrphanedSeriesRecord,
   DatabaseObservabilitySnapshot,
   DatabaseIntegrityAudit,
   OrphanedSeriesRecord
@@ -464,6 +465,7 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [liveIntegrity, setLiveIntegrity] = useState<DatabaseIntegrityAudit | null>(null);
   const [orphanedSeries, setOrphanedSeries] = useState<OrphanedSeriesRecord[]>([]);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [deletingOrphanId, setDeletingOrphanId] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
 
   const refreshDatabaseAudit = async () => {
@@ -532,6 +534,24 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
       setPingResult({ status: 'offline' });
     } finally {
       setIsPinging(false);
+    }
+  };
+
+  const handleFinalizeOrphanedSeriesDeletion = async (series: OrphanedSeriesRecord) => {
+    const confirmation = window.prompt(
+      `This will permanently remove the orphaned canonical Series "${series.name}" because its Bundle is already missing. No Bundle or test content will be recreated.\n\nType DELETE ORPHAN to continue.`
+    );
+    if (confirmation !== 'DELETE ORPHAN') return;
+
+    setDeletingOrphanId(series.id);
+    try {
+      await deleteOrphanedSeriesRecord(series.id);
+      setBackupMessage(`Finalized deletion of orphaned Series "${series.name}".`);
+      await refreshDatabaseAudit();
+    } catch (err: any) {
+      setBackupMessage('Orphan cleanup failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setDeletingOrphanId(null);
     }
   };
 
@@ -910,7 +930,8 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 </h3>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                   These are canonical <code className="text-amber-300">examTestSeries</code> records whose linked Bundle document is missing.
-                  This inspector is read-only: it will not delete or recreate production data.
+                  Normal deletion is handled by the canonical Series + Bundle lifecycle. The action below is only for finalizing
+                  Series records left behind by the older broken deletion path; it refuses cleanup if a Bundle is present.
                 </p>
               </div>
               <div className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-black">
@@ -946,14 +967,25 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                           <div><span className="text-slate-500">Slug:</span> <span className="text-slate-300">{series.slug || '—'}</span></div>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void navigator.clipboard?.writeText(JSON.stringify(series, null, 2))}
-                        className="shrink-0 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700"
-                      >
-                        <Copy className="inline w-3.5 h-3.5 mr-1.5" />
-                        Copy Record
-                      </button>
+                      <div className="shrink-0 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void navigator.clipboard?.writeText(JSON.stringify(series, null, 2))}
+                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700"
+                        >
+                          <Copy className="inline w-3.5 h-3.5 mr-1.5" />
+                          Copy Record
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleFinalizeOrphanedSeriesDeletion(series)}
+                          disabled={deletingOrphanId === series.id}
+                          className="px-3 py-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-black border border-rose-500/40 disabled:opacity-50"
+                        >
+                          <Trash2 className="inline w-3.5 h-3.5 mr-1.5" />
+                          {deletingOrphanId === series.id ? 'Removing...' : 'Finalize Deletion'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -961,8 +993,8 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
             )}
 
             <div className="text-[11px] text-slate-500 border-t border-slate-800 pt-3">
-              Safe next step: inspect these records and determine whether each Bundle was accidentally deleted or the Series is obsolete.
-              No automatic repair is performed because the original Bundle content cannot be safely reconstructed from a Series metadata record alone.
+              Finalize Deletion permanently removes only the orphaned Series document after a live safety check confirms that no Bundle references it.
+              It does not recreate Bundle content and cannot delete a Series that currently has a Bundle.
             </div>
           </div>
 
