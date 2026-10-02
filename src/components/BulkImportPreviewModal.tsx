@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Question, ExamCategory, PreviousYearPaper, MockTest, QuestionType } from '../types';
-import { ExamHierarchySelector, ExamHierarchyValue } from './ExamHierarchySelector';
+import { CanonicalIngestionSelector } from './CanonicalIngestionSelector';
+import { ExamTestSeries } from '../firebase/examCatalogService';
 import {
   HierarchyRecord,
   mapAuthorityToExamCategory,
@@ -54,6 +55,19 @@ export interface IngestionPaperConfig {
   paperSummary: string;
   subjectsWeightage: { subject: string; questionCount: number; percentage: number }[];
   vacancies?: string;
+  canonicalAuthorityId: string;
+  canonicalProgramId: string;
+  canonicalPostId?: string;
+  canonicalSeriesId: string;
+  canonicalBundleId: string;
+}
+
+export interface IngestionCanonicalTarget {
+  authority?: string;
+  examName?: string;
+  cadre?: string;
+  bundleId?: string;
+  seriesId?: string;
 }
 
 interface BulkImportPreviewModalProps {
@@ -68,6 +82,7 @@ interface BulkImportPreviewModalProps {
   allRecords?: HierarchyRecord[];
   existingTests?: MockTest[];
   existingPYPs?: PreviousYearPaper[];
+  canonicalTarget?: IngestionCanonicalTarget;
 }
 
 // Common Sub-Category Suggestions
@@ -91,6 +106,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
   allRecords = [],
   existingTests = [],
   existingPYPs = [],
+  canonicalTarget,
 }) => {
   if (!isOpen || initialRecords.length === 0) return null;
 
@@ -151,10 +167,11 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
 
   // Ingestion Configuration State
   const [paperNature, setPaperNature] = useState<'pyp' | 'mock' | 'both'>(initialNature);
-  const [authority, setAuthority] = useState<string>(initialAuthority);
+  const [authority, setAuthority] = useState<string>(canonicalTarget?.authority || initialAuthority);
   const [category, setCategory] = useState<ExamCategory>(initialCategory);
-  const [subCategory, setSubCategory] = useState<string>(initialSubCategory);
+  const [subCategory, setSubCategory] = useState<string>(canonicalTarget?.examName || initialSubCategory);
   const [postName, setPostName] = useState<string>(() => {
+    if (canonicalTarget?.cadre) return canonicalTarget.cadre;
     const lower = sampleExam.toLowerCase();
     if (lower.includes('lecturer') || lower.includes('vyakhyata')) return 'CG Lecturer 2026';
     if (lower.includes('assistant') || lower.includes('sahayak')) return 'CG Assistant Teacher 2026';
@@ -165,8 +182,13 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
 
   const [examTitle, setExamTitle] = useState<string>(() => {
     if (sampleExam && sampleExam !== 'CG Exam') return sampleExam;
-    return `${authority} Solved Paper ${sampleYear}`;
+    return canonicalTarget?.examName || `${authority} Solved Paper ${sampleYear}`;
   });
+  const [canonicalAuthorityId, setCanonicalAuthorityId] = useState<string>('');
+  const [canonicalProgramId, setCanonicalProgramId] = useState<string>('');
+  const [canonicalPostId, setCanonicalPostId] = useState<string | undefined>(undefined);
+  const [canonicalSeriesId, setCanonicalSeriesId] = useState<string>(canonicalTarget?.seriesId || '');
+  const [canonicalBundleId, setCanonicalBundleId] = useState<string>(canonicalTarget?.bundleId || '');
   const [examYear, setExamYear] = useState<number>(sampleYear);
   const [durationMinutes, setDurationMinutes] = useState<number>(() => {
     if (firstQ?.idealTimeSeconds && firstQ.idealTimeSeconds > 0) {
@@ -183,33 +205,6 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
   const [paperSummary, setPaperSummary] = useState<string>(
     `${paperNature === 'mock' ? 'High-yield mock simulation test' : 'Official past paper simulation'} containing ${initialRecords.length} questions, authentic answer keys, and detailed bilingual solutions.`
   );
-
-  // Compute available hierarchy records across existing database and imported questions
-  const computedHierarchyRecords = useMemo(() => {
-    if (allRecords && allRecords.length > 0) return allRecords;
-    return extractHierarchyFromApp(existingTests, existingPYPs, initialRecords);
-  }, [allRecords, existingTests, existingPYPs, initialRecords]);
-
-  // Handle Multi-level hierarchy change with auto-population
-  const handleHierarchyChange = (newVal: ExamHierarchyValue, matchedRecord?: HierarchyRecord) => {
-    setAuthority(newVal.authority);
-    setSubCategory(newVal.category);
-    if (newVal.postName) setPostName(newVal.postName);
-    setExamTitle(newVal.examName);
-
-    const mappedCat = mapAuthorityToExamCategory(newVal.authority);
-    setCategory(mappedCat);
-
-    // Auto-populate parameters if user matched an existing registered record
-    if (matchedRecord) {
-      if (matchedRecord.postName) setPostName(matchedRecord.postName);
-      if (matchedRecord.year) setExamYear(matchedRecord.year);
-      if (matchedRecord.durationMinutes) setDurationMinutes(matchedRecord.durationMinutes);
-      if (matchedRecord.negativeMarkingRatio) setNegativeMarkingRatio(matchedRecord.negativeMarkingRatio);
-      if (matchedRecord.vacancies) setVacancies(matchedRecord.vacancies);
-      if (matchedRecord.paperSummary) setPaperSummary(matchedRecord.paperSummary);
-    }
-  };
 
   // Questions State
   const [questionsList, setQuestionsList] = useState<Question[]>(initialRecords);
@@ -299,6 +294,11 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
       year: examYear,
     }));
 
+    if (!canonicalSeriesId || !canonicalBundleId || !canonicalAuthorityId || !canonicalProgramId) {
+      window.alert('Select a valid canonical Test Series from the Exam & Recruitment Catalog before publishing.');
+      return;
+    }
+
     onConfirm(
       {
         paperNature: finalNature,
@@ -307,7 +307,7 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
         examCategory: category,
         subCategory: subCategory.trim() || 'Teacher Recruitment 2026',
         postName: postName.trim() || 'CG Lecturer 2026',
-        examName: examTitle.trim() || `${authority} ${subCategory} Exam`,
+        examName: subCategory.trim() || `${authority} ${subCategory} Exam`,
         year: examYear,
         durationMinutes,
         marks,
@@ -315,6 +315,11 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
         paperSummary: paperSummary.trim(),
         subjectsWeightage,
         vacancies: vacancies.trim() || undefined,
+        canonicalAuthorityId,
+        canonicalProgramId,
+        canonicalPostId,
+        canonicalSeriesId,
+        canonicalBundleId,
       },
       taggedQuestions
     );
@@ -460,26 +465,35 @@ export const BulkImportPreviewModal: React.FC<BulkImportPreviewModalProps> = ({
                   </div>
                 </div>
 
-                {/* 2. Multi-Level Exam Hierarchy (Authority > Category > Exam Name) */}
+                {/* 2. Canonical Exam Hierarchy — IDs, not free-text labels */}
                 <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-200 flex items-center space-x-1.5">
-                      <Tag className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>2. Exam Hierarchy (Authority &gt; Drive &gt; Cadre &gt; Specific Exam)</span>
-                    </label>
-                    <span className="text-[10px] text-slate-400">Searchable dropdowns with auto-population</span>
-                  </div>
-
-                  <ExamHierarchySelector
-                    value={{
-                      authority,
-                      category: subCategory,
-                      postName,
-                      examName: examTitle,
+                  <CanonicalIngestionSelector
+                    authority={authority}
+                    examName={subCategory}
+                    cadre={postName}
+                    targetBundleId={canonicalBundleId}
+                    onCanonicalChange={(selected: ExamTestSeries | null) => {
+                      setCanonicalAuthorityId(selected?.authorityId || '');
+                      setCanonicalProgramId(selected?.programId || '');
+                      setCanonicalPostId(selected?.postId);
+                      setCanonicalSeriesId(selected?.id || '');
+                      setCanonicalBundleId(selected?.bundleId || '');
+                      if (selected) {
+                        setExamTitle(selected.name);
+                      }
                     }}
-                    onChange={handleHierarchyChange}
-                    allRecords={computedHierarchyRecords}
+                    onChange={(value) => {
+                      setAuthority(value.authority);
+                      setSubCategory(value.examName);
+                      setPostName(value.cadre);
+                      setCanonicalBundleId(value.targetBundleId);
+                    }}
                   />
+                  {!canonicalSeriesId && (
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300 font-semibold">
+                      Select an existing canonical Test Series before publishing. Free-text hierarchy values are not accepted.
+                    </div>
+                  )}
                 </div>
 
                 {/* 5. Year, Duration & Vacancies */}
