@@ -30,6 +30,7 @@ import { BulkImportPreviewModal, IngestionPaperConfig } from './BulkImportPrevie
 import { extractHierarchyFromApp } from '../utils/examHierarchy';
 import { mapRawJsonToQuestion } from '../utils/jsonQuestionMapper';
 import { saveBundleToFirestore } from '../firebase/firestoreService';
+import { ExamSubject, fetchExamSubjects, saveExamSubject, slugifyCatalog } from '../firebase/examCatalogService';
 import {
   Crown,
   Plus,
@@ -174,6 +175,7 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
   const [authorityFilter, setAuthorityFilter] = useState<'ALL' | 'CGSSB' | 'CGPSC'>('ALL');
   const [publishFilter, setPublishFilter] = useState<'ALL' | 'PUBLISHED' | 'DRAFT'>('ALL');
   const [editingBundle, setEditingBundle] = useState<TestSeriesBundle | null>(null);
+  const [availableSubjects, setAvailableSubjects] = useState<ExamSubject[]>([]);
   const [activeTab, setActiveTab] = useState<'basic' | 'dates' | 'eligibility' | 'links' | 'pricing' | 'syllabus' | 'tests' | 'faqs' | 'seo'>('basic');
   
   // Proven Ingestion Engine State (BulkImportPreviewModal from Picture 1)
@@ -267,6 +269,24 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
   };
+
+  const recalculateSyllabusWeightages = (sections: BundleSyllabusSection[], totalMarks: number) => {
+    const base = totalMarks > 0 ? totalMarks : sections.reduce((sum, section) => sum + (Number(section.marks) || 0), 0);
+    return sections.map(section => ({
+      ...section,
+      weightagePercentage: base > 0 ? Number((((Number(section.marks) || 0) / base) * 100).toFixed(2)) : 0
+    }));
+  };
+
+  useEffect(() => {
+    if (!editingBundle?.programId) {
+      setAvailableSubjects([]);
+      return;
+    }
+    fetchExamSubjects(editingBundle.programId).then(setAvailableSubjects).catch(() => setAvailableSubjects([]));
+  }, [editingBundle?.programId]);
+
+
 
   const handleSyncFromCloud = async (customUrl?: string) => {
     setIsSyncingCloud(true);
@@ -456,9 +476,34 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
     const freeMockCount = editingBundle.testItems?.filter(t => t.isFreePreview).length || 0;
     const totalFreeCount = freeChapterCount + freePypCount + freeMockCount;
 
-    const isPub = editingBundle.isPublished !== false && !editingBundle.isDraft;
+    const normalizedSyllabus = recalculateSyllabusWeightages(
+      editingBundle.syllabusBreakdown || [],
+      editingBundle.examPattern?.totalMarks || 0
+    );
+    for (const section of normalizedSyllabus) {
+      const subjectId = section.subjectId || `subject-${editingBundle.programId}-${slugifyCatalog(section.subject)}`;
+      await saveExamSubject({
+        id: subjectId,
+        authorityId: editingBundle.authorityId,
+        programId: editingBundle.programId,
+        name: section.subject,
+        nameHindi: section.subjectHindi,
+        slug: slugifyCatalog(section.subject),
+        topics: section.topics || [],
+        status: 'PUBLISHED',
+        sortOrder: normalizedSyllabus.indexOf(section),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      section.subjectId = subjectId;
+    }
+
+    const normalizedBundle = { ...editingBundle, syllabusBreakdown: normalizedSyllabus };
+    setEditingBundle(normalizedBundle);
+
+    const isPub = normalizedBundle.isPublished !== false && !normalizedBundle.isDraft;
     const bundleToSave: TestSeriesBundle = {
-      ...editingBundle,
+      ...normalizedBundle,
       totalTestsCount: totalCount > 0 ? totalCount : 1,
       freeTestsCount: totalFreeCount,
       isPublished: isPub,
@@ -1809,10 +1854,17 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                   <input
                     type="number"
                     value={editingBundle.examPattern?.totalMarks || 100}
-                    onChange={e => setEditingBundle({
-                      ...editingBundle,
-                      examPattern: { ...editingBundle.examPattern, totalMarks: Number(e.target.value) }
-                    })}
+                    onChange={e => {
+                      const totalMarks = Number(e.target.value);
+                      setEditingBundle({
+                        ...editingBundle,
+                        examPattern: { ...editingBundle.examPattern, totalMarks },
+                        syllabusBreakdown: recalculateSyllabusWeightages(
+                          editingBundle.syllabusBreakdown || [],
+                          totalMarks
+                        )
+                      });
+                    }}
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs font-bold text-white focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
@@ -2085,6 +2137,33 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
                         <div className="sm:col-span-2">
                           <label className="text-[10px] font-bold text-slate-400 block mb-1">Subject Name (English)</label>
+                          {availableSubjects.length > 0 && (
+                            <select
+                              value={sec.subjectId || ''}
+                              onChange={e => {
+                                const subject = availableSubjects.find(s => s.id === e.target.value);
+                                if (!subject) return;
+                                const updated = [...editingBundle.syllabusBreakdown];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  subjectId: subject.id,
+                                  subject: subject.name,
+                                  subjectHindi: subject.nameHindi || updated[idx].subjectHindi,
+                                  topics: [...subject.topics]
+                                };
+                                setEditingBundle({
+                                  ...editingBundle,
+                                  syllabusBreakdown: recalculateSyllabusWeightages(updated, editingBundle.examPattern?.totalMarks || 0)
+                                });
+                              }}
+                              className="w-full mb-2 bg-slate-900 border border-slate-800 rounded-xl p-2 text-xs font-bold text-cyan-300 focus:border-cyan-500 focus:outline-none"
+                            >
+                              <option value="">Select saved subject…</option>
+                              {availableSubjects.map(subject => (
+                                <option key={subject.id} value={subject.id}>{subject.name}</option>
+                              ))}
+                            </select>
+                          )}
                           <input
                             type="text"
                             value={sec.subject}
@@ -2121,7 +2200,13 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                             onChange={e => {
                               const updated = [...editingBundle.syllabusBreakdown];
                               updated[idx].marks = Number(e.target.value);
-                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
+                              setEditingBundle({
+                                ...editingBundle,
+                                syllabusBreakdown: recalculateSyllabusWeightages(
+                                  updated,
+                                  editingBundle.examPattern?.totalMarks || 0
+                                )
+                              });
                             }}
                             className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs font-black text-emerald-400 focus:border-indigo-500 focus:outline-none"
                           />
@@ -2142,17 +2227,14 @@ export const AdminBundleStudio: React.FC<AdminBundleStudioProps> = ({
                         </div>
 
                         <div>
-                          <label className="text-[10px] font-bold text-slate-400 block mb-1">Weightage %</label>
+                          <label className="text-[10px] font-bold text-slate-400 block mb-1">Weightage % (Auto)</label>
                           <input
                             type="number"
-                            step="0.1"
+                            step="0.01"
                             value={sec.weightagePercentage || 0}
-                            onChange={e => {
-                              const updated = [...editingBundle.syllabusBreakdown];
-                              updated[idx].weightagePercentage = Number(e.target.value);
-                              setEditingBundle({ ...editingBundle, syllabusBreakdown: updated });
-                            }}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-indigo-300 focus:border-indigo-500 focus:outline-none"
+                            readOnly
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-indigo-300/80 focus:outline-none cursor-not-allowed"
+                            title="Calculated automatically from subject marks ÷ total exam marks × 100"
                           />
                         </div>
 
