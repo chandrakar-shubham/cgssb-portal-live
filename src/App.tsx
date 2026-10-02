@@ -94,7 +94,6 @@ import {
 } from './types';
 import {
   INITIAL_MOCK_TESTS,
-  INITIAL_QUESTIONS,
   INITIAL_PYP_PAPERS
 } from './mockData';
 import {
