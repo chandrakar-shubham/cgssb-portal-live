@@ -450,10 +450,11 @@ function createServerInstance() {
     },
     async ({ seriesId, limit }) => {
       try {
-        const snapshot = await db.collection(COLLECTIONS.AUDIT).orderBy('createdAt', 'desc').limit(limit).get();
+        const snapshot = await db.collection(COLLECTIONS.AUDIT).orderBy('createdAt', 'desc').limit(Math.min(limit * 10, 500)).get();
         const entries = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(entry => !seriesId || (entry.target as Record<string, unknown> | undefined)?.seriesId === seriesId);
+          .filter(entry => !seriesId || (entry.target as Record<string, unknown> | undefined)?.seriesId === seriesId)
+          .slice(0, limit);
 
         return ok(
           { entries },
