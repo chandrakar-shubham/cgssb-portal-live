@@ -360,6 +360,13 @@ service cloud.firestore {
       allow read, write: if hasManagePayments();
     }
 
+    // Content Manager audit trail. Only authenticated admins may create/read audit records.
+    match /aiContentManagerAudit/{auditId} {
+      allow read: if isAdmin();
+      allow create: if hasManageCMS() || hasManageTests() || hasManageQuestions();
+      allow update, delete: if isBootstrapAdmin();
+    }
+
     // Public configuration.
     match /remoteConfig/{configId} {
       allow read: if true;
