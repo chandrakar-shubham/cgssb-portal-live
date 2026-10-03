@@ -110,6 +110,8 @@ import {
   fetchTestsFromFirestore,
   saveTestToFirestore,
   fetchQuestionsFromFirestore,
+  fetchQuestionsByIdsFromFirestore,
+  fetchQuestionsByProgramFromFirestore,
   saveQuestionsToFirestore,
   deleteQuestionFromFirestore,
   deleteTestFromFirestore,
@@ -494,7 +496,7 @@ function MainApp() {
   const {
     questions,
     setQuestions,
-  } = useQuestionManager();
+  } = useQuestionManager(currentRoute === 'admin' && isAdminAuthenticated);
 
   const {
     pypPapers,
@@ -613,10 +615,26 @@ function MainApp() {
     setPreFlightTest(test);
   };
 
-  const handleConfirmStartExam = (chosenLanguage: 'hi' | 'en') => {
+  const handleConfirmStartExam = async (chosenLanguage: 'hi' | 'en') => {
     if (!preFlightTest) return;
 
-    const examQuestions = resolveQuestionsForTest(preFlightTest, questions);
+    const sectionQuestionIds = Array.from(new Set(
+      (preFlightTest.sections || []).flatMap(section =>
+        Array.isArray(section.questionIds) ? section.questionIds.map(String) : []
+      )
+    ));
+
+    let examQuestions = sectionQuestionIds.length > 0
+      ? (await fetchQuestionsByIdsFromFirestore(sectionQuestionIds)).map(migrateLegacyQuestion)
+      : [];
+
+    if (examQuestions.length === 0 && preFlightTest.programId) {
+      examQuestions = (await fetchQuestionsByProgramFromFirestore(preFlightTest.programId)).map(migrateLegacyQuestion);
+    }
+
+    if (examQuestions.length === 0 && import.meta.env.DEV) {
+      examQuestions = resolveQuestionsForTest(preFlightTest, questions);
+    }
     if (examQuestions.length === 0) {
       alert('This test has no available questions yet. Please try again after the question bank finishes loading.');
       return;
@@ -631,7 +649,7 @@ function MainApp() {
   };
 
   // PRACTICE PYP AS TEST HANDLER
-  const handlePracticePaper = (paper: PreviousYearPaper) => {
+  const handlePracticePaper = async (paper: PreviousYearPaper) => {
     const existingTest = tests.find(t => t.id === paper.linkedMockTestId);
     if (existingTest) {
       handleStartTest(existingTest);
@@ -639,8 +657,8 @@ function MainApp() {
     }
 
     const relevantQs = paper.programId
-      ? questions.filter(q => String(q.programId || '') === String(paper.programId))
-      : questions.filter(q => q.category === paper.examCategory);
+      ? (await fetchQuestionsByProgramFromFirestore(paper.programId)).map(migrateLegacyQuestion)
+      : [];
     const pypTest: MockTest = {
       id: `pyp-test-${paper.id}`,
       title: `${paper.title} (Real Exam Simulation)`,
@@ -682,7 +700,7 @@ function MainApp() {
   }): Promise<boolean> => {
     if (!activeExamTest) return false;
     const currentTest = activeExamTest;
-    const activeQuestionList = resolveQuestionsForTest(currentTest, questions);
+    const activeQuestionList = activeExamQuestions.length > 0 ? activeExamQuestions : resolveQuestionsForTest(currentTest, questions);
     if (activeQuestionList.length === 0) return false;
 
     let correctCount = 0;
