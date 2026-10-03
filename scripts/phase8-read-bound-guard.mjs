@@ -22,6 +22,9 @@ if (!loadHarness.includes("await writeFile(resultFile, JSON.stringify(result, nu
 if (!loadHarness.includes('result.acceptance') || !loadHarness.includes('process.exitCode = 2')) {
   failures.push('Phase 8 load harness no longer enforces its acceptance gate.');
 }
+if (!loadHarness.includes('routeStats') || !loadHarness.includes('errorTypes')) {
+  failures.push('Phase 8 load harness no longer records per-route diagnostics and network error types.');
+}
 
 const bundleStore = read('src/utils/bundleStore.ts');
 if (bundleStore.includes('subscribeToBundles(')) {
