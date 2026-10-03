@@ -507,6 +507,29 @@ export async function fetchUserProfileFromFirestore(_userId?: string): Promise<U
 // ==========================================
 // MOCK TESTS SERVICES & REALTIME SYNC
 // ==========================================
+export async function fetchPublishedTestsFromFirestore(limitCount = 200): Promise<MockTest[]> {
+  if (!db) return [];
+  try {
+    const safeLimit = Math.min(Math.max(limitCount, 1), 200);
+    const snap = await withTimeout(
+      getDocs(query(
+        collection(db, COLLECTIONS.TESTS),
+        where('isPublished', '==', true),
+        orderBy('createdAt', 'desc'),
+        limit(safeLimit)
+      )),
+      5000
+    );
+    return snap.docs.map(d => d.data() as MockTest);
+  } catch (err) {
+    console.warn('Error fetching published tests from Firestore:', err);
+    return [];
+  }
+}
+
+// ==========================================
+// MOCK TESTS SERVICES & REALTIME SYNC
+// ==========================================
 export async function fetchTestsFromFirestore(): Promise<MockTest[]> {
   if (!db) return [];
   try {
