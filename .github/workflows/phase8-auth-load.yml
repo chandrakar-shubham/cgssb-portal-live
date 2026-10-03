@@ -1,0 +1,39 @@
+name: Phase 8 Authenticated Staging Load
+
+on:
+  workflow_dispatch:
+    inputs:
+      vus:
+        description: "Virtual users"
+        required: true
+        default: "25"
+      duration_sec:
+        description: "Duration in seconds"
+        required: true
+        default: "30"
+
+jobs:
+  authenticated-load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Write staging service account
+        env:
+          PHASE8_STAGING_SERVICE_ACCOUNT_JSON: ${{ secrets.PHASE8_STAGING_SERVICE_ACCOUNT_JSON }}
+        run: |
+          test -n "$PHASE8_STAGING_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$PHASE8_STAGING_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/phase8-staging-sa.json"
+      - name: Run authenticated Firestore workload
+        env:
+          PHASE8_STAGING_PROJECT_ID: ${{ secrets.PHASE8_STAGING_PROJECT_ID }}
+          PHASE8_STAGING_API_KEY: ${{ secrets.PHASE8_STAGING_API_KEY }}
+          PHASE8_TEST_USERS_JSON: ${{ secrets.PHASE8_TEST_USERS_JSON }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/phase8-staging-sa.json
+          VUS: ${{ inputs.vus }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+        run: node scripts/phase8-auth-load-test.mjs
