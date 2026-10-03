@@ -29,6 +29,7 @@ let errors = 0;
 let active = 0;
 let stop = false;
 const statusCounts = new Map();
+const routeStats = new Map();
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const percentile = (xs, p) => {
@@ -38,10 +39,31 @@ const percentile = (xs, p) => {
   return sorted[i];
 };
 
+function getRouteStats(path) {
+  let stats = routeStats.get(path);
+  if (!stats) {
+    stats = {
+      samples: [],
+      requests: 0,
+      errors: 0,
+      statusCounts: new Map(),
+      errorTypes: new Map()
+    };
+    routeStats.set(path, stats);
+  }
+  return stats;
+}
+
+function increment(map, key) {
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
 async function oneRequest(path) {
   const started = performance.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const route = getRouteStats(path);
+
   try {
     const res = await fetch(new URL(path, baseUrl), {
       method: 'GET',
@@ -51,34 +73,61 @@ async function oneRequest(path) {
       headers: { 'User-Agent': 'CGSSB-Phase8-LoadHarness/1.0' }
     });
     const ms = performance.now() - started;
+
     samples.push(ms);
     completed++;
-    statusCounts.set(String(res.status), (statusCounts.get(String(res.status)) || 0) + 1);
-    if (!res.ok && res.status !== 304) errors++;
-  } catch {
-    samples.push(performance.now() - started);
+    route.samples.push(ms);
+    route.requests++;
+    increment(statusCounts, String(res.status));
+    increment(route.statusCounts, String(res.status));
+
+    if (!res.ok && res.status !== 304) {
+      errors++;
+      route.errors++;
+    }
+  } catch (error) {
+    const ms = performance.now() - started;
+    const errorType = error instanceof Error && error.name ? error.name : 'UnknownError';
+
+    samples.push(ms);
     completed++;
     errors++;
-    statusCounts.set('NETWORK_ERROR', (statusCounts.get('NETWORK_ERROR') || 0) + 1);
+    route.samples.push(ms);
+    route.requests++;
+    route.errors++;
+    increment(statusCounts, 'NETWORK_ERROR');
+    increment(route.statusCounts, 'NETWORK_ERROR');
+    increment(route.errorTypes, errorType);
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function worker() {
-  active++;
-  try {
-    while (!stop) {
-      const path = paths[Math.floor(Math.random() * paths.length)];
-      await oneRequest(path);
-      if (!stop && thinkMaxMs > 0) {
-        const delay = thinkMinMs + Math.random() * (thinkMaxMs - thinkMinMs);
-        await sleep(delay);
-      }
-    }
-  } finally {
-    active--;
-  }
+function serializeCounts(map) {
+  return Object.fromEntries([...map.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true })));
+}
+
+function serializeRouteStats() {
+  return Object.fromEntries(
+    [...routeStats.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, stats]) => [
+        path,
+        {
+          requests: stats.requests,
+          errors: stats.errors,
+          errorRatePct: Number((stats.requests ? stats.errors / stats.requests * 100 : 0).toFixed(2)),
+          statusCounts: serializeCounts(stats.statusCounts),
+          errorTypes: serializeCounts(stats.errorTypes),
+          latencyMs: {
+            p50: Number(percentile(stats.samples, 0.50).toFixed(1)),
+            p95: Number(percentile(stats.samples, 0.95).toFixed(1)),
+            p99: Number(percentile(stats.samples, 0.99).toFixed(1)),
+            max: Number(stats.samples.reduce((max, value) => Math.max(max, value), 0).toFixed(1))
+          }
+        }
+      ])
+  );
 }
 
 console.log(JSON.stringify({
@@ -107,7 +156,8 @@ const result = {
   errors,
   errorRatePct: Number((completed ? errors / completed * 100 : 0).toFixed(2)),
   requestsPerSecond: Number(rps.toFixed(2)),
-  statusCounts: Object.fromEntries([...statusCounts.entries()].sort((a,b) => Number(a[0]) - Number(b[0]))),
+  statusCounts: serializeCounts(statusCounts),
+  routeStats: serializeRouteStats(),
   runId,
   generatedAt: new Date().toISOString(),
   latencyMs: {
