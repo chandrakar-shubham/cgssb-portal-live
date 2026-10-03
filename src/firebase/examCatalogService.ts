@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, query, where, orderBy, documentId } from 'firebase/firestore';
 import { db } from './config';
 
 export type CatalogStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
@@ -76,6 +76,29 @@ export async function fetchExamTestSeries(programId?: string, postId?: string): 
     : await getDocs(ref);
   return snap.docs.map(d => d.data() as ExamTestSeries).sort((a, b) => a.sortOrder - b.sortOrder);
 }
+export async function fetchExamTestSeriesByIds(seriesIds: string[]): Promise<ExamTestSeries[]> {
+  if (!db || !Array.isArray(seriesIds) || seriesIds.length === 0) return [];
+
+  const uniqueIds = [...new Set(seriesIds.filter(Boolean))];
+  const chunks: string[][] = [];
+  for (let i = 0; i < uniqueIds.length; i += 30) {
+    chunks.push(uniqueIds.slice(i, i + 30));
+  }
+
+  const results: ExamTestSeries[] = [];
+  for (const chunk of chunks) {
+    const snap = await getDocs(
+      query(
+        collection(db, EXAM_CATALOG_COLLECTIONS.SERIES),
+        where(documentId(), 'in', chunk)
+      )
+    );
+    results.push(...snap.docs.map(d => d.data() as ExamTestSeries));
+  }
+
+  return results;
+}
+
 export async function fetchExamSubjects(programId?: string): Promise<ExamSubject[]> {
   if (!db) return [];
   const ref = collection(db, EXAM_CATALOG_COLLECTIONS.SUBJECTS);
