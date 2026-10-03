@@ -745,6 +745,28 @@ export async function deletePypPaperFromFirestore(paperId: string): Promise<void
 // ==========================================
 // BUNDLES SERVICES & REALTIME SYNC
 // ==========================================
+export async function fetchPublishedBundlesFromFirestore(limitCount = 100): Promise<TestSeriesBundle[]> {
+  if (!db) return [];
+  try {
+    const safeLimit = Math.min(Math.max(limitCount, 1), 100);
+    const snap = await withTimeout(
+      getDocs(query(
+        collection(db, COLLECTIONS.BUNDLES),
+        where('isPublished', '==', true),
+        limit(safeLimit)
+      )),
+      5000
+    );
+    return snap.docs.map(d => d.data() as TestSeriesBundle);
+  } catch (err) {
+    console.warn('Error fetching published bundles from Firestore:', err);
+    return [];
+  }
+}
+
+// ==========================================
+// BUNDLES SERVICES & REALTIME SYNC
+// ==========================================
 export async function fetchBundlesFromFirestore(): Promise<TestSeriesBundle[]> {
   if (!db) return [];
   try {
