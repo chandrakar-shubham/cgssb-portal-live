@@ -130,6 +130,23 @@ function serializeRouteStats() {
   );
 }
 
+async function worker() {
+  while (!stop) {
+    const path = paths[Math.floor(Math.random() * paths.length)];
+    active++;
+    try {
+      await oneRequest(path);
+    } finally {
+      active--;
+    }
+
+    if (!stop && thinkMaxMs > 0) {
+      const delay = thinkMinMs + Math.random() * (thinkMaxMs - thinkMinMs);
+      await sleep(delay);
+    }
+  }
+}
+
 console.log(JSON.stringify({
   phase: '8-http-read-only',
   baseUrl,
