@@ -6,7 +6,6 @@ import {
   saveBundleToFirestore,
   deleteBundleFromFirestore,
   purgeFirestoreDemoData,
-  subscribeToBundles
 } from '../firebase/firestoreService';
 import {
   deleteExamTestSeries,
