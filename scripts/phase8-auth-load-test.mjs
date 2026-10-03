@@ -22,7 +22,7 @@
  */
 import fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { GoogleAuth } from 'google-auth-library';
+import crypto from 'node:crypto';
 
 const productionProject = 'gen-lang-client-0783153446';
 const projectId = process.env.PHASE8_STAGING_PROJECT_ID;
@@ -117,9 +117,29 @@ stop=true;
 await Promise.all(workers);
 const elapsedSec=(performance.now()-started)/1000;
 
-const auth = new GoogleAuth({scopes:['https://www.googleapis.com/auth/datastore']});
-const client=await auth.getClient();
-const token=(await client.getAccessToken()).token;
+const serviceAccount=JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,'utf8'));
+const b64 = value => Buffer.from(value).toString('base64url');
+const now=Math.floor(Date.now()/1000);
+const assertion=b64(JSON.stringify({alg:'RS256',typ:'JWT'}))+'.'+b64(JSON.stringify({
+  iss:serviceAccount.client_email,
+  scope:'https://www.googleapis.com/auth/datastore',
+  aud:'https://oauth2.googleapis.com/token',
+  iat:now,
+  exp:now+3600
+}));
+const signer=crypto.createSign('RSA-SHA256');
+signer.update(assertion);
+const signed=signer.sign(serviceAccount.private_key,'base64url');
+const tokenResponse=await fetch('https://oauth2.googleapis.com/token',{
+  method:'POST',
+  headers:{'content-type':'application/x-www-form-urlencoded'},
+  body:new URLSearchParams({
+    grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion:assertion+'.'+signed
+  })
+});
+if(!tokenResponse.ok) throw new Error(`Service-account OAuth token failed: ${tokenResponse.status}`);
+const token=(await tokenResponse.json()).access_token;
 const parent=`projects/${projectId}/databases/${databaseId}/documents`;
 const listUrl=`https://firestore.googleapis.com/v1/${parent}/attempts?pageSize=1000`;
 const listed=await fetch(listUrl,{headers:{authorization:`Bearer ${token}`}});
