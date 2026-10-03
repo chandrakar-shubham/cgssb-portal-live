@@ -12,6 +12,10 @@ on:
         required: true
         default: "60"
 
+concurrency:
+  group: phase8-external-read-load
+  cancel-in-progress: false
+
 jobs:
   load:
     runs-on: ubuntu-latest
