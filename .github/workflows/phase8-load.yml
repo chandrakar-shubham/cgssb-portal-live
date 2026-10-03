@@ -9,7 +9,7 @@ on:
       vus:
         description: "Virtual users"
         required: true
-        default: "500"
+        default: "1000"
       duration_sec:
         description: "Duration in seconds"
         required: true
@@ -38,3 +38,5 @@ jobs:
 # Phase 8 execution marker: run 250-VU read-only load.
 
 # Phase 8 execution marker: run 500-VU read-only load.
+
+# Phase 8 execution marker: run 1000-VU read-only load.
