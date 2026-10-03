@@ -19,6 +19,7 @@ const paths = (process.env.PATHS || '/').split(',').map(s => s.trim()).filter(Bo
 const timeoutMs = Math.max(1000, Number(process.env.TIMEOUT_MS || 10000));
 const thinkMinMs = Math.max(0, Number(process.env.THINK_MIN_MS || 0));
 const thinkMaxMs = Math.max(thinkMinMs, Number(process.env.THINK_MAX_MS || thinkMinMs));
+const runId = process.env.RUN_ID || `phase8-${new Date().toISOString().replace(/[:.]/g, '-')}`;
 
 const samples = [];
 let completed = 0;
@@ -86,6 +87,7 @@ console.log(JSON.stringify({
   paths,
   timeoutMs,
   thinkTimeMs: { min: thinkMinMs, max: thinkMaxMs },
+  runId,
   warning: 'HTTP smoke/load only. No Firestore writes, no auth simulation, no claim of 10K-user capacity.'
 }, null, 2));
 
@@ -104,6 +106,8 @@ const result = {
   errorRatePct: Number((completed ? errors / completed * 100 : 0).toFixed(2)),
   requestsPerSecond: Number(rps.toFixed(2)),
   statusCounts: Object.fromEntries([...statusCounts.entries()].sort((a,b) => Number(a[0]) - Number(b[0]))),
+  runId,
+  generatedAt: new Date().toISOString(),
   latencyMs: {
     p50: Number(percentile(samples, 0.50).toFixed(1)),
     p95: Number(percentile(samples, 0.95).toFixed(1)),
@@ -113,4 +117,9 @@ const result = {
 };
 console.log(JSON.stringify(result, null, 2));
 
-if (result.errorRatePct > 1 || result.latencyMs.p95 > 2000) process.exitCode = 2;
+result.acceptance = {
+  pass: result.errorRatePct <= 1 && result.latencyMs.p95 <= 2000,
+  errorRateThresholdPct: 1,
+  p95ThresholdMs: 2000
+};
+if (!result.acceptance.pass) process.exitCode = 2;
