@@ -1,6 +1,7 @@
 import { TestSeriesBundle, BundleTestItem } from '../data/bundleCatalog';
 import { MockTest } from '../types';
 import {
+  fetchPublishedBundlesFromFirestore,
   fetchBundlesFromFirestore,
   saveBundleToFirestore,
   deleteBundleFromFirestore,
@@ -37,25 +38,6 @@ const filterCanonicalBundles = async (bundles: TestSeriesBundle[]): Promise<Test
     return true;
   });
 };
-
-// Automatic real-time cross-browser Firestore subscription for bundles.
-// This is an in-memory UI cache only; Firestore/API remains authoritative.
-if (typeof window !== 'undefined') {
-  try {
-    subscribeToBundles((firestoreBundles) => {
-      filterCanonicalBundles(Array.isArray(firestoreBundles) ? firestoreBundles : [])
-        .then(validBundles => {
-          bundleCache = validBundles;
-          window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
-        })
-        .catch(() => {
-          // Do not surface unverified legacy bundles as active catalog content.
-          bundleCache = [];
-          window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
-        });
-    });
-  } catch {}
-}
 
 /**
  * Intelligent bundle entity merger that never wipes official curriculum items with empty arrays
@@ -139,7 +121,7 @@ export const saveStoredBundles = (bundles: TestSeriesBundle[]): void => {
  * An empty response is a legitimate production state; never fall back to localStorage or the factory catalog.
  */
 export const syncBundlesFromFirestore = async (_customUrl?: string): Promise<{ list: TestSeriesBundle[]; count: number; source: string }> => {
-  const response = await fetchBundlesFromFirestore();
+  const response = await fetchPublishedBundlesFromFirestore(100);
   bundleCache = await filterCanonicalBundles(Array.isArray(response) ? response : []);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('cgssb-bundles-updated', { detail: bundleCache }));
