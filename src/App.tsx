@@ -116,6 +116,7 @@ import {
   deleteQuestionFromFirestore,
   deleteTestFromFirestore,
   fetchPypPapersFromFirestore,
+  fetchPublishedPypPapersFromFirestore,
   savePypPaperToFirestore,
   deletePypPaperFromFirestore,
   fetchMyAttemptsFromFirestore,
@@ -501,7 +502,7 @@ function MainApp() {
   const {
     pypPapers,
     setPypPapers,
-  } = usePypManager();
+  } = usePypManager(currentRoute === 'admin' && isAdminAuthenticated);
 
   const {
     cmsPages,
