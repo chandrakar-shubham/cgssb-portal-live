@@ -1,6 +1,9 @@
 name: Phase 8 External Read Load
 
 on:
+  push:
+    paths:
+      - ".github/workflows/phase8-load.yml"
   workflow_dispatch:
     inputs:
       vus:
@@ -10,7 +13,7 @@ on:
       duration_sec:
         description: "Duration in seconds"
         required: true
-        default: "120"
+        default: "60"
 
 jobs:
   load:
