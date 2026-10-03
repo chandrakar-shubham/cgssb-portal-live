@@ -107,15 +107,12 @@ import { isUserPassActive } from './utils/devicePassManager';
 import { buildLeaderboardProfilesForUser } from './utils/leaderboardProfiles';
 import { testConnection } from './firebase/connectionTest';
 import {
-  fetchTestsFromFirestore,
   saveTestToFirestore,
-  fetchQuestionsFromFirestore,
   fetchQuestionsByIdsFromFirestore,
   fetchQuestionsByProgramFromFirestore,
   saveQuestionsToFirestore,
   deleteQuestionFromFirestore,
   deleteTestFromFirestore,
-  fetchPypPapersFromFirestore,
   savePypPaperToFirestore,
   deletePypPaperFromFirestore,
   fetchMyAttemptsFromFirestore,
