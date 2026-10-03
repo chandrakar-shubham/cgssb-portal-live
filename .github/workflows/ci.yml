@@ -27,5 +27,8 @@ jobs:
       - name: TypeScript validation
         run: npm run lint
 
+      - name: Phase 8.3 student read-bound regression guard
+        run: npm run test:phase8:read-bound
+
       - name: Production build
         run: npm run build
