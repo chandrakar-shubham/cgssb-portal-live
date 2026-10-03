@@ -116,7 +116,6 @@ import {
   deleteQuestionFromFirestore,
   deleteTestFromFirestore,
   fetchPypPapersFromFirestore,
-  fetchPublishedPypPapersFromFirestore,
   savePypPaperToFirestore,
   deletePypPaperFromFirestore,
   fetchMyAttemptsFromFirestore,
