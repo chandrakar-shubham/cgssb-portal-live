@@ -28,6 +28,7 @@ jobs:
           BASE_URL: https://gen-lang-client-0783153446.web.app
           VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.vus || '1500' }}
           DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || '60' }}
+          RUN_ID: phase8-${{ github.run_id }}
           PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
           THINK_MIN_MS: 700
           THINK_MAX_MS: 1400
