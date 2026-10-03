@@ -2,23 +2,27 @@ import { useState, useEffect, useCallback } from 'react';
 import { MockTest } from '../types';
 import { cleanTestFromAllBundles } from '../utils/bundleStore';
 import {
+  fetchPublishedTestsFromFirestore,
   fetchTestsFromFirestore,
   saveTestToFirestore,
   deleteTestFromFirestore,
   subscribeToTests
 } from '../firebase/firestoreService';
 
-export function useTestManager() {
+export function useTestManager(enabled = true) {
   const [tests, setTests] = useState<MockTest[]>([]);
 
-  // Real-time Cloud Firestore synchronization across all devices
+  // Admin needs the full realtime catalog; students receive only bounded published tests.
   useEffect(() => {
+    if (!enabled) {
+      fetchPublishedTestsFromFirestore(200).then(setTests).catch(() => setTests([]));
+      return;
+    }
     const unsubscribe = subscribeToTests((firestoreTests) => {
       setTests(firestoreTests);
     });
-
     return () => unsubscribe();
-  }, []);
+  }, [enabled]);
 
   // Listen for local broadcast test updates
   useEffect(() => {
