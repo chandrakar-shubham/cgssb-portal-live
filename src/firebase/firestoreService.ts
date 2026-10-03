@@ -656,6 +656,21 @@ export async function deleteQuestionFromFirestore(questionId: string): Promise<v
 // ==========================================
 // PREVIOUS YEAR PAPERS (PYP) SERVICES
 // ==========================================
+export async function fetchPublishedPypPapersFromFirestore(limitCount = 200): Promise<PreviousYearPaper[]> {
+  if (!db) return [];
+  try {
+    const safeLimit = Math.min(Math.max(limitCount, 1), 200);
+    const snap = await withTimeout(
+      getDocs(query(collection(db, COLLECTIONS.PYP_PAPERS), orderBy('year', 'desc'), limit(safeLimit))),
+      5000
+    );
+    return snap.docs.map(d => d.data() as PreviousYearPaper);
+  } catch (err) {
+    console.warn('Error fetching published PYP catalog from Firestore:', err);
+    return [];
+  }
+}
+
 export async function fetchPypPapersFromFirestore(): Promise<PreviousYearPaper[]> {
   if (!db) return [];
   try {
