@@ -9,11 +9,15 @@ import {
   subscribeToQuestions
 } from '../firebase/firestoreService';
 
-export function useQuestionManager() {
+export function useQuestionManager(enabled = true) {
   const [questions, setQuestions] = useState<Question[]>([]);
 
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
+    if (!enabled) {
+      setQuestions([]);
+      return;
+    }
     const unsubscribe = subscribeToQuestions((firestoreQuestions) => {
       if (Array.isArray(firestoreQuestions)) {
         setQuestions(firestoreQuestions.map(migrateLegacyQuestion));
@@ -21,7 +25,7 @@ export function useQuestionManager() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [enabled]);
 
   // Listen for local broadcast question updates
   useEffect(() => {
