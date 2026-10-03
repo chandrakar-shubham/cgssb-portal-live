@@ -11,7 +11,8 @@
     "clean": "rm -rf dist",
     "lint": "./node_modules/.bin/tsc --noEmit",
     "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\"",
-    "load:phase8": "node scripts/phase8-load-test.mjs"
+    "load:phase8": "node scripts/phase8-load-test.mjs",
+    "load:phase8:auth": "node scripts/phase8-auth-load-test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -33,7 +34,8 @@
     "autoprefixer": "^10.4.21",
     "firebase-tools": "^15.31.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "firebase-admin": "^13.5.0"
   },
   "engines": {
     "node": ">=20 <25"
