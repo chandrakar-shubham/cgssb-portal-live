@@ -11,6 +11,7 @@ import {
   deleteExamTestSeries,
   fetchExamTestSeriesById,
   fetchExamTestSeries,
+  fetchExamTestSeriesByIds,
   saveExamTestSeries,
   ExamTestSeries
 } from '../firebase/examCatalogService';
@@ -23,7 +24,8 @@ let bundleCache: TestSeriesBundle[] = [];
  * hierarchy identifier agrees. Legacy/free-text labels are never used here.
  */
 const filterCanonicalBundles = async (bundles: TestSeriesBundle[]): Promise<TestSeriesBundle[]> => {
-  const series = await fetchExamTestSeries();
+  const seriesIds = bundles.map(bundle => bundle.seriesId).filter(Boolean) as string[];
+  const series = await fetchExamTestSeriesByIds(seriesIds);
   const byId = new Map(series.map(s => [s.id, s]));
   return bundles.filter(bundle => {
     if (!bundle.seriesId) return false;
