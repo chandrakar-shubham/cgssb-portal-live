@@ -12,7 +12,8 @@
     "lint": "./node_modules/.bin/tsc --noEmit",
     "test:rules": "firebase emulators:exec --only firestore --project cgssb-rules-test \"tsx scripts/firestore-rules.test.ts\"",
     "load:phase8": "node scripts/phase8-load-test.mjs",
-    "load:phase8:auth": "node scripts/phase8-auth-load-test.mjs"
+    "load:phase8:auth": "node scripts/phase8-auth-load-test.mjs",
+    "test:phase8:read-bound": "node scripts/phase8-read-bound-guard.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
