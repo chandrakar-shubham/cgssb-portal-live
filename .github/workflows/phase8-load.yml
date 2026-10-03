@@ -29,10 +29,19 @@ jobs:
           VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.vus || '1500' }}
           DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || '60' }}
           RUN_ID: phase8-${{ github.run_id }}
+          RESULT_FILE: phase8-load-result.json
           PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
           THINK_MIN_MS: 700
           THINK_MAX_MS: 1400
         run: node scripts/phase8-load-test.mjs
+      - name: Upload load-test result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-load-result-${{ github.run_id }}
+          path: phase8-load-result.json
+          if-no-files-found: error
+          retention-days: 30
 
 
 
