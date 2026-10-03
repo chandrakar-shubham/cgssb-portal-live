@@ -2,13 +2,17 @@
 
 ## Status
 
-**Audit completed against `main` at commit `c651af5d0545a804525a9cdb7f23863b162e540d`.**
+**Audit completed against `main` through the read-amplification fixes at commit `bae4c132aacccdb271d1b9ae2792fad246bfeff6`.**
 
 This audit is intentionally read-only. It does not introduce production writes or authenticated load testing.
 
 ## Findings
 
-### 1. Student question loading has a bounded path
+### 1. Student test catalog loading has a bounded path
+
+`useTestManager()` now receives an admin-only enable flag. Student routes perform a one-time published-test query capped at 200 records; only authenticated admin routes retain the full realtime catalog listener.
+
+### 2. Student question loading has a bounded path
 
 The Firestore service contains:
 
@@ -17,19 +21,23 @@ The Firestore service contains:
 
 These are appropriate building blocks for student exam/question flows because the query size is explicitly bounded.
 
-### 2. Published PYP catalog has a bounded path
+### 3. Published PYP catalog has a bounded path
 
 `fetchPublishedPypPapersFromFirestore(limitCount)` clamps the catalog limit to 200 and orders by year.
 
 This matches the Phase 8 direction for student PYP reads.
 
-### 3. Leaderboard reads are bounded
+### 4. Leaderboard reads are bounded
 
 `fetchLeaderboardProfilesFromFirestore()` clamps the result limit to 100 and uses the composite Firestore indexes defined in `firestore.indexes.json`.
 
 The security rules also require public leaderboard list queries to specify a limit of at most 100.
 
-### 4. Legacy unbounded service functions remain
+### 5. Bundle/catalog validation is bounded
+
+Student bundle startup now fetches at most 100 published bundles. Canonical `examTestSeries` validation no longer scans the entire collection; it fetches only the referenced series IDs in Firestore `in` chunks of 30.
+
+### 6. Legacy unbounded service functions remain
 
 The service layer still contains these unbounded functions:
 
@@ -47,7 +55,7 @@ It also contains collection-wide realtime listeners such as:
 
 These functions should **not** be used by student-facing production flows.
 
-The presence of the functions is not itself a capacity failure; the critical requirement is that student routes never invoke them. They should remain available only where an admin-specific workflow genuinely requires full collection synchronization, or be removed after reference verification.
+The presence of the functions is not itself a capacity failure; the critical requirement is that student routes never invoke them. They remain available for admin-specific workflows that genuinely require full collection synchronization.
 
 ## Security/read-budget observations
 
@@ -82,23 +90,17 @@ Therefore, **application-level query bounding remains important even when Firest
 
 Before another production concurrency increase:
 
-1. Verify every call site of the four legacy unbounded catalog functions.
-2. Verify every call site of the collection-wide realtime listeners.
-3. Classify each caller as:
-   - Student
-   - Admin
-   - Startup/bootstrap
-   - Dead/unused
-4. Replace any Student/Startup caller with a bounded query.
-5. Keep Admin-only full-collection reads isolated from student bundles.
-6. Add a regression test that rejects newly introduced student use of unbounded catalog functions.
-7. Re-run the existing read-only production gate only after the call-site audit.
+1. Complete the remaining source-wide call-site audit of legacy unbounded functions/listeners using repository search or local checkout tooling.
+2. Run the existing Phase 8 read-only gate at 2,500 VUs for 60 seconds.
+3. If that passes the configured thresholds, repeat at the next controlled increment rather than jumping to 10,000.
+4. Keep authenticated write testing isolated to staging with synthetic accounts.
+5. Add a regression test/static guard before closing Phase 8.3.
 
 ## Capacity interpretation
 
 The highest demonstrated production read-only gate remains **2,250 VUs**. The 2,500-VU run remains a failed configured gate.
 
-These results do **not** establish 10,000 authenticated concurrent-student capacity.
+These results do **not** establish 10,000 authenticated concurrent-student capacity. The latest code changes are CI/deploy validated, but a new 2,500-VU measurement has not yet been run after the read-amplification fixes.
 
 The correct next target is reducing and measuring Firestore reads per real student session, not blindly increasing HTTP VUs.
 
