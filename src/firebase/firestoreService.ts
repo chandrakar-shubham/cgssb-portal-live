@@ -8,6 +8,7 @@ import {
   limit,
   getCountFromServer,
   getDoc,
+  documentId,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -557,6 +558,45 @@ export async function deleteTestFromFirestore(testId: string): Promise<void> {
 // ==========================================
 // QUESTIONS SERVICES & REALTIME SYNC
 // ==========================================
+export async function fetchQuestionsByIdsFromFirestore(questionIds: string[]): Promise<Question[]> {
+  if (!db || questionIds.length === 0) return [];
+  const uniqueIds = Array.from(new Set(questionIds.filter(Boolean)));
+  const chunks: string[][] = [];
+  for (let i = 0; i < uniqueIds.length; i += 30) chunks.push(uniqueIds.slice(i, i + 30));
+
+  try {
+    const snapshots = await Promise.all(
+      chunks.map(chunk =>
+        withTimeout(
+          getDocs(query(collection(db, COLLECTIONS.QUESTIONS), where(documentId(), 'in', chunk))),
+          5000
+        )
+      )
+    );
+    const byId = new Map<string, Question>();
+    snapshots.forEach(snap => snap.docs.forEach(d => byId.set(d.id, d.data() as Question)));
+    return uniqueIds.map(id => byId.get(id)).filter((q): q is Question => Boolean(q));
+  } catch (err) {
+    console.warn('Error fetching selected questions from Firestore:', err);
+    return [];
+  }
+}
+
+export async function fetchQuestionsByProgramFromFirestore(programId: string, limitCount = 500): Promise<Question[]> {
+  if (!db || !programId) return [];
+  try {
+    const safeLimit = Math.min(Math.max(limitCount, 1), 500);
+    const snap = await withTimeout(
+      getDocs(query(collection(db, COLLECTIONS.QUESTIONS), where('programId', '==', programId), limit(safeLimit))),
+      5000
+    );
+    return snap.docs.map(d => d.data() as Question);
+  } catch (err) {
+    console.warn('Error fetching program questions from Firestore:', err);
+    return [];
+  }
+}
+
 export async function fetchQuestionsFromFirestore(): Promise<Question[]> {
   if (!db) return [];
   try {
