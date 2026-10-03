@@ -44,8 +44,8 @@ const authUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPa
 const firestoreBase = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents`;
 const paths = [
   ({uid}) => `/users/${encodeURIComponent(uid)}`,
-  ({uid}) => `/attempts?pageSize=20&mask.fieldPaths=userId&mask.fieldPaths=submissionId`,
-  ({uid}) => `/seriesEnrollments?pageSize=20&mask.fieldPaths=userId&mask.fieldPaths=seriesId`,
+  () => '/attempts?pageSize=20&mask.fieldPaths=userId&mask.fieldPaths=submissionId',
+  () => '/seriesEnrollments?pageSize=20&mask.fieldPaths=userId&mask.fieldPaths=seriesId',
   () => '/examPrograms?pageSize=100',
   () => '/examPosts?pageSize=100',
   () => '/examTestSeries?pageSize=100',
@@ -76,7 +76,6 @@ async function signIn(user) {
 }
 
 const sessions=await Promise.all(users.map(signIn));
-sessions.forEach((session,index)=>{ users[index].uid=session.localId; });
 
 console.log(JSON.stringify({
   phase:'8-authenticated-production-read-gate',
@@ -93,7 +92,6 @@ const samples=[];
 const statusCounts=new Map();
 let requests=0;
 let errors=0;
-let authErrors=0;
 let stop=false;
 
 async function oneRequest(session, pathFactory) {
@@ -107,8 +105,7 @@ async function oneRequest(session, pathFactory) {
         'User-Agent':'CGSSB-Phase8-Authenticated-Read/1.0'
       }
     });
-    const latency=performance.now()-started;
-    samples.push(latency);
+    samples.push(performance.now()-started);
     requests++;
     statusCounts.set(String(response.status),(statusCounts.get(String(response.status))||0)+1);
     if (!response.ok) errors++;
@@ -126,10 +123,41 @@ async function worker(index) {
   while(!stop) {
     const pathFactory=paths[Math.floor(Math.random()*paths.length)];
     await oneRequest(session,pathFactory);
-    const delay=thinkMinMs + Math.random()*(thinkMaxMs-thinkMinMs);
-    if (!stop) await sleep(delay);
+    if (!stop) {
+      const delay=thinkMinMs + Math.random()*(thinkMaxMs-thinkMinMs);
+      await sleep(delay);
+    }
   }
 }
 
 const started=performance.now();
-await Promise.all(Array.from({length:vus},(_,index)=>worker(index)));
+const workers=Array.from({length:vus},(_,index)=>worker(index));
+await sleep(durationSec*1000);
+stop=true;
+await Promise.all(workers);
+const elapsedSec=(performance.now()-started)/1000;
+
+const authLatency=sessions.map(s=>s.authLatencyMs);
+const result={
+  elapsedSec:Number(elapsedSec.toFixed(2)),
+  authAccounts:sessions.length,
+  authLatencyMs:{
+    p50:Number(percentile(authLatency,.5).toFixed(1)),
+    p95:Number(percentile(authLatency,.95).toFixed(1)),
+    max:Number(Math.max(...authLatency).toFixed(1))
+  },
+  requests,
+  errors,
+  errorRatePct:Number((requests?errors/requests*100:0).toFixed(2)),
+  requestsPerSecond:Number((requests/elapsedSec).toFixed(2)),
+  statusCounts:Object.fromEntries(statusCounts),
+  latencyMs:{
+    p50:Number(percentile(samples,.5).toFixed(1)),
+    p95:Number(percentile(samples,.95).toFixed(1)),
+    p99:Number(percentile(samples,.99).toFixed(1)),
+    max:Number((samples.reduce((m,v)=>Math.max(m,v),0)).toFixed(1))
+  }
+};
+console.log(JSON.stringify(result,null,2));
+
+if (result.errorRatePct > 1 || result.latencyMs.p95 > 2000) process.exitCode=2;
