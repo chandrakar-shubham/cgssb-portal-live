@@ -488,7 +488,7 @@ function MainApp() {
     tests,
     setTests,
     syncDefaultCatalog: handleSyncDefaultCatalog,
-  } = useTestManager();
+  } = useTestManager(currentRoute === 'admin' && isAdminAuthenticated);
 
   const {
     questions,
