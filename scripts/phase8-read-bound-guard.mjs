@@ -15,6 +15,14 @@ if (!manager.includes('fetchPublishedTestsFromFirestore')) {
   failures.push('useTestManager.ts no longer references the bounded published-test catalog path.');
 }
 
+const loadHarness = read('scripts/phase8-load-test.mjs');
+if (!loadHarness.includes("await writeFile(resultFile, JSON.stringify(result, null, 2) + '\\n', 'utf8');")) {
+  failures.push('Phase 8 load harness no longer persists its structured result artifact.');
+}
+if (!loadHarness.includes('result.acceptance') || !loadHarness.includes('process.exitCode = 2')) {
+  failures.push('Phase 8 load harness no longer enforces its acceptance gate.');
+}
+
 const bundleStore = read('src/utils/bundleStore.ts');
 if (bundleStore.includes('subscribeToBundles(')) {
   failures.push('bundleStore.ts reintroduced a collection-wide subscribeToBundles listener.');
