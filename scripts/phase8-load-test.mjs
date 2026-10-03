@@ -17,6 +17,8 @@ const vus = Math.max(1, Number(process.env.VUS || 25));
 const durationSec = Math.max(1, Number(process.env.DURATION_SEC || 30));
 const paths = (process.env.PATHS || '/').split(',').map(s => s.trim()).filter(Boolean);
 const timeoutMs = Math.max(1000, Number(process.env.TIMEOUT_MS || 10000));
+const thinkMinMs = Math.max(0, Number(process.env.THINK_MIN_MS || 0));
+const thinkMaxMs = Math.max(thinkMinMs, Number(process.env.THINK_MAX_MS || thinkMinMs));
 
 const samples = [];
 let completed = 0;
@@ -63,6 +65,10 @@ async function worker() {
     while (!stop) {
       const path = paths[Math.floor(Math.random() * paths.length)];
       await oneRequest(path);
+      if (!stop && thinkMaxMs > 0) {
+        const delay = thinkMinMs + Math.random() * (thinkMaxMs - thinkMinMs);
+        await sleep(delay);
+      }
     }
   } finally {
     active--;
@@ -76,6 +82,7 @@ console.log(JSON.stringify({
   durationSec,
   paths,
   timeoutMs,
+  thinkTimeMs: { min: thinkMinMs, max: thinkMaxMs },
   warning: 'HTTP smoke/load only. No Firestore writes, no auth simulation, no claim of 10K-user capacity.'
 }, null, 2));
 
