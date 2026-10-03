@@ -2,7 +2,7 @@
 
 ## Status
 
-**Audit completed against `main` through the read-amplification fixes at commit `bae4c132aacccdb271d1b9ae2792fad246bfeff6`.**
+**Audit completed against `main` through commit `19bb4c33f2c1900ecefa9fc594fe497748fe7e92`.**
 
 This audit is intentionally read-only. It does not introduce production writes or authenticated load testing.
 
@@ -94,7 +94,7 @@ Before another production concurrency increase:
 2. Run the existing Phase 8 read-only gate at 2,500 VUs for 60 seconds.
 3. If that passes the configured thresholds, repeat at the next controlled increment rather than jumping to 10,000.
 4. Keep authenticated write testing isolated to staging with synthetic accounts.
-5. Add a regression test/static guard before closing Phase 8.3.
+5. Regression protection is now enforced in CI by `scripts/phase8-read-bound-guard.mjs`, wired through `npm run test:phase8:read-bound`.
 
 ## Capacity interpretation
 
