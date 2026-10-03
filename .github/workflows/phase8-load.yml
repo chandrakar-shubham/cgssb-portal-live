@@ -1,9 +1,6 @@
 name: Phase 8 External Read Load
 
 on:
-  push:
-    paths:
-      - ".github/workflows/phase8-load.yml"
   workflow_dispatch:
     inputs:
       vus:
