@@ -11,6 +11,7 @@
  *   BASE_URL=https://YOUR-HOST.web.app VUS=1000 DURATION_SEC=120 PATHS=/,/robots.txt node scripts/phase8-load-test.mjs
  */
 import { performance } from 'node:perf_hooks';
+import { writeFile } from 'node:fs/promises';
 
 const baseUrl = (process.env.BASE_URL || 'https://gen-lang-client-0783153446.web.app').replace(/\/$/, '');
 const vus = Math.max(1, Number(process.env.VUS || 25));
@@ -20,6 +21,7 @@ const timeoutMs = Math.max(1000, Number(process.env.TIMEOUT_MS || 10000));
 const thinkMinMs = Math.max(0, Number(process.env.THINK_MIN_MS || 0));
 const thinkMaxMs = Math.max(thinkMinMs, Number(process.env.THINK_MAX_MS || thinkMinMs));
 const runId = process.env.RUN_ID || `phase8-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+const resultFile = process.env.RESULT_FILE || 'phase8-load-result.json';
 
 const samples = [];
 let completed = 0;
@@ -122,4 +124,6 @@ result.acceptance = {
   errorRateThresholdPct: 1,
   p95ThresholdMs: 2000
 };
+await writeFile(resultFile, JSON.stringify(result, null, 2) + '\n', 'utf8');
+console.log(`Result artifact written to ${resultFile}`);
 if (!result.acceptance.pass) process.exitCode = 2;
