@@ -2,16 +2,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { PreviousYearPaper } from '../types';
 import {
   fetchPypPapersFromFirestore,
+  fetchPublishedPypPapersFromFirestore,
   savePypPaperToFirestore,
   deletePypPaperFromFirestore,
   subscribeToPypPapers
 } from '../firebase/firestoreService';
 
-export function usePypManager() {
+export function usePypManager(enabled = true) {
   const [pypPapers, setPypPapers] = useState<PreviousYearPaper[]>([]);
 
   // Real-time Cloud Firestore synchronization across all devices
   useEffect(() => {
+    if (!enabled) {
+      fetchPublishedPypPapersFromFirestore().then((remotePapers) => {
+        if (Array.isArray(remotePapers)) setPypPapers(remotePapers);
+      }).catch(() => {});
+      return;
+    }
+
     const unsubscribe = subscribeToPypPapers((firestorePapers) => {
       if (Array.isArray(firestorePapers)) {
         setPypPapers(firestorePapers);
@@ -25,7 +33,7 @@ export function usePypManager() {
     }).catch(() => {});
 
     return () => unsubscribe();
-  }, []);
+  }, [enabled]);
 
   // Listen for local broadcast pyp updates
   useEffect(() => {
