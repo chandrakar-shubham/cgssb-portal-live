@@ -104,6 +104,10 @@ These results do **not** establish 10,000 authenticated concurrent-student capac
 
 The correct next target is reducing and measuring Firestore reads per real student session, not blindly increasing HTTP VUs.
 
+## Load-gate evidence retention
+
+The Phase 8 external read-load workflow now persists `phase8-load-result.json` and uploads it as a GitHub Actions artifact for each run. The artifact includes the run ID, request/error counts, status distribution, latency percentiles, RPS, and the configured acceptance result. This makes each controlled capacity measurement reproducible and auditable instead of relying only on console output.
+
 ## Spark-plan constraint
 
 No authenticated production write/load test should be introduced merely to improve the capacity claim. The authenticated Phase 8 harness correctly requires an isolated staging project and synthetic accounts.
