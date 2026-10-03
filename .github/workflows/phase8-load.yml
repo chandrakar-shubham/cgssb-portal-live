@@ -9,7 +9,7 @@ on:
       vus:
         description: "Virtual users"
         required: true
-        default: "100"
+        default: "250"
       duration_sec:
         description: "Duration in seconds"
         required: true
@@ -34,3 +34,5 @@ jobs:
         run: node scripts/phase8-load-test.mjs
 
 # Phase 8 execution marker: rerun 100-VU load after stack-safe aggregation fix.
+
+# Phase 8 execution marker: run 250-VU read-only load.
