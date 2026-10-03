@@ -25,6 +25,7 @@ let completed = 0;
 let errors = 0;
 let active = 0;
 let stop = false;
+const statusCounts = new Map();
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const percentile = (xs, p) => {
@@ -49,11 +50,13 @@ async function oneRequest(path) {
     const ms = performance.now() - started;
     samples.push(ms);
     completed++;
+    statusCounts.set(String(res.status), (statusCounts.get(String(res.status)) || 0) + 1);
     if (!res.ok && res.status !== 304) errors++;
   } catch {
     samples.push(performance.now() - started);
     completed++;
     errors++;
+    statusCounts.set('NETWORK_ERROR', (statusCounts.get('NETWORK_ERROR') || 0) + 1);
   } finally {
     clearTimeout(timer);
   }
@@ -100,6 +103,7 @@ const result = {
   errors,
   errorRatePct: Number((completed ? errors / completed * 100 : 0).toFixed(2)),
   requestsPerSecond: Number(rps.toFixed(2)),
+  statusCounts: Object.fromEntries([...statusCounts.entries()].sort((a,b) => Number(a[0]) - Number(b[0]))),
   latencyMs: {
     p50: Number(percentile(samples, 0.50).toFixed(1)),
     p95: Number(percentile(samples, 0.95).toFixed(1)),
