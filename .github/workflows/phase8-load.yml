@@ -6,7 +6,7 @@ on:
       vus:
         description: "Virtual users"
         required: true
-        default: "2250"
+        default: "3500"
       duration_sec:
         description: "Duration in seconds"
         required: true
