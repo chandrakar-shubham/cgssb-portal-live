@@ -2,7 +2,7 @@
 
 ## Status
 
-**Audit completed against `main` through commit `19bb4c33f2c1900ecefa9fc594fe497748fe7e92`.**
+**Audit completed against `main` through the Phase 8.3 bounded-read fixes and subsequent 2,500-VU validation run.**
 
 This audit is intentionally read-only. It does not introduce production writes or authenticated load testing.
 
