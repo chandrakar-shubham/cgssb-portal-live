@@ -27,6 +27,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Validate controlled gate profile
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ github.event_name == 'workflow_dispatch' && inputs.vus || '3500' }}
+          DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || '60' }}
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
+        run: npm run test:phase8:gate-preflight
       - name: Run read-only load test
         env:
           BASE_URL: https://gen-lang-client-0783153446.web.app
