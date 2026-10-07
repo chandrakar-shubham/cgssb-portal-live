@@ -17,8 +17,8 @@ if (!manager.includes('fetchPublishedTestsFromFirestore')) {
 
 const loadHarness = read('scripts/phase8-load-test.mjs');
 const gatePreflight = read('scripts/phase8-gate-preflight.mjs');
-if (!gatePreflight.includes('approvedVus = new Set([3500, 5000])') || !gatePreflight.includes('durationSec !== 60')) {
-  failures.push('Phase 8 controlled-gate preflight no longer enforces the approved 3500/5000 VU and 60-second profiles.');
+if (!gatePreflight.includes('approvedVus = new Set([3500])') || !gatePreflight.includes('durationSec !== 60')) {
+  failures.push('Phase 8 controlled-gate preflight no longer enforces the approved 3500 VU and 60-second profile.');
 }
 if (!loadHarness.includes("await writeFile(resultFile, JSON.stringify(result, null, 2) + '\\n', 'utf8');")) {
   failures.push('Phase 8 load harness no longer persists its structured result artifact.');
