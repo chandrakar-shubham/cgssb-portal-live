@@ -47,7 +47,10 @@ function getRouteStats(path) {
       requests: 0,
       errors: 0,
       statusCounts: new Map(),
-      errorTypes: new Map()
+      errorTypes: new Map(),
+      errorCodes: new Map(),
+      errorMessages: new Map(),
+      errorCauses: new Map()
     };
     routeStats.set(path, stats);
   }
@@ -88,6 +91,13 @@ async function oneRequest(path) {
   } catch (error) {
     const ms = performance.now() - started;
     const errorType = error instanceof Error && error.name ? error.name : 'UnknownError';
+    const errorCode = error && typeof error === 'object' && 'cause' in error && error.cause && typeof error.cause === 'object' && 'code' in error.cause
+      ? String(error.cause.code)
+      : null;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCause = error && typeof error === 'object' && 'cause' in error && error.cause
+      ? (error.cause instanceof Error ? error.cause.message : String(error.cause))
+      : null;
 
     samples.push(ms);
     completed++;
@@ -98,6 +108,9 @@ async function oneRequest(path) {
     increment(statusCounts, 'NETWORK_ERROR');
     increment(route.statusCounts, 'NETWORK_ERROR');
     increment(route.errorTypes, errorType);
+    increment(route.errorCodes, errorCode || 'UNKNOWN');
+    increment(route.errorMessages, errorMessage.slice(0, 160));
+    if (errorCause) increment(route.errorCauses, errorCause.slice(0, 160));
   } finally {
     clearTimeout(timer);
   }
@@ -119,6 +132,9 @@ function serializeRouteStats() {
           errorRatePct: Number((stats.requests ? stats.errors / stats.requests * 100 : 0).toFixed(2)),
           statusCounts: serializeCounts(stats.statusCounts),
           errorTypes: serializeCounts(stats.errorTypes),
+          errorCodes: serializeCounts(stats.errorCodes),
+          errorMessages: serializeCounts(stats.errorMessages),
+          errorCauses: serializeCounts(stats.errorCauses),
           latencyMs: {
             p50: Number(percentile(stats.samples, 0.50).toFixed(1)),
             p95: Number(percentile(stats.samples, 0.95).toFixed(1)),
