@@ -6,10 +6,10 @@ const baseUrl = (process.env.BASE_URL || '').replace(/\/$/, '');
 const paths = (process.env.PATHS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 const failures = [];
-const approvedVus = new Set([3500, 5000]);
+const approvedVus = new Set([3500]);
 
 if (!approvedVus.has(vus)) {
-  failures.push('VUS=' + vus + ' is not an approved Phase 8 controlled gate. Approved gates: 3500 or 5000.');
+  failures.push('VUS=' + vus + ' is not an approved Phase 8 controlled gate. The current approved gate is 3500; 5000 requires a separate promotion decision after 3500 evidence.');
 }
 
 if (durationSec !== 60) {
