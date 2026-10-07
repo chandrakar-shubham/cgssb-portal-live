@@ -91,16 +91,16 @@ Therefore, **application-level query bounding remains important even when Firest
 Before another production concurrency increase:
 
 1. Complete the remaining source-wide call-site audit of legacy unbounded functions/listeners using repository search or local checkout tooling.
-2. Run the existing Phase 8 read-only gate at 2,500 VUs for 60 seconds.
-3. If that passes the configured thresholds, repeat at the next controlled increment rather than jumping to 10,000.
+2. Run the current Phase 8 read-only gate at 3,500 VUs for 60 seconds.
+3. Only after reviewing the 3,500-VU artifact should 5,000 VUs be considered as a separately approved promotion gate.
 4. Keep authenticated write testing isolated to staging with synthetic accounts.
 5. Regression protection is now enforced in CI by `scripts/phase8-read-bound-guard.mjs`, wired through `npm run test:phase8:read-bound`.
 
 ## Capacity interpretation
 
-The highest demonstrated production read-only gate remains **2,250 VUs**. The 2,500-VU run remains a failed configured gate.
+The highest demonstrated production read-only test remains **2,500 VUs**; the next controlled promotion gate is **3,500 VUs**. The 2,500-VU run passed the configured HTTP acceptance thresholds, but it is not the current controlled promotion gate.
 
-These results do **not** establish 10,000 authenticated concurrent-student capacity. The latest code changes are CI/deploy validated, but a new 2,500-VU measurement has not yet been run after the read-amplification fixes.
+These results do **not** establish 10,000 authenticated concurrent-student capacity. The latest code changes are CI/deploy validated. The existing 2,500-VU result remains the latest capacity evidence; the required 3,500-VU controlled gate has not yet been executed on the current hardened branch.
 
 The correct next target is reducing and measuring Firestore reads per real student session, not blindly increasing HTTP VUs.
 
