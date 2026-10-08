@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 const dir='shard-results'; const files=fs.readdirSync(dir).filter(f=>f.endsWith('.json')&&f.includes('phase8-shard-'));
 const results=files.map(f=>JSON.parse(fs.readFileSync(dir+'/'+f,'utf8')));
-const expected=Number(process.env.EXPECTED_TOTAL_VUS||3500), duration=Number(process.env.DURATION_SEC||60);
+const expected=Number(process.env.EXPECTED_TOTAL_VUS||3500), expectedShards=Number(process.env.EXPECTED_SHARDS||3), duration=Number(process.env.DURATION_SEC||60);
 const failures=[];
-if(results.length!==3) failures.push('Expected 3 shard result files; found '+results.length);
+if(results.length!==expectedShards) failures.push('Expected '+expectedShards+' shard result files; found '+results.length);
 const totalVus=results.reduce((n,r)=>n+Number(r.virtualUsers||0),0);
 if(totalVus!==expected) failures.push('Shard VU total '+totalVus+' does not equal expected '+expected);
 if(results.some(r=>Number(r.durationSec)!==duration)) failures.push('One or more shards used the wrong duration');
