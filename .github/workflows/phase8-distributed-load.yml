@@ -1,0 +1,108 @@
+name: Phase 8 Distributed External Read Load
+
+on:
+  workflow_dispatch:
+    inputs:
+      shard1_vus:
+        description: "Shard 1 VUs"
+        required: true
+        default: "1200"
+      shard2_vus:
+        description: "Shard 2 VUs"
+        required: true
+        default: "1200"
+      shard3_vus:
+        description: "Shard 3 VUs"
+        required: true
+        default: "1100"
+      duration_sec:
+        description: "Duration in seconds"
+        required: true
+        default: "60"
+
+concurrency:
+  group: phase8-distributed-external-read-load
+  cancel-in-progress: false
+
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: shard-1
+            vus: 1200
+          - id: shard-2
+            vus: 1200
+          - id: shard-3
+            vus: 1100
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate shard
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ matrix.vus }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
+        run: npm run test:phase8:gate-preflight
+      - name: Run distributed shard
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ matrix.vus }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+          SHARD_ID: ${{ matrix.id }}
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
+          THINK_MIN_MS: 700
+          THINK_MAX_MS: 1400
+          RESULT_FILE: phase8-${{ matrix.id }}.json
+        run: |
+          set +e
+          node scripts/phase8-distributed-shard.mjs
+          code=$?
+          printf '%s\n' "$code" > phase8-${{ matrix.id }}-exit-code.txt
+          exit 0
+      - name: Upload shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-distributed-${{ matrix.id }}-${{ github.run_id }}
+          path: |
+            phase8-${{ matrix.id }}.json
+            phase8-${{ matrix.id }}-exit-code.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  aggregate:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download shard evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase8-distributed-shard-*-${{ github.run_id }}
+          path: shard-results
+          merge-multiple: true
+      - name: Aggregate and enforce gate
+        env:
+          EXPECTED_TOTAL_VUS: ${{ fromJSON(inputs.shard1_vus) + fromJSON(inputs.shard2_vus) + fromJSON(inputs.shard3_vus) }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+        run: node scripts/phase8-distributed-aggregate.mjs
+      - name: Upload aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-distributed-aggregate-${{ github.run_id }}
+          path: phase8-distributed-aggregate.json
+          if-no-files-found: error
+          retention-days: 30
