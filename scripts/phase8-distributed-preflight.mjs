@@ -8,7 +8,7 @@ const failures=[];
 if(!allowed.has(vus)) failures.push('Distributed shard VUS must be 1100 or 1200.');
 if(duration!==60) failures.push('Distributed Phase 8 duration must be exactly 60 seconds.');
 if(base!=='https://gen-lang-client-0783153446.web.app') failures.push('BASE_URL must be the configured production Firebase Hosting origin.');
-if(!/^shard-[123]$/.test(shardId)) failures.push('SHARD_ID must be shard-1, shard-2, or shard-3.');
+if(!/^shard-[1234]$/.test(shardId)) failures.push('SHARD_ID must be shard-1, shard-2, shard-3, or shard-4.');
 if(!paths.length) failures.push('PATHS must contain at least one read-only route.');
 const forbidden=paths.filter(p=>{const n=p.toLowerCase();return n.includes('/admin')||n.includes('/login')||n.includes('/signup')||n.includes('/auth')||n.includes('/api/write')||n.includes('/api/admin');});
 if(forbidden.length) failures.push('Authenticated/admin/write paths are forbidden: '+forbidden.join(', '));
