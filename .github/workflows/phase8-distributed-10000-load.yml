@@ -1,0 +1,108 @@
+name: Phase 8 Distributed 10000-VU Promotion Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration_sec:
+        description: "Promotion-gate duration in seconds"
+        required: true
+        default: "60"
+
+concurrency:
+  group: phase8-distributed-10000-promotion
+  cancel-in-progress: false
+
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: shard-1
+            vus: 1250
+          - id: shard-2
+            vus: 1250
+          - id: shard-3
+            vus: 1250
+          - id: shard-4
+            vus: 1250
+          - id: shard-5
+            vus: 1250
+          - id: shard-6
+            vus: 1250
+          - id: shard-7
+            vus: 1250
+          - id: shard-8
+            vus: 1250
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate 10000-VU promotion shard
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ matrix.vus }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+          SHARD_ID: ${{ matrix.id }}
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
+        run: node scripts/phase8-10000-preflight.mjs
+      - name: Run 10000-VU promotion shard
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ matrix.vus }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+          SHARD_ID: ${{ matrix.id }}
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/practice-drills
+          THINK_MIN_MS: 700
+          THINK_MAX_MS: 1400
+          RESULT_FILE: phase8-${{ matrix.id }}.json
+        run: |
+          set +e
+          node scripts/phase8-distributed-shard.mjs
+          code=$?
+          printf '%s\n' "$code" > phase8-${{ matrix.id }}-exit-code.txt
+          exit 0
+      - name: Upload 10000-VU shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-distributed-10000-${{ matrix.id }}-${{ github.run_id }}
+          path: |
+            phase8-${{ matrix.id }}.json
+            phase8-${{ matrix.id }}-exit-code.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  aggregate:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download 10000-VU shard evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase8-distributed-10000-*-${{ github.run_id }}
+          path: shard-results
+          merge-multiple: true
+      - name: Aggregate and enforce 10000-VU promotion gate
+        env:
+          EXPECTED_TOTAL_VUS: 10000
+          EXPECTED_SHARDS: 8
+          DURATION_SEC: ${{ inputs.duration_sec }}
+        run: node scripts/phase8-distributed-aggregate.mjs
+      - name: Upload 10000-VU aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-distributed-10000-aggregate-${{ github.run_id }}
+          path: phase8-distributed-aggregate.json
+          if-no-files-found: error
+          retention-days: 30
