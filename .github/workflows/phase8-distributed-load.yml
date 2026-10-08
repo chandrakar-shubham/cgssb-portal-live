@@ -43,13 +43,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate shard
+      - name: Validate distributed shard
         env:
           BASE_URL: https://gen-lang-client-0783153446.web.app
           VUS: ${{ matrix.vus }}
           DURATION_SEC: ${{ inputs.duration_sec }}
+          SHARD_ID: ${{ matrix.id }}
           PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
-        run: npm run test:phase8:gate-preflight
+        run: node scripts/phase8-distributed-preflight.mjs
       - name: Run distributed shard
         env:
           BASE_URL: https://gen-lang-client-0783153446.web.app
@@ -93,9 +94,10 @@ jobs:
           pattern: phase8-distributed-shard-*-${{ github.run_id }}
           path: shard-results
           merge-multiple: true
-      - name: Aggregate and enforce gate
+      - name: Aggregate and enforce 3500-VU gate
         env:
-          EXPECTED_TOTAL_VUS: ${{ fromJSON(inputs.shard1_vus) + fromJSON(inputs.shard2_vus) + fromJSON(inputs.shard3_vus) }}
+          EXPECTED_TOTAL_VUS: 3500
+          EXPECTED_SHARDS: 3
           DURATION_SEC: ${{ inputs.duration_sec }}
         run: node scripts/phase8-distributed-aggregate.mjs
       - name: Upload aggregate evidence
