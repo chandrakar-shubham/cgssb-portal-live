@@ -6,7 +6,7 @@ on:
       vus:
         description: "Calibration virtual users"
         required: true
-        default: "3500"
+        default: "1000"
       duration_sec:
         description: "Calibration duration in seconds"
         required: true
