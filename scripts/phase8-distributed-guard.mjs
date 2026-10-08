@@ -2,9 +2,11 @@ import fs from 'node:fs';
 const required=[
  ['scripts/phase8-load-test.mjs','result.acceptance'],
  ['scripts/phase8-distributed-shard.mjs','phase8-http-read-only-distributed-shard'],
+ ['scripts/phase8-distributed-preflight.mjs','Distributed Phase 8 shard preflight'],
  ['.github/workflows/phase8-distributed-load.yml','Phase 8 Distributed External Read Load'],
  ['.github/workflows/phase8-distributed-load.yml','SHARD_ID'],
- ['.github/workflows/phase8-distributed-load.yml','phase8-distributed-aggregate.json']
+ ['.github/workflows/phase8-distributed-load.yml','phase8-distributed-aggregate.json'],
+ ['package.json','test:phase8:distributed-guard']
 ];
 const failures=[];
 for(const [file,needle] of required){const s=fs.readFileSync(file,'utf8');if(!s.includes(needle))failures.push(file+' missing '+needle);}
