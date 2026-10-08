@@ -30,5 +30,8 @@ jobs:
       - name: Phase 8.3 student read-bound regression guard
         run: npm run test:phase8:read-bound
 
+      - name: Phase 8 5000-VU promotion guard
+        run: npm run test:phase8:5000-guard
+
       - name: Production build
         run: npm run build
