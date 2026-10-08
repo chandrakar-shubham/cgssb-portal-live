@@ -1,0 +1,102 @@
+name: Phase 8 Distributed 7500-VU Promotion Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration_sec:
+        description: "Promotion-gate duration in seconds"
+        required: true
+        default: "60"
+
+concurrency:
+  group: phase8-distributed-7500-promotion
+  cancel-in-progress: false
+
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: shard-1
+            vus: 1500
+          - id: shard-2
+            vus: 1500
+          - id: shard-3
+            vus: 1500
+          - id: shard-4
+            vus: 1500
+          - id: shard-5
+            vus: 1500
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate 7500-VU promotion shard
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ matrix.vus }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+          SHARD_ID: ${{ matrix.id }}
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
+        run: node scripts/phase8-distributed-preflight.mjs
+      - name: Run 7500-VU promotion shard
+        env:
+          BASE_URL: https://gen-lang-client-0783153446.web.app
+          VUS: ${{ matrix.vus }}
+          DURATION_SEC: ${{ inputs.duration_sec }}
+          SHARD_ID: ${{ matrix.id }}
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
+          THINK_MIN_MS: 700
+          THINK_MAX_MS: 1400
+          RESULT_FILE: phase8-${{ matrix.id }}.json
+        run: |
+          set +e
+          node scripts/phase8-distributed-shard.mjs
+          code=$?
+          printf '%s\n' "$code" > phase8-${{ matrix.id }}-exit-code.txt
+          exit 0
+      - name: Upload 7500-VU shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-distributed-7500-${{ matrix.id }}-${{ github.run_id }}
+          path: |
+            phase8-${{ matrix.id }}.json
+            phase8-${{ matrix.id }}-exit-code.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  aggregate:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download 7500-VU shard evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase8-distributed-7500-*-${{ github.run_id }}
+          path: shard-results
+          merge-multiple: true
+      - name: Aggregate and enforce 7500-VU promotion gate
+        env:
+          EXPECTED_TOTAL_VUS: 7500
+          EXPECTED_SHARDS: 5
+          DURATION_SEC: ${{ inputs.duration_sec }}
+        run: node scripts/phase8-distributed-aggregate.mjs
+      - name: Upload 7500-VU aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-distributed-7500-aggregate-${{ github.run_id }}
+          path: phase8-distributed-aggregate.json
+          if-no-files-found: error
+          retention-days: 30
