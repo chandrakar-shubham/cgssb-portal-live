@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Run static-endpoint calibration
+      - name: Run static-endpoint calibration (diagnostic only)
         env:
           BASE_URL: https://gen-lang-client-0783153446.web.app
           VUS: ${{ inputs.vus }}
@@ -40,13 +40,22 @@ jobs:
           TIMEOUT_MS: 10000
           RUN_ID: phase8-calibration-${{ github.run_id }}
           RESULT_FILE: phase8-calibration-result.json
-        run: node scripts/phase8-load-test.mjs
+        run: |
+          set +e
+          node scripts/phase8-load-test.mjs
+          calibration_exit_code=$?
+          printf '%s\n' "$calibration_exit_code" > phase8-calibration-exit-code.txt
+          echo "Calibration harness exit code: $calibration_exit_code"
+          echo "This workflow is diagnostic-only; a non-zero harness acceptance result must not fail the workflow."
+          exit 0
 
-      - name: Upload calibration result
+      - name: Upload calibration evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: phase8-runner-calibration-${{ github.run_id }}
-          path: phase8-calibration-result.json
+          path: |
+            phase8-calibration-result.json
+            phase8-calibration-exit-code.txt
           if-no-files-found: error
           retention-days: 30
