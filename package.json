@@ -18,7 +18,8 @@
     "test:phase8:distributed-guard": "node scripts/phase8-distributed-guard.mjs",
     "test:phase8:distributed-preflight": "node scripts/phase8-distributed-preflight.mjs",
     "test:phase8:5000-guard": "node scripts/phase8-5000-promotion-guard.mjs",
-    "test:phase8:7500-guard": "node scripts/phase8-7500-promotion-guard.mjs"
+    "test:phase8:7500-guard": "node scripts/phase8-7500-promotion-guard.mjs",
+    "test:phase8:10000-guard": "node scripts/phase8-10000-promotion-guard.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
