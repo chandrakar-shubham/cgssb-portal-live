@@ -75,6 +75,13 @@ async function oneRequest(path) {
       signal: controller.signal,
       headers: { 'User-Agent': 'CGSSB-Phase8-LoadHarness/1.0' }
     });
+
+    // Fully consume the response body so Node/Undici can promptly release
+    // and reuse the underlying connection. At high VU counts, leaving bodies
+    // unread can create client-side socket pressure that masquerades as
+    // production edge/network failures.
+    await res.arrayBuffer();
+
     const ms = performance.now() - started;
 
     samples.push(ms);
