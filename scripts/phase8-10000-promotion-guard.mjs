@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 
 const failures=[];
+const requiredRoutes=['/','/cgvyapam/mock-tests','/cgpsc/mock-tests','/leaderboard','/cgvyapam/pyp-papers','/cgvyapam-cgssb/chapter-tests','/cgvyapam-cgssb/practice-drills'];
+for(const route of requiredRoutes){ if(!workflow.includes(route)) failures.push('10000-VU workflow missing required route '+route); }
+
 const workflow=fs.readFileSync('.github/workflows/phase8-distributed-10000-load.yml','utf8');
 const pre=fs.readFileSync('scripts/phase8-10000-preflight.mjs','utf8');
 const gate75=fs.readFileSync('.github/workflows/phase8-distributed-7500-load.yml','utf8');
