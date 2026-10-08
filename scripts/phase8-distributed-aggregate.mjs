@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+const dir='shard-results'; const files=fs.readdirSync(dir).filter(f=>f.endsWith('.json')&&f.includes('phase8-shard-'));
+const results=files.map(f=>JSON.parse(fs.readFileSync(dir+'/'+f,'utf8')));
+const expected=Number(process.env.EXPECTED_TOTAL_VUS||3500), duration=Number(process.env.DURATION_SEC||60);
+const failures=[];
+if(results.length!==3) failures.push('Expected 3 shard result files; found '+results.length);
+const totalVus=results.reduce((n,r)=>n+Number(r.virtualUsers||0),0);
+if(totalVus!==expected) failures.push('Shard VU total '+totalVus+' does not equal expected '+expected);
+if(results.some(r=>Number(r.durationSec)!==duration)) failures.push('One or more shards used the wrong duration');
+const requests=results.reduce((n,r)=>n+Number(r.requests||0),0), errors=results.reduce((n,r)=>n+Number(r.errors||0),0);
+const rps=results.reduce((n,r)=>n+Number(r.requestsPerSecond||0),0);
+const weightedP95=results.length?Math.max(...results.map(r=>Number(r.latencyMs?.p95||0))):0;
+const errorRate=Number((errors/requests*100||0).toFixed(2));
+const result={phase:'8-http-read-only-distributed',expectedTotalVus:expected,actualTotalVus:totalVus,shards:results.map(r=>({shardId:r.shardId,virtualUsers:r.virtualUsers,requests:r.requests,errors:r.errors,errorRatePct:r.errorRatePct,requestsPerSecond:r.requestsPerSecond,latencyMs:r.latencyMs,acceptance:r.acceptance})),requests,errors,errorRatePct:errorRate,requestsPerSecond:Number(rps.toFixed(2)),conservativeP95Ms:weightedP95,acceptance:{pass:failures.length===0&&errorRate<=1&&weightedP95<=2000,errorRateThresholdPct:1,p95ThresholdMs:2000},generatedAt:new Date().toISOString(),failures};
+fs.writeFileSync('phase8-distributed-aggregate.json',JSON.stringify(result,null,2)+'\n');
+console.log(JSON.stringify(result,null,2));
+if(!result.acceptance.pass)process.exit(2);
