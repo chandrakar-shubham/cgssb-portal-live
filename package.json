@@ -14,7 +14,9 @@
     "load:phase8": "node scripts/phase8-load-test.mjs",
     "load:phase8:auth": "node scripts/phase8-auth-load-test.mjs",
     "test:phase8:read-bound": "node scripts/phase8-read-bound-guard.mjs",
-    "test:phase8:gate-preflight": "node scripts/phase8-gate-preflight.mjs"
+    "test:phase8:gate-preflight": "node scripts/phase8-gate-preflight.mjs",
+    "test:phase8:distributed-guard": "node scripts/phase8-distributed-guard.mjs",
+    "test:phase8:distributed-preflight": "node scripts/phase8-distributed-preflight.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
