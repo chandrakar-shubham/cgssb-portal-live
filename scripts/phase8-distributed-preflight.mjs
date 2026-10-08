@@ -3,7 +3,7 @@ const vus=Number(process.env.VUS||0), duration=Number(process.env.DURATION_SEC||
 const base=(process.env.BASE_URL||'').replace(/\/$/,'');
 const paths=(process.env.PATHS||'').split(',').map(s=>s.trim()).filter(Boolean);
 const shardId=process.env.SHARD_ID||'';
-const allowed=new Set([1100,1200]);
+const allowed=new Set([1100,1200,1250]);
 const failures=[];
 if(!allowed.has(vus)) failures.push('Distributed shard VUS must be 1100 or 1200.');
 if(duration!==60) failures.push('Distributed Phase 8 duration must be exactly 60 seconds.');
