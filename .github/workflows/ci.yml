@@ -36,5 +36,8 @@ jobs:
       - name: Phase 8 7500-VU promotion guard
         run: npm run test:phase8:7500-guard
 
+      - name: Phase 8 10000-VU promotion guard
+        run: npm run test:phase8:10000-guard
+
       - name: Production build
         run: npm run build
