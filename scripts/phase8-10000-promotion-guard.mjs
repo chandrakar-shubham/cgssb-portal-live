@@ -12,9 +12,10 @@ for(const needle of [
   'EXPECTED_TOTAL_VUS: 10000',
   'EXPECTED_SHARDS: 8',
   'vus: 1250',
-  'Production HTTP GET/read-only paths only',
   'duration_sec',
-  'phase8-distributed-10000-'
+  'phase8-distributed-10000-',
+  'read-only routes',
+  'no authentication or writes'
 ]) if(!workflow.includes(needle)) failures.push('10000-VU workflow missing '+needle);
 
 for(const needle of ['vus!==1250','duration!==60','https://gen-lang-client-0783153446.web.app','^shard-[1-8]$','Production HTTP GET/read-only paths only']) {
