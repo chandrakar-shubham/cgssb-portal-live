@@ -52,6 +52,9 @@ jobs:
       - name: 🛡️ Firestore Security Rules Regression Tests
         run: npx tsx scripts/firestore-rules.test.ts
 
+      - name: 🧪 Phase 8.5 Student Journey Safety Guard
+        run: npm run test:phase8:5-journey-guard
+
       - name: 🔍 Static Type Check & Linting
         run: |
           echo "Running TypeScript strict verification (tsc --noEmit)..."
