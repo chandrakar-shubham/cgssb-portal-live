@@ -1,5 +1,5 @@
 name: Phase 8 Distributed 10000-VU Promotion Gate
-# Read-only routes only; no authentication or writes are exercised.
+# This workflow uses read-only routes; no authentication or writes are exercised.
 
 on:
   workflow_dispatch:
