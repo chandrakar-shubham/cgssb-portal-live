@@ -15,10 +15,15 @@
 3. `saveAttemptToFirestore` checks the signed-in Firebase UID against the attempt owner and uses a Firestore transaction. If the attempt document already exists, it returns that record instead of creating a duplicate.
 4. Firestore rules restrict student attempt creation to the authenticated owner and make student attempts immutable after creation; public leaderboard list queries are capped at 100.
 5. Question-by-ID reads are chunked in groups of 30; leaderboard profile queries cap at 100.
+6. Student attempt history is ordered by submission time and document ID, fetched in cursor pages of at most 100 records, and accumulated to preserve existing full-history consumers. If any page fails, the helper returns an empty result rather than silently presenting a partial history. A composite `attempts` index supports the owner + submission-time query.
 
-## Follow-up finding
+## Attempt-history pagination contract
 
-`fetchMyAttemptsFromFirestore` filters attempts by user ID but does not currently apply a limit or cursor. This is an unbounded per-user read as a student's history grows. Do not silently add a hard cap that changes analytics/leaderboard semantics. First define the history retention and pagination contract, then implement cursor pagination and verify all consumers before increasing authenticated load.
+- Each Firestore query is limited to 100 documents and continues from the last document snapshot.
+- Results remain newest-first and use document ID as a deterministic tie-breaker.
+- All pages are collected to preserve the current all-history contract used by analytics, mistake tracking, test result/re-attempt recovery, and leaderboard-profile calculations. No silent 100-attempt history cap is introduced.
+- A failure on any page returns an empty list rather than a misleading partial history.
+- This bounds each individual query and response, but it does **not** bound total reads for users with very long histories. A future product-level history UI migration can load older history on demand only after analytics and aggregate calculations have explicit all-time semantics.
 
 ## Staging execution checklist
 
@@ -39,4 +44,5 @@ Run only after a genuinely isolated staging environment and synthetic accounts a
 - [x] 10,000-VU / 60-second production HTTP GET-only promotion gate passed (run 38043270055).
 - [x] Phase 8.5 source-contract guard added to CI.
 - [ ] Actual authenticated staging journey: pending isolated staging configuration and credentials.
-- [ ] Attempt-history pagination: follow-up engineering task.
+- [x] Attempt-history cursor pagination implemented; emulator coverage verifies 205 records across multiple pages without overlap.
+- [ ] Actual authenticated staging journey: pending isolated staging configuration and credentials.
