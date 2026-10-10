@@ -15,12 +15,12 @@
 3. `saveAttemptToFirestore` checks the signed-in Firebase UID against the attempt owner and uses a Firestore transaction. If the attempt document already exists, it returns that record instead of creating a duplicate.
 4. Firestore rules restrict student attempt creation to the authenticated owner and make student attempts immutable after creation; public leaderboard list queries are capped at 100.
 5. Question-by-ID reads are chunked in groups of 30; leaderboard profile queries cap at 100.
-6. Student attempt history is ordered by submission time and document ID, fetched in cursor pages of at most 100 records, and accumulated to preserve existing full-history consumers. If any page fails, the helper returns an empty result rather than silently presenting a partial history. A composite `attempts` index supports the owner + submission-time query.
+6. Student attempt history is fetched in document-ID cursor pages of at most 100 records, accumulated to preserve existing full-history consumers, then sorted newest-first in memory. Paging by document ID also retains legacy attempts that lack `submittedAt`. If any page fails, the helper returns an empty result rather than silently presenting a partial history. A composite `attempts` index supports the owner + submission-time query.
 
 ## Attempt-history pagination contract
 
 - Each Firestore query is limited to 100 documents and continues from the last document snapshot.
-- Results remain newest-first and use document ID as a deterministic tie-breaker.
+- Returned results remain newest-first and use document ID as a deterministic tie-breaker; the underlying page query uses document ID so records missing `submittedAt` are not skipped.
 - All pages are collected to preserve the current all-history contract used by analytics, mistake tracking, test result/re-attempt recovery, and leaderboard-profile calculations. No silent 100-attempt history cap is introduced.
 - A failure on any page returns an empty list rather than a misleading partial history.
 - This bounds each individual query and response, but it does **not** bound total reads for users with very long histories. A future product-level history UI migration can load older history on demand only after analytics and aggregate calculations have explicit all-time semantics.
