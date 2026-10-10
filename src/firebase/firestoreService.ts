@@ -1374,8 +1374,8 @@ export async function fetchMyAttemptsFromFirestore(userId?: string): Promise<Tes
     while (true) {
       const constraints = [
         where('userId', '==', uid),
-        orderBy('submittedAt', 'desc'),
-        orderBy(documentId(), 'desc'),
+        // Page by document ID so legacy attempts without submittedAt are not omitted.
+        orderBy(documentId(), 'asc'),
         ...(cursor ? [startAfter(cursor)] : []),
         limit(pageSize)
       ];
@@ -1386,7 +1386,12 @@ export async function fetchMyAttemptsFromFirestore(userId?: string): Promise<Tes
       cursor = page.docs[page.docs.length - 1];
     }
 
-    return results;
+    // Restore the existing newest-first contract after all pages are collected.
+    // Document ID is a deterministic tie-breaker for equal or missing timestamps.
+    return results.sort((a, b) =>
+      String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')) ||
+      String(b.id || '').localeCompare(String(a.id || ''))
+    );
   } catch (err) {
     // Do not return a silently truncated history if a later page fails.
     console.warn('Error fetching paginated student attempts from Firestore:', err);
