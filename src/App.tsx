@@ -8,11 +8,11 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
-import { StudentDashboard } from './components/StudentDashboard';
+const StudentDashboard = lazyWithRetry(() => import('./components/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
 import { StudentTestsPage, getStudentSlug } from './components/StudentTestsPage';
-import { PYPSection } from './components/PYPSection';
-import { AnalyticsHub } from './components/AnalyticsHub';
-import { ExamEngine } from './components/ExamEngine';
+const PYPSection = lazyWithRetry(() => import('./components/PYPSection').then(m => ({ default: m.PYPSection })));
+const AnalyticsHub = lazyWithRetry(() => import('./components/AnalyticsHub').then(m => ({ default: m.AnalyticsHub })));
+const ExamEngine = lazyWithRetry(() => import('./components/ExamEngine').then(m => ({ default: m.ExamEngine })));
 import { SolutionsScreen } from './components/SolutionsScreen';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -48,9 +48,10 @@ const AdminCMSThemeCustomizer = lazyWithRetry(() => import('./components/AdminCM
 const AdminWorkspaceLayout = lazyWithRetry(() => import('./components/AdminWorkspaceLayout').then(m => ({ default: m.AdminWorkspaceLayout })));
 const AdminBundleStudio = lazyWithRetry(() => import('./components/AdminBundleStudio').then(m => ({ default: m.AdminBundleStudio })));
 const AdminExamCatalogStudio = lazyWithRetry(() => import('./components/AdminExamCatalogStudio').then(m => ({ default: m.AdminExamCatalogStudio })));
-import { UniversalIngestionStudio, IngestionContentType } from './components/UniversalIngestionStudio';
-import { ChapterTestSection } from './components/ChapterTestSection';
-import { PracticeSetSection } from './components/PracticeSetSection';
+import type { IngestionContentType } from './components/UniversalIngestionStudio';
+const UniversalIngestionStudio = lazyWithRetry(() => import('./components/UniversalIngestionStudio').then(m => ({ default: m.UniversalIngestionStudio })));
+const ChapterTestSection = lazyWithRetry(() => import('./components/ChapterTestSection').then(m => ({ default: m.ChapterTestSection })));
+const PracticeSetSection = lazyWithRetry(() => import('./components/PracticeSetSection').then(m => ({ default: m.PracticeSetSection })));
 import { SEOQuestionView } from './components/SEOQuestionView';
 const AdminChapterTestManager = lazyWithRetry(() => import('./components/AdminChapterTestManager').then(m => ({ default: m.AdminChapterTestManager })));
 const AdminPracticeSetManager = lazyWithRetry(() => import('./components/AdminPracticeSetManager').then(m => ({ default: m.AdminPracticeSetManager })));
@@ -1141,6 +1142,7 @@ function MainApp() {
       : resolveQuestionsForTest(activeExamTest, questions);
 
     return (
+      <React.Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm">Loading exam engine…</div>}>
       <ExamEngine
         test={activeExamTest}
         questions={resolvedQuestions}
@@ -1150,6 +1152,7 @@ function MainApp() {
         }}
         onSubmit={handleSubmitTest}
       />
+      </React.Suspense>
     );
   }
 
@@ -1173,6 +1176,7 @@ function MainApp() {
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
         />
         <main className="flex-1 pb-20 md:pb-8">
+        <React.Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-slate-400">Loading section…</div>}>
           <SolutionsScreen
             attempt={activeAttemptReview}
             questions={resolvedQuestions}
@@ -1199,7 +1203,8 @@ function MainApp() {
               }
             }}
           />
-        </main>
+          </React.Suspense>
+      </main>
       </div>
     );
   }
@@ -1959,7 +1964,7 @@ function MainApp() {
       />
 
       {/* Universal Ingestion Studio (Universal Master Engine) */}
-      <UniversalIngestionStudio
+      {isUniversalIngestOpen && <UniversalIngestionStudio
         isOpen={isUniversalIngestOpen}
         onClose={() => setIsUniversalIngestOpen(false)}
         initialType={universalIngestConfig.type || 'MOCK_TEST'}
@@ -1971,7 +1976,7 @@ function MainApp() {
         onQuestionsIngested={newQs => setQuestions(prev => dedupeById([...newQs, ...prev]))}
         onMockTestCreated={newTest => setTests(prev => dedupeById([newTest, ...prev]))}
         onPypCreated={newPyp => setPypPapers(prev => dedupeById([newPyp, ...prev]))}
-      />
+      />}
     </div>
   );
 }
