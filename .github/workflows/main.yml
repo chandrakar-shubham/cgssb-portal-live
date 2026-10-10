@@ -55,6 +55,12 @@ jobs:
       - name: 🧪 Phase 8.5 Student Journey Safety Guard
         run: npm run test:phase8:5-journey-guard
 
+      - name: ☕ Setup Java 21 for Firestore Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: 🔐 Phase 8.5 Firestore Emulator Student Journey Tests
         run: npm run test:phase8:5:firestore-emulator
 
