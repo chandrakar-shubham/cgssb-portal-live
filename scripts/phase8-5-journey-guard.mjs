@@ -61,8 +61,14 @@ if (failures.length) {
 const attemptQueryStart = service.indexOf('export async function fetchMyAttemptsFromFirestore');
 const attemptQueryEnd = service.indexOf('\nexport async function saveLeaderboardEntryToFirestore', attemptQueryStart);
 const attemptQueryBody = service.slice(attemptQueryStart, attemptQueryEnd);
-const unboundedAttemptsRead = attemptQueryBody.includes('getDocs(query(collection(db, COLLECTIONS.ATTEMPTS), where(\'userId\', \'==\', uid)))') &&
-  !attemptQueryBody.includes('limit(');
+const attemptsUseBoundedCursorPages =
+  attemptQueryBody.includes('const pageSize = 100;') &&
+  attemptQueryBody.includes('startAfter(cursor)') &&
+  attemptQueryBody.includes('limit(pageSize)') &&
+  attemptQueryBody.includes("orderBy('submittedAt', 'desc')");
+if (!attemptsUseBoundedCursorPages) {
+  failures.push('Student attempt history: expected ordered Firestore cursor pagination with a 100-document page limit.');
+}
 
 console.log(JSON.stringify({
   phase: '8.5-student-journey-safety-audit',
@@ -73,13 +79,10 @@ console.log(JSON.stringify({
     'transactional duplicate-attempt protection',
     'authenticated owner check and immutable student attempts',
     'chunked question reads and bounded leaderboard reads',
+    'student attempt history uses 100-document cursor pages while preserving full history',
     'staging-only authenticated workload guard',
     'production 10K workflow remains read-only'
   ],
-  findings: unboundedAttemptsRead ? [{
-    severity: 'follow-up',
-    area: 'student attempt history',
-    finding: 'fetchMyAttemptsFromFirestore filters by user but has no explicit limit or pagination. Do not increase authenticated concurrency until history pagination and expected retention semantics are validated.'
-  }] : [],
+  findings: [],
   boundary: 'Static source-contract verification only; it does not claim a live authenticated Firestore journey or staging capacity test.'
 }, null, 2));
