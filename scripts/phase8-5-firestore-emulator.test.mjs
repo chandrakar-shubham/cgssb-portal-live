@@ -7,10 +7,13 @@ import {
 import {
   collection,
   doc,
+  documentId,
   getDoc,
   getDocs,
   limit,
+  orderBy,
   query,
+  startAfter,
   runTransaction,
   setDoc,
   where,
@@ -117,6 +120,41 @@ try {
     const snap = await getDocs(query(collection(studentA, 'attempts'), where('userId', '==', 'student-a')));
     const matches = snap.docs.filter(d => d.id === 'attempt-idempotent');
     if (matches.length !== 1) throw new Error('Expected exactly one attempt document after retry');
+  });
+
+  await check('attempt history cursor pages return all records without overlap', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      const writes = [];
+      for (let i = 0; i < 205; i++) {
+        const id = 'attempt-page-' + String(i).padStart(3, '0');
+        writes.push(setDoc(doc(adminDb, 'attempts', id), {
+          ...attempt('student-a', id),
+          submittedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+        }));
+      }
+      await Promise.all(writes);
+    });
+
+    const allIds = [];
+    let cursor;
+    while (true) {
+      const constraints = [
+        where('userId', '==', 'student-a'),
+        orderBy('submittedAt', 'desc'),
+        orderBy(documentId(), 'desc'),
+        ...(cursor ? [startAfter(cursor)] : []),
+        limit(100),
+      ];
+      const page = await getDocs(query(collection(studentA, 'attempts'), ...constraints));
+      allIds.push(...page.docs.map(d => d.id));
+      if (page.size < 100) break;
+      cursor = page.docs[page.docs.length - 1];
+    }
+
+    const seededIds = allIds.filter(id => id.startsWith('attempt-page-'));
+    if (seededIds.length !== 205) throw new Error('Expected 205 paginated attempts, got ' + seededIds.length);
+    if (new Set(seededIds).size !== 205) throw new Error('Attempt cursor pages contained duplicate documents');
   });
 
   console.log(JSON.stringify({
