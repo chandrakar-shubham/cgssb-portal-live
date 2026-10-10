@@ -5,6 +5,8 @@ import {
   query,
   where,
   orderBy,
+  startAfter,
+  QueryDocumentSnapshot,
   limit,
   getCountFromServer,
   getDoc,
@@ -1351,17 +1353,43 @@ export async function saveAttemptToFirestore(attempt: TestAttempt): Promise<Test
   }
 }
 
+/**
+ * Loads a student's complete attempt history in bounded cursor pages.
+ *
+ * Keep this all-history contract: analytics, mistake tracking, re-attempt
+ * recovery, and leaderboard profile calculations currently consume the full
+ * list. Each network query is capped at 100 documents; do not replace this
+ * with a single page or a hard history cap without migrating those consumers.
+ */
 export async function fetchMyAttemptsFromFirestore(userId?: string): Promise<TestAttempt[]> {
   const uid = userId || auth.currentUser?.uid;
   if (!db || !uid) return [];
+
+  const attemptsRef = collection(db, COLLECTIONS.ATTEMPTS);
+  const pageSize = 100;
+  const results: TestAttempt[] = [];
+  let cursor: QueryDocumentSnapshot | undefined;
+
   try {
-    const snap = await withTimeout(
-      getDocs(query(collection(db, COLLECTIONS.ATTEMPTS), where('userId', '==', uid))),
-      5000
-    );
-    return snap.docs.map(d => d.data() as TestAttempt).sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+    while (true) {
+      const constraints = [
+        where('userId', '==', uid),
+        orderBy('submittedAt', 'desc'),
+        orderBy(documentId(), 'desc'),
+        ...(cursor ? [startAfter(cursor)] : []),
+        limit(pageSize)
+      ];
+      const page = await withTimeout(getDocs(query(attemptsRef, ...constraints)), 5000);
+      results.push(...page.docs.map(d => d.data() as TestAttempt));
+
+      if (page.size < pageSize) break;
+      cursor = page.docs[page.docs.length - 1];
+    }
+
+    return results;
   } catch (err) {
-    console.warn('Error fetching student attempts from Firestore:', err);
+    // Do not return a silently truncated history if a later page fails.
+    console.warn('Error fetching paginated student attempts from Firestore:', err);
     return [];
   }
 }
