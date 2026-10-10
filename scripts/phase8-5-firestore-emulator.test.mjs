@@ -130,7 +130,7 @@ try {
         const id = 'attempt-page-' + String(i).padStart(3, '0');
         writes.push(setDoc(doc(adminDb, 'attempts', id), {
           ...attempt('student-a', id),
-          submittedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+          ...(i === 0 ? {} : { submittedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString() }),
         }));
       }
       await Promise.all(writes);
@@ -141,8 +141,7 @@ try {
     while (true) {
       const constraints = [
         where('userId', '==', 'student-a'),
-        orderBy('submittedAt', 'desc'),
-        orderBy(documentId(), 'desc'),
+        orderBy(documentId(), 'asc'),
         ...(cursor ? [startAfter(cursor)] : []),
         limit(100),
       ];
@@ -155,6 +154,7 @@ try {
     const seededIds = allIds.filter(id => id.startsWith('attempt-page-'));
     if (seededIds.length !== 205) throw new Error('Expected 205 paginated attempts, got ' + seededIds.length);
     if (new Set(seededIds).size !== 205) throw new Error('Attempt cursor pages contained duplicate documents');
+    if (!seededIds.includes('attempt-page-000')) throw new Error('Legacy attempt without submittedAt was omitted');
   });
 
   console.log(JSON.stringify({
