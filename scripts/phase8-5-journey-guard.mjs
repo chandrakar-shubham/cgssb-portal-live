@@ -65,7 +65,8 @@ const attemptsUseBoundedCursorPages =
   attemptQueryBody.includes('const pageSize = 100;') &&
   attemptQueryBody.includes('startAfter(cursor)') &&
   attemptQueryBody.includes('limit(pageSize)') &&
-  attemptQueryBody.includes("orderBy('submittedAt', 'desc')");
+  attemptQueryBody.includes('orderBy(documentId(), \'asc\')') &&
+  attemptQueryBody.includes("results.sort((a, b) =>");
 if (!attemptsUseBoundedCursorPages) {
   failures.push('Student attempt history: expected ordered Firestore cursor pagination with a 100-document page limit.');
 }
