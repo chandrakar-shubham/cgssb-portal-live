@@ -1,4 +1,5 @@
 name: Phase 8 Distributed 10000-VU Promotion Gate
+# Read-only routes only; no authentication or writes are exercised.
 
 on:
   workflow_dispatch:
@@ -55,7 +56,7 @@ jobs:
           VUS: ${{ matrix.vus }}
           DURATION_SEC: ${{ inputs.duration_sec }}
           SHARD_ID: ${{ matrix.id }}
-          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/practice-drills
+          PATHS: /,/cgvyapam/mock-tests,/cgpsc/mock-tests,/leaderboard,/cgvyapam/pyp-papers,/cgvyapam-cgssb/chapter-tests,/cgvyapam-cgssb/practice-drills
           THINK_MIN_MS: 700
           THINK_MAX_MS: 1400
           RESULT_FILE: phase8-${{ matrix.id }}.json
