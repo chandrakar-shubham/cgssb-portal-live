@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { getStudentPageTitle, getStudentTabPath, parseAppRoute } from './app/studentRoutes';
+import { useAppNavigation } from './app/useAppNavigation';
 import { buildExamTest, dedupeById, resolveQuestionsForTest } from './app/examQuestionSet';
 import { addDeletedId, removeDeletedId } from './utils/localDeletionStore';
 import { LanguageProvider } from './context/LanguageContext';
@@ -129,64 +129,7 @@ function MainApp() {
   const { config, isMaintenanceMode } = useRemoteConfig();
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
-  // Route & SEO State
-  const initialRoute = parseAppRoute();
-  const [currentRoute, setCurrentRoute] = useState<'student' | 'admin'>(initialRoute.route);
-  const [studentActiveTab, setStudentActiveTabState] = useState<string>(initialRoute.tab);
   const [selectedSEOQuestion, setSelectedSEOQuestion] = useState<Question | null>(null);
-
-  // Navigates and updates browser URL + document title for SEO
-  const setStudentActiveTab = (tab: string) => {
-    setActivePageSlug(null);
-    setStudentActiveTabState(tab);
-    setCurrentRoute('student');
-    const targetPath = getStudentTabPath(tab, user ? getStudentSlug(user) : undefined);
-    if (window.location.pathname !== targetPath) {
-      try {
-        window.history.pushState({}, '', targetPath);
-      } catch {
-        window.location.hash = `#${targetPath}`;
-      }
-    }
-    document.title = getStudentPageTitle(tab);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Track browser forward / back button and hash changes
-  useEffect(() => {
-    const handleLocationChange = () => {
-      const { route, tab, pageSlug, postSlug } = parseAppRoute();
-      setCurrentRoute(route);
-      setStudentActiveTabState(tab);
-      if (pageSlug) setActivePageSlug(pageSlug);
-      if (postSlug) setActivePostSlug(postSlug);
-      document.title = route === 'admin' ? 'Admin Portal & CMS | cgtest.in' : tab === 'student-tests' ? 'My Tests | cgtest.in' : getStudentPageTitle(tab);
-    };
-
-    window.addEventListener('popstate', handleLocationChange);
-    window.addEventListener('hashchange', handleLocationChange);
-    return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-      window.removeEventListener('hashchange', handleLocationChange);
-    };
-  }, []);
-
-  const navigateToAdmin = () => {
-    if (window.location.pathname !== '/admin') {
-      try {
-        window.history.pushState({}, '', '/admin');
-      } catch {
-        window.location.hash = '#/admin';
-      }
-    }
-    document.title = 'Admin Portal & CMS | CGSSB Test';
-    setCurrentRoute('admin');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const navigateToStudent = () => {
-    setStudentActiveTab('tests');
-  };
 
   const [selectedCategory, setSelectedCategory] = useState<ExamCategory | 'ALL'>('ALL');
 
@@ -271,9 +214,20 @@ function MainApp() {
     handleSaveCmsSettings,
   } = useCmsManager();
 
-  // Selected slug for dynamic page or post viewing
   const [activePageSlug, setActivePageSlug] = useState<string | null>(null);
   const [activePostSlug, setActivePostSlug] = useState<string | null>(null);
+  const {
+    currentRoute,
+    setCurrentRoute,
+    studentActiveTab,
+    setStudentActiveTab,
+    navigateToAdmin,
+    navigateToStudent,
+  } = useAppNavigation({
+    userSlug: user ? getStudentSlug(user) : undefined,
+    setActivePageSlug,
+    setActivePostSlug,
+  });
 
   const [attempts, setAttempts] = useState<TestAttempt[]>([]);
 
