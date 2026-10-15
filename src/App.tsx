@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { getStudentPageTitle, getStudentTabPath, parseAppRoute } from './app/studentRoutes';
+import { buildExamTest, dedupeById, resolveQuestionsForTest } from './app/examQuestionSet';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 const StudentDashboard = lazyWithRetry(() => import('./components/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
@@ -237,100 +238,6 @@ function MainApp() {
   const [activeExamQuestions, setActiveExamQuestions] = useState<Question[]>([]);
   const [activeAttemptReview, setActiveAttemptReview] = useState<TestAttempt | null>(null);
   const [attemptReviewReturnPath, setAttemptReviewReturnPath] = useState<string | null>(null);
-
-  // Helper to deduplicate objects with an 'id' attribute
-  function dedupeById<T extends { id: string }>(items: T[]): T[] {
-    const seen = new Set<string>();
-    const result: T[] = [];
-    for (const item of items) {
-      if (item && item.id && !seen.has(item.id)) {
-        seen.add(item.id);
-        result.push(item);
-      }
-    }
-    return result;
-  }
-
-  // Resolve the complete question set for a test.
-  // Some legacy test documents contain stale/incomplete section.questionIds even
-  // though questionCount and the actual question bank contain the full paper.
-  function resolveQuestionsForTest(test: MockTest, source: Question[]): Question[] {
-    const expected = Math.max(0, Number(test.questionCount || 0));
-    const ids = Array.isArray(test.sections)
-      ? test.sections.flatMap(section => Array.isArray(section.questionIds) ? section.questionIds : [])
-      : [];
-
-    const selectedIds = new Set<string>();
-    const selected: Question[] = [];
-    const add = (q: Question) => {
-      if (q?.id && !selectedIds.has(q.id)) {
-        selectedIds.add(q.id);
-        selected.push(q);
-      }
-    };
-
-    ids.forEach(id => {
-      const q = source.find(item => item.id === id);
-      if (q) add(q);
-    });
-
-    if (expected > selected.length) {
-      const examName = String(test.examName || '').trim().toLowerCase();
-      const authority = String(test.authority || '').trim().toLowerCase();
-      const category = String(test.category || '').trim().toLowerCase();
-
-      const exactExam = examName
-        ? source.filter(q => String(q.examName || '').trim().toLowerCase() === examName)
-        : [];
-      exactExam.forEach(add);
-
-      if (expected > selected.length) {
-        source
-          .filter(q => {
-            if (selectedIds.has(q.id)) return false;
-            const qAuthority = String(q.authority || '').trim().toLowerCase();
-            const qCategory = String(q.category || '').trim().toLowerCase();
-            return (authority && qAuthority === authority) || (category && qCategory === category);
-          })
-          .forEach(add);
-      }
-    }
-
-    if (expected > selected.length) {
-      source.forEach(add);
-    }
-
-    // The section question IDs are the canonical paper definition. Never truncate
-    // a valid section-defined paper because a stale questionCount says 20/50/100.
-    return selected;
-  }
-
-  function buildExamTest(test: MockTest, examQuestions: Question[]): MockTest {
-    const actualCount = examQuestions.length;
-    const existingIds = new Set(
-      (test.sections || []).flatMap(section => section.questionIds || [])
-    );
-    const missingIds = examQuestions
-      .map(q => q.id)
-      .filter(id => !existingIds.has(id));
-
-    if (missingIds.length === 0) {
-      return { ...test, questionCount: actualCount };
-    }
-
-    return {
-      ...test,
-      questionCount: actualCount,
-      sections: [
-        ...(test.sections || []),
-        {
-          id: 'sec-' + test.id + '-additional',
-          name: 'Additional Questions',
-          questionIds: missingIds,
-        },
-      ],
-    };
-  }
 
   // Helper to get deleted IDs set from localStorage
   function getDeletedIds(key: string): Set<string> {
