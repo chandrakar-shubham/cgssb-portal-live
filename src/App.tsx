@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { getStudentPageTitle, getStudentTabPath, parseAppRoute } from './app/studentRoutes';
 import { buildExamTest, dedupeById, resolveQuestionsForTest } from './app/examQuestionSet';
+import { addDeletedId, removeDeletedId } from './utils/localDeletionStore';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 const StudentDashboard = lazyWithRetry(() => import('./components/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
@@ -238,53 +239,6 @@ function MainApp() {
   const [activeExamQuestions, setActiveExamQuestions] = useState<Question[]>([]);
   const [activeAttemptReview, setActiveAttemptReview] = useState<TestAttempt | null>(null);
   const [attemptReviewReturnPath, setAttemptReviewReturnPath] = useState<string | null>(null);
-
-  // Helper to get deleted IDs set from localStorage
-  function getDeletedIds(key: string): Set<string> {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return new Set(parsed);
-      }
-    } catch {}
-    return new Set<string>();
-  }
-
-  function addDeletedId(key: string, id: string) {
-    try {
-      const set = getDeletedIds(key);
-      set.add(id);
-      localStorage.setItem(key, JSON.stringify(Array.from(set)));
-    } catch {}
-  }
-
-  function removeDeletedId(key: string, id: string) {
-    try {
-      const set = getDeletedIds(key);
-      if (set.has(id)) {
-        set.delete(id);
-        localStorage.setItem(key, JSON.stringify(Array.from(set)));
-      }
-    } catch {}
-  }
-
-  // Helper to deduplicate and merge initial items with saved local state (respecting deletions)
-  function mergeWithInitial<T extends { id: string }>(initial: T[], saved: T[], deletedKey: string): T[] {
-    const deletedSet = getDeletedIds(deletedKey);
-    const map = new Map<string, T>();
-    // 1. First populate all built-in latest catalog items (skipping deleted)
-    initial.forEach(item => {
-      if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
-    });
-    // 2. Add/overlay saved items (skipping deleted)
-    saved.forEach(item => {
-      if (item && item.id && !deletedSet.has(item.id)) {
-        map.set(item.id, item);
-      }
-    });
-    return Array.from(map.values());
-  }
 
   // App Data State (Encapsulated via Headless Domain Hooks)
   const {
