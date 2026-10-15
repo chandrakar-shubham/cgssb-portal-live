@@ -9,6 +9,16 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { useAppNavigation } from './app/useAppNavigation';
 import { buildExamTest, dedupeById, resolveQuestionsForTest } from './app/examQuestionSet';
 import { calculateExamScore } from './app/examScoring';
+import { createQuestion } from './app/questionFactory';
+import { createPypPaper } from './app/pypFactory';
+import { createMockTest } from './app/mockTestFactory';
+import { createTestFromPyp } from './app/pypTestFactory';
+import { createPracticeTestFromPyp } from './app/pypPracticeTestFactory';
+import { loadExamSessionQuestions } from './app/examSessionQuestions';
+import { buildAttemptIdentity } from './app/attemptIdentity';
+import { getAdminRequestHeaders } from './app/adminRequestHeaders';
+import { mergeQuestions, mergeTests } from './app/catalogMerge';
+import { countMarkedForReview } from './app/attemptReviewStats';
 import { addDeletedId, removeDeletedId } from './utils/localDeletionStore';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
@@ -329,23 +339,7 @@ function MainApp() {
   const handleConfirmStartExam = async (chosenLanguage: 'hi' | 'en') => {
     if (!preFlightTest) return;
 
-    const sectionQuestionIds = Array.from(new Set(
-      (preFlightTest.sections || []).flatMap(section =>
-        Array.isArray(section.questionIds) ? section.questionIds.map(String) : []
-      )
-    ));
-
-    let examQuestions = sectionQuestionIds.length > 0
-      ? (await fetchQuestionsByIdsFromFirestore(sectionQuestionIds)).map(migrateLegacyQuestion)
-      : [];
-
-    if (examQuestions.length === 0 && preFlightTest.programId) {
-      examQuestions = (await fetchQuestionsByProgramFromFirestore(preFlightTest.programId)).map(migrateLegacyQuestion);
-    }
-
-    if (examQuestions.length === 0 && import.meta.env.DEV) {
-      examQuestions = resolveQuestionsForTest(preFlightTest, questions);
-    }
+    const examQuestions = await loadExamSessionQuestions(preFlightTest, questions, import.meta.env.DEV);
     if (examQuestions.length === 0) {
       alert('This test has no available questions yet. Please try again after the question bank finishes loading.');
       return;
@@ -370,33 +364,7 @@ function MainApp() {
     const relevantQs = paper.programId
       ? (await fetchQuestionsByProgramFromFirestore(paper.programId)).map(migrateLegacyQuestion)
       : [];
-    const pypTest: MockTest = {
-      id: `pyp-test-${paper.id}`,
-      title: `${paper.title} (Real Exam Simulation)`,
-      category: paper.examCategory,
-      authorityId: paper.authorityId,
-      programId: paper.programId,
-      postId: paper.postId,
-      seriesId: paper.seriesId,
-      isPYP: true,
-      originType: 'pyq',
-      pypYear: paper.year,
-      description: `Official past paper simulation. Converted from archived examination ${paper.year}.`,
-      durationMinutes: paper.durationMinutes,
-      questionCount: relevantQs.length > 0 ? relevantQs.length : paper.totalQuestions,
-      marksPerQuestion: paper.examCategory === 'CGPSC' ? 2.0 : 1.0,
-      negativeMarksPerQuestion: paper.examCategory === 'CGPSC' ? 0.666 : 0.333,
-      sections: [
-        {
-          id: 'pyp-sec-1',
-          name: 'Official Exam Paper',
-          questionIds: relevantQs.length > 0 ? relevantQs.map(q => q.id) : questions.map(q => q.id),
-        },
-      ],
-      difficultyDistribution: { easy: 40, medium: 40, hard: 20 },
-      attemptsCount: 0,
-      createdAt: new Date().toISOString(),
-    };
+    const pypTest = createPracticeTestFromPyp(paper, relevantQs, questions);
 
     handleStartTest(pypTest);
   };
@@ -436,18 +404,13 @@ function MainApp() {
       sectorAnalysis,
     } = score;
 
-    const targetExam = user?.targetExam || currentTest.examName || currentTest.title;
-    const authority = String(currentTest.authority || currentTest.category || 'CG').toUpperCase();
-    const year = user?.targetYear || 2026;
-    const normalizedTarget = String(targetExam).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
-    const targetKey = authority + ':' + normalizedTarget + ':' + year;
-    const seriesId = currentTest.bundleId || currentTest.id;
-    const safeSubmissionId = String(submission.submissionId || '').trim();
-    const fallbackSubmissionId = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const stableSubmissionId = safeSubmissionId || fallbackSubmissionId;
-    const attemptId = user?.id
-      ? 'att-' + encodeURIComponent(user.id + '-' + currentTest.id + '-' + stableSubmissionId)
-      : 'att-guest-' + encodeURIComponent(currentTest.id + '-' + stableSubmissionId);
+    const { targetExam, targetKey, seriesId, stableSubmissionId, attemptId } = buildAttemptIdentity({
+      userId: user?.id,
+      targetExam: user?.targetExam,
+      targetYear: user?.targetYear,
+      test: currentTest,
+      submissionId: submission.submissionId,
+    });
 
     const newAttempt: TestAttempt = {
       id: attemptId,
@@ -470,7 +433,7 @@ function MainApp() {
       negativeMarksDeducted: negDeduction,
       responses: submission.responses,
       questionStatuses: submission.questionStatuses,
-      markedForReviewCount: Object.values(submission.questionStatuses).filter(s => s === 'marked_for_review' || s === 'answered_and_marked').length,
+      markedForReviewCount: countMarkedForReview(submission.questionStatuses),
       sectorAnalysis,
       seriesId,
       targetKey,
@@ -505,37 +468,7 @@ function MainApp() {
 
   // ADMIN QUESTION BANK ACTIONS
   const handleAddQuestion = (qData: Partial<Question>) => {
-    const newQ: Question = {
-      id: qData.id || `q-cg-${Date.now().toString().slice(-6)}`,
-      subject: qData.subject || 'Chhattisgarh Special Knowledge',
-      topic: qData.topic || 'General',
-      subtopic: qData.subtopic || 'General',
-      difficulty: qData.difficulty || 'Medium',
-      category: qData.category || 'CGSSB',
-      authorityId: qData.authorityId,
-      programId: qData.programId,
-      postId: qData.postId,
-      seriesId: qData.seriesId,
-      questionText: qData.questionText || '',
-      questionHindi: qData.questionHindi || '',
-      options: qData.options || [],
-      correctOption: qData.correctOption || 'A',
-      marks: qData.marks || 1.0,
-      negativeMarks: qData.negativeMarks || 0.333,
-      explanation: qData.explanation || '',
-      explanationHindi: qData.explanationHindi || '',
-      pypSource: qData.pypSource || '',
-      pypAppearances: qData.pypAppearances || [],
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    const adminHeaders = () => {
-      const token = getAdminToken();
-      return {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      };
-    };
-
+    const newQ = createQuestion(qData);
     removeDeletedId('cgssb_deleted_questions', newQ.id);
     setQuestions(prev => [newQ, ...prev]);
     saveQuestionsToFirestore([newQ]).catch(() => null);
@@ -572,27 +505,7 @@ function MainApp() {
 
   // ADMIN PYP ACTIONS
   const handleAddPYP = (pypData: Partial<PreviousYearPaper>) => {
-    const paperId = pypData.id || `pyp-${Date.now()}`;
-    const newPaper: PreviousYearPaper = {
-      id: paperId,
-      title: pypData.title || 'Official Exam Paper',
-      examCategory: pypData.examCategory || 'CGSSB',
-      authorityId: pypData.authorityId,
-      programId: pypData.programId,
-      postId: pypData.postId,
-      seriesId: pypData.seriesId,
-      year: pypData.year || 2024,
-      totalQuestions: pypData.totalQuestions || 100,
-      durationMinutes: pypData.durationMinutes || 120,
-      marks: pypData.marks || 100,
-      negativeMarkingRatio: pypData.negativeMarkingRatio || '1/3rd (0.333)',
-      paperSummary: pypData.paperSummary || '',
-      subjectsWeightage: pypData.subjectsWeightage || [],
-      isOfficialPaper: true,
-      downloadFileName: pypData.downloadFileName,
-      linkedMockTestId: pypData.linkedMockTestId,
-      linkedQuestionIds: pypData.linkedQuestionIds,
-    };
+    const newPaper = createPypPaper(pypData);
     removeDeletedId('cgssb_deleted_pyp', newPaper.id);
     setPypPapers(prev => dedupeById([newPaper, ...prev]));
     savePypPaperToFirestore(newPaper).catch(() => null);
@@ -611,34 +524,7 @@ function MainApp() {
   };
 
   const handleConvertPYPToMockTest = (pyp: PreviousYearPaper) => {
-    const testId = pyp.linkedMockTestId || `test-from-${pyp.id}`;
-    const newTest: MockTest = {
-      id: testId,
-      title: `${pyp.title} (Official Mock Test)`,
-      category: pyp.examCategory,
-      authorityId: pyp.authorityId,
-      programId: pyp.programId,
-      postId: pyp.postId,
-      seriesId: pyp.seriesId,
-      description: `Official past paper simulation. Converted from archived examination ${pyp.year}.`,
-      durationMinutes: pyp.durationMinutes,
-      questionCount: pyp.totalQuestions,
-      marksPerQuestion: pyp.examCategory === 'CGPSC' ? 2.0 : 1.0,
-      negativeMarksPerQuestion: pyp.examCategory === 'CGPSC' ? 0.66 : 0.333,
-      sections: [
-        {
-          id: `sec-${pyp.id}`,
-          name: 'Official Exam Paper',
-          questionIds: (pyp.programId
-            ? questions.filter(q => String(q.programId || '') === String(pyp.programId))
-            : questions.filter(q => q.category === pyp.examCategory)
-          ).map(q => q.id),
-        },
-      ],
-      difficultyDistribution: { easy: 40, medium: 40, hard: 20 },
-      attemptsCount: 0,
-      createdAt: new Date().toISOString(),
-    };
+    const newTest = createTestFromPyp(pyp, questions);
 
     removeDeletedId('cgssb_deleted_tests', newTest.id);
     setTests(prev => dedupeById([newTest, ...prev]));
@@ -704,24 +590,7 @@ function MainApp() {
   };
 
   const handleAddTest = (newTest: Partial<MockTest>) => {
-    const fullTest: MockTest = {
-      id: newTest.id || `test-${Date.now()}`,
-      title: newTest.title || 'New Mock Test',
-      category: newTest.category || 'CGSSB',
-      authorityId: newTest.authorityId,
-      programId: newTest.programId,
-      postId: newTest.postId,
-      seriesId: newTest.seriesId,
-      description: newTest.description || '',
-      durationMinutes: newTest.durationMinutes || 120,
-      questionCount: newTest.questionCount || 100,
-      marksPerQuestion: newTest.marksPerQuestion || 1.0,
-      negativeMarksPerQuestion: newTest.negativeMarksPerQuestion || 0.333,
-      sections: newTest.sections || [{ id: 'sec-1', name: 'General', questionIds: [] }],
-      attemptsCount: 0,
-      isPublished: newTest.isPublished !== false,
-      createdAt: new Date().toISOString(),
-    };
+    const fullTest = createMockTest(newTest);
     removeDeletedId('cgssb_deleted_tests', fullTest.id);
     setTests(prev => dedupeById([fullTest, ...prev]));
     saveTestToFirestore(fullTest).catch(() => null);
@@ -743,7 +612,7 @@ function MainApp() {
   const handleBulkQuestionsAdded = (newQs: Question[]) => {
     if (!newQs || newQs.length === 0) return;
     newQs.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
-    setQuestions(prev => dedupeById([...newQs, ...prev]));
+    setQuestions(prev => mergeQuestions(prev, newQs));
     saveQuestionsToFirestore(newQs).catch(() => null);
     const token = getAdminToken();
   };
@@ -752,7 +621,7 @@ function MainApp() {
   const handleBulkTestsAdded = (newTests: MockTest[]) => {
     if (!newTests || newTests.length === 0) return;
     newTests.forEach(t => removeDeletedId('cgssb_deleted_tests', t.id));
-    setTests(prev => dedupeById([...newTests, ...prev]));
+    setTests(prev => mergeTests(prev, newTests));
     newTests.forEach(t => {
       saveTestToFirestore(t).catch(() => null);
     });
