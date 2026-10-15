@@ -15,10 +15,19 @@ import { createMockTest } from './app/mockTestFactory';
 import { createTestFromPyp } from './app/pypTestFactory';
 import { createPracticeTestFromPyp } from './app/pypPracticeTestFactory';
 import { loadExamSessionQuestions } from './app/examSessionQuestions';
-import { buildAttemptIdentity } from './app/attemptIdentity';
 import { getAdminRequestHeaders } from './app/adminRequestHeaders';
 import { mergeQuestions, mergeTests } from './app/catalogMerge';
-import { countMarkedForReview } from './app/attemptReviewStats';
+import { createTestAttempt } from './app/attemptFactory';
+import { updateQuestionById, removeQuestionById } from './app/questionCatalogMutations';
+import { togglePublishedState, updateTestById } from './app/testCatalogMutations';
+import { mergeCompletedQuestions } from './app/completedQuestionMerge';
+import { resolveAttemptReviewQuestions } from './app/attemptReviewResolver';
+import { selectPypQuestionIds } from './app/pypQuestionSelection';
+import { hasGuestUsedFreeTest, requiresProPass } from './app/studentAccessPolicy';
+import { mergeUserAttemptHistory } from './app/attemptHistoryMerge';
+import { linkPypToTest } from './app/pypLinkedTestUpdate';
+import { mergePublishedQuestions, mergePublishedTests } from './app/adminCatalogPublishMerge';
+import { getPypDeleteStorageKey, getPypStorageKey } from './app/pypMetadata';
 import { addDeletedId, removeDeletedId } from './utils/localDeletionStore';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
@@ -320,7 +329,7 @@ function MainApp() {
     }
     // Guest Policy: 1 Free Test before requiring signup (claims 1-month free pass on signup)
     if (!user) {
-      const hasTakenGuestTest = typeof window !== 'undefined' && localStorage.getItem('cgtest_guest_test_completed') === 'true';
+      const hasTakenGuestTest = typeof window !== 'undefined' && hasGuestUsedFreeTest(localStorage.getItem('cgtest_guest_test_completed'));
       if (hasTakenGuestTest) {
         setAuthModalInitialMode('signup');
         setIsAuthModalOpen(true);
@@ -328,7 +337,7 @@ function MainApp() {
       }
     }
     // If test is marked as Pro and candidate does not have pass
-    if (test.isPro && !isUserPassActive(user)) {
+    if (requiresProPass(test.isPro, isUserPassActive(user))) {
       setStudentActiveTab('pass');
       return;
     }
@@ -365,6 +374,7 @@ function MainApp() {
       ? (await fetchQuestionsByProgramFromFirestore(paper.programId)).map(migrateLegacyQuestion)
       : [];
     const pypTest = createPracticeTestFromPyp(paper, relevantQs, questions);
+    pypTest.sections[0].questionIds = selectPypQuestionIds(paper, relevantQs, questions);
 
     handleStartTest(pypTest);
   };
@@ -391,61 +401,13 @@ function MainApp() {
       marksPerQuestion: marksPerQ,
       negativeMarksPerQuestion: negPenaltyPerQ,
     });
-    const {
-      correctCount,
-      incorrectCount,
-      unattemptedCount,
-      netScore,
-      maxScore,
-      percentage,
-      attemptedCount,
-      accuracy,
-      negDeduction,
-      sectorAnalysis,
-    } = score;
-
-    const { targetExam, targetKey, seriesId, stableSubmissionId, attemptId } = buildAttemptIdentity({
-      userId: user?.id,
-      targetExam: user?.targetExam,
-      targetYear: user?.targetYear,
-      test: currentTest,
-      submissionId: submission.submissionId,
-    });
-
-    const newAttempt: TestAttempt = {
-      id: attemptId,
-      testId: currentTest.id,
-      testTitle: currentTest.title,
-      category: currentTest.category,
-      userId: user?.id || 'guest',
-      userName: user?.name || 'Aspirant Student',
-      submittedAt: new Date().toISOString(),
-      timeTakenSeconds: submission.timeTakenSeconds,
-      totalDurationSeconds: (currentTest.durationMinutes || 90) * 60,
-      score: netScore,
-      maxScore,
-      percentage,
-      accuracy,
-      correctCount,
-      incorrectCount,
-      unattemptedCount,
-      attemptedCount,
-      negativeMarksDeducted: negDeduction,
-      responses: submission.responses,
-      questionStatuses: submission.questionStatuses,
-      markedForReviewCount: countMarkedForReview(submission.questionStatuses),
-      sectorAnalysis,
-      seriesId,
-      targetKey,
-      targetExam,
-      submissionId: stableSubmissionId,
-    };
+    const newAttempt = createTestAttempt(currentTest, user, submission, score);
 
     let persistedAttempt = newAttempt;
     if (user?.id) {
       try {
         persistedAttempt = await saveAttemptToFirestore(newAttempt);
-        const allMineAttempts = [persistedAttempt, ...attempts.filter(a => a.userId === user.id && a.id !== persistedAttempt.id)];
+        const allMineAttempts = mergeUserAttemptHistory(persistedAttempt, attempts, user);
         const profiles = buildLeaderboardProfilesForUser(user, allMineAttempts);
         await saveLeaderboardProfilesToFirestore(profiles);
       } catch (error) {
@@ -482,7 +444,7 @@ function MainApp() {
     };
 
     setQuestions(prev => {
-      const updated = prev.map(q => (q.id === id ? { ...q, ...qData } : q));
+      const updated = updateQuestionById(prev, id, qData);
       const target = updated.find(q => q.id === id);
       if (target) {
         saveQuestionsToFirestore([target]).catch(() => null);
@@ -495,7 +457,7 @@ function MainApp() {
     addDeletedId('cgssb_deleted_questions', id);
     const token = getAdminToken();
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const updated = questions.filter(q => q.id !== id);
+    const updated = removeQuestionById(questions, id);
     setQuestions(updated);
     try {
       localStorage.setItem('cgssb_questions', JSON.stringify(updated));
@@ -513,11 +475,11 @@ function MainApp() {
   };
 
   const handleDeletePYP = (id: string) => {
-    addDeletedId('cgssb_deleted_pyp', id);
+    addDeletedId(getPypDeleteStorageKey(), id);
     const updated = pypPapers.filter(p => p.id !== id);
     setPypPapers(updated);
     try {
-      localStorage.setItem('cgssb_pyp', JSON.stringify(updated));
+      localStorage.setItem(getPypStorageKey(), JSON.stringify(updated));
     } catch {}
     deletePypPaperFromFirestore(id).catch(() => null);
     const token = getAdminToken();
@@ -527,9 +489,9 @@ function MainApp() {
     const newTest = createTestFromPyp(pyp, questions);
 
     removeDeletedId('cgssb_deleted_tests', newTest.id);
-    setTests(prev => dedupeById([newTest, ...prev]));
+    setTests(prev => mergePublishedTests(prev, [newTest]));
     saveTestToFirestore(newTest).catch(() => null);
-    const updatedPaper = { ...pyp, linkedMockTestId: newTest.id };
+    const updatedPaper = linkPypToTest(pyp, newTest.id);
     setPypPapers(prev =>
       prev.map(p => (p.id === pyp.id ? updatedPaper : p))
     );
@@ -539,14 +501,10 @@ function MainApp() {
 
   // ADMIN TEST MANAGEMENT ACTIONS
   const handleTogglePublishTest = async (testId: string) => {
-    const target = tests.find(t => t.id === testId);
-    const nextStatus = target ? target.isPublished === false : false;
     setTests(prev => {
-      const updated = prev.map(t => (t.id === testId ? { ...t, isPublished: nextStatus } : t));
+      const updated = togglePublishedState(prev, testId);
       const updatedTarget = updated.find(t => t.id === testId);
-      if (updatedTarget) {
-        saveTestToFirestore(updatedTarget).catch(() => null);
-      }
+      if (updatedTarget) saveTestToFirestore(updatedTarget).catch(() => null);
       return updated;
     });
     try {
@@ -560,11 +518,9 @@ function MainApp() {
     let targetTest: MockTest | null = null;
     removeDeletedId('cgssb_deleted_tests', testId);
     setTests(prev => {
-      const updated = prev.map(t => (t.id === testId ? { ...t, ...updates } : t));
+      const updated = updateTestById(prev, testId, updates);
       targetTest = updated.find(t => t.id === testId) || null;
-      if (targetTest) {
-        saveTestToFirestore(targetTest).catch(() => null);
-      }
+      if (targetTest) saveTestToFirestore(targetTest).catch(() => null);
       return updated;
     });
     try {
@@ -601,7 +557,7 @@ function MainApp() {
   const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
     removeDeletedId('cgssb_deleted_tests', newTest.id);
     newQuestions.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
-    setQuestions(prev => dedupeById([...newQuestions, ...prev]));
+    setQuestions(prev => mergePublishedQuestions(prev, newQuestions));
     setTests(prev => dedupeById([newTest, ...prev]));
     saveTestToFirestore(newTest).catch(() => null);
     saveQuestionsToFirestore(newQuestions).catch(() => null);
@@ -634,13 +590,7 @@ function MainApp() {
   const handleSaveCompletedTestAndQuestions = (updatedTest: MockTest, updatedQuestions: Question[]) => {
     handleUpdateTest(updatedTest.id, updatedTest);
     if (updatedQuestions && updatedQuestions.length > 0) {
-      setQuestions(prev => {
-        const updatedMap = new Map(updatedQuestions.map(q => [q.id, q]));
-        const existingIds = new Set(prev.map(q => q.id));
-        const newQuestions = updatedQuestions.filter(q => !existingIds.has(q.id));
-        const merged = prev.map(q => updatedMap.has(q.id) ? updatedMap.get(q.id)! : q);
-        return dedupeById([...newQuestions, ...merged]);
-      });
+      setQuestions(prev => mergeCompletedQuestions(prev, updatedQuestions));
       saveQuestionsToFirestore(updatedQuestions).catch(() => null);
       const token = getAdminToken();
     }
@@ -715,10 +665,7 @@ function MainApp() {
   // VIEW 2: ACTIVE ATTEMPT REVIEW SCREEN
   // =========================================================================
   if (activeAttemptReview) {
-    const attemptQuestions = questions.filter(q =>
-      Object.keys(activeAttemptReview.responses).includes(q.id)
-    );
-    const resolvedQuestions = attemptQuestions.length > 0 ? attemptQuestions : questions;
+    const resolvedQuestions = resolveAttemptReviewQuestions(activeAttemptReview, questions);
 
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
