@@ -129,6 +129,22 @@ function MainApp() {
   const { config, isMaintenanceMode } = useRemoteConfig();
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
+  const [activePageSlug, setActivePageSlug] = useState<string | null>(null);
+  const [activePostSlug, setActivePostSlug] = useState<string | null>(null);
+  const {
+    currentRoute,
+    setCurrentRoute,
+    studentActiveTab,
+    setStudentActiveTab,
+    setStudentActiveTabState,
+    navigateToAdmin,
+    navigateToStudent,
+  } = useAppNavigation({
+    userSlug: user ? getStudentSlug(user) : undefined,
+    setActivePageSlug,
+    setActivePostSlug,
+  });
+
   const [selectedSEOQuestion, setSelectedSEOQuestion] = useState<Question | null>(null);
 
   const [selectedCategory, setSelectedCategory] = useState<ExamCategory | 'ALL'>('ALL');
@@ -214,20 +230,6 @@ function MainApp() {
     handleSaveCmsSettings,
   } = useCmsManager();
 
-  const [activePageSlug, setActivePageSlug] = useState<string | null>(null);
-  const [activePostSlug, setActivePostSlug] = useState<string | null>(null);
-  const {
-    currentRoute,
-    setCurrentRoute,
-    studentActiveTab,
-    setStudentActiveTab,
-    navigateToAdmin,
-    navigateToStudent,
-  } = useAppNavigation({
-    userSlug: user ? getStudentSlug(user) : undefined,
-    setActivePageSlug,
-    setActivePostSlug,
-  });
 
   const [attempts, setAttempts] = useState<TestAttempt[]>([]);
 

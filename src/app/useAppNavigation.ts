@@ -75,6 +75,7 @@ export function useAppNavigation({
     setCurrentRoute,
     studentActiveTab,
     setStudentActiveTab,
+    setStudentActiveTabState,
     navigateToAdmin,
     navigateToStudent,
   };
