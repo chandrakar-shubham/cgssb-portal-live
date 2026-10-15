@@ -21,7 +21,6 @@ import { createTestAttempt } from './app/attemptFactory';
 import { updateQuestionById, removeQuestionById } from './app/questionCatalogMutations';
 import { togglePublishedState, updateTestById } from './app/testCatalogMutations';
 import { mergeCompletedQuestions } from './app/completedQuestionMerge';
-import { selectPypQuestionIds } from './app/pypQuestionSelection';
 import { hasGuestUsedFreeTest, requiresProPass } from './app/studentAccessPolicy';
 import { mergeUserAttemptHistory } from './app/attemptHistoryMerge';
 import { linkPypToTest } from './app/pypLinkedTestUpdate';
