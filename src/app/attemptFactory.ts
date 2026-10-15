@@ -3,6 +3,7 @@ import type { User } from '../types';
 import type { ExamScore } from './examScoring';
 import { buildAttemptIdentity } from './attemptIdentity';
 import { countMarkedForReview } from './attemptReviewStats';
+import { getExamDurationSeconds } from './examDuration';
 
 type AttemptSubmission = {
   timeTakenSeconds: number;
@@ -28,7 +29,7 @@ export function createTestAttempt(test: MockTest, user: Pick<User, 'id' | 'name'
     userName: user?.name || 'Aspirant Student',
     submittedAt: new Date().toISOString(),
     timeTakenSeconds: submission.timeTakenSeconds,
-    totalDurationSeconds: (test.durationMinutes || 90) * 60,
+    totalDurationSeconds: getExamDurationSeconds(test),
     score: score.netScore,
     maxScore: score.maxScore,
     percentage: score.percentage,

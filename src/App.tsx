@@ -21,13 +21,22 @@ import { createTestAttempt } from './app/attemptFactory';
 import { updateQuestionById, removeQuestionById } from './app/questionCatalogMutations';
 import { togglePublishedState, updateTestById } from './app/testCatalogMutations';
 import { mergeCompletedQuestions } from './app/completedQuestionMerge';
-import { resolveAttemptReviewQuestions } from './app/attemptReviewResolver';
 import { selectPypQuestionIds } from './app/pypQuestionSelection';
 import { hasGuestUsedFreeTest, requiresProPass } from './app/studentAccessPolicy';
 import { mergeUserAttemptHistory } from './app/attemptHistoryMerge';
 import { linkPypToTest } from './app/pypLinkedTestUpdate';
 import { mergePublishedQuestions, mergePublishedTests } from './app/adminCatalogPublishMerge';
 import { getPypDeleteStorageKey, getPypStorageKey } from './app/pypMetadata';
+import { upsertRestoredTest, applyPublishCascade, replaceTestsFromGovernanceEvent, replaceQuestionsFromGovernanceEvent, replacePypFromGovernanceEvent } from './app/governanceReducers';
+import { countUnresolvedMistakeQuestions } from './app/unresolvedMistakes';
+import { resolveActiveExamQuestions } from './app/activeExamQuestionResolver';
+import { findLinkedPypTest } from './app/pypPracticeResolver';
+import { getAttemptReviewReturnPath } from './app/attemptReviewReturn';
+import { writeGuestCompletionFlag } from './app/guestCompletionStore';
+import { prependQuestionCatalog } from './app/adminCatalogMerge';
+import { getQuestionsForAttemptReview } from './app/attemptReviewQuestions';
+import { canSubmitExam } from './app/attemptSubmissionGuard';
+import { selectPypQuestionIds } from './app/pypSelection';
 import { addDeletedId, removeDeletedId } from './utils/localDeletionStore';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
@@ -256,31 +265,11 @@ function MainApp() {
   // Run taxonomy migration on initial mount
   useEffect(() => {
     // Listen for governance events (Test restore, Cascade publish, Data Purge/Restore)
-    const handleRestored = (e: any) => {
-      if (e.detail && e.detail.id) {
-        setTests(prev => dedupeById([e.detail, ...prev]));
-      }
-    };
-
-    const handleCascadePublish = (e: any) => {
-      if (e.detail && Array.isArray(e.detail.affectedTestIds)) {
-        const { newPublishStatus, affectedTestIds } = e.detail;
-        const targetIds = new Set(affectedTestIds);
-        setTests(prev => prev.map(t => targetIds.has(t.id) ? { ...t, isPublished: newPublishStatus } : t));
-      }
-    };
-
-    const handleTestsUpdated = (e: any) => {
-      if (Array.isArray(e.detail)) setTests(e.detail);
-    };
-
-    const handleQuestionsUpdated = (e: any) => {
-      if (Array.isArray(e.detail)) setQuestions(e.detail.map(migrateLegacyQuestion));
-    };
-
-    const handlePypUpdated = (e: any) => {
-      if (Array.isArray(e.detail)) setPypPapers(e.detail);
-    };
+    const handleRestored = (e: any) => { if (e.detail && e.detail.id) setTests(prev => upsertRestoredTest(prev, e.detail)); };
+    const handleCascadePublish = (e: any) => { if (e.detail && Array.isArray(e.detail.affectedTestIds)) setTests(prev => applyPublishCascade(prev, e.detail.affectedTestIds, e.detail.newPublishStatus)); };
+    const handleTestsUpdated = (e: any) => { setTests(prev => replaceTestsFromGovernanceEvent(e.detail, prev)); };
+    const handleQuestionsUpdated = (e: any) => { setQuestions(prev => replaceQuestionsFromGovernanceEvent(e.detail, prev)); };
+    const handlePypUpdated = (e: any) => { setPypPapers(prev => replacePypFromGovernanceEvent(e.detail, prev)); };
 
     window.addEventListener('cgssb-test-restored', handleRestored);
     window.addEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
@@ -364,7 +353,7 @@ function MainApp() {
 
   // PRACTICE PYP AS TEST HANDLER
   const handlePracticePaper = async (paper: PreviousYearPaper) => {
-    const existingTest = tests.find(t => t.id === paper.linkedMockTestId);
+    const existingTest = findLinkedPypTest(paper, tests);
     if (existingTest) {
       handleStartTest(existingTest);
       return;
@@ -389,8 +378,8 @@ function MainApp() {
   }): Promise<boolean> => {
     if (!activeExamTest) return false;
     const currentTest = activeExamTest;
-    const activeQuestionList = activeExamQuestions.length > 0 ? activeExamQuestions : resolveQuestionsForTest(currentTest, questions);
-    if (activeQuestionList.length === 0) return false;
+    const activeQuestionList = resolveActiveExamQuestions(activeExamQuestions, currentTest, questions);
+    if (!canSubmitExam(currentTest, activeQuestionList)) return false;
 
     const marksPerQ = currentTest.marksPerQuestion || 1;
     const negPenaltyPerQ = currentTest.negativeMarksPerQuestion || 0;
@@ -424,7 +413,7 @@ function MainApp() {
 
     const milestoneRes = recordTestCompletion();
     if (milestoneRes.unlockedBonus) setShowMilestoneCelebrationModal(true);
-    if (!user && typeof window !== 'undefined') localStorage.setItem('cgtest_guest_test_completed', 'true');
+    if (!user && typeof window !== 'undefined') writeGuestCompletionFlag(window.localStorage);
     return true;
   };
 
@@ -599,30 +588,21 @@ function MainApp() {
   // MISTAKE RETEST ENGINE HANDLER
   const handleStartMistakeTest = (test: MockTest, mistakeQuestions: Question[]) => {
     if (!test || !mistakeQuestions || mistakeQuestions.length === 0) return;
-    setQuestions(prev => dedupeById([...mistakeQuestions, ...prev]));
+    setQuestions(prev => prependQuestionCatalog(prev, mistakeQuestions));
     setActiveExamTest(test);
   };
 
   // BOOKMARK PRACTICE HANDLER
   const handleStartBookmarkPractice = (test: MockTest, bookmarkedQuestions: Question[]) => {
     if (!test || !bookmarkedQuestions || bookmarkedQuestions.length === 0) return;
-    setQuestions(prev => dedupeById([...bookmarkedQuestions, ...prev]));
+    setQuestions(prev => prependQuestionCatalog(prev, bookmarkedQuestions));
     setActiveExamTest(test);
   };
 
   // LIVE UNRESOLVED MISTAKES COUNT FOR NAVBAR BADGE
   const unresolvedMistakesCount = React.useMemo(() => {
     const qMap = new Map(questions.map(q => [q.id, q]));
-    const missedQIds = new Set<string>();
-    attempts.forEach(att => {
-      Object.entries(att.responses).forEach(([qid, userAns]) => {
-        const q = qMap.get(qid);
-        if (q && userAns !== q.correctOption) {
-          missedQIds.add(qid);
-        }
-      });
-    });
-    return missedQIds.size;
+    return countUnresolvedMistakeQuestions(attempts, questions);
   }, [attempts, questions]);
 
   // =========================================================================
@@ -665,7 +645,7 @@ function MainApp() {
   // VIEW 2: ACTIVE ATTEMPT REVIEW SCREEN
   // =========================================================================
   if (activeAttemptReview) {
-    const resolvedQuestions = resolveAttemptReviewQuestions(activeAttemptReview, questions);
+    const resolvedQuestions = getQuestionsForAttemptReview(activeAttemptReview, questions);
 
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -683,7 +663,7 @@ function MainApp() {
             attempt={activeAttemptReview}
             questions={resolvedQuestions}
             onBackToDashboard={() => {
-              const returnPath = attemptReviewReturnPath;
+              const returnPath = getAttemptReviewReturnPath(attemptReviewReturnPath);
               setActiveAttemptReview(null);
               setAttemptReviewReturnPath(null);
               if (returnPath) {

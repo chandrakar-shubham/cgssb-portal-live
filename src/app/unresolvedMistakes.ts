@@ -1,0 +1,2 @@
+import type { Question, TestAttempt } from '../types';
+export function countUnresolvedMistakeQuestions(attempts: TestAttempt[], questions: Question[]): number { const questionById = new Map(questions.map(question => [question.id, question])); const missedIds = new Set<string>(); attempts.forEach(attempt => { Object.entries(attempt.responses).forEach(([questionId, answer]) => { const question = questionById.get(questionId); if (question && answer !== question.correctOption) missedIds.add(questionId); }); }); return missedIds.size; }
