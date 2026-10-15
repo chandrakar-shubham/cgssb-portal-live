@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useAppNavigation } from './app/useAppNavigation';
 import { buildExamTest, dedupeById, resolveQuestionsForTest } from './app/examQuestionSet';
+import { calculateExamScore } from './app/examScoring';
 import { addDeletedId, removeDeletedId } from './utils/localDeletionStore';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
@@ -413,54 +414,27 @@ function MainApp() {
     const activeQuestionList = activeExamQuestions.length > 0 ? activeExamQuestions : resolveQuestionsForTest(currentTest, questions);
     if (activeQuestionList.length === 0) return false;
 
-    let correctCount = 0;
-    let incorrectCount = 0;
-    let unattemptedCount = 0;
-    const subjectMap: Record<string, { total: number; correct: number; incorrect: number; unattempted: number }> = {};
-
-    activeQuestionList.forEach(q => {
-      const resp = submission.responses[q.id];
-      const cleanSubj = normalizeSubjectName(q.subject, `${q.questionHindi || ''} ${q.questionText || ''}`);
-      if (!subjectMap[cleanSubj]) subjectMap[cleanSubj] = { total: 0, correct: 0, incorrect: 0, unattempted: 0 };
-      subjectMap[cleanSubj].total += 1;
-      if (resp == null) {
-        unattemptedCount += 1;
-        subjectMap[cleanSubj].unattempted += 1;
-      } else if (resp === q.correctOption) {
-        correctCount += 1;
-        subjectMap[cleanSubj].correct += 1;
-      } else {
-        incorrectCount += 1;
-        subjectMap[cleanSubj].incorrect += 1;
-      }
-    });
-
     const marksPerQ = currentTest.marksPerQuestion || 1;
     const negPenaltyPerQ = currentTest.negativeMarksPerQuestion || 0;
-    const rawScore = correctCount * marksPerQ;
-    const negDeduction = Number((incorrectCount * negPenaltyPerQ).toFixed(2));
-    const netScore = Number(Math.max(0, rawScore - negDeduction).toFixed(2));
-    const maxScore = activeQuestionList.length * marksPerQ;
-    const percentage = maxScore > 0 ? Number(((netScore / maxScore) * 100).toFixed(2)) : 0;
-    const attemptedCount = correctCount + incorrectCount;
-    const accuracy = attemptedCount > 0 ? Number(((correctCount / attemptedCount) * 100).toFixed(2)) : 0;
-
-    const sectorAnalysis = Object.keys(subjectMap).map(subj => {
-      const data = subjectMap[subj];
-      const subjMax = data.total * marksPerQ;
-      const subjScore = Number(Math.max(0, data.correct * marksPerQ - data.incorrect * negPenaltyPerQ).toFixed(2));
-      const subjAtt = data.correct + data.incorrect;
-      return {
-        subject: subj,
-        total: data.total,
-        correct: data.correct,
-        incorrect: data.incorrect,
-        unattempted: data.unattempted,
-        accuracy: subjAtt > 0 ? Number(((data.correct / subjAtt) * 100).toFixed(2)) : 0,
-        score: subjScore,
-        maxScore: subjMax,
-      };
+    const score = calculateExamScore({
+      questions: activeQuestionList,
+      responses: submission.responses,
+      questionStatuses: submission.questionStatuses,
+      marksPerQuestion: marksPerQ,
+      negativeMarksPerQuestion: negPenaltyPerQ,
     });
+    const {
+      correctCount,
+      incorrectCount,
+      unattemptedCount,
+      netScore,
+      maxScore,
+      percentage,
+      attemptedCount,
+      accuracy,
+      negDeduction,
+      sectorAnalysis,
+    } = score;
 
     const targetExam = user?.targetExam || currentTest.examName || currentTest.title;
     const authority = String(currentTest.authority || currentTest.category || 'CG').toUpperCase();
