@@ -6,7 +6,7 @@ function attempt(id: string, userId: string): TestAttempt {
   return { id, userId, testId: 'test-1', percentage: 75, score: 15, maxScore: 20, accuracy: 80, timeTakenSeconds: 300 } as TestAttempt;
 }
 
-const student = { id: 'student-1', name: 'Student', targetExam: 'CGPSC', targetYear: '2026' } as User;
+const student = { id: 'student-1', name: 'Student', targetExam: 'CGPSC', targetYear: '2026' } as unknown as User;
 
 async function run() {
   {
