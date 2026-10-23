@@ -13,7 +13,6 @@ import { getPypDeleteStorageKey, getPypStorageKey } from './pypMetadata';
 import { addDeletedId, removeDeletedId } from '../utils/localDeletionStore';
 import { mergeQuestions, mergeTests } from './catalogMerge';
 import { dedupeById } from './examQuestionSet';
-import { prependQuestionCatalog } from './adminCatalogMerge';
 import {
   saveTestToFirestore,
   saveQuestionsToFirestore,
@@ -160,16 +159,6 @@ export function createAdminCatalogActions(deps: AdminCatalogActionDependencies) 
     }
   };
 
-  const handleStartMistakeTest = (test: MockTest, mistakeQuestions: Question[]) => {
-    if (!test || !mistakeQuestions || mistakeQuestions.length === 0) return;
-    setQuestions(prev => prependQuestionCatalog(prev, mistakeQuestions));
-  };
-
-  const handleStartBookmarkPractice = (test: MockTest, bookmarkedQuestions: Question[]) => {
-    if (!test || !bookmarkedQuestions || bookmarkedQuestions.length === 0) return;
-    setQuestions(prev => prependQuestionCatalog(prev, bookmarkedQuestions));
-  };
-
   return {
     handleAddQuestion,
     handleUpdateQuestion,
@@ -185,7 +174,5 @@ export function createAdminCatalogActions(deps: AdminCatalogActionDependencies) 
     handleBulkQuestionsAdded,
     handleBulkTestsAdded,
     handleSaveCompletedTestAndQuestions,
-    handleStartMistakeTest,
-    handleStartBookmarkPractice,
   };
 }
