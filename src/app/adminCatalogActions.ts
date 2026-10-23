@@ -95,7 +95,7 @@ export function createAdminCatalogActions(deps: AdminCatalogActionDependencies) 
     savePypPaperToFirestore(updatedPaper).catch(() => null);
   };
 
-  const handleTogglePublishTest = (testId: string) => {
+  const handleTogglePublishTest = async (testId: string) => {
     setTests(prev => {
       const updated = togglePublishedState(prev, testId);
       const target = updated.find(t => t.id === testId);
@@ -104,7 +104,7 @@ export function createAdminCatalogActions(deps: AdminCatalogActionDependencies) 
     });
   };
 
-  const handleUpdateTest = (testId: string, updates: Partial<MockTest>) => {
+  const handleUpdateTest = async (testId: string, updates: Partial<MockTest>) => {
     removeDeletedId('cgssb_deleted_tests', testId);
     setTests(prev => {
       const updated = updateTestById(prev, testId, updates);
@@ -114,7 +114,7 @@ export function createAdminCatalogActions(deps: AdminCatalogActionDependencies) 
     });
   };
 
-  const handleDeleteTest = (testId: string) => {
+  const handleDeleteTest = async (testId: string) => {
     addDeletedId('cgssb_deleted_tests', testId);
     setTests(tests.filter(t => t.id !== testId));
     cleanTestFromAllBundles(testId);
