@@ -1,10 +1,10 @@
-import type { TestAttempt, User } from '../types';
+import type { LeaderboardProfileRecord, TestAttempt, User } from '../types';
 import { mergeUserAttemptHistory } from './attemptHistoryMerge';
 
 export interface AttemptPersistenceDependencies {
   saveAttempt: (attempt: TestAttempt) => Promise<TestAttempt>;
-  buildLeaderboardProfiles: (user: User, attempts: TestAttempt[]) => unknown;
-  saveLeaderboardProfiles: (profiles: unknown) => Promise<unknown>;
+  buildLeaderboardProfiles: (user: User, attempts: TestAttempt[]) => LeaderboardProfileRecord[];
+  saveLeaderboardProfiles: (profiles: LeaderboardProfileRecord[]) => Promise<unknown>;
 }
 
 export interface PersistSubmittedAttemptInput {
