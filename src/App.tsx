@@ -12,8 +12,8 @@ import { calculateExamScore } from './app/examScoring';
 import { createPracticeTestFromPyp } from './app/pypPracticeTestFactory';
 import { loadExamSessionQuestions } from './app/examSessionQuestions';
 import { createTestAttempt } from './app/attemptFactory';
+import { persistSubmittedAttempt } from './app/persistSubmittedAttempt';
 import { hasGuestUsedFreeTest, requiresProPass } from './app/studentAccessPolicy';
-import { mergeUserAttemptHistory } from './app/attemptHistoryMerge';
 import { upsertRestoredTest, applyPublishCascade, replaceTestsFromGovernanceEvent, replaceQuestionsFromGovernanceEvent, replacePypFromGovernanceEvent } from './app/governanceReducers';
 import { countUnresolvedMistakeQuestions } from './app/unresolvedMistakes';
 import { resolveActiveExamQuestions } from './app/activeExamQuestionResolver';
@@ -373,17 +373,19 @@ function MainApp() {
     });
     const newAttempt = createTestAttempt(currentTest, user, submission, score);
 
-    let persistedAttempt = newAttempt;
-    if (user?.id) {
-      try {
-        persistedAttempt = await saveAttemptToFirestore(newAttempt);
-        const allMineAttempts = mergeUserAttemptHistory(persistedAttempt, attempts, user);
-        const profiles = buildLeaderboardProfilesForUser(user, allMineAttempts);
-        await saveLeaderboardProfilesToFirestore(profiles);
-      } catch (error) {
-        console.warn('Attempt persistence failed; keeping exam checkpoint for retry:', error);
-        return false;
-      }
+    let persistedAttempt: TestAttempt;
+    try {
+      persistedAttempt = await persistSubmittedAttempt(
+        { attempt: newAttempt, user, attempts },
+        {
+          saveAttempt: saveAttemptToFirestore,
+          buildLeaderboardProfiles: buildLeaderboardProfilesForUser,
+          saveLeaderboardProfiles: saveLeaderboardProfilesToFirestore,
+        },
+      );
+    } catch (error) {
+      console.warn('Attempt persistence failed; keeping exam checkpoint for retry:', error);
+      return false;
     }
 
     setAttempts(prev => [persistedAttempt, ...prev.filter(a => a.id !== persistedAttempt.id)]);
