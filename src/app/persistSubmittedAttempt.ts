@@ -1,10 +1,10 @@
-import type { LeaderboardProfileRecord, TestAttempt, User } from '../types';
+import type { TestAttempt, User } from '../types';
 import { mergeUserAttemptHistory } from './attemptHistoryMerge';
 
-export interface AttemptPersistenceDependencies {
+export interface AttemptPersistenceDependencies<TProfiles> {
   saveAttempt: (attempt: TestAttempt) => Promise<TestAttempt>;
-  buildLeaderboardProfiles: (user: User, attempts: TestAttempt[]) => LeaderboardProfileRecord[];
-  saveLeaderboardProfiles: (profiles: LeaderboardProfileRecord[]) => Promise<unknown>;
+  buildLeaderboardProfiles: (user: User, attempts: TestAttempt[]) => TProfiles;
+  saveLeaderboardProfiles: (profiles: TProfiles) => Promise<unknown>;
 }
 
 export interface PersistSubmittedAttemptInput {
@@ -18,9 +18,9 @@ export interface PersistSubmittedAttemptInput {
  * exam checkpoint. Any write failure propagates so callers can keep the exam
  * open and allow a safe retry.
  */
-export async function persistSubmittedAttempt(
+export async function persistSubmittedAttempt<TProfiles>(
   input: PersistSubmittedAttemptInput,
-  dependencies: AttemptPersistenceDependencies,
+  dependencies: AttemptPersistenceDependencies<TProfiles>,
 ): Promise<TestAttempt> {
   const { attempt, user, attempts } = input;
   if (!user?.id) return attempt;
