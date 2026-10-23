@@ -22,7 +22,8 @@
     "test:phase8:10000-guard": "node scripts/phase8-10000-promotion-guard.mjs",
     "test:phase8:5-journey-guard": "node scripts/phase8-5-journey-guard.mjs",
     "test:phase8:5:firestore-emulator": "firebase emulators:exec --only firestore --project demo-cgssb-phase85 \"node scripts/phase8-5-firestore-emulator.test.mjs\"",
-    "test:domain": "tsx scripts/domain-helpers.test.ts"
+    "test:domain": "tsx scripts/domain-helpers.test.ts && npm run test:attempt-persistence",
+    "test:attempt-persistence": "tsx scripts/persist-submitted-attempt.test.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
