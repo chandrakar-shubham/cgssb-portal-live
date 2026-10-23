@@ -9,23 +9,11 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { useAppNavigation } from './app/useAppNavigation';
 import { buildExamTest, dedupeById, resolveQuestionsForTest } from './app/examQuestionSet';
 import { calculateExamScore } from './app/examScoring';
-import { createQuestion } from './app/questionFactory';
-import { createPypPaper } from './app/pypFactory';
-import { createMockTest } from './app/mockTestFactory';
-import { createTestFromPyp } from './app/pypTestFactory';
 import { createPracticeTestFromPyp } from './app/pypPracticeTestFactory';
 import { loadExamSessionQuestions } from './app/examSessionQuestions';
-import { getAdminRequestHeaders } from './app/adminRequestHeaders';
-import { mergeQuestions, mergeTests } from './app/catalogMerge';
 import { createTestAttempt } from './app/attemptFactory';
-import { updateQuestionById, removeQuestionById } from './app/questionCatalogMutations';
-import { togglePublishedState, updateTestById } from './app/testCatalogMutations';
-import { mergeCompletedQuestions } from './app/completedQuestionMerge';
 import { hasGuestUsedFreeTest, requiresProPass } from './app/studentAccessPolicy';
 import { mergeUserAttemptHistory } from './app/attemptHistoryMerge';
-import { linkPypToTest } from './app/pypLinkedTestUpdate';
-import { mergePublishedQuestions, mergePublishedTests } from './app/adminCatalogPublishMerge';
-import { getPypDeleteStorageKey, getPypStorageKey } from './app/pypMetadata';
 import { upsertRestoredTest, applyPublishCascade, replaceTestsFromGovernanceEvent, replaceQuestionsFromGovernanceEvent, replacePypFromGovernanceEvent } from './app/governanceReducers';
 import { countUnresolvedMistakeQuestions } from './app/unresolvedMistakes';
 import { resolveActiveExamQuestions } from './app/activeExamQuestionResolver';
@@ -36,7 +24,6 @@ import { prependQuestionCatalog } from './app/adminCatalogMerge';
 import { getQuestionsForAttemptReview } from './app/attemptReviewQuestions';
 import { canSubmitExam } from './app/attemptSubmissionGuard';
 import { selectPypQuestionIds } from './app/pypSelection';
-import { addDeletedId, removeDeletedId } from './utils/localDeletionStore';
 import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 const StudentDashboard = lazyWithRetry(() => import('./components/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
@@ -90,7 +77,7 @@ const AdminStudentManagement = lazyWithRetry(() => import('./components/AdminStu
 const AdminRoleManagement = lazyWithRetry(() => import('./components/AdminRoleManagement').then(m => ({ default: m.AdminRoleManagement })));
 const LiveTestLeaderboard = lazyWithRetry(() => import('./components/LiveTestLeaderboard').then(m => ({ default: m.LiveTestLeaderboard })));
 import { LegalModal, LegalTab } from './components/LegalModal';
-import { syncBundlesFromFirestore, cleanTestFromAllBundles } from './utils/bundleStore';
+import { syncBundlesFromFirestore } from './utils/bundleStore';
 import { useRemoteConfig } from './context/RemoteConfigContext';
 const AdminRemoteConfigStudio = lazyWithRetry(() => import('./components/AdminRemoteConfigStudio').then(m => ({ default: m.AdminRemoteConfigStudio })));
 const AdminSliderStudio = lazyWithRetry(() => import('./components/AdminSliderStudio').then(m => ({ default: m.AdminSliderStudio })));
@@ -98,6 +85,7 @@ import { useTestManager } from './hooks/useTestManager';
 import { useQuestionManager } from './hooks/useQuestionManager';
 import { usePypManager } from './hooks/usePypManager';
 import { useCmsManager } from './hooks/useCmsManager';
+import { createAdminCatalogActions } from './app/adminCatalogActions';
 import { ArrowLeft, Trophy, Bell, AlertTriangle, Radio, X, Gift } from 'lucide-react';
 import {
   CMSPage,
@@ -105,7 +93,7 @@ import {
   CMSTestSeriesPack,
   CMSSiteSettings
 } from './types/cms';
-import { getAdminToken, api } from './utils/apiClient';
+import { api } from './utils/apiClient';
 import {
   cacheTestBundleForDevice,
   clearCachedTestBundle,
@@ -139,14 +127,8 @@ import { isUserPassActive } from './utils/devicePassManager';
 import { buildLeaderboardProfilesForUser } from './utils/leaderboardProfiles';
 import { testConnection } from './firebase/connectionTest';
 import {
-  saveTestToFirestore,
   fetchQuestionsByIdsFromFirestore,
   fetchQuestionsByProgramFromFirestore,
-  saveQuestionsToFirestore,
-  deleteQuestionFromFirestore,
-  deleteTestFromFirestore,
-  savePypPaperToFirestore,
-  deletePypPaperFromFirestore,
   fetchMyAttemptsFromFirestore,
   saveAttemptToFirestore,
   saveLeaderboardProfilesToFirestore,
@@ -416,173 +398,30 @@ function MainApp() {
     return true;
   };
 
-  // ADMIN QUESTION BANK ACTIONS
-  const handleAddQuestion = (qData: Partial<Question>) => {
-    const newQ = createQuestion(qData);
-    removeDeletedId('cgssb_deleted_questions', newQ.id);
-    setQuestions(prev => [newQ, ...prev]);
-    saveQuestionsToFirestore([newQ]).catch(() => null);
-  };
-
-  const handleUpdateQuestion = (id: string, qData: Partial<Question>) => {
-    const token = getAdminToken();
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-
-    setQuestions(prev => {
-      const updated = updateQuestionById(prev, id, qData);
-      const target = updated.find(q => q.id === id);
-      if (target) {
-        saveQuestionsToFirestore([target]).catch(() => null);
-      }
-      return updated;
-    });
-  };
-
-  const handleDeleteQuestion = (id: string) => {
-    addDeletedId('cgssb_deleted_questions', id);
-    const token = getAdminToken();
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const updated = removeQuestionById(questions, id);
-    setQuestions(updated);
-    try {
-      localStorage.setItem('cgssb_questions', JSON.stringify(updated));
-    } catch {}
-    deleteQuestionFromFirestore(id).catch(() => null);
-  };
-
-  // ADMIN PYP ACTIONS
-  const handleAddPYP = (pypData: Partial<PreviousYearPaper>) => {
-    const newPaper = createPypPaper(pypData);
-    removeDeletedId('cgssb_deleted_pyp', newPaper.id);
-    setPypPapers(prev => dedupeById([newPaper, ...prev]));
-    savePypPaperToFirestore(newPaper).catch(() => null);
-    const token = getAdminToken();
-  };
-
-  const handleDeletePYP = (id: string) => {
-    addDeletedId(getPypDeleteStorageKey(), id);
-    const updated = pypPapers.filter(p => p.id !== id);
-    setPypPapers(updated);
-    try {
-      localStorage.setItem(getPypStorageKey(), JSON.stringify(updated));
-    } catch {}
-    deletePypPaperFromFirestore(id).catch(() => null);
-    const token = getAdminToken();
-  };
-
-  const handleConvertPYPToMockTest = (pyp: PreviousYearPaper) => {
-    const newTest = createTestFromPyp(pyp, questions);
-
-    removeDeletedId('cgssb_deleted_tests', newTest.id);
-    setTests(prev => mergePublishedTests(prev, [newTest]));
-    saveTestToFirestore(newTest).catch(() => null);
-    const updatedPaper = linkPypToTest(pyp, newTest.id);
-    setPypPapers(prev =>
-      prev.map(p => (p.id === pyp.id ? updatedPaper : p))
-    );
-    savePypPaperToFirestore(updatedPaper).catch(() => null);
-    const token = getAdminToken();
-  };
-
-  // ADMIN TEST MANAGEMENT ACTIONS
-  const handleTogglePublishTest = async (testId: string) => {
-    setTests(prev => {
-      const updated = togglePublishedState(prev, testId);
-      const updatedTarget = updated.find(t => t.id === testId);
-      if (updatedTarget) saveTestToFirestore(updatedTarget).catch(() => null);
-      return updated;
-    });
-    try {
-      const token = getAdminToken();
-    } catch (err) {
-      console.warn('Failed to sync publish status with server:', err);
-    }
-  };
-
-  const handleUpdateTest = async (testId: string, updates: Partial<MockTest>) => {
-    let targetTest: MockTest | null = null;
-    removeDeletedId('cgssb_deleted_tests', testId);
-    setTests(prev => {
-      const updated = updateTestById(prev, testId, updates);
-      targetTest = updated.find(t => t.id === testId) || null;
-      if (targetTest) saveTestToFirestore(targetTest).catch(() => null);
-      return updated;
-    });
-    try {
-      const token = getAdminToken();
-    } catch (err) {
-      console.warn('Failed to update test on server:', err);
-    }
-  };
-
-  const handleDeleteTest = async (testId: string) => {
-    addDeletedId('cgssb_deleted_tests', testId);
-    const updated = tests.filter(t => t.id !== testId);
-    setTests(updated);
-    try {
-    } catch {}
-    cleanTestFromAllBundles(testId);
-    deleteTestFromFirestore(testId).catch(() => null);
-    try {
-      const token = getAdminToken();
-    } catch (err) {
-      console.warn('Failed to delete test on server:', err);
-    }
-  };
-
-  const handleAddTest = (newTest: Partial<MockTest>) => {
-    const fullTest = createMockTest(newTest);
-    removeDeletedId('cgssb_deleted_tests', fullTest.id);
-    setTests(prev => dedupeById([fullTest, ...prev]));
-    saveTestToFirestore(fullTest).catch(() => null);
-    const token = getAdminToken();
-  };
-
-  // ADMIN AI TEST CREATOR PUBLISH ACTION
-  const handleTestPublished = (newTest: MockTest, newQuestions: Question[]) => {
-    removeDeletedId('cgssb_deleted_tests', newTest.id);
-    newQuestions.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
-    setQuestions(prev => mergePublishedQuestions(prev, newQuestions));
-    setTests(prev => dedupeById([newTest, ...prev]));
-    saveTestToFirestore(newTest).catch(() => null);
-    saveQuestionsToFirestore(newQuestions).catch(() => null);
-    const token = getAdminToken();
-  };
-
-  // UNIFIED BULK QUESTIONS ADDED (Syncs directly to Cloud Firestore & backend)
-  const handleBulkQuestionsAdded = (newQs: Question[]) => {
-    if (!newQs || newQs.length === 0) return;
-    newQs.forEach(q => removeDeletedId('cgssb_deleted_questions', q.id));
-    setQuestions(prev => mergeQuestions(prev, newQs));
-    saveQuestionsToFirestore(newQs).catch(() => null);
-    const token = getAdminToken();
-  };
-
-  // UNIFIED BULK TESTS ADDED (Syncs directly to Cloud Firestore & backend)
-  const handleBulkTestsAdded = (newTests: MockTest[]) => {
-    if (!newTests || newTests.length === 0) return;
-    newTests.forEach(t => removeDeletedId('cgssb_deleted_tests', t.id));
-    setTests(prev => mergeTests(prev, newTests));
-    newTests.forEach(t => {
-      saveTestToFirestore(t).catch(() => null);
-    });
-    const token = getAdminToken();
-    newTests.forEach(t => {
-    });
-  };
-
-  // UNIFIED COMPLETE TEST & QUESTIONS SAVE (Syncs directly to Cloud Firestore & backend)
-  const handleSaveCompletedTestAndQuestions = (updatedTest: MockTest, updatedQuestions: Question[]) => {
-    handleUpdateTest(updatedTest.id, updatedTest);
-    if (updatedQuestions && updatedQuestions.length > 0) {
-      setQuestions(prev => mergeCompletedQuestions(prev, updatedQuestions));
-      saveQuestionsToFirestore(updatedQuestions).catch(() => null);
-      const token = getAdminToken();
-    }
-  };
+  // Admin catalog domain actions are isolated from app routing and rendering.
+  const {
+    handleAddQuestion,
+    handleUpdateQuestion,
+    handleDeleteQuestion,
+    handleAddPYP,
+    handleDeletePYP,
+    handleConvertPYPToMockTest,
+    handleTogglePublishTest,
+    handleUpdateTest,
+    handleDeleteTest,
+    handleAddTest,
+    handleTestPublished,
+    handleBulkQuestionsAdded,
+    handleBulkTestsAdded,
+    handleSaveCompletedTestAndQuestions,
+  } = createAdminCatalogActions({
+    questions,
+    pypPapers,
+    tests,
+    setQuestions,
+    setPypPapers,
+    setTests,
+  });
 
   // MISTAKE RETEST ENGINE HANDLER
   const handleStartMistakeTest = (test: MockTest, mistakeQuestions: Question[]) => {
