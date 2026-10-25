@@ -7,6 +7,7 @@
  */
 
 import { MockTest, Question } from '../types';
+import { toStudentQuestion } from './studentQuestionProjection';
 
 const CACHE_PREFIX = 'cgssb_offline_test_bundle_';
 
@@ -22,11 +23,9 @@ export function cacheTestBundleForDevice(test: MockTest, questions: Question[]):
 
     const testQuestions = questions
       .filter(q => relevantIds.size === 0 || relevantIds.has(q.id))
-      .map(q => {
-        // Strip answer key from client-cached questions for exam integrity
-        const { correctOption, explanation, explanationHindi, ...sanitized } = q;
-        return sanitized as Question;
-      });
+      // Use the same explicit allowlist as the future student-safe collection.
+      // This protects the local cache from answer-key aliases and unknown fields.
+      .map(q => toStudentQuestion(q) as Question);
 
     const bundle = {
       test,
