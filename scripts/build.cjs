@@ -28,6 +28,25 @@ async function runBuild() {
     configFile: path.resolve(process.cwd(), 'vite.config.ts')
   });
 
+  // Fail the release if Vite leaves a development entry point or a missing app bundle.
+  const builtHtmlPath = path.resolve('dist/index.html');
+  if (!fs.existsSync(builtHtmlPath)) {
+    throw new Error('Production build did not emit dist/index.html');
+  }
+  const builtHtml = fs.readFileSync(builtHtmlPath, 'utf8');
+  if (builtHtml.includes('/src/main.tsx')) {
+    throw new Error('Production HTML still references /src/main.tsx instead of a compiled bundle');
+  }
+  const appBundleMatch = builtHtml.match(/(?:src|href)="([^"]*\/assets\/app-[^"]+\\.(?:js|mjs))"/);
+  if (!appBundleMatch) {
+    throw new Error('Production HTML does not reference the expected compiled app bundle under /assets/app-*.js');
+  }
+  const appBundlePath = path.resolve('dist', appBundleMatch[1].replace(/^\\//, ''));
+  if (!fs.existsSync(appBundlePath) || fs.statSync(appBundlePath).size === 0) {
+    throw new Error(`Compiled app bundle is missing or empty: ${appBundlePath}`);
+  }
+  console.log(`Verified production entry bundle: ${appBundleMatch[1]} (${fs.statSync(appBundlePath).size} bytes)`);
+
   const versionInfo = {
     version: '2.5.2',
     buildId: uniqueBuildTag,
