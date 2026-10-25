@@ -66,6 +66,16 @@
     <script type="module" src="/src/main.tsx"></script>
   </head>
   <body class="bg-slate-900 text-slate-100 antialiased selection:bg-emerald-500 selection:text-white font-sans min-h-screen">
-    <div id="root"></div>
+    <div id="root">
+      <main id="startup-fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;text-align:center">
+        <section style="max-width:520px">
+          <div style="font-size:28px;font-weight:800;margin-bottom:12px">CGSSBTest</div>
+          <p style="font-size:16px;margin:0 0 12px">Portal is starting…</p>
+          <p style="font-size:13px;color:#94a3b8;margin:0 0 20px">If this screen remains visible, the application script could not start. Check your connection and reload.</p>
+          <button onclick="window.location.reload()" style="padding:10px 18px;border:1px solid #475569;border-radius:10px;background:#1e293b;color:#f8fafc;font-weight:700;cursor:pointer">Reload portal</button>
+          <p style="margin-top:18px;font-size:12px"><a href="/version.json" style="color:#93c5fd">Build / deployment information</a></p>
+        </section>
+      </main>
+    </div>
   </body>
 </html>

@@ -23,6 +23,12 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --package-lock=false --no-audit --no-fund
 
+      - name: Domain helper regression tests
+        run: npm run test:domain
+
+      - name: Student question projection security tests
+        run: npm run test:student-question-projection
+
       # Validate the canonical Authority -> Recruitment -> Post -> Test Series architecture.
       - name: TypeScript validation
         run: npm run lint

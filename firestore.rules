@@ -251,17 +251,15 @@ service cloud.firestore {
           'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
            'unlockedMilestoneBonus', 'campaignId'
         ]);
+      // Students may update only non-authoritative campaign/device metadata.
+      // Access-bearing fields (planType, status, issuedAt, expiresAt, durationDays,
+      // source, campaignId) are admin-controlled; client-side checkout is not trusted.
       allow update: if hasManagePayments() ||
         (isOwner(userId) &&
          request.resource.data.userId == userId &&
-         request.resource.data.source in ['CLIENT_CHECKOUT', 'FREE_CAMPAIGN'] &&
-         request.resource.data.status in ['ACTIVE', 'EXPIRED'] &&
-         request.resource.data.durationDays in [30, 90, 365] &&
-         request.resource.data.keys().hasOnly([
-           'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
-           'durationDays', 'source', 'planName', 'boundDeviceId',
-           'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
-           'unlockedMilestoneBonus', 'campaignId'
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'boundDeviceId', 'boundDeviceName', 'updatedAt',
+           'completedTestsCount', 'freePassStage', 'unlockedMilestoneBonus'
          ]));
       allow delete: if hasManagePayments();
     }
@@ -325,6 +323,14 @@ service cloud.firestore {
       allow list: if hasManageStudents() || request.query.limit <= 100;
       allow create: if isOwner(request.resource.data.userId) &&
         request.resource.data.source == 'practice_summary' &&
+        request.resource.data.score is number && request.resource.data.score >= 0 &&
+        request.resource.data.maxScore is number && request.resource.data.maxScore >= 0 &&
+        request.resource.data.averagePercentage is number &&
+        request.resource.data.averagePercentage >= 0 && request.resource.data.averagePercentage <= 100 &&
+        request.resource.data.averageAccuracy is number &&
+        request.resource.data.averageAccuracy >= 0 && request.resource.data.averageAccuracy <= 100 &&
+        request.resource.data.testsTaken is int && request.resource.data.testsTaken > 0 &&
+        request.resource.data.averageTimeSeconds is number && request.resource.data.averageTimeSeconds >= 0 &&
         request.resource.data.keys().hasOnly([
           'id', 'userId', 'scopeType', 'scopeKey', 'targetKey', 'targetExam',
           'seriesId', 'testId', 'candidateName', 'district', 'category',
@@ -333,13 +339,22 @@ service cloud.firestore {
         ]);
       allow update: if isOwner(resource.data.userId) &&
         request.resource.data.userId == resource.data.userId &&
+        request.resource.data.source == 'practice_summary' &&
         request.resource.data.scopeType == resource.data.scopeType &&
         request.resource.data.scopeKey == resource.data.scopeKey &&
+        request.resource.data.score is number && request.resource.data.score >= 0 &&
+        request.resource.data.maxScore is number && request.resource.data.maxScore >= 0 &&
+        request.resource.data.averagePercentage is number &&
+        request.resource.data.averagePercentage >= 0 && request.resource.data.averagePercentage <= 100 &&
+        request.resource.data.averageAccuracy is number &&
+        request.resource.data.averageAccuracy >= 0 && request.resource.data.averageAccuracy <= 100 &&
+        request.resource.data.testsTaken is int && request.resource.data.testsTaken > 0 &&
+        request.resource.data.averageTimeSeconds is number && request.resource.data.averageTimeSeconds >= 0 &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'candidateName', 'district', 'category', 'score', 'maxScore',
           'averagePercentage', 'averageAccuracy', 'testsTaken',
           'averageTimeSeconds', 'updatedAt', 'targetExam', 'targetKey',
-          'seriesId', 'testId', 'source'
+          'seriesId', 'testId'
         ]);
       allow delete: if isOwner(resource.data.userId) || isAdmin();
     }

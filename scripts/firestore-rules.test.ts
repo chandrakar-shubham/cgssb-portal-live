@@ -71,10 +71,29 @@ for (const privilegedField of ['credits', 'adminPermissions']) {
   }
 }
 
+const entitlementStart = rules.indexOf('match /userEntitlements/{userId}');
+const entitlementEnd = rules.indexOf('\n    // Student test-series enrollments', entitlementStart);
+const entitlementBlock = rules.slice(entitlementStart, entitlementEnd);
+if (entitlementStart === -1 || !entitlementBlock.includes('allow update: if hasManagePayments()')) {
+  throw new Error('Entitlement updates must be admin-controlled except for the explicit metadata allowlist');
+}
+if (!entitlementBlock.includes("affectedKeys().hasOnly([\n           'boundDeviceId', 'boundDeviceName', 'updatedAt',\n           'completedTestsCount', 'freePassStage', 'unlockedMilestoneBonus'")) {
+  throw new Error('Student entitlement update allowlist must exclude access-bearing fields');
+}
 const profileStart = rules.indexOf('match /leaderboardProfiles/{profileId}');
 if (profileStart === -1) throw new Error('Scalable leaderboard profile rule missing');
 const profileEnd = rules.indexOf('\n    // Referral records', profileStart);
 const profileBlock = rules.slice(profileStart, profileEnd);
+for (const required of [
+  "request.resource.data.source == 'practice_summary'",
+  'request.resource.data.averagePercentage <= 100',
+  'request.resource.data.averageAccuracy <= 100',
+  "request.resource.data.diff(resource.data).affectedKeys().hasOnly(["
+]) {
+  if (!profileBlock.includes(required)) {
+    throw new Error(`Leaderboard profile integrity rule missing: ${required}`);
+  }
+}
 for (const required of [
   'allow get: if true;',
   'allow list: if hasManageStudents() || request.query.limit <= 100;',
