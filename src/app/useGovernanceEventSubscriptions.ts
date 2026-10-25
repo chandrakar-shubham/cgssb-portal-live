@@ -36,7 +36,7 @@ export function useGovernanceEventSubscriptions({
         affectedTestIds?: unknown;
         newPublishStatus?: unknown;
       }>).detail;
-      if (detail && Array.isArray(detail.affectedTestIds)) {
+      if (detail && Array.isArray(detail.affectedTestIds) && typeof detail.newPublishStatus === 'boolean') {
         setTests(previous =>
           applyPublishCascade(previous, detail.affectedTestIds as string[], detail.newPublishStatus),
         );
