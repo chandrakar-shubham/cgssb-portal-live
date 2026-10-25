@@ -251,17 +251,15 @@ service cloud.firestore {
           'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
            'unlockedMilestoneBonus', 'campaignId'
         ]);
+      // Students may update only non-authoritative campaign/device metadata.
+      // Access-bearing fields (planType, status, issuedAt, expiresAt, durationDays,
+      // source, campaignId) are admin-controlled; client-side checkout is not trusted.
       allow update: if hasManagePayments() ||
         (isOwner(userId) &&
          request.resource.data.userId == userId &&
-         request.resource.data.source in ['CLIENT_CHECKOUT', 'FREE_CAMPAIGN'] &&
-         request.resource.data.status in ['ACTIVE', 'EXPIRED'] &&
-         request.resource.data.durationDays in [30, 90, 365] &&
-         request.resource.data.keys().hasOnly([
-           'userId', 'planType', 'status', 'issuedAt', 'expiresAt',
-           'durationDays', 'source', 'planName', 'boundDeviceId',
-           'boundDeviceName', 'updatedAt', 'completedTestsCount', 'freePassStage',
-           'unlockedMilestoneBonus', 'campaignId'
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'boundDeviceId', 'boundDeviceName', 'updatedAt',
+           'completedTestsCount', 'freePassStage', 'unlockedMilestoneBonus'
          ]));
       allow delete: if hasManagePayments();
     }
