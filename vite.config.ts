@@ -53,19 +53,7 @@ export default defineConfig(() => {
           entryFileNames: 'assets/app-[hash].js',
           chunkFileNames: 'assets/chunk-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]',
-          // Keep dependency chunks cacheable while splitting oversized vendor bundles.
-          // Verify the result in CI before promoting further chunking changes.
-          codeSplitting: {
-            groups: [
-              {
-                name: 'vendor-large',
-                test: /node_modules/,
-                minSize: 100_000,
-                maxSize: 250_000,
-                priority: 10,
-              },
-            ],
-          },
+
         },
       },
     },
