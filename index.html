@@ -64,6 +64,35 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (() => {
+        const report = (message) => {
+          const fallback = document.getElementById('startup-fallback');
+          if (!fallback) return;
+          const detail = document.getElementById('startup-diagnostic');
+          if (detail) detail.textContent = message;
+          const heading = fallback.querySelector('p');
+          if (heading) heading.textContent = 'The portal could not start.';
+        };
+        window.addEventListener('error', (event) => {
+          const target = event.target;
+          if (target && target !== window && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+            report('Failed to load app asset: ' + (target.src || target.href || 'unknown resource'));
+            return;
+          }
+          if (event.message) report('JavaScript error: ' + event.message);
+        }, true);
+        window.addEventListener('unhandledrejection', (event) => {
+          const reason = event.reason;
+          report('Startup promise rejected: ' + (reason && reason.message ? reason.message : String(reason)));
+        });
+        window.setTimeout(() => {
+          if (document.getElementById('startup-fallback')) {
+            report('App did not mount within 12 seconds. Check asset loading, Firebase configuration, and browser console.');
+          }
+        }, 12000);
+      })();
+    </script>
   </head>
   <body class="bg-slate-900 text-slate-100 antialiased selection:bg-emerald-500 selection:text-white font-sans min-h-screen">
     <div id="root">
@@ -73,6 +102,7 @@
           <p style="font-size:16px;margin:0 0 12px">Portal is starting…</p>
           <p style="font-size:13px;color:#94a3b8;margin:0 0 20px">If this screen remains visible, the application script could not start. Check your connection and reload.</p>
           <button onclick="window.location.reload()" style="padding:10px 18px;border:1px solid #475569;border-radius:10px;background:#1e293b;color:#f8fafc;font-weight:700;cursor:pointer">Reload portal</button>
+          <p id="startup-diagnostic" role="status" style="margin-top:14px;font-size:12px;color:#fbbf24;overflow-wrap:anywhere">Waiting for application bundle…</p>
           <p style="margin-top:18px;font-size:12px"><a href="/version.json" style="color:#93c5fd">Build / deployment information</a></p>
         </section>
       </main>
