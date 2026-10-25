@@ -4,6 +4,8 @@ import {
   doc,
   getDocs,
   getCountFromServer,
+  limit,
+  query,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
@@ -48,21 +50,26 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
   countParity: boolean;
 }> {
   if (!db) throw new Error('Firestore is not initialized.');
+  const requestedSampleSize = Number.isFinite(sampleLimit)
+    ? Math.max(0, Math.min(500, Math.floor(sampleLimit)))
+    : 100;
   const [canonicalCountSnap, projectedCountSnap, projectedSnap] = await Promise.all([
     getCountFromServer(collection(db, CANONICAL_QUESTIONS)),
     getCountFromServer(collection(db, STUDENT_QUESTIONS)),
-    getDocs(collection(db, STUDENT_QUESTIONS)),
+    requestedSampleSize > 0
+      ? getDocs(query(collection(db, STUDENT_QUESTIONS), limit(requestedSampleSize)))
+      : Promise.resolve(null),
   ]);
   const canonicalCount = canonicalCountSnap.data().count;
   const projectedCount = projectedCountSnap.data().count;
-  const sampleSize = Math.max(0, Math.min(Math.floor(sampleLimit), projectedSnap.docs.length));
+  const sampleSize = projectedSnap?.docs.length ?? 0;
   const leakedDocuments: string[] = [];
   const forbiddenFields = [
     'correctOption', 'correctAnswer', 'answer', 'answerKey', 'modelKey',
     'finalAmendedKey', 'explanation', 'explanationHindi', 'solution',
     'solutionHindi', 'moderationNotes', 'internalNotes',
   ];
-  for (const questionDoc of projectedSnap.docs.slice(0, sampleSize)) {
+  for (const questionDoc of (projectedSnap?.docs ?? [])) {
     const data = questionDoc.data();
     if (forbiddenFields.some(field => Object.prototype.hasOwnProperty.call(data, field))) {
       leakedDocuments.push(questionDoc.id);
