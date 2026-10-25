@@ -4,6 +4,7 @@ const failures = [];
 const read = (path) => fs.readFileSync(path, 'utf8');
 const exam = read('src/components/ExamEngine.tsx');
 const app = read('src/App.tsx');
+const persistence = read('src/app/persistSubmittedAttempt.ts');
 const service = read('src/firebase/firestoreService.ts');
 const rules = read('firestore.rules');
 const authLoad = read('scripts/phase8-auth-load-test.mjs');
@@ -27,8 +28,13 @@ for (const [needle, label] of [
 
 // Real submission path: attempt write is idempotent; leaderboard follows attempt.
 requireText(app, 'const handleSubmitTest = async', 'Student submission handler');
-requireText(app, 'persistedAttempt = await saveAttemptToFirestore(newAttempt)', 'Firestore attempt persistence');
-requireText(app, 'await saveLeaderboardProfilesToFirestore(profiles)', 'Leaderboard profile persistence');
+// Persistence is intentionally extracted from App.tsx; verify the call boundary and the helper contract.
+requireText(app, 'persistSubmittedAttempt(', 'Submission delegates to persistence helper');
+requireText(app, 'saveAttempt: saveAttemptToFirestore', 'Firestore attempt dependency wiring');
+requireText(app, 'saveLeaderboardProfiles: saveLeaderboardProfilesToFirestore', 'Leaderboard dependency wiring');
+requireText(persistence, 'await dependencies.saveAttempt(attempt)', 'Firestore attempt persistence');
+requireText(persistence, 'await dependencies.saveLeaderboardProfiles(profiles)', 'Leaderboard profile persistence');
+requireText(persistence, 'if (!user?.id) return attempt;', 'Guest attempt does not write authenticated records');
 requireText(app, 'return false;', 'Submission failure propagation');
 requireText(service, 'runTransaction(db, async (transaction) =>', 'Idempotent attempt transaction');
 requireText(service, 'if (existing.exists())', 'Duplicate submission protection');
@@ -52,12 +58,6 @@ requireText(prodLoad, 'no authentication or writes are exercised', 'Production l
 requireText(prodLoad, 'EXPECTED_TOTAL_VUS: 10000', 'Certified 10K read-only gate');
 requireText(preflight, 'Production HTTP GET/read-only paths only', 'Production read-only preflight');
 
-if (failures.length) {
-  console.error('Phase 8.5 student journey safety guard FAILED');
-  failures.forEach((failure) => console.error('- ' + failure));
-  process.exit(1);
-}
-
 const attemptQueryStart = service.indexOf('export async function fetchMyAttemptsFromFirestore');
 const attemptQueryEnd = service.indexOf('\nexport async function saveLeaderboardEntryToFirestore', attemptQueryStart);
 const attemptQueryBody = service.slice(attemptQueryStart, attemptQueryEnd);
@@ -69,6 +69,12 @@ const attemptsUseBoundedCursorPages =
   attemptQueryBody.includes("results.sort((a, b) =>");
 if (!attemptsUseBoundedCursorPages) {
   failures.push('Student attempt history: expected ordered Firestore cursor pagination with a 100-document page limit.');
+}
+
+if (failures.length) {
+  console.error('Phase 8.5 student journey safety guard FAILED');
+  failures.forEach((failure) => console.error('- ' + failure));
+  process.exit(1);
 }
 
 console.log(JSON.stringify({
