@@ -88,7 +88,35 @@ export function toStudentQuestion(question: Question | Record<string, unknown>):
   const source = question as Record<string, unknown>;
   const projected: Record<string, unknown> = {};
   for (const field of STUDENT_QUESTION_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(source, field)) projected[field] = source[field];
+    if (!Object.prototype.hasOwnProperty.call(source, field)) continue;
+
+    const value = source[field];
+    // Nested objects need their own allowlists: copying `options`, `statements`,
+    // or matching columns wholesale could leak answer markers added by future
+    // importers even when the top-level question fields are safe.
+    if (field === 'options' && Array.isArray(value)) {
+      projected[field] = value.map(option => {
+        if (!option || typeof option !== 'object') return {};
+        const item = option as Record<string, unknown>;
+        const safe: Record<string, unknown> = {};
+        for (const key of ['label', 'id', 'text', 'textHindi']) {
+          if (Object.prototype.hasOwnProperty.call(item, key)) safe[key] = item[key];
+        }
+        return safe;
+      });
+    } else if (['statements', 'columnA', 'columnB'].includes(field) && Array.isArray(value)) {
+      projected[field] = value.map(entry => {
+        if (!entry || typeof entry !== 'object') return {};
+        const item = entry as Record<string, unknown>;
+        const safe: Record<string, unknown> = {};
+        for (const key of ['id', 'text', 'textHindi']) {
+          if (Object.prototype.hasOwnProperty.call(item, key)) safe[key] = item[key];
+        }
+        return safe;
+      });
+    } else {
+      projected[field] = value;
+    }
   }
   return projected as StudentQuestion;
 }
