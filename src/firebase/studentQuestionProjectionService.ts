@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getCountFromServer,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
@@ -33,6 +34,49 @@ export async function deleteStudentQuestionProjection(questionId: string): Promi
  * Idempotent admin-invoked backfill. Caller must enforce admin authorization.
  * Writes in bounded batches and never modifies canonical question records.
  */
+/**
+ * Read-only rollout gate: compare canonical and projected counts and sample
+ * every projected record for known answer-key aliases. Does not imply that
+ * all projection content is semantically correct; full migration still needs
+ * representative exam journey tests before rules can be tightened.
+ */
+export async function verifyStudentQuestionProjections(sampleLimit = 100): Promise<{
+  canonicalCount: number;
+  projectedCount: number;
+  sampled: number;
+  leakedDocuments: string[];
+  countParity: boolean;
+}> {
+  if (!db) throw new Error('Firestore is not initialized.');
+  const [canonicalCountSnap, projectedCountSnap, projectedSnap] = await Promise.all([
+    getCountFromServer(collection(db, CANONICAL_QUESTIONS)),
+    getCountFromServer(collection(db, STUDENT_QUESTIONS)),
+    getDocs(collection(db, STUDENT_QUESTIONS)),
+  ]);
+  const canonicalCount = canonicalCountSnap.data().count;
+  const projectedCount = projectedCountSnap.data().count;
+  const sampleSize = Math.max(0, Math.min(Math.floor(sampleLimit), projectedSnap.docs.length));
+  const leakedDocuments: string[] = [];
+  const forbiddenFields = [
+    'correctOption', 'correctAnswer', 'answer', 'answerKey', 'modelKey',
+    'finalAmendedKey', 'explanation', 'explanationHindi', 'solution',
+    'solutionHindi', 'moderationNotes', 'internalNotes',
+  ];
+  for (const questionDoc of projectedSnap.docs.slice(0, sampleSize)) {
+    const data = questionDoc.data();
+    if (forbiddenFields.some(field => Object.prototype.hasOwnProperty.call(data, field))) {
+      leakedDocuments.push(questionDoc.id);
+    }
+  }
+  return {
+    canonicalCount,
+    projectedCount,
+    sampled: sampleSize,
+    leakedDocuments,
+    countParity: canonicalCount === projectedCount,
+  };
+}
+
 export async function backfillStudentQuestionProjections(): Promise<{ scanned: number; projected: number }> {
   if (!db) throw new Error('Firestore is not initialized.');
   const snapshot = await getDocs(collection(db, CANONICAL_QUESTIONS));
