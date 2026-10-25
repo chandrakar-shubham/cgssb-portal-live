@@ -16,7 +16,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { backfillStudentQuestionProjections, deleteStudentQuestionProjection, syncStudentQuestionProjection } from '../firebase/studentQuestionProjectionService';
+import { backfillStudentQuestionProjections, deleteStudentQuestionProjection, syncStudentQuestionProjection, verifyStudentQuestionProjections } from '../firebase/studentQuestionProjectionService';
 
 const ADMIN_BOOTSTRAP_EMAIL = 'admin@cgtest.in';
 const BOOTSTRAP_ADMIN_UID = 'VOynxZyDOJR4lg2x4va2U3qF5m72';
@@ -336,6 +336,12 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
         .sort((a:any, b:any) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
       return { success:true, attempts } as T;
     }
+  }
+
+  // Explicitly admin-gated read-only verification gate for migration rollout.
+  if (method === 'GET' && parts[1] === 'admin' && parts[2] === 'questions' && parts[3] === 'verify-student-projection') {
+    await requireAdminAuth();
+    return { success: true, ...(await verifyStudentQuestionProjections()) } as T;
   }
 
   // Explicitly admin-gated, idempotent projection backfill. Never runs on student startup.
