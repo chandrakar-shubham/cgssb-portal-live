@@ -38,7 +38,7 @@ export function useGovernanceEventSubscriptions({
       }>).detail;
       if (detail && Array.isArray(detail.affectedTestIds) && typeof detail.newPublishStatus === 'boolean') {
         setTests(previous =>
-          applyPublishCascade(previous, detail.affectedTestIds as string[], detail.newPublishStatus),
+          applyPublishCascade(previous, detail.affectedTestIds as string[], detail.newPublishStatus as boolean),
         );
       }
     };
