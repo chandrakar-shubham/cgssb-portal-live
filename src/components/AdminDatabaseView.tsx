@@ -15,6 +15,7 @@ import {
 import { getStoredBundles, purgeAllDemoDatabaseData, isDemoDataPurged, getTrueZeroDataMode, setTrueZeroDataMode } from '../utils/bundleStore';
 import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mockData';
 import { testConnection } from '../firebase/connectionTest';
+import { api } from '../utils/apiClient';
 import {
   Database,
   Layers,
@@ -459,12 +460,35 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [pingResult, setPingResult] = useState<{ status: 'idle' | 'success' | 'offline'; time?: number }>({ status: 'idle' });
 
   const [isPurging, setIsPurging] = useState(false);
+  const [isProjectingQuestions, setIsProjectingQuestions] = useState(false);
+  const [projectionMessage, setProjectionMessage] = useState<string | null>(null);
   const [liveObservability, setLiveObservability] = useState<DatabaseObservabilitySnapshot | null>(null);
   const [liveIntegrity, setLiveIntegrity] = useState<DatabaseIntegrityAudit | null>(null);
   const [orphanedSeries, setOrphanedSeries] = useState<OrphanedSeriesRecord[]>([]);
   const [isAuditing, setIsAuditing] = useState(false);
   const [deletingOrphanId, setDeletingOrphanId] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
+
+  const backfillQuestionProjection = async () => {
+    const confirmed = window.confirm(
+      'Create/update student-safe projections for all canonical questions? This does not change the existing exam read path or Firestore canonical-question rules.'
+    );
+    if (!confirmed) return;
+    setIsProjectingQuestions(true);
+    setProjectionMessage(null);
+    try {
+      const result = await api.post<{ success: boolean; scanned: number; projected: number }>(
+        '/api/admin/questions/backfill-student-projection',
+        {},
+        { requireAdmin: true }
+      );
+      setProjectionMessage(`Projection backfill complete: ${result.projected} of ${result.scanned} canonical questions processed. Canonical read rules remain unchanged.`);
+    } catch (error) {
+      setProjectionMessage(`Projection backfill failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsProjectingQuestions(false);
+    }
+  };
 
   const refreshDatabaseAudit = async () => {
     if (!isFirebaseConfigured) {
@@ -812,15 +836,30 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                 <p className="text-xs text-slate-400">Live document counts, sampled payload size, and query health</p>
               </div>
 
-              <button
-                onClick={() => void refreshDatabaseAudit()}
-                disabled={isAuditing}
-                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
-                <span>{isAuditing ? 'Auditing...' : 'Refresh Audit'}</span>
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => void backfillQuestionProjection()}
+                  disabled={isProjectingQuestions}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold transition border border-indigo-500 disabled:opacity-50"
+                >
+                  {isProjectingQuestions ? 'Projecting questions…' : 'Backfill Student-Safe Questions'}
+                </button>
+                <button
+                  onClick={() => void refreshDatabaseAudit()}
+                  disabled={isAuditing}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1.5 border border-slate-700 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                  <span>{isAuditing ? 'Auditing...' : 'Refresh Audit'}</span>
+                </button>
+              </div>
             </div>
+
+            {projectionMessage && (
+              <div role="status" className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-xs text-slate-200 break-words">
+                {projectionMessage}
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
