@@ -85,6 +85,16 @@ if (profileStart === -1) throw new Error('Scalable leaderboard profile rule miss
 const profileEnd = rules.indexOf('\n    // Referral records', profileStart);
 const profileBlock = rules.slice(profileStart, profileEnd);
 for (const required of [
+  "request.resource.data.source == 'practice_summary'",
+  'request.resource.data.averagePercentage <= 100',
+  'request.resource.data.averageAccuracy <= 100',
+  "request.resource.data.diff(resource.data).affectedKeys().hasOnly(["
+]) {
+  if (!profileBlock.includes(required)) {
+    throw new Error(`Leaderboard profile integrity rule missing: ${required}`);
+  }
+}
+for (const required of [
   'allow get: if true;',
   'allow list: if hasManageStudents() || request.query.limit <= 100;',
   'isOwner(request.resource.data.userId)',
