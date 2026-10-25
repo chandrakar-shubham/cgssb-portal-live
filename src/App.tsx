@@ -14,7 +14,7 @@ import { loadExamSessionQuestions } from './app/examSessionQuestions';
 import { createTestAttempt } from './app/attemptFactory';
 import { persistSubmittedAttempt } from './app/persistSubmittedAttempt';
 import { hasGuestUsedFreeTest, requiresProPass } from './app/studentAccessPolicy';
-import { upsertRestoredTest, applyPublishCascade, replaceTestsFromGovernanceEvent, replaceQuestionsFromGovernanceEvent, replacePypFromGovernanceEvent } from './app/governanceReducers';
+import { useGovernanceEventSubscriptions } from './app/useGovernanceEventSubscriptions';
 import { countUnresolvedMistakeQuestions } from './app/unresolvedMistakes';
 import { resolveActiveExamQuestions } from './app/activeExamQuestionResolver';
 import { findLinkedPypTest } from './app/pypPracticeResolver';
@@ -243,28 +243,8 @@ function MainApp() {
 
   const [attempts, setAttempts] = useState<TestAttempt[]>([]);
 
-  // Run taxonomy migration on initial mount
-  useEffect(() => {
-    // Listen for governance events (Test restore, Cascade publish, Data Purge/Restore)
-    const handleRestored = (e: any) => { if (e.detail && e.detail.id) setTests(prev => upsertRestoredTest(prev, e.detail)); };
-    const handleCascadePublish = (e: any) => { if (e.detail && Array.isArray(e.detail.affectedTestIds)) setTests(prev => applyPublishCascade(prev, e.detail.affectedTestIds, e.detail.newPublishStatus)); };
-    const handleTestsUpdated = (e: any) => { setTests(prev => replaceTestsFromGovernanceEvent(e.detail, prev)); };
-    const handleQuestionsUpdated = (e: any) => { setQuestions(prev => replaceQuestionsFromGovernanceEvent(e.detail, prev)); };
-    const handlePypUpdated = (e: any) => { setPypPapers(prev => replacePypFromGovernanceEvent(e.detail, prev)); };
-
-    window.addEventListener('cgssb-test-restored', handleRestored);
-    window.addEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
-    window.addEventListener('cgssb-tests-updated', handleTestsUpdated);
-    window.addEventListener('cgssb-questions-updated', handleQuestionsUpdated);
-    window.addEventListener('cgssb-pyp-updated', handlePypUpdated);
-    return () => {
-      window.removeEventListener('cgssb-test-restored', handleRestored);
-      window.removeEventListener('cgssb-governance-publish-cascade', handleCascadePublish);
-      window.removeEventListener('cgssb-tests-updated', handleTestsUpdated);
-      window.removeEventListener('cgssb-questions-updated', handleQuestionsUpdated);
-      window.removeEventListener('cgssb-pyp-updated', handlePypUpdated);
-    };
-  }, []);
+  // Domain hook owns cross-module governance event listeners and cleanup.
+  useGovernanceEventSubscriptions({ setTests, setQuestions, setPypPapers });
 
 
   // Managers own their Firestore subscriptions. Keep App-level startup focused on
