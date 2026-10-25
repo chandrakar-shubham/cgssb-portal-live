@@ -66,13 +66,25 @@
     <script type="module" src="/src/main.tsx"></script>
     <script>
       (() => {
+        const isAdminRoute = /^\/admin(?:\/|$)/i.test(window.location.pathname);
         const report = (message) => {
           const fallback = document.getElementById('startup-fallback');
           if (!fallback) return;
+          fallback.style.display = 'flex';
+          fallback.setAttribute('data-startup-failed', 'true');
+          const heading = document.getElementById('startup-heading');
+          const copy = document.getElementById('startup-copy');
           const detail = document.getElementById('startup-diagnostic');
-          if (detail) detail.textContent = message;
-          const heading = fallback.querySelector('p');
-          if (heading) heading.textContent = 'The portal could not start.';
+          const versionLink = document.getElementById('startup-version-link');
+          if (heading) heading.textContent = isAdminRoute ? 'Admin portal could not start.' : 'We’re temporarily unable to load the portal.';
+          if (copy) copy.textContent = isAdminRoute
+            ? 'The application failed to initialize. Use the diagnostic details below to investigate.'
+            : 'Your exam experience is temporarily unavailable. Please try again in a moment.';
+          if (detail) {
+            detail.hidden = !isAdminRoute;
+            detail.textContent = isAdminRoute ? message : '';
+          }
+          if (versionLink) versionLink.hidden = !isAdminRoute;
         };
         window.addEventListener('error', (event) => {
           const target = event.target;
@@ -96,14 +108,14 @@
   </head>
   <body class="bg-slate-900 text-slate-100 antialiased selection:bg-emerald-500 selection:text-white font-sans min-h-screen">
     <div id="root">
-      <main id="startup-fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;text-align:center">
+      <main id="startup-fallback" style="min-height:100vh;display:none;align-items:center;justify-content:center;padding:24px;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;text-align:center">
         <section style="max-width:520px">
           <div style="font-size:28px;font-weight:800;margin-bottom:12px">CGSSBTest</div>
-          <p style="font-size:16px;margin:0 0 12px">Portal is starting…</p>
-          <p style="font-size:13px;color:#94a3b8;margin:0 0 20px">If this screen remains visible, the application script could not start. Check your connection and reload.</p>
+          <p id="startup-heading" style="font-size:18px;font-weight:700;margin:0 0 12px">CGSSBTest</p>
+          <p id="startup-copy" style="font-size:13px;color:#94a3b8;margin:0 0 20px">Loading your exam experience…</p>
           <button onclick="window.location.reload()" style="padding:10px 18px;border:1px solid #475569;border-radius:10px;background:#1e293b;color:#f8fafc;font-weight:700;cursor:pointer">Reload portal</button>
-          <p id="startup-diagnostic" role="status" style="margin-top:14px;font-size:12px;color:#fbbf24;overflow-wrap:anywhere">Waiting for application bundle…</p>
-          <p style="margin-top:18px;font-size:12px"><a href="/version.json" style="color:#93c5fd">Build / deployment information</a></p>
+          <p id="startup-diagnostic" role="status" hidden style="margin-top:14px;font-size:12px;color:#fbbf24;overflow-wrap:anywhere"></p>
+          <p id="startup-version-link" hidden style="margin-top:18px;font-size:12px"><a href="/version.json" style="color:#93c5fd">Build / deployment information</a></p>
         </section>
       </main>
     </div>
