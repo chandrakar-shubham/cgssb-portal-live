@@ -129,6 +129,21 @@ try {
       durationDays: 365,
     }, { merge: true })));
 
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'userEntitlements', 'student-a'), {
+      userId: 'student-a',
+      planType: 'WELCOME_FREE',
+      status: 'EXPIRED',
+      durationDays: 30,
+      source: 'WELCOME_FREE',
+      issuedAt: '2026-10-25T00:00:00.000Z',
+      expiresAt: '2026-10-24T00:00:00.000Z',
+      completedTestsCount: 1,
+      freePassStage: 'not_started',
+      unlockedMilestoneBonus: false,
+    });
+  });
+
   await check('student cannot reactivate an expired entitlement', () =>
     assertFails(setDoc(doc(studentA, 'userEntitlements', 'student-a'), {
       status: 'ACTIVE',
