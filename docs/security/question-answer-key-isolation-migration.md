@@ -1,6 +1,6 @@
 # Question answer-key isolation migration
 
-Status: **planned / not yet enforced**. This document records the safe sequence for removing public answer-key exposure without breaking current student tests.
+Status: **projection infrastructure implemented; production backfill and read-path cutover pending**. The safe student projection helper, admin-only idempotent backfill endpoint, question-write mirroring, and `studentQuestions` rules are now implemented. Canonical `questions` remains publicly readable until backfill verification and the student grading/read-path migration are complete.
 
 ## Current risk
 
@@ -19,10 +19,10 @@ The Spark compatibility layer also has a public GET path for `/api/questions`, a
 ## Safe rollout order
 
 1. **Inventory all readers/writers**: Firestore service functions, `useQuestionManager`, exam engine, practice mode, PYP, API compatibility routes, offline manager, catalog imports, migration scripts, admin editors, and result/review screens.
-2. Add a pure projection function and unit tests. Use an explicit allowlist of student-safe fields rather than a denylist alone; this prevents newly added canonical fields from leaking by default.
-3. Add an admin-only canonical collection rule and student-readable `studentQuestions` rule. Keep the existing public canonical read temporarily while migration and client switch are incomplete; mark the intermediate state as still exposed.
-4. Make every student read path use `studentQuestions`. Keep all admin CRUD paths on canonical `questions`. Ensure result/review behavior does not depend on answer keys being delivered before submission.
-5. Add an admin-only, idempotent backfill/sync routine for existing questions. Verify document counts, IDs, and projection parity before flipping read rules. Never run a bulk migration automatically from a student browser.
+2. ✅ Add a pure projection function and unit tests using an explicit allowlist. Student-safe projection infrastructure is in the codebase.
+3. ✅ Add the student-readable `studentQuestions` rule with admin-only writes. Canonical `questions` remains publicly readable during this intermediate state.
+4. Pending: make every student read path use `studentQuestions`, while keeping admin CRUD on canonical `questions`. Rework result/review so student clients do not need answer keys before submission.
+5. Implemented: admin-only idempotent backfill and automatic projection mirroring for admin question writes. Run it from Admin → Database → Backfill Student-Safe Questions, then verify counts, IDs, and projection parity before any cutover. It is never triggered from student startup.
 6. Add emulator tests proving: anonymous/student reads of canonical questions fail after cutover; student-safe reads succeed; answer-key fields are absent; unauthorized projection writes fail; authorized admin writes work; create/update/delete synchronization remains correct.
 7. Only after the reader audit, backfill verification, and CI pass, remove public reads from `questions`. Deploying rules and running a production migration require a separately reviewed rollout; do not assume a branch change updates production.
 8. Re-test full test journeys (test list, attempt, refresh/resume, offline cache, submit, result review, admin authoring/import) before promotion.
