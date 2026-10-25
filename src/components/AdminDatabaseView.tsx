@@ -469,6 +469,24 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
   const [deletingOrphanId, setDeletingOrphanId] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
 
+  const verifyQuestionProjection = async () => {
+    setProjectionMessage(null);
+    try {
+      const result = await api.get<{
+        success: boolean; canonicalCount: number; projectedCount: number;
+        sampled: number; leakedDocuments: string[]; countParity: boolean;
+      }>('/api/admin/questions/verify-student-projection', { requireAdmin: true });
+      const leakSummary = result.leakedDocuments.length
+        ? ` Answer-key fields detected in sampled projection docs: ${result.leakedDocuments.join(', ')}.`
+        : ' No known answer-key aliases found in the sample.';
+      setProjectionMessage(
+        `Verification: canonical=${result.canonicalCount}, projected=${result.projectedCount}, sampled=${result.sampled}, count parity=${result.countParity ? 'PASS' : 'FAIL'}.${leakSummary}`
+      );
+    } catch (error) {
+      setProjectionMessage(`Projection verification failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const backfillQuestionProjection = async () => {
     const confirmed = window.confirm(
       'Create/update student-safe projections for all canonical questions? This does not change the existing exam read path or Firestore canonical-question rules.'
@@ -843,6 +861,13 @@ export const AdminDatabaseView: React.FC<AdminDatabaseViewProps> = ({
                   className="px-3.5 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold transition border border-indigo-500 disabled:opacity-50"
                 >
                   {isProjectingQuestions ? 'Projecting questions…' : 'Backfill Student-Safe Questions'}
+                </button>
+                <button
+                  onClick={() => void verifyQuestionProjection()}
+                  disabled={isProjectingQuestions}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition border border-slate-700 disabled:opacity-50"
+                >
+                  Verify Projection
                 </button>
                 <button
                   onClick={() => void refreshDatabaseAudit()}
