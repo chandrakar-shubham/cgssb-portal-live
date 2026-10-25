@@ -37,11 +37,11 @@ async function runBuild() {
   if (builtHtml.includes('/src/main.tsx')) {
     throw new Error('Production HTML still references /src/main.tsx instead of a compiled bundle');
   }
-  const appBundleMatch = builtHtml.match(/(?:src|href)="([^"]*\/assets\/app-[^"]+\\.(?:js|mjs))"/);
+  const appBundleMatch = builtHtml.match(/(?:src|href)="([^"]*\/assets\/app-[^"]+\.(?:js|mjs))"/);
   if (!appBundleMatch) {
     throw new Error('Production HTML does not reference the expected compiled app bundle under /assets/app-*.js');
   }
-  const appBundlePath = path.resolve('dist', appBundleMatch[1].replace(/^\\//, ''));
+  const appBundlePath = path.resolve('dist', appBundleMatch[1].replace(/^\//, ''));
   if (!fs.existsSync(appBundlePath) || fs.statSync(appBundlePath).size === 0) {
     throw new Error(`Compiled app bundle is missing or empty: ${appBundlePath}`);
   }
