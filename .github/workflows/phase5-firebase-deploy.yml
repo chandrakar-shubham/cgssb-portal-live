@@ -42,6 +42,11 @@ jobs:
         run: npm run lint
 
       - name: Production build
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          BUILD_TIME: ${{ github.event.head_commit.timestamp }}
+          NODE_ENV: production
         run: npm run build
 
       - name: Verify Spark artifacts
@@ -65,12 +70,20 @@ jobs:
         run: |
           ./node_modules/.bin/firebase deploy --project "$FIREBASE_PROJECT_ID" --only hosting,firestore:rules --non-interactive
 
-      - name: Smoke test deployed Firebase Hosting
+      - name: Smoke test deployed Firebase Hosting and verify release commit
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
         run: |
           set -e
           for i in 1 2 3 4 5; do
-            if curl -fsSL --max-time 20 https://gen-lang-client-0783153446.web.app/ | grep -qi '<html'; then
-              echo "Firebase Hosting smoke test passed."
+            if curl -fsSL --max-time 20 https://gen-lang-client-0783153446.web.app/ -o /tmp/hosting-index.html; then
+              if ! grep -qi '<html' /tmp/hosting-index.html; then
+                echo "Hosting response did not contain an HTML document."
+                exit 1
+              fi
+              curl -fsSL --max-time 20 https://gen-lang-client-0783153446.web.app/version.json -o /tmp/hosting-version.json
+              node -e "const v=require('/tmp/hosting-version.json'); const expected=process.env.EXPECTED_COMMIT.slice(0,7); console.log('Deployed version:',v); if(v.commitSha!==expected){console.error('Expected commit '+expected+' but Hosting serves '+v.commitSha);process.exit(1)}"
+              echo "Firebase Hosting serves the expected commit."
               exit 0
             fi
             sleep 5
