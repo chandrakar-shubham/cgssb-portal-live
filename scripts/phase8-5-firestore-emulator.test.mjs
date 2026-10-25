@@ -98,6 +98,42 @@ try {
   await check('public catalog cannot be written by an unauthenticated visitor', () =>
     assertFails(setDoc(doc(anonymous, 'mockTests', 'phase85-forbidden-write'), { id: 'phase85-forbidden-write' })));
 
+  await check('student can create the one-time free welcome entitlement', () =>
+    assertSucceeds(setDoc(doc(studentA, 'userEntitlements', 'student-a'), {
+      userId: 'student-a',
+      planType: 'WELCOME_FREE',
+      status: 'ACTIVE',
+      durationDays: 30,
+      source: 'WELCOME_FREE',
+      issuedAt: '2026-10-25T00:00:00.000Z',
+      expiresAt: '2026-11-24T00:00:00.000Z',
+      completedTestsCount: 0,
+      freePassStage: 'not_started',
+      unlockedMilestoneBonus: false,
+    })));
+
+  await check('student may update non-authoritative free-campaign progress metadata', () =>
+    assertSucceeds(setDoc(doc(studentA, 'userEntitlements', 'student-a'), {
+      completedTestsCount: 1,
+      updatedAt: '2026-10-25T00:10:00.000Z',
+    }, { merge: true })));
+
+  await check('student cannot extend entitlement expiry from the client', () =>
+    assertFails(setDoc(doc(studentA, 'userEntitlements', 'student-a'), {
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    }, { merge: true })));
+
+  await check('student cannot change entitlement source to client checkout', () =>
+    assertFails(setDoc(doc(studentA, 'userEntitlements', 'student-a'), {
+      source: 'CLIENT_CHECKOUT',
+      durationDays: 365,
+    }, { merge: true })));
+
+  await check('student cannot reactivate an expired entitlement', () =>
+    assertFails(setDoc(doc(studentA, 'userEntitlements', 'student-a'), {
+      status: 'ACTIVE',
+    }, { merge: true })));
+
   await check('student can create a profile owned by them', () =>
     assertSucceeds(setDoc(doc(studentA, 'leaderboardProfiles', 'profile-a'), {
       id: 'profile-a',
