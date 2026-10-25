@@ -138,6 +138,13 @@ service cloud.firestore {
       allow write: if hasManageTests();
     }
     match /questions/{questionId} {
+      // Transitional: canonical answer keys remain publicly readable until the
+      // student projection migration and client grading path are verified.
+      allow read: if true;
+      allow write: if hasManageQuestions();
+    }
+    match /studentQuestions/{questionId} {
+      // Student-safe allowlisted projection; contains no grading keys.
       allow read: if true;
       allow write: if hasManageQuestions();
     }
