@@ -149,14 +149,41 @@ try {
       status: 'ACTIVE',
     }, { merge: true })));
 
-  await check('student can create a profile owned by them', () =>
-    assertSucceeds(setDoc(doc(studentA, 'leaderboardProfiles', 'profile-a'), {
-      id: 'profile-a',
-      userId: 'student-a',
-      source: 'practice_summary',
-      scopeType: 'target',
-      scopeKey: 'CGPSC',
+  const validProfile = {
+    id: 'profile-a',
+    userId: 'student-a',
+    source: 'practice_summary',
+    scopeType: 'target',
+    scopeKey: 'CGPSC',
+    targetKey: 'CGPSC',
+    targetExam: 'CGPSC',
+    candidateName: 'Student A',
+    score: 45,
+    maxScore: 60,
+    averagePercentage: 75,
+    averageAccuracy: 80,
+    testsTaken: 2,
+    averageTimeSeconds: 1200,
+    updatedAt: '2026-10-25T00:00:00.000Z',
+  };
+
+  await check('student can create a bounded practice-summary profile they own', () =>
+    assertSucceeds(setDoc(doc(studentA, 'leaderboardProfiles', 'profile-a'), validProfile)));
+
+  await check('student cannot label a client-computed profile as verified', () =>
+    assertFails(setDoc(doc(studentA, 'leaderboardProfiles', 'profile-spoof'), {
+      ...validProfile, id: 'profile-spoof', source: 'verified_official',
     })));
+
+  await check('student cannot publish out-of-range percentage values', () =>
+    assertFails(setDoc(doc(studentA, 'leaderboardProfiles', 'profile-invalid'), {
+      ...validProfile, id: 'profile-invalid', averagePercentage: 1000,
+    })));
+
+  await check('student cannot change a practice profile source after creation', () =>
+    assertFails(setDoc(doc(studentA, 'leaderboardProfiles', 'profile-a'), {
+      source: 'verified_official',
+    }, { merge: true })));
 
   await check('public leaderboard query with limit 100 is allowed', () =>
     assertSucceeds(getDocs(query(collection(anonymous, 'leaderboardProfiles'), limit(100)))));
