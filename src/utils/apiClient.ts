@@ -16,6 +16,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
+import { backfillStudentQuestionProjections, deleteStudentQuestionProjection, syncStudentQuestionProjection } from '../firebase/studentQuestionProjectionService';
 
 const ADMIN_BOOTSTRAP_EMAIL = 'admin@cgtest.in';
 const BOOTSTRAP_ADMIN_UID = 'VOynxZyDOJR4lg2x4va2U3qF5m72';
@@ -337,6 +338,12 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     }
   }
 
+  // Explicitly admin-gated, idempotent projection backfill. Never runs on student startup.
+  if (method === 'POST' && parts[1] === 'admin' && parts[2] === 'questions' && parts[3] === 'backfill-student-projection') {
+    await requireAdminAuth();
+    return { success: true, ...(await backfillStudentQuestionProjections()) } as T;
+  }
+
   // Admin reads
   if (parts[1] === 'admin' && method === 'GET') {
     await requireAdminAuth();
@@ -370,10 +377,15 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     await requireAdminAuth();
     if (parts[2]==='bulk') {
       const list=Array.isArray(body?.questions)?body.questions:[];
-      for(const q of list) await writeDoc('questions',String(q.id),q);
+      for(const q of list) {
+        await writeDoc('questions',String(q.id),q);
+        await syncStudentQuestionProjection({ ...q, id: String(q.id) });
+      }
       return { success:true, inserted:list.length, updated:0 };
     }
-    const value=await writeDoc('questions',String(body.id),body); return { success:true, question:value };
+    const value=await writeDoc('questions',String(body.id),body);
+    await syncStudentQuestionProjection({ ...body, id: String(body.id) });
+    return { success:true, question:value };
   }
   if (method==='POST' && parts[1]==='pyp') {
     await requireAdminAuth(); const value=await writeDoc('pypPapers',String(body.id),body); return { success:true,paper:value };
@@ -446,7 +458,7 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     }[parts[2]] || parts[2];
     if (parts[1]==='admin') map[parts[2]]={students:'users',members:'adminMembers',coupons:'discountCoupons'}[parts[2]];
     const collectionName=parts[1]==='cms'?map[parts[2]]:map[parts[1]];
-    if(collectionName){ await requireAdminAuth(); return await removeDoc(collectionName,decode(parts[3]||parts[2])) as T; }
+    if(collectionName){ await requireAdminAuth(); const id=decode(parts[3]||parts[2]); const result=await removeDoc(collectionName,id); if(collectionName==='questions') await deleteStudentQuestionProjection(id); return result as T; }
   }
 
   if (method==='POST' && parts[1]==='ai') {
