@@ -27,6 +27,7 @@ import { INITIAL_MOCK_TESTS, INITIAL_QUESTIONS, INITIAL_PYP_PAPERS } from '../mo
 import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../types/cms';
 import { INITIAL_CMS_PAGES, INITIAL_CMS_POSTS, INITIAL_CMS_SERIES_PACKS, INITIAL_CMS_SETTINGS } from '../defaultCmsData';
 import { DEFAULT_SLIDER_BANNERS } from '../utils/sliderStore';
+import { syncStudentQuestionProjection, deleteStudentQuestionProjection } from './studentQuestionProjectionService';
 
 export enum OperationType {
   CREATE = 'create',
@@ -664,18 +665,23 @@ export async function saveQuestionsToFirestore(questions: Question[]): Promise<v
   if (!db) return;
     const validQuestions = questions.filter(q => q && q.id);
     if (validQuestions.length > 0) {
-      await Promise.all(validQuestions.map(q => setDoc(doc(db, COLLECTIONS.QUESTIONS, q.id), q, { merge: true })));
+      await Promise.all(validQuestions.map(async q => {
+        await setDoc(doc(db, COLLECTIONS.QUESTIONS, q.id), q, { merge: true });
+        await syncStudentQuestionProjection(q);
+      }));
     }
 }
 
 export async function saveSingleQuestionToFirestore(question: Question): Promise<void> {
   if (!db || !question?.id) return;
     await setDoc(doc(db, COLLECTIONS.QUESTIONS, question.id), question, { merge: true });
+    await syncStudentQuestionProjection(question);
 }
 
 export async function deleteQuestionFromFirestore(questionId: string): Promise<void> {
   if (!db || !questionId) return;
     await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, questionId));
+    await deleteStudentQuestionProjection(questionId);
 }
 
 // ==========================================
