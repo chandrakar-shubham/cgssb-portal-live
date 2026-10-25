@@ -64,16 +64,25 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
   const projectedCount = projectedCountSnap.data().count;
   const sampleSize = projectedSnap?.docs.length ?? 0;
   const leakedDocuments: string[] = [];
-  const forbiddenFields = [
-    'correctOption', 'correctAnswer', 'answer', 'answerKey', 'modelKey',
-    'finalAmendedKey', 'explanation', 'explanationHindi', 'solution',
-    'solutionHindi', 'moderationNotes', 'internalNotes',
-  ];
+  // Scan nested objects and arrays as well as top-level fields. A projection
+  // can be unsafe even when the answer marker is hidden inside an option or
+  // matching-column item.
+  const forbiddenFields = new Set([
+    'correctoption', 'correctanswer', 'answer', 'answerkey', 'modelkey',
+    'finalamendedkey', 'explanation', 'explanationhindi', 'solution',
+    'solutionhindi', 'moderationnotes', 'internalnotes', 'iscorrect',
+    'correct', 'isanswer', 'answerid', 'isrightanswer',
+  ]);
+  const containsForbiddenField = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(containsForbiddenField);
+    if (value === null || typeof value !== 'object') return false;
+    return Object.entries(value as Record<string, unknown>).some(([key, nested]) => {
+      const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
+      return forbiddenFields.has(normalizedKey) || containsForbiddenField(nested);
+    });
+  };
   for (const questionDoc of (projectedSnap?.docs ?? [])) {
-    const data = questionDoc.data();
-    if (forbiddenFields.some(field => Object.prototype.hasOwnProperty.call(data, field))) {
-      leakedDocuments.push(questionDoc.id);
-    }
+    if (containsForbiddenField(questionDoc.data())) leakedDocuments.push(questionDoc.id);
   }
   return {
     canonicalCount,
