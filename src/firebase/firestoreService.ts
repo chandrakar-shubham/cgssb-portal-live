@@ -28,6 +28,7 @@ import { CMSPage, CMSPost, CMSTestSeriesPack, CMSSiteSettings } from '../types/c
 import { INITIAL_CMS_PAGES, INITIAL_CMS_POSTS, INITIAL_CMS_SERIES_PACKS, INITIAL_CMS_SETTINGS } from '../defaultCmsData';
 import { DEFAULT_SLIDER_BANNERS } from '../utils/sliderStore';
 import { syncStudentQuestionProjection, deleteStudentQuestionProjection } from './studentQuestionProjectionService';
+import type { StudentQuestion } from '../utils/studentQuestionProjection';
 
 export enum OperationType {
   CREATE = 'create',
