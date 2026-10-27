@@ -7,6 +7,9 @@ import {
   getCountFromServer,
   limit,
   query,
+  orderBy,
+  startAfter,
+  documentId,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
@@ -43,7 +46,7 @@ export async function deleteStudentQuestionProjection(questionId: string): Promi
  * all projection content is semantically correct; full migration still needs
  * representative exam journey tests before rules can be tightened.
  */
-export async function verifyStudentQuestionProjections(sampleLimit = 100): Promise<{
+export async function verifyStudentQuestionProjections(pageSize = 200): Promise<{
   canonicalCount: number;
   projectedCount: number;
   sampled: number;
@@ -55,42 +58,61 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
   passed: boolean;
 }> {
   if (!db) throw new Error('Firestore is not initialized.');
-  const requestedSampleSize = Number.isFinite(sampleLimit)
-    ? Math.max(0, Math.min(500, Math.floor(sampleLimit)))
-    : 100;
-  const [canonicalCountSnap, projectedCountSnap, canonicalSnap] = await Promise.all([
+  // `pageSize` controls the bounded Firestore page size, not total coverage.
+  // Always traverse the full canonical collection; a partial scan can never pass.
+  const boundedPageSize = Number.isFinite(pageSize)
+    ? Math.max(1, Math.min(400, Math.floor(pageSize)))
+    : 200;
+  const [canonicalCountSnap, projectedCountSnap] = await Promise.all([
     getCountFromServer(collection(db, CANONICAL_QUESTIONS)),
     getCountFromServer(collection(db, STUDENT_QUESTIONS)),
-    requestedSampleSize > 0
-      ? getDocs(query(collection(db, CANONICAL_QUESTIONS), limit(requestedSampleSize)))
-      : Promise.resolve(null),
   ]);
   const canonicalCount = canonicalCountSnap.data().count;
   const projectedCount = projectedCountSnap.data().count;
-  const sampleSize = canonicalSnap?.docs.length ?? 0;
+  let sampled = 0;
+  let cursor: ReturnType<typeof query> extends never ? never : any = null;
   const leakedDocuments: string[] = [];
   const missingProjectionIds: string[] = [];
   const mismatchedProjectionIds: string[] = [];
-  for (const canonicalDoc of (canonicalSnap?.docs ?? [])) {
-    const projectedDoc = await getDoc(doc(db, STUDENT_QUESTIONS, canonicalDoc.id));
-    if (!projectedDoc.exists()) {
-      missingProjectionIds.push(canonicalDoc.id);
-      continue;
+
+  while (true) {
+    const pageQuery = cursor
+      ? query(collection(db, CANONICAL_QUESTIONS), orderBy(documentId()), startAfter(cursor), limit(boundedPageSize))
+      : query(collection(db, CANONICAL_QUESTIONS), orderBy(documentId()), limit(boundedPageSize));
+    const canonicalPage = await getDocs(pageQuery);
+    if (canonicalPage.empty) break;
+    sampled += canonicalPage.docs.length;
+
+    // Bound concurrent point reads to avoid unbounded client-side fan-out.
+    for (let offset = 0; offset < canonicalPage.docs.length; offset += 20) {
+      const chunk = canonicalPage.docs.slice(offset, offset + 20);
+      const projectedSnapshots = await Promise.all(chunk.map(canonicalDoc =>
+        getDoc(doc(db, STUDENT_QUESTIONS, canonicalDoc.id))
+      ));
+      chunk.forEach((canonicalDoc, index) => {
+        const projectedDoc = projectedSnapshots[index];
+        if (!projectedDoc.exists()) {
+          missingProjectionIds.push(canonicalDoc.id);
+          return;
+        }
+        const canonicalQuestion = { ...canonicalDoc.data(), id: canonicalDoc.id } as Question;
+        const expectedProjection = toStudentQuestion(canonicalQuestion);
+        const actualProjection = { ...projectedDoc.data(), id: projectedDoc.id };
+        if (containsForbiddenStudentField(actualProjection)) leakedDocuments.push(projectedDoc.id);
+        if (stableSerializeProjection(expectedProjection) !== stableSerializeProjection(actualProjection)) {
+          mismatchedProjectionIds.push(canonicalDoc.id);
+        }
+      });
     }
-    const canonicalQuestion = { ...canonicalDoc.data(), id: canonicalDoc.id } as Question;
-    const expectedProjection = toStudentQuestion(canonicalQuestion);
-    const actualProjection = { ...projectedDoc.data(), id: projectedDoc.id };
-    if (containsForbiddenStudentField(actualProjection)) leakedDocuments.push(projectedDoc.id);
-    if (stableSerializeProjection(expectedProjection) !== stableSerializeProjection(actualProjection)) {
-      mismatchedProjectionIds.push(canonicalDoc.id);
-    }
+    cursor = canonicalPage.docs[canonicalPage.docs.length - 1];
+    if (canonicalPage.docs.length < boundedPageSize) break;
   }
   const countParity = canonicalCount === projectedCount;
-  const completeCoverage = sampleSize === canonicalCount;
+  const completeCoverage = sampled === canonicalCount;
   return {
     canonicalCount,
     projectedCount,
-    sampled: sampleSize,
+    sampled,
     leakedDocuments,
     missingProjectionIds,
     mismatchedProjectionIds,
