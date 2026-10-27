@@ -26,6 +26,9 @@ jobs:
       - name: Domain helper regression tests
         run: npm run test:domain
 
+      - name: Trusted scoring worker security scaffold tests
+        run: npm --prefix services/trusted-scoring-worker test
+
       - name: Student question projection security tests
         run: npm run test:student-question-projection
 
