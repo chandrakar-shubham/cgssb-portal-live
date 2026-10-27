@@ -129,17 +129,32 @@ export async function verifyStudentQuestionProjections(pageSize = 200): Promise<
 
 export async function backfillStudentQuestionProjections(): Promise<{ scanned: number; projected: number }> {
   if (!db) throw new Error('Firestore is not initialized.');
-  const snapshot = await getDocs(collection(db, CANONICAL_QUESTIONS));
+
+  // Bound both read memory and write batches. The cursor is always advanced
+  // from the canonical query snapshot, never from the projection writes.
+  let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
+  let scanned = 0;
   let projected = 0;
-  for (let offset = 0; offset < snapshot.docs.length; offset += WRITE_BATCH_SIZE) {
-    const docs = snapshot.docs.slice(offset, offset + WRITE_BATCH_SIZE);
+
+  while (true) {
+    const pageQuery: Query<DocumentData> = cursor
+      ? query(collection(db, CANONICAL_QUESTIONS), orderBy(documentId()), startAfter(cursor), limit(WRITE_BATCH_SIZE))
+      : query(collection(db, CANONICAL_QUESTIONS), orderBy(documentId()), limit(WRITE_BATCH_SIZE));
+    const canonicalPage: QuerySnapshot<DocumentData> = await getDocs(pageQuery);
+    if (canonicalPage.empty) break;
+
     const batch = writeBatch(db);
-    for (const questionDoc of docs) {
+    for (const questionDoc of canonicalPage.docs) {
       const question = { ...questionDoc.data(), id: questionDoc.id } as Question;
       batch.set(doc(db, STUDENT_QUESTIONS, questionDoc.id), toStudentQuestion(question));
     }
     await batch.commit();
-    projected += docs.length;
+
+    scanned += canonicalPage.docs.length;
+    projected += canonicalPage.docs.length;
+    cursor = canonicalPage.docs[canonicalPage.docs.length - 1];
+    if (canonicalPage.docs.length < WRITE_BATCH_SIZE) break;
   }
-  return { scanned: snapshot.docs.length, projected };
+
+  return { scanned, projected };
 }
