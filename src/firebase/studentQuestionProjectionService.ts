@@ -10,7 +10,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
-import { toStudentQuestion } from '../utils/studentQuestionProjection';
+import { containsForbiddenStudentField, stableSerializeProjection, toStudentQuestion } from '../utils/studentQuestionProjection';
 import type { Question } from '../types';
 
 const CANONICAL_QUESTIONS = 'questions';
@@ -71,31 +71,6 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
   const leakedDocuments: string[] = [];
   const missingProjectionIds: string[] = [];
   const mismatchedProjectionIds: string[] = [];
-  const stableSerialize = (value: unknown): string => {
-    if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
-    if (value !== null && typeof value === 'object') {
-      const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
-      return `{${entries.map(([key, nested]) => `${JSON.stringify(key)}:${stableSerialize(nested)}`).join(',')}}`;
-    }
-    return JSON.stringify(value) ?? 'undefined';
-  };
-  // Scan nested objects and arrays as well as top-level fields. A projection
-  // can be unsafe even when the answer marker is hidden inside an option or
-  // matching-column item.
-  const forbiddenFields = new Set([
-    'correctoption', 'correctanswer', 'answer', 'answerkey', 'modelkey',
-    'finalamendedkey', 'explanation', 'explanationhindi', 'solution',
-    'solutionhindi', 'moderationnotes', 'internalnotes', 'iscorrect',
-    'correct', 'isanswer', 'answerid', 'isrightanswer',
-  ]);
-  const containsForbiddenField = (value: unknown): boolean => {
-    if (Array.isArray(value)) return value.some(containsForbiddenField);
-    if (value === null || typeof value !== 'object') return false;
-    return Object.entries(value as Record<string, unknown>).some(([key, nested]) => {
-      const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
-      return forbiddenFields.has(normalizedKey) || containsForbiddenField(nested);
-    });
-  };
   for (const canonicalDoc of (canonicalSnap?.docs ?? [])) {
     const projectedDoc = await getDoc(doc(db, STUDENT_QUESTIONS, canonicalDoc.id));
     if (!projectedDoc.exists()) {
@@ -105,8 +80,8 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
     const canonicalQuestion = { ...canonicalDoc.data(), id: canonicalDoc.id } as Question;
     const expectedProjection = toStudentQuestion(canonicalQuestion);
     const actualProjection = { ...projectedDoc.data(), id: projectedDoc.id };
-    if (containsForbiddenField(actualProjection)) leakedDocuments.push(projectedDoc.id);
-    if (stableSerialize(expectedProjection) !== stableSerialize(actualProjection)) {
+    if (containsForbiddenStudentField(actualProjection)) leakedDocuments.push(projectedDoc.id);
+    if (stableSerializeProjection(expectedProjection) !== stableSerializeProjection(actualProjection)) {
       mismatchedProjectionIds.push(canonicalDoc.id);
     }
   }
