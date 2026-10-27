@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDoc,
   getCountFromServer,
   limit,
   query,
@@ -47,23 +48,36 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
   projectedCount: number;
   sampled: number;
   leakedDocuments: string[];
+  missingProjectionIds: string[];
+  mismatchedProjectionIds: string[];
   countParity: boolean;
+  passed: boolean;
 }> {
   if (!db) throw new Error('Firestore is not initialized.');
   const requestedSampleSize = Number.isFinite(sampleLimit)
     ? Math.max(0, Math.min(500, Math.floor(sampleLimit)))
     : 100;
-  const [canonicalCountSnap, projectedCountSnap, projectedSnap] = await Promise.all([
+  const [canonicalCountSnap, projectedCountSnap, canonicalSnap] = await Promise.all([
     getCountFromServer(collection(db, CANONICAL_QUESTIONS)),
     getCountFromServer(collection(db, STUDENT_QUESTIONS)),
     requestedSampleSize > 0
-      ? getDocs(query(collection(db, STUDENT_QUESTIONS), limit(requestedSampleSize)))
+      ? getDocs(query(collection(db, CANONICAL_QUESTIONS), limit(requestedSampleSize)))
       : Promise.resolve(null),
   ]);
   const canonicalCount = canonicalCountSnap.data().count;
   const projectedCount = projectedCountSnap.data().count;
-  const sampleSize = projectedSnap?.docs.length ?? 0;
+  const sampleSize = canonicalSnap?.docs.length ?? 0;
   const leakedDocuments: string[] = [];
+  const missingProjectionIds: string[] = [];
+  const mismatchedProjectionIds: string[] = [];
+  const stableSerialize = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+    if (value !== null && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
+      return `{${entries.map(([key, nested]) => `${JSON.stringify(key)}:${stableSerialize(nested)}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+  };
   // Scan nested objects and arrays as well as top-level fields. A projection
   // can be unsafe even when the answer marker is hidden inside an option or
   // matching-column item.
@@ -81,15 +95,30 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
       return forbiddenFields.has(normalizedKey) || containsForbiddenField(nested);
     });
   };
-  for (const questionDoc of (projectedSnap?.docs ?? [])) {
-    if (containsForbiddenField(questionDoc.data())) leakedDocuments.push(questionDoc.id);
+  for (const canonicalDoc of (canonicalSnap?.docs ?? [])) {
+    const projectedDoc = await getDoc(doc(db, STUDENT_QUESTIONS, canonicalDoc.id));
+    if (!projectedDoc.exists()) {
+      missingProjectionIds.push(canonicalDoc.id);
+      continue;
+    }
+    const canonicalQuestion = { ...canonicalDoc.data(), id: canonicalDoc.id } as Question;
+    const expectedProjection = toStudentQuestion(canonicalQuestion);
+    const actualProjection = { ...projectedDoc.data(), id: projectedDoc.id };
+    if (containsForbiddenField(actualProjection)) leakedDocuments.push(projectedDoc.id);
+    if (stableSerialize(expectedProjection) !== stableSerialize(actualProjection)) {
+      mismatchedProjectionIds.push(canonicalDoc.id);
+    }
   }
+  const countParity = canonicalCount === projectedCount;
   return {
     canonicalCount,
     projectedCount,
     sampled: sampleSize,
     leakedDocuments,
-    countParity: canonicalCount === projectedCount,
+    missingProjectionIds,
+    mismatchedProjectionIds,
+    countParity,
+    passed: countParity && leakedDocuments.length === 0 && missingProjectionIds.length === 0 && mismatchedProjectionIds.length === 0,
   };
 }
 
