@@ -51,6 +51,7 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
   missingProjectionIds: string[];
   mismatchedProjectionIds: string[];
   countParity: boolean;
+  completeCoverage: boolean;
   passed: boolean;
 }> {
   if (!db) throw new Error('Firestore is not initialized.');
@@ -110,6 +111,7 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
     }
   }
   const countParity = canonicalCount === projectedCount;
+  const completeCoverage = sampleSize === canonicalCount;
   return {
     canonicalCount,
     projectedCount,
@@ -118,7 +120,9 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
     missingProjectionIds,
     mismatchedProjectionIds,
     countParity,
-    passed: countParity && leakedDocuments.length === 0 && missingProjectionIds.length === 0 && mismatchedProjectionIds.length === 0,
+    completeCoverage,
+    // Fail closed: a partial sample is useful diagnostics, not migration approval.
+    passed: completeCoverage && countParity && leakedDocuments.length === 0 && missingProjectionIds.length === 0 && mismatchedProjectionIds.length === 0,
   };
 }
 
