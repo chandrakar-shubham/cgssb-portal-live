@@ -1,0 +1,55 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import worker from "../src/index.mjs";
+
+const env = { FIREBASE_PROJECT_ID: "test-project" };
+
+test("health endpoint exposes only a minimal scaffold status", async () => {
+  const response = await worker.fetch(new Request("https://worker.test/healthz"), env);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    service: "cgssb-trusted-scoring",
+    mode: "scaffold",
+  });
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("unknown route is not found", async () => {
+  const response = await worker.fetch(new Request("https://worker.test/not-a-route"), env);
+  assert.equal(response.status, 404);
+  assert.equal((await response.json()).error, "NOT_FOUND");
+});
+
+test("submission rejects missing bearer token", async () => {
+  const response = await worker.fetch(
+    new Request("https://worker.test/v1/attempts:submit", { method: "POST" }),
+    env,
+  );
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error, "UNAUTHENTICATED");
+});
+
+test("submission rejects malformed bearer token", async () => {
+  const response = await worker.fetch(
+    new Request("https://worker.test/v1/attempts:submit", {
+      method: "POST",
+      headers: { authorization: "Bearer not-a-jwt" },
+      body: JSON.stringify({ score: 100 }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error, "UNAUTHENTICATED");
+});
+
+test("unconfigured project fails closed", async () => {
+  const response = await worker.fetch(
+    new Request("https://worker.test/v1/attempts:submit", {
+      method: "POST",
+      headers: { authorization: "Bearer a.b.c" },
+    }),
+    { FIREBASE_PROJECT_ID: "REPLACE_WITH_NON_PRODUCTION_FIREBASE_PROJECT_ID" },
+  );
+  assert.equal(response.status, 401);
+});
