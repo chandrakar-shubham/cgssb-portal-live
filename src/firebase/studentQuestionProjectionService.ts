@@ -76,7 +76,7 @@ export async function verifyStudentQuestionProjections(sampleLimit = 100): Promi
       const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
       return `{${entries.map(([key, nested]) => `${JSON.stringify(key)}:${stableSerialize(nested)}`).join(',')}}`;
     }
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? 'undefined';
   };
   // Scan nested objects and arrays as well as top-level fields. A projection
   // can be unsafe even when the answer marker is hidden inside an option or
