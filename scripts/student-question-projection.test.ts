@@ -11,8 +11,9 @@ const canonical = {
   negativeMarks: 0.66,
   questionText: 'Which option is correct?',
   options: [{ label: 'A', text: 'Option A', textHindi: 'विकल्प A', isCorrect: true, answerKey: 'A' }],
-  statements: [{ id: 1, text: 'Statement', textHindi: 'कथन', correct: true, explanation: 'private' }],
-  columnA: [{ id: 'a', text: 'Left', isAnswer: true }],
+  statements: [{ id: 1, text: 'Statement', textHindi: 'कथन', correct: true, explanation: 'private', modelKey: 'A', nested: { isCorrect: true } }],
+  columnA: [{ id: 'a', text: 'Left', isAnswer: true, answer: 'B', finalAmendedKey: 'C' }],
+  columnB: [null, { id: 'b', text: 'Right', correctAnswer: 'B', moderationNotes: 'private' }],
   correctOption: 'A',
   correctAnswer: 'A',
   modelKey: 'B',
@@ -38,10 +39,16 @@ assert.equal(projected.questionText, 'Which option is correct?');
 assert.deepEqual(projected.options, [{ label: 'A', text: 'Option A', textHindi: 'विकल्प A' }]);
 assert.deepEqual(projected.statements, [{ id: 1, text: 'Statement', textHindi: 'कथन' }]);
 assert.deepEqual(projected.columnA, [{ id: 'a', text: 'Left' }]);
+assert.deepEqual(projected.columnB, [{}, { id: 'b', text: 'Right' }]);
 assert.equal('isCorrect' in projected.options[0], false);
+assert.equal('correctOption' in projected.options[0], false);
+assert.equal('explanation' in projected.options[0], false);
+assert.equal('nested' in projected.options[0], false);
 assert.equal('answerKey' in projected.options[0], false);
 assert.equal('correct' in projected.statements![0], false);
 assert.equal('explanation' in projected.statements![0], false);
+assert.equal('modelKey' in projected.statements![0], false);
+assert.equal('nested' in projected.statements![0], false);
 assert.equal('isAnswer' in projected.columnA![0], false);
 
 const many = toStudentQuestions([canonical, { ...canonical, id: 'q-2' }]);
