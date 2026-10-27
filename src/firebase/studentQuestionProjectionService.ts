@@ -11,6 +11,8 @@ import {
   startAfter,
   documentId,
   writeBatch,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from './config';
 import { containsForbiddenStudentField, stableSerializeProjection, toStudentQuestion } from '../utils/studentQuestionProjection';
@@ -41,10 +43,10 @@ export async function deleteStudentQuestionProjection(questionId: string): Promi
  * Writes in bounded batches and never modifies canonical question records.
  */
 /**
- * Read-only rollout gate: compare canonical and projected counts and sample
- * every projected record for known answer-key aliases. Does not imply that
- * all projection content is semantically correct; full migration still needs
- * representative exam journey tests before rules can be tightened.
+ * Read-only rollout gate: compare counts and verify every canonical record
+ * against its student-safe projection using bounded pagination. It checks
+ * known answer-key aliases and exact allowlist parity; representative exam
+ * journey tests are still required before rules can be tightened.
  */
 export async function verifyStudentQuestionProjections(pageSize = 200): Promise<{
   canonicalCount: number;
@@ -70,7 +72,7 @@ export async function verifyStudentQuestionProjections(pageSize = 200): Promise<
   const canonicalCount = canonicalCountSnap.data().count;
   const projectedCount = projectedCountSnap.data().count;
   let sampled = 0;
-  let cursor: ReturnType<typeof query> extends never ? never : any = null;
+  let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
   const leakedDocuments: string[] = [];
   const missingProjectionIds: string[] = [];
   const mismatchedProjectionIds: string[] = [];
@@ -118,7 +120,7 @@ export async function verifyStudentQuestionProjections(pageSize = 200): Promise<
     mismatchedProjectionIds,
     countParity,
     completeCoverage,
-    // Fail closed: a partial sample is useful diagnostics, not migration approval.
+    // Fail closed: every canonical document must be covered before approval.
     passed: completeCoverage && countParity && leakedDocuments.length === 0 && missingProjectionIds.length === 0 && mismatchedProjectionIds.length === 0,
   };
 }
