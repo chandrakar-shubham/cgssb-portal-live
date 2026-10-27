@@ -12,7 +12,9 @@ import {
   documentId,
   writeBatch,
   type DocumentData,
+  type Query,
   type QueryDocumentSnapshot,
+  type QuerySnapshot,
 } from 'firebase/firestore';
 import { db } from './config';
 import { containsForbiddenStudentField, stableSerializeProjection, toStudentQuestion } from '../utils/studentQuestionProjection';
@@ -78,10 +80,10 @@ export async function verifyStudentQuestionProjections(pageSize = 200): Promise<
   const mismatchedProjectionIds: string[] = [];
 
   while (true) {
-    const pageQuery = cursor
+    const pageQuery: Query<DocumentData> = cursor
       ? query(collection(db, CANONICAL_QUESTIONS), orderBy(documentId()), startAfter(cursor), limit(boundedPageSize))
       : query(collection(db, CANONICAL_QUESTIONS), orderBy(documentId()), limit(boundedPageSize));
-    const canonicalPage = await getDocs(pageQuery);
+    const canonicalPage: QuerySnapshot<DocumentData> = await getDocs(pageQuery);
     if (canonicalPage.empty) break;
     sampled += canonicalPage.docs.length;
 
