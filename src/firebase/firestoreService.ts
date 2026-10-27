@@ -609,6 +609,40 @@ export async function fetchQuestionsByIdsFromFirestore(questionIds: string[]): P
   }
 }
 
+/**
+ * Student-safe projection readers. These return only allowlisted question
+ * content and intentionally do not return answer keys or explanations.
+ * Keep canonical question readers below for admin-only workflows.
+ */
+export async function fetchStudentQuestionsByIdsFromFirestore(questionIds: string[]): Promise<StudentQuestion[]> {
+  if (!db || questionIds.length === 0) return [];
+  const uniqueIds = Array.from(new Set(questionIds.map(String).filter(Boolean)));
+  const chunks: string[][] = [];
+  for (let i = 0; i < uniqueIds.length; i += 30) chunks.push(uniqueIds.slice(i, i + 30));
+
+  const snapshots = await Promise.all(chunks.map(chunk =>
+    withTimeout(
+      getDocs(query(collection(db, 'studentQuestions'), where(documentId(), 'in', chunk))),
+      5000
+    )
+  ));
+  const byId = new Map<string, StudentQuestion>();
+  snapshots.forEach(snap => snap.docs.forEach(d =>
+    byId.set(d.id, { ...d.data(), id: d.id } as StudentQuestion)
+  ));
+  return uniqueIds.map(id => byId.get(id)).filter((q): q is StudentQuestion => Boolean(q));
+}
+
+export async function fetchStudentQuestionsByProgramFromFirestore(programId: string, limitCount = 500): Promise<StudentQuestion[]> {
+  if (!db || !programId) return [];
+  const safeLimit = Math.min(Math.max(limitCount, 1), 500);
+  const snap = await withTimeout(
+    getDocs(query(collection(db, 'studentQuestions'), where('programId', '==', programId), limit(safeLimit))),
+    5000
+  );
+  return snap.docs.map(d => ({ ...d.data(), id: d.id } as StudentQuestion));
+}
+
 export async function fetchQuestionsByProgramFromFirestore(programId: string, limitCount = 500): Promise<Question[]> {
   if (!db || !programId) return [];
   try {
