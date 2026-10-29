@@ -203,3 +203,19 @@ test("submission receipts withhold per-question correctness details", async () =
   const stored = [...repository.records.values()][0].result;
   assert.equal(stored.scoreBreakdown.questionResults.length, 2);
 });
+
+
+test("rejects mismatched student profile before loading canonical questions", async () => {
+  const repository = makeRepository();
+  let canonicalQuestionReads = 0;
+  repository.loadStudentProfile = async () => ({ id: "different-user", name: "Test Student" });
+  repository.loadCanonicalQuestions = async () => {
+    canonicalQuestionReads += 1;
+    return [{ id: "q1", correctOption: "A" }, { id: "q2", correctOption: "B" }];
+  };
+  const result = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  assert.equal(result.status, 403);
+  assert.equal(result.error, "STUDENT_PROFILE_UNAVAILABLE");
+  assert.equal(canonicalQuestionReads, 0);
+  assert.equal(repository.records.size, 0);
+});
