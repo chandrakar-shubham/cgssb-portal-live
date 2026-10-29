@@ -24,6 +24,11 @@ test("scores correct, incorrect, and unattempted answers from trusted question r
     maxScore: 5,
     percentage: 30,
     accuracy: 50,
+    questionResults: [
+      { questionId: "q1", subject: "General", status: "correct", marks: 2, negativeMarks: 0, score: 2 },
+      { questionId: "q2", subject: "General", status: "incorrect", marks: 2, negativeMarks: 0.5, score: -0.5 },
+      { questionId: "q3", subject: "General", status: "unattempted", marks: 1, negativeMarks: 0, score: 0 },
+    ],
   });
 });
 
