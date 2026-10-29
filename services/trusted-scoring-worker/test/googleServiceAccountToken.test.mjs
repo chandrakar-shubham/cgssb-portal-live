@@ -18,7 +18,7 @@ test("creates a short-lived datastore-scoped OAuth token and caches it", async (
   let assertion;
   const provider = createServiceAccountTokenProvider({
     clientEmail: "trusted-worker@example-project.iam.gserviceaccount.com",
-    privateKey,
+    privateKey: privateKey.replace(/\n/g, "\\n"),
     now: () => clock,
     fetchImpl: async (url, init) => {
       assert.equal(url, "https://oauth2.googleapis.com/token");
