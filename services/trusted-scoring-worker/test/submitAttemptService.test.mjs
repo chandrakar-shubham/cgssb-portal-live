@@ -84,7 +84,7 @@ test("does not trust client-supplied score or identity fields", async () => {
   });
   assert.equal(result.status, 201);
   assert.equal(result.result.score, 1.5);
-  assert.equal("userId" in result.result, false);
+  assert.equal(result.result.userId, "verified-user");
 });
 
 test("fails closed when repository adapter is incomplete", async () => {
