@@ -1,7 +1,15 @@
 const encoder = new TextEncoder();
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const ANSWER_VALUES = new Set(["A", "B", "C", "D", null]);
 
 function assertNonEmptyString(value, name, maxLength = 256) {
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
+    throw new TypeError(`invalid ${name}`);
+  }
+}
+
+function assertIdentifier(value, name) {
+  if (typeof value !== "string" || !ID_PATTERN.test(value)) {
     throw new TypeError(`invalid ${name}`);
   }
 }
@@ -10,9 +18,15 @@ function canonicalResponses(responses) {
   if (!responses || typeof responses !== "object" || Array.isArray(responses)) {
     throw new TypeError("responses must be an object");
   }
+  const entries = Object.entries(responses);
+  if (entries.length > 500) throw new TypeError("too many responses");
+  for (const [questionId, answer] of entries) {
+    assertIdentifier(questionId, "question id");
+    if (!ANSWER_VALUES.has(answer ?? null)) throw new TypeError("invalid response value");
+  }
   // Question IDs are ASCII-safe identifiers; code-point ordering is stable
-  // across runtimes/locales, unlike localeCompare for collation-sensitive keys.
-  return Object.entries(responses)
+  // across runtimes/locales, unlike locale-sensitive collation.
+  return entries
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([questionId, answer]) => [questionId, answer ?? null]);
 }
@@ -30,8 +44,8 @@ async function sha256Hex(value) {
  */
 export async function buildAttemptIdempotency({ uid, testId, clientAttemptId, responses, timeTakenSeconds }) {
   assertNonEmptyString(uid, "authenticated uid");
-  assertNonEmptyString(testId, "test id", 128);
-  assertNonEmptyString(clientAttemptId, "client attempt id", 128);
+  assertIdentifier(testId, "test id");
+  assertIdentifier(clientAttemptId, "client attempt id");
   if (!Number.isInteger(timeTakenSeconds) || timeTakenSeconds < 0 || timeTakenSeconds > 86400) {
     throw new TypeError("invalid timeTakenSeconds");
   }
