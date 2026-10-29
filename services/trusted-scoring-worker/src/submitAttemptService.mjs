@@ -3,6 +3,17 @@ import { buildTrustedTestDefinition } from "./trustedTestDefinition.mjs";
 import { scoreTrustedTestDefinition } from "./trustedScoring.mjs";
 
 /**
+ * Submission receipts deliberately omit per-question correctness and scoring
+ * details. Those belong behind the separately authorized solution-release
+ * endpoint; aggregate score/counts remain available for the immediate result.
+ */
+function toSubmissionReceipt(attempt) {
+  if (!attempt || typeof attempt !== "object") return attempt;
+  const { scoreBreakdown: _withheldScoreBreakdown, ...receipt } = attempt;
+  return receipt;
+}
+
+/**
  * Dependency-injected trusted submission orchestration. No credentials or
  * database client live here; repository methods must enforce trusted access.
  */
@@ -49,7 +60,7 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       if (prior.fingerprint !== idempotency.fingerprint) {
         return { ok: false, status: 409, error: "IDEMPOTENCY_KEY_REUSED" };
       }
-      return { ok: true, status: 200, replayed: true, result: prior.result };
+      return { ok: true, status: 200, replayed: true, result: toSubmissionReceipt(prior.result) };
     }
 
     const test = await repository.loadPublishedTest(submission.testId);
@@ -149,7 +160,7 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       if (committed.fingerprint !== idempotency.fingerprint) {
         return { ok: false, status: 409, error: "IDEMPOTENCY_KEY_REUSED" };
       }
-      return { ok: true, status: 200, replayed: true, result: committed.result };
+      return { ok: true, status: 200, replayed: true, result: toSubmissionReceipt(committed.result) };
     }
     if (committed.kind !== "created" || !committed.result) {
       return { ok: false, status: 503, error: "ATTEMPT_PERSISTENCE_FAILED" };
@@ -159,7 +170,7 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
     if (committed.result.userId !== uid || committed.result.testId !== definition.testId) {
       return { ok: false, status: 503, error: "ATTEMPT_REPOSITORY_SCOPE_VIOLATION" };
     }
-    return { ok: true, status: 201, replayed: false, result: committed.result };
+    return { ok: true, status: 201, replayed: false, result: toSubmissionReceipt(committed.result) };
   } catch (error) {
     if (error?.message === "TEST_NOT_PUBLISHED" || error?.message === "TRUSTED_TEST_QUESTION_MISSING") {
       return { ok: false, status: 503, error: "TEST_CONFIGURATION_INVALID" };
