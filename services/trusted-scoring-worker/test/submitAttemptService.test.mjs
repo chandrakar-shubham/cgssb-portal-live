@@ -16,7 +16,7 @@ function makeRepository() {
     async findAttemptByIdempotencyKey({ documentId }) { return records.get(documentId) || null; },
     async loadPublishedTest() { return testDefinition; },
     async loadCanonicalQuestions(ids) { return questions.filter(q => ids.includes(q.id)); },
-    async loadStudentProfile() { return { name: "Test Student" }; },
+    async loadStudentProfile(uid) { return { id: uid, name: "Test Student" }; },
     async authorizeAttempt() { return true; },
     async commitAttemptAtomically(input) {
       const existing = records.get(input.documentId);
@@ -146,4 +146,14 @@ test("fails closed if an atomic replay returns another user's result", async () 
   assert.equal(result.status, 503);
   assert.equal(result.error, "ATTEMPT_REPOSITORY_SCOPE_VIOLATION");
   assert.equal(result.result, undefined);
+});
+
+
+test("rejects a student profile whose ID does not match the verified UID", async () => {
+  const repository = makeRepository();
+  repository.loadStudentProfile = async () => ({ id: "different-user", name: "Test Student" });
+  const result = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  assert.equal(result.status, 403);
+  assert.equal(result.error, "STUDENT_PROFILE_UNAVAILABLE");
+  assert.equal(repository.records.size, 0);
 });
