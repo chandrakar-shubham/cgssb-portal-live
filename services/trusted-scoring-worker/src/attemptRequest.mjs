@@ -57,6 +57,11 @@ export async function parseAttemptSubmission(request) {
     }
   }
 
+  if (body.clientAttemptId !== undefined && body.idempotencyKey !== undefined &&
+      body.clientAttemptId !== body.idempotencyKey) {
+    return { ok: false, status: 400, error: "CONFLICTING_IDEMPOTENCY_KEYS" };
+  }
+
   const clientAttemptId = body.clientAttemptId ?? body.idempotencyKey;
   if (clientAttemptId === undefined || clientAttemptId === null || clientAttemptId === "") {
     return { ok: false, status: 400, error: "MISSING_IDEMPOTENCY_KEY" };
