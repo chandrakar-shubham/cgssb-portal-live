@@ -157,3 +157,16 @@ test("rejects a student profile whose ID does not match the verified UID", async
   assert.equal(result.error, "STUDENT_PROFILE_UNAVAILABLE");
   assert.equal(repository.records.size, 0);
 });
+
+
+test("fails closed if a newly created attempt result has the wrong user or test scope", async () => {
+  const repository = makeRepository();
+  repository.commitAttemptAtomically = async () => ({
+    kind: "created",
+    result: { userId: "student-victim", testId: "other-test", score: 100 },
+  });
+  const result = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  assert.equal(result.status, 503);
+  assert.equal(result.error, "ATTEMPT_REPOSITORY_SCOPE_VIOLATION");
+  assert.equal(result.result, undefined);
+});
