@@ -73,20 +73,21 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       return { ok: false, status: 403, error: "ATTEMPT_NOT_AUTHORIZED" };
     }
 
+    // Validate the authenticated user's profile before any canonical answer-key
+    // reads. Authorization above should enforce eligibility; this is an
+    // independent identity-integrity check against the trusted profile record.
+    const profile = await repository.loadStudentProfile(uid);
+    if (!profile || profile.id !== uid ||
+        typeof profile.name !== "string" || !profile.name.trim()) {
+      return { ok: false, status: 403, error: "STUDENT_PROFILE_UNAVAILABLE" };
+    }
+
     const questionIds = Array.isArray(test.sections)
       ? test.sections.flatMap(section => Array.isArray(section?.questionIds) ? section.questionIds : [])
       : [];
     const definition = buildTrustedTestDefinition({
       test, questions: await repository.loadCanonicalQuestions(questionIds),
     });
-
-    const profile = await repository.loadStudentProfile(uid);
-    // Defense in depth: the repository must return the exact profile document
-    // for the verified Firebase UID, not merely a record with a display name.
-    if (!profile || profile.id !== uid ||
-        typeof profile.name !== "string" || !profile.name.trim()) {
-      return { ok: false, status: 403, error: "STUDENT_PROFILE_UNAVAILABLE" };
-    }
     const score = scoreTrustedTestDefinition(definition, submission.responses);
     const questionStatuses = Object.fromEntries(definition.questionIds.map(questionId => [
       questionId,
