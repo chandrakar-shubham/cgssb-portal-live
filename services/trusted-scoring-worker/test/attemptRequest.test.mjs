@@ -110,3 +110,14 @@ test("requires a client attempt id for safe idempotent submission", async () => 
   }));
   assert.equal(empty.error, "MISSING_IDEMPOTENCY_KEY");
 });
+
+test("rejects unreviewed submission fields rather than silently accepting them", async () => {
+  for (const extra of [{ userName: "Injected Name" }, { debug: true }, { isAdmin: true }]) {
+    const result = await parseAttemptSubmission(request({
+      testId: "test_1", responses: {}, clientAttemptId: "attempt_123",
+      timeTakenSeconds: 1, ...extra,
+    }));
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "FORBIDDEN_CLIENT_FIELD");
+  }
+});
