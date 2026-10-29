@@ -19,10 +19,10 @@ A production adapter must implement these operations with a documented credentia
 1. `loadPublishedTest(testId)`: fetch authoritative test definition and reject missing/unpublished tests.
 2. `loadCanonicalQuestions(questionIds)`: fetch canonical question records by exact ID; reject missing/duplicate IDs and preserve the test's declared order.
 3. `authorizeAttempt({ uid, test, now })`: enforce current access policy (free test, purchase/pass, enrollment, blocked status, attempt limits, and any schedule window) from trusted records. Authentication alone is not eligibility.
-4. `commitAttempt({ uid, testId, idempotencyDocumentId, fingerprint, result, metadata })`: atomically create the attempt and idempotency record, or replay the exact prior result.
+4. `commitAttemptAtomically({ uid, testId, documentId, fingerprint, attempt })`: atomically create the attempt and idempotency record, or replay the exact prior result.
 5. `loadAttemptForReview({ uid, attemptId, now })`: enforce ownership/admin permission and the server-side solution-release policy before returning any answer or explanation.
 
-No adapter is currently implemented. The worker must continue returning 503 until all operations and their authorization rules are integrated and tested. The submission orchestration now calls `authorizeAttempt` after loading trusted published-test metadata but **before** loading canonical questions, so unauthorized requests do not trigger answer-key reads.
+No adapter is currently implemented. The worker must continue returning 503 until all operations and their authorization rules are integrated and tested. The submission orchestration calls `authorizeAttempt` after loading trusted published-test metadata but **before** loading canonical questions. It also validates that the trusted student profile ID exactly matches the verified UID before loading canonical questions. Regression tests assert that unauthorized requests and mismatched profiles do not trigger answer-key reads.
 
 ## Published test resolution
 
