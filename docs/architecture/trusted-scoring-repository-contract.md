@@ -81,3 +81,7 @@ This helper is not an authorization control until a trusted adapter loads the te
 
 ## Submission receipt versus solution review
 The submission orchestration now strips `scoreBreakdown` from immediate and idempotent-replay receipts. The stored attempt retains the trusted per-question result for a future review flow, but correctness details must be returned only through a separate endpoint that enforces attempt ownership/admin access and the test's trusted solution-release policy. Aggregate score and counts remain in the receipt for immediate result compatibility. This is a service-level guard; the HTTP endpoint is still not wired to the service.
+
+
+## Review service scaffold added
+`src/attemptReviewService.mjs` now composes trusted attempt lookup with `authorizeAttemptReview`. It applies the same 404 behavior to missing and foreign attempts, uses server-derived admin status and release policy, allowlists the returned attempt receipt fields, and includes `scoreBreakdown` only when the policy permits solution viewing. Regression tests cover ownership, admin authorization, malformed release policy, and response allowlisting. This remains an isolated service: no HTTP route or production repository adapter calls it yet, so it is not a deployed access control.
