@@ -54,18 +54,18 @@ test("expired, pending, or malformed passes do not authorize premium tests", () 
   }).allowed, false);
 });
 
-test("active series enrollment grants access only to the matching user and series", () => {
+test("series enrollment metadata alone cannot grant premium access", () => {
   const test = { ...base.test, isPro: true, seriesId: "series-1" };
   const enrollment = {
     id: "enroll-1", userId: "student-1", seriesId: "series-1",
     status: "active", accessType: "PURCHASED",
   };
-  assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [enrollment] }).reason, "ACTIVE_SERIES_ENROLLMENT");
+  assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [enrollment] }).reason, "PREMIUM_ACCESS_REQUIRED");
   assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [{ ...enrollment, userId: "student-victim" }] }).allowed, false);
   assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [{ ...enrollment, seriesId: "other-series" }] }).allowed, false);
 });
 
-test("expired and cancelled enrollments do not grant access", () => {
+test("expired and cancelled enrollment metadata does not grant access", () => {
   const test = { ...base.test, isPro: true, seriesId: "series-1" };
   const enrollment = {
     userId: "student-1", seriesId: "series-1", status: "active",
