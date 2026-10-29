@@ -170,3 +170,19 @@ test("fails closed if a newly created attempt result has the wrong user or test 
   assert.equal(result.error, "ATTEMPT_REPOSITORY_SCOPE_VIOLATION");
   assert.equal(result.result, undefined);
 });
+
+
+test("denies unauthorized attempts before loading canonical questions", async () => {
+  const repository = makeRepository();
+  let canonicalQuestionReads = 0;
+  repository.authorizeAttempt = async () => false;
+  repository.loadCanonicalQuestions = async () => {
+    canonicalQuestionReads += 1;
+    return [{ id: "q1", correctOption: "A" }, { id: "q2", correctOption: "B" }];
+  };
+  const result = await submitTrustedAttempt({ uid: "student-2", submission, repository });
+  assert.equal(result.status, 403);
+  assert.equal(result.error, "ATTEMPT_NOT_AUTHORIZED");
+  assert.equal(canonicalQuestionReads, 0);
+  assert.equal(repository.records.size, 0);
+});
