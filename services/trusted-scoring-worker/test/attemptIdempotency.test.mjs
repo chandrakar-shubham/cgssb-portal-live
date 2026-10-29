@@ -37,3 +37,17 @@ test("rejects missing identity, key and invalid time", async () => {
   await assert.rejects(() => buildAttemptIdempotency({ ...base, clientAttemptId: "" }), /client attempt id/);
   await assert.rejects(() => buildAttemptIdempotency({ ...base, timeTakenSeconds: -1 }), /timeTakenSeconds/);
 });
+
+
+test("canonical response fingerprints are stable for punctuation-bearing ASCII IDs", async () => {
+  const first = await buildAttemptIdempotency({
+    ...base,
+    responses: { "q-z": "A", "q_1": "B", "qA": null, "q-2": "C" },
+  });
+  const reordered = await buildAttemptIdempotency({
+    ...base,
+    responses: { "q-2": "C", "qA": null, "q_1": "B", "q-z": "A" },
+  });
+  assert.equal(first.documentId, reordered.documentId);
+  assert.equal(first.fingerprint, reordered.fingerprint);
+});
