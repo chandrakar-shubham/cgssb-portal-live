@@ -1,11 +1,8 @@
 const VALID_SINGLE_OPTIONS = new Set(["A", "B", "C", "D"]);
 
 /**
- * Pure authoritative-scoring primitive.
- *
- * Inputs must be loaded from trusted server-side records, never copied from
- * request-provided question objects. This intentionally supports only the
- * currently verified single-choice contract; unknown question types fail closed.
+ * Pure authoritative-scoring primitive. Inputs must come from trusted records.
+ * Supports only the verified single-choice contract; unknown types fail closed.
  */
 export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNegativeMarks = null }) {
   if (!Array.isArray(questions) || questions.length === 0 || questions.length > 500) {
@@ -47,6 +44,7 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
   let rawScore = 0;
   let negDeduction = 0;
   let maxScore = 0;
+  const questionResults = [];
 
   for (const question of questions) {
     if (questionIds.has(question.id)) throw new TypeError("duplicate question ID");
@@ -70,16 +68,32 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
     }
 
     maxScore += marks;
-    const answer = responses[question.id];
+    const answer = responses[question.id] ?? null;
+    let status = "unattempted";
+    let score = 0;
+    let deduction = 0;
     if (answer == null) {
       unattemptedCount += 1;
     } else if (answer === question.correctOption) {
       correctCount += 1;
       rawScore += marks;
+      score = marks;
+      status = "correct";
     } else {
       incorrectCount += 1;
       negDeduction += negativeMarks;
+      deduction = negativeMarks;
+      score = -negativeMarks;
+      status = "incorrect";
     }
+    questionResults.push({
+      questionId: question.id,
+      subject: typeof question.subject === "string" && question.subject.trim() ? question.subject : "General",
+      status,
+      marks,
+      negativeMarks: deduction,
+      score,
+    });
   }
 
   const round2 = value => Number(value.toFixed(2));
@@ -96,5 +110,6 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
     maxScore: round2(maxScore),
     percentage: maxScore > 0 ? round2((netScore / maxScore) * 100) : 0,
     accuracy: attemptedCount > 0 ? round2((correctCount / attemptedCount) * 100) : 0,
+    questionResults,
   };
 }
