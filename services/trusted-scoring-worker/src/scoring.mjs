@@ -7,7 +7,7 @@ const VALID_SINGLE_OPTIONS = new Set(["A", "B", "C", "D"]);
  * request-provided question objects. This intentionally supports only the
  * currently verified single-choice contract; unknown question types fail closed.
  */
-export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNegativeMarks = 0 }) {
+export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNegativeMarks = null }) {
   if (!Array.isArray(questions) || questions.length === 0 || questions.length > 500) {
     throw new TypeError("questions must contain 1..500 trusted questions");
   }
@@ -17,7 +17,7 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
   if (!Number.isFinite(defaultMarks) || defaultMarks < 0 || defaultMarks > 100) {
     throw new TypeError("invalid default marks");
   }
-  if (!Number.isFinite(defaultNegativeMarks) || defaultNegativeMarks < 0 || defaultNegativeMarks > 100) {
+  if (defaultNegativeMarks !== null && (!Number.isFinite(defaultNegativeMarks) || defaultNegativeMarks < 0 || defaultNegativeMarks > 100)) {
     throw new TypeError("invalid default negative marks");
   }
 
@@ -61,7 +61,9 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
     }
 
     const marks = question.marks == null ? defaultMarks : Number(question.marks);
-    const negativeMarks = question.negativeMarks == null ? defaultNegativeMarks : Number(question.negativeMarks);
+    const negativeMarks = question.negativeMarks == null
+      ? (defaultNegativeMarks == null ? marks / 3 : defaultNegativeMarks)
+      : Number(question.negativeMarks);
     if (!Number.isFinite(marks) || marks < 0 || marks > 100 ||
         !Number.isFinite(negativeMarks) || negativeMarks < 0 || negativeMarks > 100) {
       throw new TypeError("invalid trusted scoring values");
