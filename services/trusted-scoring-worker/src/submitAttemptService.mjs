@@ -56,16 +56,18 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
     if (!test || test.isPublished !== true) {
       return { ok: false, status: 404, error: "TEST_NOT_FOUND" };
     }
+    // Authorize against trusted test metadata before loading canonical questions.
+    // This avoids unnecessary answer-key reads for users who cannot take the test.
+    if (await repository.authorizeAttempt({ uid, test, now }) !== true) {
+      return { ok: false, status: 403, error: "ATTEMPT_NOT_AUTHORIZED" };
+    }
+
     const questionIds = Array.isArray(test.sections)
       ? test.sections.flatMap(section => Array.isArray(section?.questionIds) ? section.questionIds : [])
       : [];
     const definition = buildTrustedTestDefinition({
       test, questions: await repository.loadCanonicalQuestions(questionIds),
     });
-
-    if (await repository.authorizeAttempt({ uid, test, now }) !== true) {
-      return { ok: false, status: 403, error: "ATTEMPT_NOT_AUTHORIZED" };
-    }
 
     const profile = await repository.loadStudentProfile(uid);
     // Defense in depth: the repository must return the exact profile document
