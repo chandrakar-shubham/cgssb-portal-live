@@ -7,3 +7,7 @@ workers_dev = true
 # Set this to the exact Firebase project ID for the target environment.
 # Never use a production project ID for local synthetic tests by accident.
 FIREBASE_PROJECT_ID = "REPLACE_WITH_NON_PRODUCTION_FIREBASE_PROJECT_ID"
+
+# Configure the exact non-production Firestore database ID before any adapter wiring.
+# This project has used a named database; do not assume "(default)".
+FIRESTORE_DATABASE_ID = "REPLACE_WITH_NON_PRODUCTION_DATABASE_ID"
