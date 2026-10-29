@@ -97,3 +97,16 @@ test("rejects out-of-range duration and invalid idempotency keys", async () => {
   }));
   assert.equal(badKey.error, "INVALID_IDEMPOTENCY_KEY");
 });
+
+test("requires a client attempt id for safe idempotent submission", async () => {
+  const missing = await parseAttemptSubmission(request({
+    testId: "test_1", responses: { q1: "A" }, timeTakenSeconds: 1,
+  }));
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error, "MISSING_IDEMPOTENCY_KEY");
+
+  const empty = await parseAttemptSubmission(request({
+    testId: "test_1", responses: {}, timeTakenSeconds: 1, clientAttemptId: "",
+  }));
+  assert.equal(empty.error, "MISSING_IDEMPOTENCY_KEY");
+});
