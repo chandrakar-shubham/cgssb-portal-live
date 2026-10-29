@@ -13,7 +13,8 @@ const baseAttempt = {
   questionStatuses: { q1: "answered" },
   scoreBreakdown: {
     rawScore: 10,
-    questionResults: [{ questionId: "q1", status: "correct", score: 2 }],
+    questionResults: [{ questionId: "q1", status: "correct", score: 2, correctOption: "A", internal: "must not leak" }],
+    internalScoringField: "must not leak",
   },
   internalRepositoryField: "must not leak",
 };
@@ -64,6 +65,9 @@ test("reveals per-question breakdown only after trusted manual release", async (
   });
   assert.equal(result.canViewSolutions, true);
   assert.equal(result.result.scoreBreakdown.questionResults[0].status, "correct");
+  assert.equal("correctOption" in result.result.scoreBreakdown.questionResults[0], false);
+  assert.equal("internal" in result.result.scoreBreakdown.questionResults[0], false);
+  assert.equal("internalScoringField" in result.result.scoreBreakdown, false);
 });
 
 test("server-authorized admin may review another user's attempt", async () => {
@@ -101,4 +105,14 @@ test("does not reveal solutions for malformed release policy", async () => {
   });
   assert.equal(result.canViewSolutions, false);
   assert.equal("scoreBreakdown" in result.result, false);
+});
+
+test("rejects repository response whose attempt ID differs from requested ID", async () => {
+  const result = await loadAuthorizedAttemptReview({
+    uid: "student-1",
+    attemptId: "attempt-other",
+    repository: repository(),
+  });
+  assert.equal(result.status, 503);
+  assert.equal(result.error, "ATTEMPT_REPOSITORY_SCOPE_VIOLATION");
 });
