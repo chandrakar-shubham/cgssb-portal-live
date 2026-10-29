@@ -88,3 +88,24 @@ test("fails closed when repository adapter is incomplete", async () => {
   const result = await submitTrustedAttempt({ uid: "student-1", submission, repository: {} });
   assert.equal(result.status, 503);
 });
+
+
+test("concurrent duplicate submissions are resolved by the repository's atomic commit", async () => {
+  const repository = makeRepository();
+  const [first, second] = await Promise.all([
+    submitTrustedAttempt({ uid: "student-1", submission, repository }),
+    submitTrustedAttempt({ uid: "student-1", submission, repository }),
+  ]);
+  assert.equal(repository.records.size, 1);
+  assert.equal([first, second].filter(result => result.status === 201).length, 1);
+  assert.equal([first, second].filter(result => result.status === 200).length, 1);
+});
+
+test("different users get separate idempotency scopes for the same client key", async () => {
+  const repository = makeRepository();
+  const first = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  const second = await submitTrustedAttempt({ uid: "student-2", submission, repository });
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.equal(repository.records.size, 2);
+});
