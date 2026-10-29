@@ -51,3 +51,30 @@ test("canonical response fingerprints are stable for punctuation-bearing ASCII I
   assert.equal(first.documentId, reordered.documentId);
   assert.equal(first.fingerprint, reordered.fingerprint);
 });
+
+
+test("rejects invalid IDs and answer values before a repository key can be built", async () => {
+  await assert.rejects(
+    () => buildAttemptIdempotency({ ...base, testId: "../other" }),
+    /test id/,
+  );
+  await assert.rejects(
+    () => buildAttemptIdempotency({ ...base, clientAttemptId: "bad/key" }),
+    /client attempt id/,
+  );
+  await assert.rejects(
+    () => buildAttemptIdempotency({ ...base, responses: { "q/1": "A" } }),
+    /question id/,
+  );
+  await assert.rejects(
+    () => buildAttemptIdempotency({ ...base, responses: { q1: ["A", "B"] } }),
+    /response value/,
+  );
+  await assert.rejects(
+    () => buildAttemptIdempotency({
+      ...base,
+      responses: Object.fromEntries(Array.from({ length: 501 }, (_, i) => [`q${i}`, "A"])),
+    }),
+    /too many responses/,
+  );
+});
