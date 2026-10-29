@@ -3,7 +3,8 @@
  * the trusted repository using the verified UID; never pass request JSON.
  *
  * Current app contracts: MockTest.isPro, User.status/isBlocked/hasProPass/
- * passExpiresAt, UserEntitlement.status/expiresAt, SeriesEnrollment fields.
+ * passExpiresAt, and UserEntitlement.status/expiresAt. Series enrollments are
+ * organization/entitlement metadata, not an independent premium grant.
  */
 function isFutureDate(value, now) {
   if (typeof value !== "string" || value.length === 0) return false;
@@ -18,20 +19,10 @@ function hasValidPass(user, entitlement, now) {
   return profilePass || activeEntitlement;
 }
 
-function hasValidEnrollment(uid, test, enrollments, now) {
-  if (typeof test.seriesId !== "string" || !test.seriesId || !Array.isArray(enrollments)) return false;
-  return enrollments.some(enrollment => {
-    if (!enrollment || enrollment.userId !== uid || enrollment.seriesId !== test.seriesId ||
-        enrollment.status !== "active" ||
-        !["PASS", "PURCHASED"].includes(enrollment.accessType)) return false;
-    return enrollment.accessExpiresAt == null || isFutureDate(enrollment.accessExpiresAt, now);
-  });
-}
-
 /**
  * @returns { {allowed:boolean,status:number,reason:string} }
  */
-export function authorizeStudentAttempt({ uid, test, user, entitlement = null, enrollments = [], now = Date.now() }) {
+export function authorizeStudentAttempt({ uid, test, user, entitlement = null, now = Date.now() }) {
   if (typeof uid !== "string" || uid.length === 0) {
     return { allowed: false, status: 401, reason: "UNAUTHENTICATED" };
   }
@@ -53,11 +44,11 @@ export function authorizeStudentAttempt({ uid, test, user, entitlement = null, e
     return { allowed: true, status: 200, reason: "FREE_TEST" };
   }
 
+  // The live rules document says series enrollments organize My Tests; the
+  // active pass/entitlement is authoritative for access. Do not grant premium
+  // access merely because a student can create or mutate enrollment metadata.
   if (hasValidPass(user, entitlement, now)) {
     return { allowed: true, status: 200, reason: "ACTIVE_PASS" };
-  }
-  if (hasValidEnrollment(uid, test, enrollments, now)) {
-    return { allowed: true, status: 200, reason: "ACTIVE_SERIES_ENROLLMENT" };
   }
   return { allowed: false, status: 403, reason: "PREMIUM_ACCESS_REQUIRED" };
 }
