@@ -67,3 +67,13 @@ Use `src/scoring.mjs` only with question objects loaded from the trusted reposit
 - [ ] Run load and abuse tests, then approve a staged deployment/rollback plan.
 
 Until these gates pass, the worker remains a non-production scaffold and the draft PR must not be merged or deployed.
+
+
+## Eligibility policy helper added (not yet wired)
+`services/trusted-scoring-worker/src/attemptEligibility.mjs` now defines a pure, testable policy against the repository's existing field contracts:
+- Rejects unpublished/missing tests and blocked/suspended student records.
+- Allows published tests not explicitly marked `isPro: true`.
+- For premium tests, accepts an unexpired user pass, an active unexpired user entitlement, or an active enrollment matching both the authenticated UID and the test's `seriesId`.
+- Rejects expired/malformed passes and expired/cancelled/mismatched enrollments.
+
+This helper is not an authorization control until a trusted adapter loads the test, user, entitlement, and enrollment records using the verified UID and invokes it. Before production use, confirm whether all premium access paths in the live catalog are represented by these three records (including bundle-level purchases, device binding, attempt limits, and schedule windows). Missing policy paths must be implemented before rollout; do not silently treat this helper as a complete entitlement implementation.
