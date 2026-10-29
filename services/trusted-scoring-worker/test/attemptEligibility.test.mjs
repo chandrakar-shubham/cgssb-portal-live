@@ -81,3 +81,21 @@ test("rejects missing identity and invalid policy clock", () => {
   assert.equal(authorizeStudentAttempt({ ...base, uid: "" }).status, 401);
   assert.equal(authorizeStudentAttempt({ ...base, now: Number.NaN }).reason, "INVALID_POLICY_CLOCK");
 });
+
+
+test("fails closed when a trusted student profile is missing its required identity", () => {
+  assert.equal(authorizeStudentAttempt({ ...base, user: { status: "active" } }).reason, "STUDENT_PROFILE_UNAVAILABLE");
+  assert.equal(authorizeStudentAttempt({ ...base, user: { id: "" } }).reason, "STUDENT_PROFILE_UNAVAILABLE");
+});
+
+test("premium entitlement expiry must be strictly in the future", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest,
+    entitlement: { status: "ACTIVE", expiresAt: "2026-10-29T10:00:00Z" },
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest,
+    entitlement: { status: "ACTIVE", expiresAt: "2026-10-29T10:00:00.001Z" },
+  }).reason, "ACTIVE_PASS");
+});
