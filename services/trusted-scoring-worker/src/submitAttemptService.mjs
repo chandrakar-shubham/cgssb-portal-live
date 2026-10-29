@@ -152,6 +152,11 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
     if (committed.kind !== "created" || !committed.result) {
       return { ok: false, status: 503, error: "ATTEMPT_PERSISTENCE_FAILED" };
     }
+    // Treat the adapter's create response as untrusted until its scope matches
+    // the authenticated caller and selected test; never return a cross-scope result.
+    if (committed.result.userId !== uid || committed.result.testId !== definition.testId) {
+      return { ok: false, status: 503, error: "ATTEMPT_REPOSITORY_SCOPE_VIOLATION" };
+    }
     return { ok: true, status: 201, replayed: false, result: committed.result };
   } catch (error) {
     if (error?.message === "TEST_NOT_PUBLISHED" || error?.message === "TRUSTED_TEST_QUESTION_MISSING") {
