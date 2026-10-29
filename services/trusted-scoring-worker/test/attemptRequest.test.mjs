@@ -121,3 +121,29 @@ test("rejects unreviewed submission fields rather than silently accepting them",
     assert.equal(result.error, "FORBIDDEN_CLIENT_FIELD");
   }
 });
+
+
+test("rejects conflicting clientAttemptId and idempotencyKey values", async () => {
+  const result = await parseAttemptSubmission(request({
+    testId: "test_1",
+    responses: { q1: "A" },
+    clientAttemptId: "attempt_primary",
+    idempotencyKey: "attempt_different",
+    timeTakenSeconds: 1,
+  }));
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 400);
+  assert.equal(result.error, "CONFLICTING_IDEMPOTENCY_KEYS");
+});
+
+test("accepts identical clientAttemptId and idempotencyKey aliases", async () => {
+  const result = await parseAttemptSubmission(request({
+    testId: "test_1",
+    responses: { q1: "A" },
+    clientAttemptId: "attempt_same",
+    idempotencyKey: "attempt_same",
+    timeTakenSeconds: 1,
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(result.value.clientAttemptId, "attempt_same");
+});
