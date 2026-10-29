@@ -55,7 +55,7 @@ test("unconfigured project fails closed", async () => {
 });
 
 
-test("configured placeholder repository never enables submission before adapter integration", async () => {
+test("invalid bearer is rejected before a configured repository binding is touched", async () => {
   let invoked = false;
   const response = await worker.fetch(
     new Request("https://worker.test/v1/attempts:submit", {
