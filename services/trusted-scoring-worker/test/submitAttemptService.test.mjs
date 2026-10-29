@@ -5,7 +5,7 @@ import { submitTrustedAttempt } from "../src/submitAttemptService.mjs";
 function makeRepository() {
   const records = new Map();
   const testDefinition = {
-    id: "test-1", title: "Sample Test", isPublished: true,
+    id: "test-1", title: "Sample Test", category: "CGSSB", isPublished: true,
     questionCount: 2, durationMinutes: 60, marksPerQuestion: 2,
     negativeMarksPerQuestion: 0.5,
     sections: [{ id: "s1", questionIds: ["q1", "q2"] }],
@@ -16,6 +16,7 @@ function makeRepository() {
     async findAttemptByIdempotencyKey({ documentId }) { return records.get(documentId) || null; },
     async loadPublishedTest() { return testDefinition; },
     async loadCanonicalQuestions(ids) { return questions.filter(q => ids.includes(q.id)); },
+    async loadStudentProfile() { return { name: "Test Student" }; },
     async authorizeAttempt() { return true; },
     async commitAttemptAtomically(input) {
       const existing = records.get(input.documentId);
@@ -36,9 +37,11 @@ const submission = {
 test("scores from trusted canonical questions", async () => {
   const result = await submitTrustedAttempt({ uid: "student-1", submission, repository: makeRepository() });
   assert.equal(result.status, 201);
-  assert.equal(result.result.score.correctCount, 1);
-  assert.equal(result.result.score.incorrectCount, 1);
-  assert.equal(result.result.score.netScore, 1.5);
+  assert.equal(result.result.correctCount, 1);
+  assert.equal(result.result.incorrectCount, 1);
+  assert.equal(result.result.score, 1.5);
+  assert.equal(result.result.userName, "Test Student");
+  assert.equal(result.result.questionStatuses.q1, "answered");
 });
 
 test("replays identical retries without duplicate attempts", async () => {
@@ -80,7 +83,7 @@ test("does not trust client-supplied score or identity fields", async () => {
     repository: makeRepository(),
   });
   assert.equal(result.status, 201);
-  assert.equal(result.result.score.netScore, 1.5);
+  assert.equal(result.result.score, 1.5);
   assert.equal("userId" in result.result, false);
 });
 
