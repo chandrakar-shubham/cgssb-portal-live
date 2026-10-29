@@ -10,8 +10,10 @@ function canonicalResponses(responses) {
   if (!responses || typeof responses !== "object" || Array.isArray(responses)) {
     throw new TypeError("responses must be an object");
   }
+  // Question IDs are ASCII-safe identifiers; code-point ordering is stable
+  // across runtimes/locales, unlike localeCompare for collation-sensitive keys.
   return Object.entries(responses)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([questionId, answer]) => [questionId, answer ?? null]);
 }
 
