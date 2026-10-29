@@ -22,7 +22,7 @@ A production adapter must implement these operations with a documented credentia
 4. `commitAttempt({ uid, testId, idempotencyDocumentId, fingerprint, result, metadata })`: atomically create the attempt and idempotency record, or replay the exact prior result.
 5. `loadAttemptForReview({ uid, attemptId, now })`: enforce ownership/admin permission and the server-side solution-release policy before returning any answer or explanation.
 
-No adapter is currently implemented. The worker must continue returning 503 until all operations and their authorization rules are integrated and tested.
+No adapter is currently implemented. The worker must continue returning 503 until all operations and their authorization rules are integrated and tested. The submission orchestration now calls `authorizeAttempt` after loading trusted published-test metadata but **before** loading canonical questions, so unauthorized requests do not trigger answer-key reads.
 
 ## Published test resolution
 
