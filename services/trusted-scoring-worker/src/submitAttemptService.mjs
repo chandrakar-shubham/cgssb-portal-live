@@ -10,6 +10,9 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
   if (typeof uid !== "string" || uid.length === 0) {
     return { ok: false, status: 401, error: "UNAUTHENTICATED" };
   }
+  if (!Number.isFinite(now)) {
+    return { ok: false, status: 400, error: "INVALID_REQUEST_CLOCK" };
+  }
   if (!submission || typeof submission.testId !== "string" ||
       !submission.responses || typeof submission.responses !== "object" ||
       Array.isArray(submission.responses) ||
@@ -40,6 +43,9 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       uid, testId: submission.testId, documentId: idempotency.documentId,
     });
     if (prior) {
+      if (prior.result?.userId !== uid || prior.result?.testId !== submission.testId) {
+        return { ok: false, status: 503, error: "ATTEMPT_REPOSITORY_SCOPE_VIOLATION" };
+      }
       if (prior.fingerprint !== idempotency.fingerprint) {
         return { ok: false, status: 409, error: "IDEMPOTENCY_KEY_REUSED" };
       }
@@ -132,6 +138,9 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       return { ok: false, status: 409, error: "IDEMPOTENCY_KEY_REUSED" };
     }
     if (committed.kind === "replay") {
+      if (committed.result?.userId !== uid || committed.result?.testId !== definition.testId) {
+        return { ok: false, status: 503, error: "ATTEMPT_REPOSITORY_SCOPE_VIOLATION" };
+      }
       if (committed.fingerprint !== idempotency.fingerprint) {
         return { ok: false, status: 409, error: "IDEMPOTENCY_KEY_REUSED" };
       }
