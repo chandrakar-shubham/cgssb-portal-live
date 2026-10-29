@@ -68,7 +68,10 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
     }
 
     const profile = await repository.loadStudentProfile(uid);
-    if (!profile || typeof profile.name !== "string" || !profile.name.trim()) {
+    // Defense in depth: the repository must return the exact profile document
+    // for the verified Firebase UID, not merely a record with a display name.
+    if (!profile || profile.id !== uid ||
+        typeof profile.name !== "string" || !profile.name.trim()) {
       return { ok: false, status: 403, error: "STUDENT_PROFILE_UNAVAILABLE" };
     }
     const score = scoreTrustedTestDefinition(definition, submission.responses);
