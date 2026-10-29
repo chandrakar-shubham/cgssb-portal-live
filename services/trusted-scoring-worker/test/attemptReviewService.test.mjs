@@ -9,8 +9,9 @@ const baseAttempt = {
   testId: "test-1",
   score: 8,
   correctCount: 4,
-  responses: { q1: "A" },
-  questionStatuses: { q1: "answered" },
+  responses: { q1: "A", q2: { answer: "B", internal: "must not leak" }, "../bad": "D" },
+  questionStatuses: { q1: "answered", q2: { status: "correct" }, "../bad": "correct" },
+  sectorAnalysis: [{ subject: "Maths", score: 2, total: 1, internal: "must not leak" }],
   scoreBreakdown: {
     rawScore: 10,
     questionResults: [{ questionId: "q1", status: "correct", score: 2, correctOption: "A", internal: "must not leak" }],
@@ -55,6 +56,9 @@ test("hides per-question correctness until trusted release", async () => {
   assert.equal(result.result.score, 8);
   assert.equal("scoreBreakdown" in result.result, false);
   assert.equal("internalRepositoryField" in result.result, false);
+  assert.deepEqual(result.result.responses, { q1: "A" });
+  assert.deepEqual(result.result.questionStatuses, { q1: "answered" });
+  assert.deepEqual(result.result.sectorAnalysis, [{ subject: "Maths", score: 2, total: 1 }]);
 });
 
 test("reveals per-question breakdown only after trusted manual release", async () => {
