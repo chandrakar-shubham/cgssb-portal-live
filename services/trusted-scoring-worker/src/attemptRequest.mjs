@@ -70,10 +70,13 @@ export async function parseAttemptSubmission(request) {
     return { ok: false, status: 400, error: "INVALID_TIME_TAKEN" };
   }
 
-  // Explicitly ignore/reject client-controlled score and identity fields.
-  for (const forbidden of ["score", "correctCount", "incorrectCount", "unattemptedCount",
-    "correctOption", "answerKey", "explanation", "userId", "role", "isAdmin"]) {
-    if (Object.prototype.hasOwnProperty.call(body, forbidden)) {
+  // Accept only the minimal wire contract. This rejects score/identity fields,
+  // accidental UI payloads, and future fields that have not been reviewed.
+  const allowedFields = new Set([
+    "testId", "responses", "clientAttemptId", "idempotencyKey", "timeTakenSeconds",
+  ]);
+  for (const field of Object.keys(body)) {
+    if (!allowedFields.has(field)) {
       return { ok: false, status: 400, error: "FORBIDDEN_CLIENT_FIELD" };
     }
   }
