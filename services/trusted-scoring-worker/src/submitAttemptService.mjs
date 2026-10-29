@@ -7,9 +7,48 @@ import { scoreTrustedTestDefinition } from "./trustedScoring.mjs";
  * details. Those belong behind the separately authorized solution-release
  * endpoint; aggregate score/counts remain available for the immediate result.
  */
+const SUBMISSION_RECEIPT_FIELDS = [
+  "id", "userId", "userName", "testId", "testTitle", "category",
+  "submittedAt", "timeTakenSeconds", "totalDurationSeconds", "responses",
+  "questionStatuses", "score", "maxScore", "percentage", "accuracy",
+  "correctCount", "incorrectCount", "unattemptedCount", "attemptedCount",
+  "markedForReviewCount", "negativeMarksDeducted", "sectorAnalysis", "submissionId",
+];
+
 function toSubmissionReceipt(attempt) {
-  if (!attempt || typeof attempt !== "object") return attempt;
-  const { scoreBreakdown: _withheldScoreBreakdown, ...receipt } = attempt;
+  if (!attempt || typeof attempt !== "object" || Array.isArray(attempt)) return null;
+  const receipt = {};
+  for (const field of SUBMISSION_RECEIPT_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(attempt, field)) continue;
+    const value = attempt[field];
+    if (field === "responses" || field === "questionStatuses") {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const projected = {};
+      for (const [questionId, entry] of Object.entries(value)) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(questionId)) continue;
+        if (field === "responses" && [null, "A", "B", "C", "D"].includes(entry ?? null)) {
+          projected[questionId] = entry ?? null;
+        } else if (field === "questionStatuses" &&
+            ["unanswered", "answered", "markedForReview", "marked_for_review"].includes(entry)) {
+          projected[questionId] = entry;
+        }
+      }
+      receipt[field] = projected;
+    } else if (field === "sectorAnalysis") {
+      if (!Array.isArray(value)) continue;
+      receipt[field] = value.filter(item => item && typeof item === "object" && !Array.isArray(item)).map(item => {
+        const projected = {};
+        if (typeof item.subject === "string") projected.subject = item.subject.slice(0, 120);
+        for (const metric of ["total", "correct", "incorrect", "unattempted", "accuracy", "score", "maxScore"]) {
+          if (Number.isFinite(item[metric])) projected[metric] = item[metric];
+        }
+        return projected;
+      });
+    } else if (typeof value === "string" || typeof value === "boolean" ||
+        (typeof value === "number" && Number.isFinite(value))) {
+      receipt[field] = value;
+    }
+  }
   return receipt;
 }
 
