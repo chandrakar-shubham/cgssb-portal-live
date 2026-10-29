@@ -77,3 +77,7 @@ Until these gates pass, the worker remains a non-production scaffold and the dra
 - Rejects expired/malformed passes and expired/cancelled/mismatched enrollments.
 
 This helper is not an authorization control until a trusted adapter loads the test, user, entitlement, and enrollment records using the verified UID and invokes it. Before production use, confirm whether all premium access paths in the live catalog are represented by the pass/entitlement records (including bundle-level purchases, device binding, attempt limits, and schedule windows). Missing policy paths must be implemented before rollout; do not silently treat this helper as a complete entitlement implementation.
+
+
+## Submission receipt versus solution review
+The submission orchestration now strips `scoreBreakdown` from immediate and idempotent-replay receipts. The stored attempt retains the trusted per-question result for a future review flow, but correctness details must be returned only through a separate endpoint that enforces attempt ownership/admin access and the test's trusted solution-release policy. Aggregate score and counts remain in the receipt for immediate result compatibility. This is a service-level guard; the HTTP endpoint is still not wired to the service.
