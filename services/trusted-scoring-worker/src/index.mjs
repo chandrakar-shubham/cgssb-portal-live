@@ -1,4 +1,5 @@
 import { verifyFirebaseIdToken } from "./firebaseToken.mjs";
+import { parseAttemptSubmission } from "./attemptRequest.mjs";
 
 const json = (body, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(body), {
@@ -40,6 +41,9 @@ export default {
       return json({ error: "UNAUTHENTICATED" }, 401);
     }
 
+    const parsed = await parseAttemptSubmission(request);
+    if (!parsed.ok) return json({ error: parsed.error }, parsed.status);
+
     // Fail closed until a least-privilege data adapter, test eligibility checks,
     // server-side scoring rules, and idempotent attempt persistence are implemented.
     // Never accept a browser-provided score as a fallback.
@@ -47,7 +51,7 @@ export default {
       return json({
         error: "SCORING_BACKEND_NOT_CONFIGURED",
         message: "Submission is not enabled until trusted persistence and scoring are configured.",
-        requestIdentityPresent: Boolean(identity.uid),
+        requestId: crypto.randomUUID(),
       }, 503);
     }
 
