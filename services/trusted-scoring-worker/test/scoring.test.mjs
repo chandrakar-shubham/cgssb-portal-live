@@ -77,3 +77,12 @@ test("rejects missing answer keys in trusted records", () => {
     responses: { q: "A" },
   }), /no valid correct option/);
 });
+
+test("uses the current app's one-third default penalty when a question omits negative marks", () => {
+  const result = scoreAttempt({
+    questions: [{ id: "q", correctOption: "A", marks: 3 }],
+    responses: { q: "B" },
+  });
+  assert.equal(result.negDeduction, 1);
+  assert.equal(result.netScore, 0);
+});
