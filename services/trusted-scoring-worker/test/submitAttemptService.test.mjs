@@ -112,3 +112,24 @@ test("different users get separate idempotency scopes for the same client key", 
   assert.equal(second.status, 201);
   assert.equal(repository.records.size, 2);
 });
+
+
+test("rejects an invalid trusted clock before touching the repository", async () => {
+  const repository = makeRepository();
+  const result = await submitTrustedAttempt({ uid: "student-1", submission, repository, now: Number.NaN });
+  assert.equal(result.status, 400);
+  assert.equal(result.error, "INVALID_REQUEST_CLOCK");
+  assert.equal(repository.records.size, 0);
+});
+
+test("fails closed if the repository returns an attempt from another user or test", async () => {
+  const repository = makeRepository();
+  repository.findAttemptByIdempotencyKey = async () => ({
+    fingerprint: "irrelevant",
+    result: { userId: "student-victim", testId: "other-test", score: 100 },
+  });
+  const result = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  assert.equal(result.status, 503);
+  assert.equal(result.error, "ATTEMPT_REPOSITORY_SCOPE_VIOLATION");
+  assert.equal(result.result, undefined);
+});
