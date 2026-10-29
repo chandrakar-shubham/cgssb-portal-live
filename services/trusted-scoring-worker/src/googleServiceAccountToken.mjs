@@ -4,7 +4,7 @@ const SCOPE = "https://www.googleapis.com/auth/datastore";
 function base64Url(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
 function encodeJson(value) {
@@ -14,9 +14,9 @@ function encodeJson(value) {
 function decodePemPkcs8(pem) {
   if (typeof pem !== "string") throw new TypeError("service-account private key is missing");
   const normalized = pem.replace(/\\n/g, "\n");
-  const match = /-----BEGIN PRIVATE KEY-----([\\s\\S]+?)-----END PRIVATE KEY-----/.exec(normalized);
+  const match = /-----BEGIN PRIVATE KEY-----([\s\S]+?)-----END PRIVATE KEY-----/.exec(normalized);
   if (!match) throw new TypeError("service-account private key must be PKCS#8 PEM");
-  const base64 = match[1].replace(/\\s/g, "");
+  const base64 = match[1].replace(/\s/g, "");
   const binary = atob(base64);
   return Uint8Array.from(binary, char => char.charCodeAt(0));
 }
