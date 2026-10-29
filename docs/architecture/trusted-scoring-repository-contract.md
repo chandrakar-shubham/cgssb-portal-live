@@ -85,3 +85,5 @@ The submission orchestration now strips `scoreBreakdown` from immediate and idem
 
 ## Review service scaffold added
 `src/attemptReviewService.mjs` now composes trusted attempt lookup with `authorizeAttemptReview`. It applies the same 404 behavior to missing and foreign attempts, uses server-derived admin status and release policy, allowlists the returned attempt receipt fields, and includes `scoreBreakdown` only when the policy permits solution viewing. Regression tests cover ownership, admin authorization, malformed release policy, and response allowlisting. This remains an isolated service: no HTTP route or production repository adapter calls it yet, so it is not a deployed access control.
+
+The review service also verifies that the repository-returned attempt ID matches the requested ID and projects nested `scoreBreakdown.questionResults` through an explicit field allowlist; it does not return the nested objects wholesale. Regression tests assert internal fields and unapproved answer metadata are omitted. The repository adapter must still enforce least-privilege access and return trusted release/admin metadata.
