@@ -51,7 +51,7 @@ test("rejects client-provided score or identity fields", async () => {
     { role: "admin" }, { answerKey: "A" }, { explanation: "leak" },
   ]) {
     const result = await parseAttemptSubmission(request({
-      testId: "test_1", responses: {}, timeTakenSeconds: 1, ...forbidden,
+      testId: "test_1", responses: {}, clientAttemptId: "attempt_123", timeTakenSeconds: 1, ...forbidden,
     }));
     assert.equal(result.ok, false);
     assert.equal(result.error, "FORBIDDEN_CLIENT_FIELD");
@@ -60,7 +60,7 @@ test("rejects client-provided score or identity fields", async () => {
 
 test("rejects unknown answer representations", async () => {
   const result = await parseAttemptSubmission(request({
-    testId: "test_1", responses: { q1: ["A", "B"] }, timeTakenSeconds: 1,
+    testId: "test_1", responses: { q1: ["A", "B"] }, clientAttemptId: "attempt_123", timeTakenSeconds: 1,
   }));
   assert.equal(result.error, "INVALID_ANSWER_VALUE");
 });
@@ -72,7 +72,7 @@ test("rejects invalid test and question IDs", async () => {
   assert.equal(badTest.error, "INVALID_TEST_ID");
 
   const badQuestion = await parseAttemptSubmission(request({
-    testId: "test_1", responses: { "q/1": "A" }, timeTakenSeconds: 1,
+    testId: "test_1", responses: { "q/1": "A" }, clientAttemptId: "attempt_123", timeTakenSeconds: 1,
   }));
   assert.equal(badQuestion.error, "INVALID_QUESTION_ID");
 });
@@ -80,7 +80,7 @@ test("rejects invalid test and question IDs", async () => {
 test("rejects excessive response count", async () => {
   const responses = Object.fromEntries(Array.from({ length: 501 }, (_, i) => [`q${i}`, "A"]));
   const result = await parseAttemptSubmission(request({
-    testId: "test_1", responses, timeTakenSeconds: 1,
+    testId: "test_1", responses, clientAttemptId: "attempt_123", timeTakenSeconds: 1,
   }));
   assert.equal(result.status, 413);
   assert.equal(result.error, "TOO_MANY_RESPONSES");
@@ -88,7 +88,7 @@ test("rejects excessive response count", async () => {
 
 test("rejects out-of-range duration and invalid idempotency keys", async () => {
   const badTime = await parseAttemptSubmission(request({
-    testId: "test_1", responses: {}, timeTakenSeconds: -1,
+    testId: "test_1", responses: {}, clientAttemptId: "attempt_123", timeTakenSeconds: -1,
   }));
   assert.equal(badTime.error, "INVALID_TIME_TAKEN");
 
