@@ -67,6 +67,7 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       testTitle: definition.title,
       timeTakenSeconds: submission.timeTakenSeconds,
       questionCount: definition.questionIds.length,
+      responses: { ...submission.responses },
       score,
     };
     const committed = await repository.commitAttemptAtomically({
