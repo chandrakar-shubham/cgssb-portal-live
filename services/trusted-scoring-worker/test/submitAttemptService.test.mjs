@@ -186,3 +186,20 @@ test("denies unauthorized attempts before loading canonical questions", async ()
   assert.equal(canonicalQuestionReads, 0);
   assert.equal(repository.records.size, 0);
 });
+
+
+test("submission receipts withhold per-question correctness details", async () => {
+  const repository = makeRepository();
+  const first = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  const replay = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  assert.equal(first.status, 201);
+  assert.equal(replay.status, 200);
+  assert.equal(first.result.correctCount, 1);
+  assert.equal(first.result.score, 1.5);
+  assert.equal("scoreBreakdown" in first.result, false);
+  assert.equal("scoreBreakdown" in replay.result, false);
+  // The canonical stored record retains the detailed breakdown for a future
+  // separately authorized review flow; only the returned receipt is redacted.
+  const stored = [...repository.records.values()][0].result;
+  assert.equal(stored.scoreBreakdown.questionResults.length, 2);
+});
