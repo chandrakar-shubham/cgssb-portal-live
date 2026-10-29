@@ -58,8 +58,10 @@ export async function parseAttemptSubmission(request) {
   }
 
   const clientAttemptId = body.clientAttemptId ?? body.idempotencyKey;
-  if (clientAttemptId !== undefined &&
-      (typeof clientAttemptId !== "string" || !ID_PATTERN.test(clientAttemptId))) {
+  if (clientAttemptId === undefined || clientAttemptId === null || clientAttemptId === "") {
+    return { ok: false, status: 400, error: "MISSING_IDEMPOTENCY_KEY" };
+  }
+  if (typeof clientAttemptId !== "string" || !ID_PATTERN.test(clientAttemptId)) {
     return { ok: false, status: 400, error: "INVALID_IDEMPOTENCY_KEY" };
   }
 
@@ -81,7 +83,7 @@ export async function parseAttemptSubmission(request) {
     value: {
       testId,
       responses,
-      clientAttemptId: clientAttemptId || null,
+      clientAttemptId,
       timeTakenSeconds,
     },
   };
