@@ -19,7 +19,7 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
   }
   const required = [
     "findAttemptByIdempotencyKey", "loadPublishedTest",
-    "loadCanonicalQuestions", "authorizeAttempt", "commitAttemptAtomically",
+    "loadCanonicalQuestions", "loadStudentProfile", "authorizeAttempt", "commitAttemptAtomically",
   ];
   if (!repository || required.some(method => typeof repository[method] !== "function")) {
     return { ok: false, status: 503, error: "SCORING_BACKEND_NOT_CONFIGURED" };
@@ -61,14 +61,68 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       return { ok: false, status: 403, error: "ATTEMPT_NOT_AUTHORIZED" };
     }
 
+    const profile = await repository.loadStudentProfile(uid);
+    if (!profile || typeof profile.name !== "string" || !profile.name.trim()) {
+      return { ok: false, status: 403, error: "STUDENT_PROFILE_UNAVAILABLE" };
+    }
     const score = scoreTrustedTestDefinition(definition, submission.responses);
+    const questionStatuses = Object.fromEntries(definition.questionIds.map(questionId => [
+      questionId,
+      submission.responses[questionId] == null ? "unanswered" : "answered",
+    ]));
+    const sectorMap = new Map();
+    for (const result of score.questionResults) {
+      const current = sectorMap.get(result.subject) || {
+        subject: result.subject, total: 0, correct: 0, incorrect: 0,
+        unattempted: 0, rawScore: 0, maxScore: 0,
+      };
+      current.total += 1;
+      current.maxScore += result.marks;
+      if (result.status === "correct") current.correct += 1;
+      else if (result.status === "incorrect") current.incorrect += 1;
+      else current.unattempted += 1;
+      current.rawScore += result.score;
+      sectorMap.set(result.subject, current);
+    }
+    const sectorAnalysis = [...sectorMap.values()].map(item => ({
+      subject: item.subject,
+      total: item.total,
+      correct: item.correct,
+      incorrect: item.incorrect,
+      unattempted: item.unattempted,
+      accuracy: item.correct + item.incorrect > 0
+        ? Number(((item.correct / (item.correct + item.incorrect)) * 100).toFixed(2)) : 0,
+      score: Number(Math.max(0, item.rawScore).toFixed(2)),
+      maxScore: Number(item.maxScore.toFixed(2)),
+    }));
     const attempt = {
+      id: idempotency.documentId,
+      userId: uid,
+      userName: profile.name.trim(),
       testId: definition.testId,
       testTitle: definition.title,
+      category: test.category,
+      submittedAt: new Date(now).toISOString(),
       timeTakenSeconds: submission.timeTakenSeconds,
-      questionCount: definition.questionIds.length,
+      totalDurationSeconds: definition.durationMinutes * 60,
       responses: { ...submission.responses },
-      score,
+      questionStatuses,
+      score: score.netScore,
+      maxScore: score.maxScore,
+      percentage: score.percentage,
+      accuracy: score.accuracy,
+      correctCount: score.correctCount,
+      incorrectCount: score.incorrectCount,
+      unattemptedCount: score.unattemptedCount,
+      attemptedCount: score.attemptedCount,
+      markedForReviewCount: 0,
+      negativeMarksDeducted: score.negDeduction,
+      sectorAnalysis,
+      submissionId: submission.clientAttemptId,
+      scoreBreakdown: {
+        rawScore: score.rawScore,
+        questionResults: score.questionResults,
+      },
     };
     const committed = await repository.commitAttemptAtomically({
       uid, testId: definition.testId, documentId: idempotency.documentId,
