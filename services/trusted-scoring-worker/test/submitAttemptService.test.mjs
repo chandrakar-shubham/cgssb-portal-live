@@ -133,3 +133,17 @@ test("fails closed if the repository returns an attempt from another user or tes
   assert.equal(result.error, "ATTEMPT_REPOSITORY_SCOPE_VIOLATION");
   assert.equal(result.result, undefined);
 });
+
+
+test("fails closed if an atomic replay returns another user's result", async () => {
+  const repository = makeRepository();
+  repository.commitAttemptAtomically = async () => ({
+    kind: "replay",
+    fingerprint: "not-the-request-fingerprint",
+    result: { userId: "student-victim", testId: "test-1", score: 100 },
+  });
+  const result = await submitTrustedAttempt({ uid: "student-1", submission, repository });
+  assert.equal(result.status, 503);
+  assert.equal(result.error, "ATTEMPT_REPOSITORY_SCOPE_VIOLATION");
+  assert.equal(result.result, undefined);
+});
