@@ -32,7 +32,9 @@ export function authorizeStudentAttempt({ uid, test, user, entitlement = null, n
   if (!test || typeof test !== "object" || test.isPublished !== true) {
     return { allowed: false, status: 404, reason: "TEST_NOT_FOUND" };
   }
-  if (!user || (typeof user.id === "string" && user.id !== uid)) {
+  // The profile must be the exact document belonging to the verified UID.
+  // Missing IDs are malformed trusted data and must not be treated as a match.
+  if (!user || typeof user.id !== "string" || user.id !== uid) {
     return { allowed: false, status: 403, reason: "STUDENT_PROFILE_UNAVAILABLE" };
   }
   if (user.isBlocked === true || user.status === "blocked" || user.status === "suspended") {
