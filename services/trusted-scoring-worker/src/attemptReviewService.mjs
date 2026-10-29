@@ -9,6 +9,69 @@ const RECEIPT_FIELDS = [
   "submissionId",
 ];
 
+const QUESTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const ANSWERS = new Set(["A", "B", "C", "D", null]);
+const QUESTION_STATUSES = new Set(["unanswered", "answered", "markedForReview", "marked_for_review"]);
+
+function projectAnswerMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const result = {};
+  for (const [questionId, answer] of Object.entries(value)) {
+    if (QUESTION_ID_PATTERN.test(questionId) && ANSWERS.has(answer ?? null)) {
+      result[questionId] = answer ?? null;
+    }
+  }
+  return result;
+}
+
+function projectQuestionStatuses(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const result = {};
+  for (const [questionId, status] of Object.entries(value)) {
+    if (QUESTION_ID_PATTERN.test(questionId) && QUESTION_STATUSES.has(status)) {
+      result[questionId] = status;
+    }
+  }
+  return result;
+}
+
+function projectSectorAnalysis(value) {
+  if (!Array.isArray(value)) return undefined;
+  const allowed = ["subject", "total", "correct", "incorrect", "unattempted", "accuracy", "score", "maxScore"];
+  return value.filter(item => item && typeof item === "object" && !Array.isArray(item)).map(item => {
+    const projected = {};
+    if (typeof item.subject === "string") projected.subject = item.subject.slice(0, 120);
+    for (const field of allowed.slice(1)) {
+      if (Number.isFinite(item[field])) projected[field] = item[field];
+    }
+    return projected;
+  });
+}
+
+function projectAttemptReceipt(attempt) {
+  const result = {};
+  for (const field of RECEIPT_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(attempt, field)) continue;
+    if (field === "responses") {
+      const projected = projectAnswerMap(attempt.responses);
+      if (projected) result.responses = projected;
+    } else if (field === "questionStatuses") {
+      const projected = projectQuestionStatuses(attempt.questionStatuses);
+      if (projected) result.questionStatuses = projected;
+    } else if (field === "sectorAnalysis") {
+      const projected = projectSectorAnalysis(attempt.sectorAnalysis);
+      if (projected) result.sectorAnalysis = projected;
+    } else {
+      const value = attempt[field];
+      if (typeof value === "string" || typeof value === "boolean" ||
+          (typeof value === "number" && Number.isFinite(value))) {
+        result[field] = value;
+      }
+    }
+  }
+  return result;
+}
+
 function projectScoreBreakdown(value) {
   if (!value || typeof value !== "object" || !Array.isArray(value.questionResults)) return null;
   const questionResults = value.questionResults.map(item => {
@@ -65,10 +128,7 @@ export async function loadAuthorizedAttemptReview({ uid, attemptId, repository, 
       return { ok: false, status: policy.status, error: policy.reason };
     }
 
-    const result = {};
-    for (const field of RECEIPT_FIELDS) {
-      if (Object.prototype.hasOwnProperty.call(attempt, field)) result[field] = attempt[field];
-    }
+    const result = projectAttemptReceipt(attempt);
     if (policy.canViewSolutions === true) {
       const scoreBreakdown = projectScoreBreakdown(attempt.scoreBreakdown);
       if (scoreBreakdown) result.scoreBreakdown = scoreBreakdown;
