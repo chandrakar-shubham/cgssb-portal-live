@@ -49,3 +49,15 @@ Before the trusted scorer is considered compatible:
 - Add differential tests that run representative canonical question/test records through both legacy semantics and the approved server contract.
 - Preserve or intentionally retire `markedForReviewCount` with explicit UI/analytics acceptance.
 - Check rounding behavior, per-subject clamping, and score breakdown consumers. Current browser per-subject aggregation can retain a negative subject score even though the overall score is floored at zero; the trusted worker currently floors each subject score independently.
+
+
+## Executable compatibility audit
+
+The worker test suite now includes `test/scoringParityAudit.test.mjs`. These tests intentionally **pass by proving the known legacy/trusted differences**, rather than pretending the implementations are already equivalent. They cover:
+
+- Missing question marks when the test-level default is not 1.
+- Missing negative marks when the test-level penalty differs from one-third.
+- Explicit zero marks, which the legacy `q.marks || 1` expression treats as missing.
+- Unsupported matching questions remaining rejected until an explicit answer/scoring contract is implemented.
+
+These tests are a temporary migration guard, not approval of either scoring policy. Before cutover, product/assessment owners must choose the canonical rules, then replace divergence assertions with parity tests against that approved contract. Per-subject aggregation and rounding still require separate parity coverage. No student flow or production configuration was changed by this audit.
