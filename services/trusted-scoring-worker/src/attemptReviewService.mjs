@@ -9,6 +9,22 @@ const RECEIPT_FIELDS = [
   "submissionId",
 ];
 
+function projectScoreBreakdown(value) {
+  if (!value || typeof value !== "object" || !Array.isArray(value.questionResults)) return null;
+  const questionResults = value.questionResults.map(item => {
+    if (!item || typeof item !== "object") return null;
+    const projected = {};
+    for (const field of ["questionId", "subject", "status", "marks", "negativeMarks", "score"]) {
+      if (Object.prototype.hasOwnProperty.call(item, field)) projected[field] = item[field];
+    }
+    return projected;
+  }).filter(Boolean);
+  return {
+    ...(Number.isFinite(value.rawScore) ? { rawScore: value.rawScore } : {}),
+    questionResults,
+  };
+}
+
 /**
  * Load a review using a trusted repository, then apply ownership and release
  * policy before exposing per-question correctness. Admin status and release
@@ -34,6 +50,10 @@ export async function loadAuthorizedAttemptReview({ uid, attemptId, repository, 
       return { ok: false, status: 404, error: "ATTEMPT_NOT_FOUND" };
     }
     const attempt = record.attempt;
+    // Do not trust an adapter response that does not match the requested ID.
+    if (attempt.id !== attemptId) {
+      return { ok: false, status: 503, error: "ATTEMPT_REPOSITORY_SCOPE_VIOLATION" };
+    }
     const policy = authorizeAttemptReview({
       requesterUid: uid,
       attemptOwnerUid: attempt.userId,
@@ -49,9 +69,9 @@ export async function loadAuthorizedAttemptReview({ uid, attemptId, repository, 
     for (const field of RECEIPT_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(attempt, field)) result[field] = attempt[field];
     }
-    if (policy.canViewSolutions === true && attempt.scoreBreakdown &&
-        typeof attempt.scoreBreakdown === "object") {
-      result.scoreBreakdown = attempt.scoreBreakdown;
+    if (policy.canViewSolutions === true) {
+      const scoreBreakdown = projectScoreBreakdown(attempt.scoreBreakdown);
+      if (scoreBreakdown) result.scoreBreakdown = scoreBreakdown;
     }
     return {
       ok: true,
