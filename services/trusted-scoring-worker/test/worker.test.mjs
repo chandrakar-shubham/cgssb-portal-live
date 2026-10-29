@@ -53,3 +53,31 @@ test("unconfigured project fails closed", async () => {
   );
   assert.equal(response.status, 401);
 });
+
+
+test("configured placeholder repository never enables submission before adapter integration", async () => {
+  let invoked = false;
+  const response = await worker.fetch(
+    new Request("https://worker.test/v1/attempts:submit", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer not-a-valid-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        testId: "test-1",
+        clientAttemptId: "attempt-1",
+        responses: { q1: "A" },
+        timeTakenSeconds: 10,
+      }),
+    }),
+    {
+      FIREBASE_PROJECT_ID: "test-project",
+      ATTEMPT_REPOSITORY: {
+        get() { invoked = true; throw new Error("must not be called"); },
+      },
+    },
+  );
+  assert.equal(response.status, 401);
+  assert.equal(invoked, false);
+});
