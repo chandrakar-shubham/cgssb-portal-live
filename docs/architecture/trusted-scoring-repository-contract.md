@@ -99,3 +99,16 @@ The adapter deliberately uses `trustedAttempts` and `trustedAttemptIdempotency`,
 Submission receipts are now allowlisted too: persisted replay documents are projected through an explicit top-level field list and sanitized nested response/status/subject-analysis maps. Synthetic `__path` and unknown repository fields are not returned. This is important because the Firestore REST decoder adds internal path metadata to returned documents. A regression test injects such fields into a stored attempt and asserts they are omitted from the replay response.
 
 The Firestore REST client accepts an explicit `databaseId`. Configure it from the verified target environment rather than relying on the `(default)` database: the application has used a named Firestore database. `wrangler.toml` now contains a non-production placeholder `FIRESTORE_DATABASE_ID`; it is intentionally not populated with production values. Never point this adapter at live data until the exact project/database pair, service-account permissions, and test schema have been verified.
+
+
+## HTTP submission route integration status
+
+The Worker `POST /v1/attempts:submit` route now calls the trusted submission orchestration and the Firestore repository factory after Firebase ID-token verification and strict request parsing. The route derives the user ID only from the verified token, returns a minimal allowlisted attempt receipt, and keeps backend configuration failures fail-closed (503). Repository initialization is cached per Worker isolate for OAuth token reuse and a failed initialization can be retried. Basic HTTP guard tests cover health, missing bearer token, and unknown routes.
+
+Required Cloudflare Worker configuration (not currently populated):
+- Variables: `FIREBASE_PROJECT_ID`, `FIRESTORE_DATABASE_ID`.
+- Secrets: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (PKCS#8 PEM; escaped newline form is supported).
+
+Do not configure these against production yet. Before a non-production integration test, provision a dedicated test Firebase project/database and synthetic user/test/question documents, create a service account with the narrowest practical Firestore access, and apply client-deny rules for `trustedAttempts` and `trustedAttemptIdempotency`. The adapter's trusted collections and current Firestore security rules must be reviewed together. The app's actual stored user profile must contain an `id` matching the UID; the adapter now preserves the stored ID rather than manufacturing it from the document path, and a regression test covers mismatch rejection.
+
+The route is wired in source but no Worker deployment, secrets, Firestore rules, production records, or live student client migration has occurred. The tests still use mocked Firestore transport; real non-production integration remains a mandatory gate.
