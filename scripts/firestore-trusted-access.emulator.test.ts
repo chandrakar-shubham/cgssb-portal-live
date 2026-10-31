@@ -6,11 +6,11 @@ const projectId = "cgssb-rules-test";
 const rules = readFileSync("firestore.rules", "utf8");
 const collections = ["trustedAttempts", "trustedAttemptIdempotency"];
 const contexts = [
-  { label: "unauthenticated client", create: env => env.unauthenticatedContext() },
-  { label: "authenticated student", create: env => env.authenticatedContext("synthetic-student-1") },
+  { label: "unauthenticated client", create: (env: any) => env.unauthenticatedContext() },
+  { label: "authenticated student", create: (env: any) => env.authenticatedContext("synthetic-student-1") },
   // The bootstrap admin must still be denied: client rules never grant access
   // to trusted scoring records, even to an application administrator.
-  { label: "bootstrap administrator", create: env => env.authenticatedContext("VOynxZyDOJR4lg2x4va2U3qF5m72") },
+  { label: "bootstrap administrator", create: (env: any) => env.authenticatedContext("VOynxZyDOJR4lg2x4va2U3qF5m72") },
 ];
 
 const env = await initializeTestEnvironment({
@@ -21,7 +21,7 @@ const env = await initializeTestEnvironment({
 try {
   // Seed existing records through the emulator-only rules bypass so read,
   // update, and delete checks exercise existing documents as well as creates.
-  await env.withSecurityRulesDisabled(async adminContext => {
+  await env.withSecurityRulesDisabled(async (adminContext: any) => {
     const db = adminContext.firestore();
     for (const collectionName of collections) {
       await setDoc(doc(db, collectionName, "synthetic-attempt-1"), { synthetic: true });
