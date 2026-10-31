@@ -25,3 +25,14 @@ test("unknown routes remain not found", async () => {
   const response = await worker.fetch(new Request("https://worker.example/v1/unknown"), {});
   assert.equal(response.status, 404);
 });
+
+test("review endpoint requires a bearer token before repository access", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/v1/attempts/attempt-123/review"), {});
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "UNAUTHENTICATED" });
+});
+
+test("review endpoint rejects malformed attempt identifiers as an unknown route", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/v1/attempts/invalid%2Fid/review"), {});
+  assert.equal(response.status, 404);
+});
