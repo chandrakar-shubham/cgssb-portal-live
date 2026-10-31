@@ -53,6 +53,44 @@ test("atomically stores trusted attempt and idempotency record", async () => {
   assert.equal(firestore.docs.get("trustedAttemptIdempotency/attempt_abc").fingerprint, "fp-1");
 });
 
+test("does not mask Firestore permission failures with a replay lookup", async () => {
+  const firestore = makeFirestore();
+  let reads = 0;
+  const originalGet = firestore.getDocument;
+  firestore.getDocument = async path => {
+    reads += 1;
+    return originalGet(path);
+  };
+  firestore.commitWrites = async () => {
+    const error = new Error("permission denied");
+    error.status = 403;
+    error.code = "PERMISSION_DENIED";
+    throw error;
+  };
+  const repository = createFirestoreAttemptRepository({ firestore });
+  await assert.rejects(() => repository.commitAttemptAtomically({
+    uid: "student-1", testId: "test-1", documentId: attempt.id,
+    fingerprint: "fp-1", attempt,
+  }), /ATTEMPT_PERSISTENCE_FAILED/);
+  assert.equal(reads, 0, "permanent authorization failures must not trigger recovery reads");
+});
+
+test("recovers an exact result after an ambiguous lost commit acknowledgement", async () => {
+  const firestore = makeFirestore();
+  firestore.commitWrites = async batch => {
+    for (const write of batch) firestore.docs.set(write.path, write.data);
+    throw new TypeError("network connection interrupted after commit");
+  };
+  const repository = createFirestoreAttemptRepository({ firestore });
+  const result = await repository.commitAttemptAtomically({
+    uid: "student-1", testId: "test-1", documentId: attempt.id,
+    fingerprint: "fp-1", attempt,
+  });
+  assert.equal(result.kind, "replay");
+  assert.equal(result.fingerprint, "fp-1");
+  assert.equal(result.result.score, 2);
+});
+
 test("replays the original result on duplicate atomic commit", async () => {
   const firestore = makeFirestore();
   const repository = createFirestoreAttemptRepository({ firestore });
