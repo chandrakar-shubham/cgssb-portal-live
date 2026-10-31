@@ -80,7 +80,7 @@ test("decodes newline-delimited Firestore batchGet streaming responses", async (
         fields: { correctOption: { stringValue: "C" } },
       } }),
       JSON.stringify({ missing: "projects/project-test/databases/named-db/documents/questions/q1" }),
-    ].join("\\n"), 200, "application/json"),
+    ].join("\n"), 200, "application/json"),
   });
   const result = await client.batchGetDocuments(["questions/q1", "questions/q2"]);
   assert.deepEqual(result.map(question => question.__path), ["questions/q2"]);
