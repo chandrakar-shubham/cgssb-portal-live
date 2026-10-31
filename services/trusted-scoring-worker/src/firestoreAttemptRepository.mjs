@@ -11,6 +11,17 @@ import { authorizeStudentAttempt } from "./attemptEligibility.mjs";
  * Trusted attempts are deliberately stored separately from legacy client-
  * writable `attempts` until UI consumers and Firestore rules are migrated.
  */
+function isCommitOutcomeUncertain(error) {
+  const status = Number(error?.status);
+  if (Number.isInteger(status)) {
+    return status === 408 || status === 409 || status === 412 ||
+      status === 429 || status >= 500;
+  }
+  const code = String(error?.code || "").toUpperCase();
+  if (["ALREADY_EXISTS", "FAILED_PRECONDITION", "ABORTED"].includes(code)) return true;
+  return error?.name === "TypeError" || error?.name === "AbortError";
+}
+
 export function createFirestoreAttemptRepository({ firestore, now = () => Date.now() }) {
   if (!firestore || typeof firestore.getDocument !== "function" ||
       typeof firestore.batchGetDocuments !== "function" ||
@@ -101,9 +112,13 @@ export function createFirestoreAttemptRepository({ firestore, now = () => Date.n
     try {
       await firestore.commitWrites(writes);
       return { kind: "created", result: attempt };
-    } catch {
-      // Concurrent request or lost commit acknowledgement: read the atomic
-      // idempotency record and return only the exact original committed result.
+    } catch (error) {
+      // Only ambiguous outcomes (precondition races, throttling, server errors,
+      // or transport interruption) justify a read-after-write recovery. A
+      // permission/configuration/client error must not be masked by a lookup.
+      if (!isCommitOutcomeUncertain(error)) {
+        throw new Error("ATTEMPT_PERSISTENCE_FAILED");
+      }
       const prior = await findAttemptByIdempotencyKey({ uid, testId, documentId });
       if (!prior) throw new Error("ATTEMPT_PERSISTENCE_FAILED");
       if (prior.fingerprint !== fingerprint) return { kind: "conflict" };
