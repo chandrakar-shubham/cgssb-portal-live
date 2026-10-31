@@ -32,6 +32,9 @@ jobs:
       - name: Student question projection security tests
         run: npm run test:student-question-projection
 
+      - name: Firestore trusted-collection emulator authorization tests
+        run: npm run test:rules
+
       # Validate the canonical Authority -> Recruitment -> Post -> Test Series architecture.
       - name: TypeScript validation
         run: npm run lint
