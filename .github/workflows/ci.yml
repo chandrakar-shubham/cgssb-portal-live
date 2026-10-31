@@ -45,6 +45,9 @@ jobs:
       - name: TypeScript validation
         run: npm run lint
 
+      - name: Trusted Firestore smoke-test syntax check
+        run: npm run check:trusted-firestore-smoke
+
       - name: Phase 8.3 student read-bound regression guard
         run: npm run test:phase8:read-bound
 
