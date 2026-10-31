@@ -4,13 +4,13 @@ import worker from "../src/index.mjs";
 
 const env = { FIREBASE_PROJECT_ID: "test-project" };
 
-test("health endpoint exposes only a minimal scaffold status", async () => {
+test("health endpoint exposes minimal trusted API status", async () => {
   const response = await worker.fetch(new Request("https://worker.test/healthz"), env);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     ok: true,
     service: "cgssb-trusted-scoring",
-    mode: "scaffold",
+    mode: "trusted-api",
   });
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
@@ -55,7 +55,7 @@ test("unconfigured project fails closed", async () => {
 });
 
 
-test("invalid bearer is rejected before a configured repository binding is touched", async () => {
+test("invalid bearer is rejected before Firestore configuration is initialized", async () => {
   let invoked = false;
   const response = await worker.fetch(
     new Request("https://worker.test/v1/attempts:submit", {
