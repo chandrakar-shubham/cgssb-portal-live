@@ -10,7 +10,7 @@ function makeFirestore() {
       sections: [{ id: "s1", questionIds: ["q1"] }],
       solutionReleasePolicy: { mode: "manual", isReleased: false },
     }],
-    ["users/student-1", { name: "Student", status: "active" }],
+    ["users/student-1", { id: "student-1", name: "Student", status: "active" }],
     ["questions/q1", { correctOption: "A", marks: 2, questionType: "mcq" }],
   ]);
   const writes = [];
