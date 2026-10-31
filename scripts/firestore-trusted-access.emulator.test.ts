@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
-const projectId = "cgssb-trusted-rules-emulator";
+const projectId = "cgssb-rules-test";
 const rules = readFileSync("firestore.rules", "utf8");
 const collections = ["trustedAttempts", "trustedAttemptIdempotency"];
 const contexts = [
