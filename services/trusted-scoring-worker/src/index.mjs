@@ -17,7 +17,7 @@ const json = (body, status = 200, extraHeaders = {}) =>
 
 function readBearer(request) {
   const value = request.headers.get("authorization") || "";
-  const match = /^Bearer ([^\\s]+)$/i.exec(value);
+  const match = /^Bearer ([^\s]+)$/i.exec(value);
   return match?.[1] || null;
 }
 
@@ -51,7 +51,7 @@ export function createTrustedScoringWorker({
       }
 
       const reviewMatch = request.method === "GET"
-        ? /^\\/v1\\/attempts\\/([A-Za-z0-9_-]{1,128})\\/review$/.exec(url.pathname)
+        ? /^\/v1\/attempts\/([A-Za-z0-9_-]{1,128})\/review$/.exec(url.pathname)
         : null;
       const isSubmission = request.method === "POST" && url.pathname === "/v1/attempts:submit";
       if (!isSubmission && !reviewMatch) return json({ error: "NOT_FOUND" }, 404);
