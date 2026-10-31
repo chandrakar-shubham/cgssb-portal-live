@@ -31,11 +31,11 @@ try {
   for (const contextSpec of contexts) {
     const context = contextSpec.create(env);
     const db = context.firestore();
-    for (const collection of collections) {
-      const ref = doc(db, collection, "synthetic-attempt-1");
+    for (const collectionName of collections) {
+      const ref = doc(db, collectionName, "synthetic-attempt-1");
       await assertFails(getDoc(ref));
-      await assertFails(getDocs(collection(db, collection)));
-      await assertFails(setDoc(doc(db, collection, "synthetic-create-1"), {
+      await assertFails(getDocs(collection(db, collectionName)));
+      await assertFails(setDoc(doc(db, collectionName, "synthetic-create-1"), {
         userId: "synthetic-student-1",
         testId: "synthetic-test-1",
         score: 100,
