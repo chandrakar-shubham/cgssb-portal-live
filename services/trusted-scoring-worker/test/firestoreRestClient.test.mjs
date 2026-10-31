@@ -70,6 +70,23 @@ test("batch gets only requested documents and maps names back to paths", async (
   assert.equal(result[0].correctOption, "B");
 });
 
+test("decodes newline-delimited Firestore batchGet streaming responses", async () => {
+  const client = createFirestoreRestClient({
+    projectId: "project-test", databaseId: "named-db",
+    getAccessToken: async () => "token",
+    fetchImpl: async () => response([
+      JSON.stringify({ found: {
+        name: "projects/project-test/databases/named-db/documents/questions/q2",
+        fields: { correctOption: { stringValue: "C" } },
+      } }),
+      JSON.stringify({ missing: "projects/project-test/databases/named-db/documents/questions/q1" }),
+    ].join("\\n"), 200, "application/json"),
+  });
+  const result = await client.batchGetDocuments(["questions/q1", "questions/q2"]);
+  assert.deepEqual(result.map(question => question.__path), ["questions/q2"]);
+  assert.equal(result[0].correctOption, "C");
+});
+
 test("commits both attempt writes with create-only preconditions", async () => {
   let requestBody;
   const client = createFirestoreRestClient({
