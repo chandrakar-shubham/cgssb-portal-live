@@ -106,6 +106,15 @@ for (const required of [
   }
 }
 
+// Trusted scoring collections are server-owned and must deny every client operation.
+for (const [collection, documentId] of [['trustedAttempts', 'attemptId'], ['trustedAttemptIdempotency', 'idempotencyId']]) {
+  const rule = `match /${collection}/{${documentId}}`;
+  const start = rules.indexOf(rule);
+  if (start === -1) throw new Error(`Missing explicit client-deny rule for ${collection}`);
+  const nextMatch = rules.indexOf('\n    match /', start + rule.length);
+  const block = rules.slice(start, nextMatch === -1 ? rules.length : nextMatch);
+  if (!block.includes('allow read, write: if false;')) throw new Error(`Client access must be denied for ${collection}`);
+}
 const indexes = readFileSync('firestore.indexes.json', 'utf8');
 for (const field of ['scopeType', 'scopeKey', 'averagePercentage']) {
   if (!indexes.includes(`"fieldPath": "${field}"`)) {

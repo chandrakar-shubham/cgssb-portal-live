@@ -124,3 +124,31 @@ export function toStudentQuestion(question: Question | Record<string, unknown>):
 export function toStudentQuestions(questions: Array<Question | Record<string, unknown>>): StudentQuestion[] {
   return questions.map(toStudentQuestion);
 }
+
+
+/** Stable comparison for Firestore values; object key order is not significant. */
+export function stableSerializeProjection(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableSerializeProjection).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([key, nested]) => `${JSON.stringify(key)}:${stableSerializeProjection(nested)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
+const FORBIDDEN_STUDENT_FIELDS = new Set([
+  'correctoption', 'correctanswer', 'answer', 'answerkey', 'modelkey',
+  'finalamendedkey', 'explanation', 'explanationhindi', 'solution',
+  'solutionhindi', 'moderationnotes', 'internalnotes', 'iscorrect',
+  'correct', 'isanswer', 'answerid', 'isrightanswer',
+]);
+
+/** Recursively detects answer-key and internal fields in nested projection payloads. */
+export function containsForbiddenStudentField(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsForbiddenStudentField);
+  if (value === null || typeof value !== 'object') return false;
+  return Object.entries(value as Record<string, unknown>).some(([key, nested]) => {
+    const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
+    return FORBIDDEN_STUDENT_FIELDS.has(normalizedKey) || containsForbiddenStudentField(nested);
+  });
+}

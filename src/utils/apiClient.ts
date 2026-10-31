@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { backfillStudentQuestionProjections, deleteStudentQuestionProjection, syncStudentQuestionProjection, verifyStudentQuestionProjections } from '../firebase/studentQuestionProjectionService';
+import { toStudentQuestion } from './studentQuestionProjection';
 
 const ADMIN_BOOTSTRAP_EMAIL = 'admin@cgtest.in';
 const BOOTSTRAP_ADMIN_UID = 'VOynxZyDOJR4lg2x4va2U3qF5m72';
@@ -242,7 +243,8 @@ async function submitAttempt(testId: string, body: any) {
   // Do not mutate the public mockTests document from the student client.
   await setDoc(doc(db, 'attempts', attempt.id), attempt, { merge: true });
 
-  return { success: true, attempt, solutions: testQuestions };
+  // Return only allowlisted question content in the student-facing review payload.
+  return { success: true, attempt, solutions: testQuestions.map(toStudentQuestion) };
 }
 
 async function leaderboard(_testId: string) {
@@ -272,7 +274,10 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     return (parts[2] ? value : { success:true, tests:value }) as T;
   }
   if (parts[1] === 'questions' && method === 'GET') {
-    const value = parts[2] ? await readById<any>('questions', decode(parts[2])) : await readCollection<any>('questions');
+    // Public/student reads must never expose the canonical answer-key collection.
+    const value = parts[2]
+      ? await readById<any>('studentQuestions', decode(parts[2]))
+      : await readCollection<any>('studentQuestions');
     return (parts[2] ? value : { success:true, questions:value }) as T;
   }
   if (parts[1] === 'pyp' && method === 'GET') {

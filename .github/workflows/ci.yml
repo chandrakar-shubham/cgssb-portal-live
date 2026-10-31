@@ -20,18 +20,33 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps --package-lock=false --no-audit --no-fund
 
       - name: Domain helper regression tests
         run: npm run test:domain
 
+      - name: Trusted scoring worker security scaffold tests
+        run: npm --prefix services/trusted-scoring-worker test
+
       - name: Student question projection security tests
         run: npm run test:student-question-projection
+
+      - name: Firestore trusted-collection emulator authorization tests
+        run: npm run test:rules
 
       # Validate the canonical Authority -> Recruitment -> Post -> Test Series architecture.
       - name: TypeScript validation
         run: npm run lint
+
+      - name: Trusted Firestore smoke-test syntax check
+        run: npm run check:trusted-firestore-smoke
 
       - name: Phase 8.3 student read-bound regression guard
         run: npm run test:phase8:read-bound
