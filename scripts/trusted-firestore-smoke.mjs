@@ -59,7 +59,6 @@ async function deleteDocument(path) {
   }
 }
 
-let created = false;
 try {
   // Validate the exact synthetic fixture schema before creating any records.
   const [test, profile] = await Promise.all([
@@ -99,7 +98,6 @@ try {
   const args = { uid, testId, documentId: attemptId, fingerprint, attempt };
   const first = await repository.commitAttemptAtomically(args);
   assert(first.kind === "created", `Expected atomic create, received ${first.kind}`);
-  created = true;
   const [storedAttempt, storedIdempotency] = await Promise.all([
     firestore.getDocument(attemptPath),
     firestore.getDocument(idempotencyPath),
@@ -115,10 +113,8 @@ try {
   assert(conflict.kind === "conflict", "Changed payload did not return an idempotency conflict");
   console.log("PASS: exact retry replay and changed-payload conflict");
 } finally {
-  if (created) {
-    await Promise.all([deleteDocument(attemptPath), deleteDocument(idempotencyPath)]);
-    console.log("PASS: synthetic smoke-test documents cleaned up");
-  }
+  await Promise.all([deleteDocument(attemptPath), deleteDocument(idempotencyPath)]);
+  console.log("PASS: synthetic smoke-test documents cleaned up");
 }
 
 console.log(`Trusted Firestore non-production smoke test passed for ${projectId}/${databaseId}.`);
