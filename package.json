@@ -24,7 +24,8 @@
     "test:phase8:5:firestore-emulator": "firebase emulators:exec --only firestore --project demo-cgssb-phase85 \"node scripts/phase8-5-firestore-emulator.test.mjs\"",
     "test:domain": "tsx scripts/domain-helpers.test.ts && npm run test:attempt-persistence",
     "test:attempt-persistence": "tsx scripts/persist-submitted-attempt.test.ts",
-    "test:student-question-projection": "tsx scripts/student-question-projection.test.ts"
+    "test:student-question-projection": "tsx scripts/student-question-projection.test.ts",
+    "check:trusted-firestore-smoke": "node --check scripts/trusted-firestore-smoke.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
