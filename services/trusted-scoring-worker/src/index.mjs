@@ -23,9 +23,14 @@ function readBearer(request) {
 // Cloudflare Worker isolates reuse module state between requests. Retain one
 // repository/token provider per isolate so OAuth tokens can be safely cached.
 let repositoryPromise;
-function getRepository(env) {
+async function getRepository(env) {
   repositoryPromise ||= Promise.resolve().then(() => createTrustedAttemptRepository(env));
-  return repositoryPromise;
+  try {
+    return await repositoryPromise;
+  } catch (error) {
+    repositoryPromise = undefined;
+    throw error;
+  }
 }
 
 export default {
