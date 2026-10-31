@@ -61,3 +61,15 @@ The worker test suite now includes `test/scoringParityAudit.test.mjs`. These tes
 - Unsupported matching questions remaining rejected until an explicit answer/scoring contract is implemented.
 
 These tests are a temporary migration guard, not approval of either scoring policy. Before cutover, product/assessment owners must choose the canonical rules, then replace divergence assertions with parity tests against that approved contract. Per-subject aggregation and rounding still require separate parity coverage. No student flow or production configuration was changed by this audit.
+
+
+## Additional source-level access-control findings (2026-10-31)
+
+A targeted review of `src/components/TestPassSection.tsx`, `src/utils/devicePassManager.ts`, and the trusted repository adapter found additional cutover blockers:
+
+1. **The current free-launch campaign is an explicit product mode.** `FREE_ACCESS_CAMPAIGN` is currently `true`; the UI advertises 30 days on registration and a further 60 days after five completed tests. The worker eligibility helper does not evaluate the campaign flag, campaign ID, milestone completion, or the authoritative process that grants the bonus. It only evaluates `isPro`, `hasProPass/passExpiresAt`, and `userEntitlements/{uid}.status/expiresAt`. Before migration, define the server-authoritative campaign grant and expiry rules; do not infer a grant from client-side progress or a UI label.
+2. **Device binding is not enforced by trusted submission.** The app has `boundDeviceId` and `boundDeviceName`, and the UI checks a browser-local device ID. The trusted submission request does not carry a device credential and `authorizeStudentAttempt` does not check device binding. This UI check is not a server security boundary. Decide whether device binding remains a product requirement, then implement a server-verifiable binding/transfer protocol before claiming one-device enforcement.
+3. **The paid checkout UI is not a trusted payment-verification flow.** The source includes a client-side “I Have Completed Payment” action that waits briefly and calls `activateProPass`; this is not evidence of a verified payment-provider webhook or bank/UPI confirmation. Paid access must only be granted from a trusted payment reconciliation path. The current free-launch flag hides the paid checkout, but the legacy UI path must not be treated as proof of payment or entitlement.
+4. **Legacy pass expiry semantics differ.** `isUserPassActive` in the browser treats `hasProPass === true` with no `passExpiresAt` as active for legacy compatibility. The trusted worker requires a future parseable expiry for a profile pass. This is a deliberate fail-closed difference, but it needs a data inventory and explicit migration decision so legitimate legacy users are not silently locked out or granted indefinite access.
+
+These findings are from source inspection only. They do not prove the current production records or payment-provider configuration. No production data, access rules, credentials, or deployment were changed.
