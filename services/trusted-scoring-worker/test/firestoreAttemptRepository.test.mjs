@@ -115,3 +115,15 @@ test("review repository returns unknown release policy as hidden by default", as
   assert.equal(record.releasePolicy.mode, "manual");
   assert.equal(record.isAuthorizedAdmin, false);
 });
+
+test("does not overwrite a mismatched stored profile ID with the authenticated UID", async () => {
+  const firestore = makeFirestore();
+  firestore.docs.set("users/student-1", { id: "another-user", name: "Student", status: "active" });
+  const repository = createFirestoreAttemptRepository({ firestore });
+  const profile = await repository.loadStudentProfile("student-1");
+  assert.equal(profile.id, "another-user");
+  const testDefinition = await repository.loadPublishedTest("test-1");
+  assert.equal(await repository.authorizeAttempt({
+    uid: "student-1", test: testDefinition, now: Date.now(),
+  }), false);
+});
