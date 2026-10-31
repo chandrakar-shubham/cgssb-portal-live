@@ -1,6 +1,7 @@
 import { verifyFirebaseIdToken } from "./firebaseToken.mjs";
 import { parseAttemptSubmission } from "./attemptRequest.mjs";
 import { submitTrustedAttempt } from "./submitAttemptService.mjs";
+import { loadAuthorizedAttemptReview } from "./attemptReviewService.mjs";
 import { createTrustedAttemptRepository } from "./createTrustedAttemptRepository.mjs";
 
 const json = (body, status = 200, extraHeaders = {}) =>
@@ -16,7 +17,7 @@ const json = (body, status = 200, extraHeaders = {}) =>
 
 function readBearer(request) {
   const value = request.headers.get("authorization") || "";
-  const match = /^Bearer ([^\\s]+)$/i.exec(value);
+  const match = /^Bearer ([^\s]+)$/i.exec(value);
   return match?.[1] || null;
 }
 
@@ -41,9 +42,9 @@ export default {
       return json({ ok: true, service: "cgssb-trusted-scoring", mode: "trusted-api" });
     }
 
-    if (request.method !== "POST" || url.pathname !== "/v1/attempts:submit") {
-      return json({ error: "NOT_FOUND" }, 404);
-    }
+    const reviewMatch = request.method === "GET" ? /^\/v1\/attempts\/([A-Za-z0-9_-]{1,128})\/review$/.exec(url.pathname) : null;
+    const isSubmission = request.method === "POST" && url.pathname === "/v1/attempts:submit";
+    if (!isSubmission && !reviewMatch) return json({ error: "NOT_FOUND" }, 404);
 
     const token = readBearer(request);
     if (!token) return json({ error: "UNAUTHENTICATED" }, 401);
@@ -53,6 +54,21 @@ export default {
       identity = await verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID);
     } catch {
       return json({ error: "UNAUTHENTICATED" }, 401);
+    }
+
+    if (reviewMatch) {
+      let repository;
+      try {
+        repository = await getRepository(env);
+      } catch {
+        return json({ error: "SCORING_BACKEND_NOT_CONFIGURED" }, 503);
+      }
+      const review = await loadAuthorizedAttemptReview({ uid: identity.uid, attemptId: reviewMatch[1], repository });
+      if (!review.ok) {
+        const status = [400, 401, 403, 404, 409].includes(review.status) ? review.status : 503;
+        return json({ error: review.error }, status);
+      }
+      return json({ ok: true, canViewSolutions: review.canViewSolutions, attempt: review.result });
     }
 
     const parsed = await parseAttemptSubmission(request);
