@@ -71,7 +71,7 @@ export function createFirestoreAttemptRepository({ firestore, now = () => Date.n
 
   async function loadStudentProfile(uid) {
     const profile = await get(`users/${uid}`);
-    return profile ? { ...profile, id: uid } : null;
+    return profile ? { ...profile, id: profile.id } : null;
   }
 
   async function authorizeAttempt({ uid, test, now: requestNow }) {
