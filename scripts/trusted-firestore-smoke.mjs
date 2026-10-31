@@ -47,6 +47,7 @@ const attemptId = `smoke_${runId}`;
 const attemptPath = `trustedAttempts/${attemptId}`;
 const idempotencyPath = `trustedAttemptIdempotency/${attemptId}`;
 const baseUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/${encodeURIComponent(databaseId)}/documents`;
+let writeStarted = false;
 
 async function deleteDocument(path) {
   const token = await tokenProvider.getAccessToken();
@@ -96,6 +97,9 @@ try {
     smokeTest: true,
   };
   const args = { uid, testId, documentId: attemptId, fingerprint, attempt };
+  // From this point onward the commit may have reached Firestore even if the
+  // client loses its acknowledgement, so cleanup must be attempted in finally.
+  writeStarted = true;
   const first = await repository.commitAttemptAtomically(args);
   assert(first.kind === "created", `Expected atomic create, received ${first.kind}`);
   const [storedAttempt, storedIdempotency] = await Promise.all([
@@ -113,8 +117,12 @@ try {
   assert(conflict.kind === "conflict", "Changed payload did not return an idempotency conflict");
   console.log("PASS: exact retry replay and changed-payload conflict");
 } finally {
-  await Promise.all([deleteDocument(attemptPath), deleteDocument(idempotencyPath)]);
-  console.log("PASS: synthetic smoke-test documents cleaned up");
+  // Avoid a second OAuth request masking an earlier auth/fixture-read failure.
+  // Once a write is attempted, cleanup is mandatory even for ambiguous outcomes.
+  if (writeStarted) {
+    await Promise.all([deleteDocument(attemptPath), deleteDocument(idempotencyPath)]);
+    console.log("PASS: synthetic smoke-test documents cleaned up");
+  }
 }
 
 console.log(`Trusted Firestore non-production smoke test passed for ${projectId}/${databaseId}.`);
