@@ -67,3 +67,20 @@ The migration gate remains **BLOCKED**. A source review of the current branch co
 Continue building and testing the projection-only student journey as an isolated path. The next integration must be an end-to-end adapter change behind a non-production-only feature configuration, with no fallback to canonical reads or browser scoring when enabled. Keep the current production path unchanged until Worker deployment, isolated Firestore/IAM validation, review parity, and explicit release approval are complete.
 
 This audit is source-level evidence only. It does not assert that production rules, data, hosting, or traffic have changed.
+## Trusted review receipt integration — 2026-11-01
+
+The isolated trusted review orchestrator now validates the complete Worker review receipt through the same strict parser used for first-submit receipts before loading student question projections. It explicitly preserves the distinction between:
+- `attempt.id`: the trusted Firestore attempt document ID used by the review endpoint; and
+- `attempt.submissionId`: the client-generated idempotency key used to make submission retries safe.
+
+The orchestrator returns a validated `TestAttempt` aggregate alongside the projection-only questions. Regression coverage verifies aggregate score provenance, both IDs, fail-closed feature gating, cross-student/cross-test rejection before projection reads, and invalid client submission IDs. This closes a DTO adaptation gap in the isolated review path; it does **not** connect the live `SolutionsScreen` or authorize rollout.
+
+### Remaining student journey blockers (confirmed in source)
+
+- `src/App.tsx` still invokes `calculateExamScore` in the browser, persists the legacy attempt and leaderboard profiles, and sets that legacy record as the active review.
+- `SolutionsScreen` still requires the legacy `TestAttempt` + `Question[]` contract and performs question correctness filtering against `Question.correctOption`.
+- The isolated trusted review orchestrator is not called by `App.tsx`; no trusted-vs-legacy attempt provenance discriminator exists in the live review route.
+- The Worker derives `questionStatuses` from submitted answers and currently does not accept marked-for-review palette state. That behavior must be reconciled with the live exam UX and approved scoring contract before using the trusted result screen.
+- The Worker review receipt can now be parsed into the aggregate `TestAttempt` type, but this alone does not reconcile leaderboard/profile writes, milestones, analytics, offline cache, saved attempt consumers, or scoring parity.
+
+The next safe boundary is a separately tested trusted submission journey adapter that coordinates submission receipt persistence, review loading, and downstream side effects. Do not switch `handleSubmitTest`, remove the legacy path, tighten canonical Firestore rules, or deploy the Worker until the non-production Firestore/IAM gate, published-test compatibility audit, scoring-policy decision, and complete student journey tests pass.
