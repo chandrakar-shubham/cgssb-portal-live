@@ -57,6 +57,10 @@ export function validateTrustedCatalogSnapshot({
       || snapshot.questions.some(record => !record || typeof record !== "object" || Array.isArray(record))) {
     throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must be objects");
   }
+  if (snapshot.tests.some(record => typeof record.id !== "string" || !record.id.startsWith("synthetic-"))
+      || snapshot.questions.some(record => typeof record.id !== "string" || !record.id.startsWith("synthetic-"))) {
+    throw snapshotError("NON_SYNTHETIC_RECORD_ID", "offline audit snapshots may contain synthetic records only");
+  }
 
   return Object.freeze({
     projectId,
