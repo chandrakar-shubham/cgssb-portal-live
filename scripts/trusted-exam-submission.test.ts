@@ -77,3 +77,35 @@ await assert.rejects(() => submitTrustedExamAttempt({
   test, userId: 'student-1',
   submission: { testId: 'test-1', timeTakenSeconds: 45, submissionId: 'session-123', responses: { q1: 'Z' as any } },
 }, client), /invalid answer/);
+
+
+await assert.rejects(() => submitTrustedExamAttempt({
+  test, userId: 'student-1',
+  submission: {
+    testId: 'test-1', timeTakenSeconds: 45, submissionId: 'session-123',
+    responses: { q1: 'B' }, questionStatuses: { q1: 'unanswered' },
+  },
+}, client), /status or answer mismatch/);
+
+await assert.rejects(() => submitTrustedExamAttempt({
+  test, userId: 'student-1',
+  submission: {
+    testId: 'test-1', timeTakenSeconds: 45, submissionId: 'session-123',
+    responses: { q1: 'B' }, questionStatuses: { foreign: 'answered' } as any,
+  },
+}, client), /outside the active test/);
+
+let statusGetterCalls = 0;
+const unsafeStatuses = {};
+Object.defineProperty(unsafeStatuses, 'q1', {
+  enumerable: true,
+  get() { statusGetterCalls += 1; return 'answered'; },
+});
+await assert.rejects(() => submitTrustedExamAttempt({
+  test, userId: 'student-1',
+  submission: {
+    testId: 'test-1', timeTakenSeconds: 45, submissionId: 'session-123',
+    responses: { q1: 'B' }, questionStatuses: unsafeStatuses as any,
+  },
+}, client), /enumerable data properties/);
+assert.equal(statusGetterCalls, 0);
