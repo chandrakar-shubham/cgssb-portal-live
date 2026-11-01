@@ -1,0 +1,93 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { validateTrustedCatalogSnapshot } from "../src/trustedCatalogSnapshot.mjs";
+
+const validSnapshot = {
+  schemaVersion: 1,
+  metadata: {
+    projectId: "cgssb-audit-dev",
+    databaseId: "cgssb-audit-dev",
+    exportedAt: "2026-11-01T10:30:00.000Z",
+  },
+  tests: [{ id: "synthetic-test-1" }],
+  questions: [{ id: "synthetic-question-1", correctOption: "A" }],
+};
+
+const target = {
+  expectedProjectId: "cgssb-audit-dev",
+  expectedDatabaseId: "cgssb-audit-dev",
+};
+
+test("accepts a versioned snapshot matching the confirmed isolated target", () => {
+  const result = validateTrustedCatalogSnapshot({ snapshot: validSnapshot, ...target });
+  assert.equal(result.projectId, target.expectedProjectId);
+  assert.equal(result.databaseId, target.expectedDatabaseId);
+  assert.equal(result.tests.length, 1);
+  assert.equal(result.questions.length, 1);
+  assert.equal(Object.isFrozen(result), true);
+});
+
+test("requires an explicit operator-confirmed target", () => {
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: validSnapshot }),
+    error => error.code === "MISSING_TARGET_CONFIRMATION",
+  );
+});
+
+test("rejects snapshot project or database metadata that differs from confirmation", () => {
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({
+      snapshot: { ...validSnapshot, metadata: { ...validSnapshot.metadata, projectId: "other-audit-dev" } },
+      ...target,
+    }),
+    error => error.code === "SNAPSHOT_TARGET_MISMATCH",
+  );
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({
+      snapshot: { ...validSnapshot, metadata: { ...validSnapshot.metadata, databaseId: "other-audit-dev" } },
+      ...target,
+    }),
+    error => error.code === "SNAPSHOT_TARGET_MISMATCH",
+  );
+});
+
+test("rejects production and unisolated project/database identifiers", () => {
+  for (const projectId of ["gen-lang-client-0783153446", "cgssb-production", "cgssb-audit"]) {
+    assert.throws(
+      () => validateTrustedCatalogSnapshot({
+        snapshot: { ...validSnapshot, metadata: { ...validSnapshot.metadata, projectId } },
+        expectedProjectId: projectId,
+        expectedDatabaseId: target.expectedDatabaseId,
+      }),
+      error => error.code === "PRODUCTION_OR_UNISOLATED_PROJECT",
+    );
+  }
+  for (const databaseId of ["(default)", "production", "cgssb-live"]) {
+    assert.throws(
+      () => validateTrustedCatalogSnapshot({
+        snapshot: { ...validSnapshot, metadata: { ...validSnapshot.metadata, databaseId } },
+        expectedProjectId: target.expectedProjectId,
+        expectedDatabaseId: databaseId,
+      }),
+      error => error.code === "PRODUCTION_OR_UNISOLATED_DATABASE",
+    );
+  }
+});
+
+test("rejects malformed version, timestamp, metadata, and record arrays", () => {
+  const cases = [
+    [{ ...validSnapshot, schemaVersion: 2 }, "UNSUPPORTED_SNAPSHOT_VERSION"],
+    [{ ...validSnapshot, metadata: null }, "INVALID_SNAPSHOT_METADATA"],
+    [{ ...validSnapshot, metadata: { ...validSnapshot.metadata, exportedAt: "yesterday" } }, "INVALID_EXPORT_TIMESTAMP"],
+    [{ ...validSnapshot, tests: null }, "INVALID_SNAPSHOT_RECORDS"],
+    [{ ...validSnapshot, questions: [null] }, "INVALID_SNAPSHOT_RECORD"],
+    [null, "INVALID_SNAPSHOT"],
+  ];
+  for (const [snapshot, code] of cases) {
+    assert.throws(
+      () => validateTrustedCatalogSnapshot({ snapshot, ...target }),
+      error => error.code === code,
+      code,
+    );
+  }
+});
