@@ -47,7 +47,7 @@ export interface PublishedExamAuditOptions {
  * Read-only, bounded pre-cutover audit. It validates published definitions
  * against their actual student projection documents using the same strict
  * adapter used by the isolated production data source. Tests are processed
- * sequentially and a total document-read budget prevents unexpectedly large
+ * with a small bounded worker pool and a total document-read budget prevents unexpectedly large
  * Firestore bills during a pre-cutover audit.
  */
 export async function auditPublishedStudentExamDefinitions(
