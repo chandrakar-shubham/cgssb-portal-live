@@ -25,12 +25,14 @@ const ANSWERS = new Set(['A', 'B', 'C', 'D', null]);
 export function buildTrustedReviewQuestions(
   questions: readonly StudentQuestion[],
   review: TrustedReviewPayload,
+  expectedAttemptId: string,
 ): TrustedReviewQuestion[] {
   if (!Array.isArray(questions) || questions.length === 0 || questions.length > 500) {
     throw new Error('Trusted review requires 1..500 student-safe questions.');
   }
   if (!review || typeof review !== 'object' || typeof review.canViewSolutions !== 'boolean' ||
-      !review.attempt || typeof review.attempt.id !== 'string') {
+      !review.attempt || typeof review.attempt.id !== 'string' ||
+      typeof expectedAttemptId !== 'string' || review.attempt.id !== expectedAttemptId) {
     throw new Error('Trusted review payload is incomplete.');
   }
   const ids = questions.map(question => question?.id);
