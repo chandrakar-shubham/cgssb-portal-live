@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   MockTest,
-  Question,
-  QuestionPaletteStatus,
+    QuestionPaletteStatus,
   TestAttempt,
   ExamCategory
 } from '../types';
