@@ -3,9 +3,21 @@ const SUPPORTED_SINGLE_ANSWER_TYPES = new Set([
   "", "single", "single-choice", "mcq", "multiple-choice",
 ]);
 
+function trustedDefinitionError(code, message, ErrorType = Error) {
+  const error = new ErrorType(message);
+  error.code = code;
+  return error;
+}
+
 function finiteRange(value, name, { min = 0, max = 100 } = {}) {
   if (!Number.isFinite(value) || value < min || value > max) {
-    throw new TypeError(`invalid trusted test ${name}`);
+    const code = name === "marksPerQuestion" ? "INVALID_DEFAULT_MARKS"
+      : name === "negativeMarksPerQuestion" ? "INVALID_DEFAULT_NEGATIVE_MARKS"
+      : name === "durationMinutes" ? "INVALID_DURATION"
+      : name === "question marks" ? "INVALID_QUESTION_MARKS"
+      : name === "question negative marks" ? "INVALID_QUESTION_NEGATIVE_MARKS"
+      : "INVALID_SCORING_VALUE";
+    throw trustedDefinitionError(code, `invalid trusted test ${name}`, TypeError);
   }
   return value;
 }
@@ -13,10 +25,10 @@ function finiteRange(value, name, { min = 0, max = 100 } = {}) {
 function validateScorableQuestion(question) {
   const type = String(question.questionType || question.type || "single").toLowerCase();
   if (!SUPPORTED_SINGLE_ANSWER_TYPES.has(type)) {
-    throw new Error("TRUSTED_TEST_UNSUPPORTED_QUESTION_TYPE");
+    throw trustedDefinitionError("UNSUPPORTED_QUESTION_TYPE", "TRUSTED_TEST_UNSUPPORTED_QUESTION_TYPE");
   }
   if (!["A", "B", "C", "D"].includes(question.correctOption)) {
-    throw new Error("TRUSTED_TEST_INVALID_CORRECT_OPTION");
+    throw trustedDefinitionError("INVALID_CORRECT_OPTION", "TRUSTED_TEST_INVALID_CORRECT_OPTION");
   }
   if (question.marks != null) {
     finiteRange(Number(question.marks), "question marks");
@@ -33,50 +45,50 @@ function validateScorableQuestion(question) {
  */
 export function buildTrustedTestDefinition({ test, questions }) {
   if (!test || typeof test !== "object" || Array.isArray(test)) {
-    throw new TypeError("trusted test is required");
+    throw trustedDefinitionError("INVALID_TEST_DEFINITION", "trusted test is required", TypeError);
   }
-  if (test.isPublished !== true) throw new Error("TEST_NOT_PUBLISHED");
+  if (test.isPublished !== true) throw trustedDefinitionError("TEST_NOT_PUBLISHED", "TEST_NOT_PUBLISHED");
   if (typeof test.id !== "string" || !ID_PATTERN.test(test.id)) {
-    throw new TypeError("invalid trusted test id");
+    throw trustedDefinitionError("INVALID_TEST_ID", "invalid trusted test id", TypeError);
   }
   if (!Array.isArray(test.sections) || test.sections.length === 0) {
-    throw new TypeError("published test must define explicit sections");
+    throw trustedDefinitionError("MISSING_EXPLICIT_SECTIONS", "published test must define explicit sections", TypeError);
   }
-  if (!Array.isArray(questions)) throw new TypeError("canonical questions must be an array");
+  if (!Array.isArray(questions)) throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must be an array", TypeError);
 
   const ids = [];
   for (const section of test.sections) {
     if (!section || !Array.isArray(section.questionIds)) {
-      throw new TypeError("every test section must contain explicit questionIds");
+      throw trustedDefinitionError("MISSING_EXPLICIT_QUESTION_IDS", "every test section must contain explicit questionIds", TypeError);
     }
     for (const id of section.questionIds) {
       if (typeof id !== "string" || !ID_PATTERN.test(id)) {
-        throw new TypeError("invalid question ID in trusted test definition");
+        throw trustedDefinitionError("INVALID_QUESTION_ID", "invalid question ID in trusted test definition", TypeError);
       }
       ids.push(id);
     }
   }
 
   if (ids.length === 0 || ids.length > 500) {
-    throw new TypeError("trusted test must contain 1..500 explicitly assigned questions");
+    throw trustedDefinitionError("QUESTION_COUNT_OUT_OF_RANGE", "trusted test must contain 1..500 explicitly assigned questions", TypeError);
   }
   if (new Set(ids).size !== ids.length) {
-    throw new TypeError("trusted test contains duplicate question IDs");
+    throw trustedDefinitionError("DUPLICATE_QUESTION_IDS", "trusted test contains duplicate question IDs", TypeError);
   }
   if (!Number.isInteger(test.questionCount) || test.questionCount !== ids.length) {
-    throw new TypeError("questionCount does not match explicitly assigned questions");
+    throw trustedDefinitionError("QUESTION_COUNT_MISMATCH", "questionCount does not match explicitly assigned questions", TypeError);
   }
 
   const byId = new Map();
   for (const question of questions) {
     if (!question || typeof question.id !== "string") continue;
-    if (byId.has(question.id)) throw new TypeError("canonical question IDs are not unique");
+    if (byId.has(question.id)) throw trustedDefinitionError("DUPLICATE_CANONICAL_QUESTION_IDS", "canonical question IDs are not unique", TypeError);
     byId.set(question.id, question);
   }
 
   const resolved = ids.map(id => {
     const question = byId.get(id);
-    if (!question) throw new Error("TRUSTED_TEST_QUESTION_MISSING");
+    if (!question) throw trustedDefinitionError("QUESTION_MISSING", "TRUSTED_TEST_QUESTION_MISSING");
     validateScorableQuestion(question);
     return question;
   });
@@ -100,28 +112,31 @@ export function buildTrustedTestDefinition({ test, questions }) {
 }
 
 
-const ISSUE_CODES = [
-  ["TEST_NOT_PUBLISHED", "TEST_NOT_PUBLISHED"],
-  ["TRUSTED_TEST_QUESTION_MISSING", "QUESTION_MISSING"],
-  ["TRUSTED_TEST_UNSUPPORTED_QUESTION_TYPE", "UNSUPPORTED_QUESTION_TYPE"],
-  ["TRUSTED_TEST_INVALID_CORRECT_OPTION", "INVALID_CORRECT_OPTION"],
-  ["invalid trusted test question marks", "INVALID_QUESTION_MARKS"],
-  ["invalid trusted test question negative marks", "INVALID_QUESTION_NEGATIVE_MARKS"],
-  ["questionCount does not match", "QUESTION_COUNT_MISMATCH"],
-  ["duplicate question IDs", "DUPLICATE_QUESTION_IDS"],
-  ["canonical question IDs are not unique", "DUPLICATE_CANONICAL_QUESTION_IDS"],
-  ["durationMinutes", "INVALID_DURATION"],
-  ["marksPerQuestion", "INVALID_DEFAULT_MARKS"],
-  ["negativeMarksPerQuestion", "INVALID_DEFAULT_NEGATIVE_MARKS"],
-  ["explicit sections", "MISSING_EXPLICIT_SECTIONS"],
-  ["explicit questionIds", "MISSING_EXPLICIT_QUESTION_IDS"],
-  ["invalid question ID", "INVALID_QUESTION_ID"],
-  ["1..500 explicitly assigned", "QUESTION_COUNT_OUT_OF_RANGE"],
-];
+const KNOWN_ISSUE_CODES = new Set([
+  "TEST_NOT_PUBLISHED",
+  "QUESTION_MISSING",
+  "UNSUPPORTED_QUESTION_TYPE",
+  "INVALID_CORRECT_OPTION",
+  "INVALID_QUESTION_MARKS",
+  "INVALID_QUESTION_NEGATIVE_MARKS",
+  "QUESTION_COUNT_MISMATCH",
+  "DUPLICATE_QUESTION_IDS",
+  "DUPLICATE_CANONICAL_QUESTION_IDS",
+  "INVALID_DURATION",
+  "INVALID_DEFAULT_MARKS",
+  "INVALID_DEFAULT_NEGATIVE_MARKS",
+  "MISSING_EXPLICIT_SECTIONS",
+  "MISSING_EXPLICIT_QUESTION_IDS",
+  "INVALID_QUESTION_ID",
+  "QUESTION_COUNT_OUT_OF_RANGE",
+  "INVALID_TEST_ID",
+  "INVALID_TEST_DEFINITION",
+  "INVALID_QUESTION_SNAPSHOT",
+  "INVALID_SCORING_VALUE",
+]);
 
 function catalogIssueCode(error) {
-  const message = String(error?.message || "");
-  return ISSUE_CODES.find(([fragment]) => message.includes(fragment))?.[1] || "INVALID_TEST_DEFINITION";
+  return KNOWN_ISSUE_CODES.has(error?.code) ? error.code : "INVALID_TEST_DEFINITION";
 }
 
 /**
