@@ -29,7 +29,7 @@ function toSubmissionReceipt(attempt) {
         if (field === "responses" && [null, "A", "B", "C", "D"].includes(entry ?? null)) {
           projected[questionId] = entry ?? null;
         } else if (field === "questionStatuses" &&
-            ["unanswered", "answered", "not_visited", "unanswered", "answered", "marked_for_review", "answered_and_marked"].includes(entry)) {
+            ["not_visited", "unanswered", "answered", "marked_for_review", "answered_and_marked"].includes(entry)) {
           projected[questionId] = entry;
         }
       }
@@ -231,6 +231,9 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
     }
     return { ok: true, status: 201, replayed: false, result: toSubmissionReceipt(committed.result) };
   } catch (error) {
+    if (error?.message === "INVALID_QUESTION_STATUS" || error?.message === "QUESTION_STATUS_RESPONSE_MISMATCH") {
+      return { ok: false, status: 400, error: error.message };
+    }
     if (error?.message === "TEST_NOT_PUBLISHED" || error?.message === "TRUSTED_TEST_QUESTION_MISSING") {
       return { ok: false, status: 503, error: "TEST_CONFIGURATION_INVALID" };
     }
