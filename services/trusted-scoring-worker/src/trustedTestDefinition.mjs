@@ -174,10 +174,21 @@ export function auditTrustedTestCatalog({ tests, questions }) {
   });
 
   const compatibleCount = results.filter(item => item.compatible).length;
+  const issueCodeCounts = Object.create(null);
+  for (const result of results) {
+    for (const code of result.issueCodes) {
+      issueCodeCounts[code] = (issueCodeCounts[code] || 0) + 1;
+    }
+  }
+  const frozenIssueCodeCounts = Object.freeze(
+    Object.fromEntries(Object.entries(issueCodeCounts).sort(([a], [b]) => a.localeCompare(b))),
+  );
+
   return Object.freeze({
     totalTests: results.length,
     compatibleCount,
     incompatibleCount: results.length - compatibleCount,
+    issueCodeCounts: frozenIssueCodeCounts,
     results: Object.freeze(results.map(item => Object.freeze({
       ...item,
       issueCodes: Object.freeze([...item.issueCodes]),
