@@ -106,3 +106,21 @@ The current Worker Firestore REST client supports document reads, batch gets, an
 A separately authenticated `GET /v1/attempts` Worker route now exposes bounded pages from the server-owned `trustedAttempts` collection. It derives the owner UID only from the verified Firebase bearer token, accepts a page size from 1–50, validates an opaque cursor, applies a server-side `userId == UID` filter, and orders by submission timestamp plus document name for stable pagination. The Worker response is projected through an explicit history-field allowlist; score breakdowns, correctness fields, canonical questions, explanations, idempotency fingerprints, and internal Firestore metadata are not returned. The Firestore REST adapter adds a bounded `runQuery` primitive, and the repository independently rechecks owner UID on returned rows.
 
 The client now exposes a strict `listMyAttempts` transport adapter that obtains a fresh Firebase token, uses the existing no-store/redirect protections, validates the page envelope and attempt identities, and rejects unknown or solution-bearing fields. This adapter is isolated: it is not yet merged into the legacy complete-history loader or student UI. Existing history still includes older legacy attempts without timestamps, so combining sources must preserve all-history semantics and avoid duplicate IDs. A composite index declaration was added for `trustedAttempts(userId, submittedAt DESC)`; it is configuration only and has not been deployed to production. The endpoint is not enabled on a deployed Worker and no production data or rules were changed.
+
+
+## Trusted history pagination and merge adapter — 2026-11-01
+
+The typed client now provides `listAllMyAttempts()`, which follows every bounded Worker page, rejects a non-advancing cursor, deduplicates trusted IDs, and returns newest-first history. A pure merge helper now combines already-validated trusted receipts with the complete legacy history, filters both sources to the authenticated UID, gives trusted receipts precedence for duplicate IDs, and applies newest-first ordering with an ID tie-breaker.
+
+The merge helper is deliberately not connected to `App.tsx`. The current app history hydration still loads the complete legacy `attempts` history, which feeds dashboard/re-attempt flows, analytics, mistake tracking, and other student/admin views. The browser submission handler also still calculates and persists legacy attempts and leaderboard profiles. Wiring the merge into the live state before trusted submission, review, and downstream side effects are migrated would create mixed-provenance records and inconsistent reporting.
+
+CI initially caught an incorrect expected order in the new merge test: the fixture's legacy record had a newer timestamp than the separate trusted record. The implementation's newest-first order was correct; the fixture expectation has been corrected and the full workflows are rerunning on the latest commit.
+
+### Remaining history cutover requirements
+
+- Add an explicit loading/error/degraded state so a trusted-history outage cannot silently hide server-authored attempts or present a misleading partial history.
+- Preserve legacy records with missing timestamps and complete 100-document cursor pagination.
+- Confirm trusted DTO compatibility with dashboard, analytics, mistake notebook, reattempt recovery, leaderboard, and admin reporting.
+- Keep the live history state on the legacy path until the full trusted submission/review journey and side effects are proven in isolated non-production infrastructure.
+
+No live UI, Firestore rules, indexes, Worker deployment, production data, or hosting configuration changed.
