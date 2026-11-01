@@ -7,11 +7,11 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 /** Parse and validate only untrusted request fields. Never trusts scores or question definitions. */
 export async function parseAttemptSubmission(request) {
   const contentType = request.headers.get("content-type") || "";
-  if (!/^application\\/json(?:\\s*;|\\s*$)/i.test(contentType)) {
+  if (!/^application\/json(?:\s*;|\s*$)/i.test(contentType)) {
     return { ok: false, status: 415, error: "UNSUPPORTED_MEDIA_TYPE" };
   }
   const declaredLength = request.headers.get("content-length");
-  if (declaredLength && (!/^\\d+$/.test(declaredLength) || Number(declaredLength) > MAX_BODY_BYTES)) {
+  if (declaredLength && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > MAX_BODY_BYTES)) {
     return { ok: false, status: 413, error: "PAYLOAD_TOO_LARGE" };
   }
   let raw;
