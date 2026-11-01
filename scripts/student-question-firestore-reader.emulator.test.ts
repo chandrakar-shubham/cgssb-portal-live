@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { readFile } from 'node:fs/promises';
 import { fetchStudentQuestionDocumentsByIds } from '../src/firebase/studentQuestionFirestoreReader';
+import { auditPublishedStudentExamDefinitionsFromFirestore } from '../src/firebase/studentExamDefinitionAuditFirestore';
 
 const projectId = 'cgssb-student-question-reader-test';
 const rules = await readFile('firestore.rules', 'utf8');
@@ -48,6 +49,56 @@ try {
     () => fetchStudentQuestionDocumentsByIds(null, ['valid-id']),
     /Firestore is not configured/,
   );
+
+  await env.withSecurityRulesDisabled(async context => {
+    const firestore = context.firestore();
+    await setDoc(doc(firestore, 'studentQuestions', 'audit-q1'), {
+      questionText: 'Audit question 1',
+      options: [{ label: 'A', text: 'Option A' }],
+    });
+    await setDoc(doc(firestore, 'studentQuestions', 'audit-q2'), {
+      questionText: 'Audit question 2',
+      options: [{ label: 'A', text: 'Option A' }],
+    });
+    await setDoc(doc(firestore, 'mockTests', 'published-audit-test'), {
+      id: 'published-audit-test',
+      title: 'Synthetic published audit test',
+      isPublished: true,
+      questionCount: 2,
+      sections: [{ id: 'section-1', name: 'Section 1', questionIds: ['audit-q1', 'audit-q2'] }],
+    });
+    await setDoc(doc(firestore, 'mockTests', 'unpublished-audit-test'), {
+      id: 'unpublished-audit-test',
+      title: 'Synthetic unpublished audit test',
+      isPublished: false,
+      questionCount: 1,
+      sections: [{ id: 'section-1', name: 'Section 1', questionIds: ['audit-q1'] }],
+    });
+  });
+
+  const audit = await auditPublishedStudentExamDefinitionsFromFirestore(studentDb);
+  assert.equal(audit.scanned, 1, 'Firestore entry point must query published definitions only');
+  assert.equal(audit.published, 1);
+  assert.equal(audit.ready, 1);
+  assert.equal(audit.questionIdsAttempted, 2);
+  assert.equal(audit.results[0].testId, 'published-audit-test');
+
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'mockTests', 'identity-mismatch'), {
+      id: 'different-embedded-id',
+      title: 'Synthetic mismatched identity',
+      isPublished: true,
+      questionCount: 1,
+      sections: [{ id: 'section-1', name: 'Section 1', questionIds: ['audit-q1'] }],
+    });
+  });
+  await assert.rejects(
+    () => auditPublishedStudentExamDefinitionsFromFirestore(studentDb),
+    /identity mismatch/,
+  );
+  await env.withSecurityRulesDisabled(async context => {
+    await deleteDoc(doc(context.firestore(), 'mockTests', 'identity-mismatch'));
+  });
 
   console.log('PASS student question Firestore reader: emulator read, 30-ID chunking, and fail-closed input validation');
 } finally {
