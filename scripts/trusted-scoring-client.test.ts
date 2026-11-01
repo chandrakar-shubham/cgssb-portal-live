@@ -277,3 +277,26 @@ test('rejects history DTOs containing solution internals or malformed identity',
     await assert.rejects(() => client.listMyAttempts(), /invalid attempt|solution data/i);
   }
 });
+
+
+test('loads every trusted history page and rejects a non-advancing cursor', async () => {
+  let page = 0;
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://worker.example', getIdToken: async () => 'token',
+    fetchImpl: async () => {
+      page += 1;
+      return response(page === 1
+        ? { ok: true, attempts: [
+            { id: 'attempt-old', userId: 'student-1', testId: 'test-1', submittedAt: '2026-10-30T10:00:00Z' },
+            { id: 'attempt-new', userId: 'student-1', testId: 'test-1', submittedAt: '2026-11-01T10:00:00Z' },
+          ], nextCursor: 'cursor-1' }
+        : { ok: true, attempts: [
+            { id: 'attempt-old', userId: 'student-1', testId: 'test-1', submittedAt: '2026-10-30T10:00:00Z' },
+            { id: 'attempt-mid', userId: 'student-1', testId: 'test-1', submittedAt: '2026-10-31T10:00:00Z' },
+          ], nextCursor: null });
+    },
+  });
+  const all = await client.listAllMyAttempts();
+  assert.equal(page, 2);
+  assert.deepEqual(all.map(item => item.id), ['attempt-new', 'attempt-mid', 'attempt-old']);
+});
