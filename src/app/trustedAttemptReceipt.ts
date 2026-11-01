@@ -6,6 +6,28 @@ const finite = (value: unknown): value is number => typeof value === 'number' &&
 const ALLOWED_ANSWERS = new Set(['A', 'B', 'C', 'D', null]);
 const ALLOWED_STATUSES = new Set(['unanswered', 'answered', 'marked_for_review', 'answered_and_marked']);
 
+function ownDataRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Trusted attempt receipt has invalid ' + label + '.');
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error('Trusted attempt receipt has invalid ' + label + '.');
+  }
+  if (Object.getOwnPropertySymbols(value).length) {
+    throw new Error('Trusted attempt receipt has invalid symbol properties.');
+  }
+  const copy: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (typeof key !== 'string' || !descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new Error('Trusted attempt receipt has invalid property descriptors.');
+    }
+    copy[key] = descriptor.value;
+  }
+  return copy;
+}
+
 function validateQuestionMap(
   value: unknown,
   questionIds: readonly string[],
@@ -14,7 +36,7 @@ function validateQuestionMap(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Trusted attempt receipt has invalid ' + field + '.');
   }
-  const map = value as Record<string, unknown>;
+  const map = ownDataRecord(value, field);
   const expectedIds = new Set(questionIds);
   if (Object.keys(map).length !== expectedIds.size || Object.keys(map).some(id => !expectedIds.has(id))) {
     throw new Error('Trusted attempt receipt ' + field + ' do not match the test question set.');
@@ -33,7 +55,7 @@ export function parseTrustedAttemptReceipt(
   expected: { userId: string; test: MockTest; clientAttemptId: string },
 ): TestAttempt {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Trusted attempt receipt is missing.');
-  const raw = value as Record<string, unknown>;
+  const raw = ownDataRecord(value, 'receipt');
   if (raw.userId !== expected.userId || raw.testId !== expected.test.id ||
       raw.submissionId !== expected.clientAttemptId) {
     throw new Error('Trusted attempt receipt does not match the current student, test, or submission.');
