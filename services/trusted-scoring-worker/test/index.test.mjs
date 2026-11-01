@@ -269,3 +269,51 @@ test("authenticated submission rejects client-supplied score and identity fields
   assert.deepEqual(await response.json(), { error: "FORBIDDEN_CLIENT_FIELD" });
   assert.equal(repository.attempts.size, 0);
 });
+
+
+test("authenticated history endpoint is owner-scoped, bounded and excludes solution internals", async () => {
+  const rows = [
+    { id: "attempt-new", userId: "student-1", testId: "test-1", testTitle: "Test", submittedAt: "2026-11-01T10:00:00.000Z", score: 8, responses: { q1: "A" }, scoreBreakdown: { questionResults: [{ correctOption: "B" }] }, internalSecret: "no" },
+    { id: "attempt-old", userId: "student-1", testId: "test-1", testTitle: "Test", submittedAt: "2026-10-31T10:00:00.000Z", score: 6 },
+    { id: "foreign", userId: "other-user", testId: "test-1", testTitle: "Test", submittedAt: "2026-10-30T10:00:00.000Z", score: 99 },
+  ];
+  let query;
+  const repository = {
+    async listAttemptsForStudent(input) {
+      query = input;
+      return rows.filter(row => row.userId === input.uid).slice(0, input.pageSize);
+    },
+  };
+  const journeyWorker = createJourneyWorker(repository);
+  const response = await journeyWorker.fetch(new Request("https://worker.example/v1/attempts?limit=1", {
+    headers: { authorization: "Bearer synthetic-firebase-token" },
+  }), { FIREBASE_PROJECT_ID: "synthetic-project" });
+  assert.equal(response.status, 200);
+  assert.equal(query.uid, "student-1");
+  assert.equal(query.pageSize, 2);
+  const payload = await response.json();
+  assert.equal(payload.attempts.length, 1);
+  assert.equal(payload.attempts[0].id, "attempt-new");
+  assert.equal(payload.attempts[0].score, 8);
+  assert.equal("scoreBreakdown" in payload.attempts[0], false);
+  assert.equal("internalSecret" in payload.attempts[0], false);
+  assert.equal(typeof payload.nextCursor, "string");
+});
+
+test("history endpoint rejects malformed cursors and oversized pages", async () => {
+  const repository = { async listAttemptsForStudent() { throw new Error("must not query"); } };
+  const journeyWorker = createJourneyWorker(repository);
+  const badCursor = await journeyWorker.fetch(new Request("https://worker.example/v1/attempts?cursor=not-json", {
+    headers: { authorization: "Bearer synthetic-firebase-token" },
+  }), { FIREBASE_PROJECT_ID: "synthetic-project" });
+  assert.equal(badCursor.status, 400);
+  const oversized = await journeyWorker.fetch(new Request("https://worker.example/v1/attempts?limit=51", {
+    headers: { authorization: "Bearer synthetic-firebase-token" },
+  }), { FIREBASE_PROJECT_ID: "synthetic-project" });
+  assert.equal(oversized.status, 400);
+});
+
+test("history endpoint requires authentication", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/v1/attempts"), {});
+  assert.equal(response.status, 401);
+});
