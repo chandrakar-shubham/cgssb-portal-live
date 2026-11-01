@@ -62,6 +62,8 @@ jobs:
 
       - name: Trusted scoring client contract tests
         run: npm run test:trusted-scoring-client
+      - name: Trusted attempt review DTO adapter tests
+        run: npx tsx scripts/trusted-attempt-review-adapter.test.ts
 
       - name: 🧪 Phase 8.5 Student Journey Safety Guard
         run: npm run test:phase8:5-journey-guard
