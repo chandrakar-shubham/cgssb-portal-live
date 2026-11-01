@@ -79,6 +79,8 @@ test("rejects malformed version, timestamp, metadata, and record arrays", () => 
     [{ ...validSnapshot, schemaVersion: 2 }, "UNSUPPORTED_SNAPSHOT_VERSION"],
     [{ ...validSnapshot, metadata: null }, "INVALID_SNAPSHOT_METADATA"],
     [{ ...validSnapshot, metadata: { ...validSnapshot.metadata, exportedAt: "yesterday" } }, "INVALID_EXPORT_TIMESTAMP"],
+    [{ ...validSnapshot, metadata: { ...validSnapshot.metadata, exportedAt: "2026-02-30T10:30:00.000Z" } }, "INVALID_EXPORT_TIMESTAMP"],
+    [{ ...validSnapshot, metadata: { ...validSnapshot.metadata, exportedAt: "2026-11-01T25:30:00Z" } }, "INVALID_EXPORT_TIMESTAMP"],
     [{ ...validSnapshot, tests: null }, "INVALID_SNAPSHOT_RECORDS"],
     [{ ...validSnapshot, questions: [null] }, "INVALID_SNAPSHOT_RECORD"],
     [{ ...validSnapshot, tests: [{ id: "copied-production-test" }] }, "NON_SYNTHETIC_RECORD_ID"],
@@ -92,4 +94,24 @@ test("rejects malformed version, timestamp, metadata, and record arrays", () => 
       code,
     );
   }
+});
+
+test("bounds snapshot sizes and synthetic record identifier lengths", () => {
+  const tooManyTests = { ...validSnapshot, tests: Array.from({ length: 5001 }, (_, i) => ({ id: `synthetic-test-${i}` })) };
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: tooManyTests, ...target }),
+    error => error.code === "SNAPSHOT_RECORD_LIMIT_EXCEEDED",
+  );
+
+  const tooManyQuestions = { ...validSnapshot, questions: Array.from({ length: 25001 }, (_, i) => ({ id: `synthetic-question-${i}` })) };
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: tooManyQuestions, ...target }),
+    error => error.code === "SNAPSHOT_RECORD_LIMIT_EXCEEDED",
+  );
+
+  const oversizedId = { ...validSnapshot, tests: [{ id: `synthetic-${"x".repeat(130)}` }] };
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: oversizedId, ...target }),
+    error => error.code === "NON_SYNTHETIC_RECORD_ID",
+  );
 });
