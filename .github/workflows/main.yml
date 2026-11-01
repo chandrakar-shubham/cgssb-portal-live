@@ -60,6 +60,9 @@ jobs:
       - name: Published student exam definition audit tests
         run: npm run test:student-exam-definition-audit
 
+      - name: Trusted scoring client contract tests
+        run: npm run test:trusted-scoring-client
+
       - name: 🧪 Phase 8.5 Student Journey Safety Guard
         run: npm run test:phase8:5-journey-guard
 
