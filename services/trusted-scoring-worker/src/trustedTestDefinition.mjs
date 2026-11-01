@@ -133,6 +133,7 @@ const KNOWN_ISSUE_CODES = new Set([
   "INVALID_TEST_DEFINITION",
   "INVALID_QUESTION_SNAPSHOT",
   "INVALID_SCORING_VALUE",
+  "DUPLICATE_TEST_IDS",
 ]);
 
 function catalogIssueCode(error) {
@@ -148,14 +149,28 @@ export function auditTrustedTestCatalog({ tests, questions }) {
     throw new TypeError("tests and canonical questions must be arrays");
   }
 
+  const testIdCounts = new Map();
+  for (const test of tests) {
+    if (typeof test?.id !== "string") continue;
+    testIdCounts.set(test.id, (testIdCounts.get(test.id) || 0) + 1);
+  }
+
   const results = tests.map(test => {
     const testId = typeof test?.id === "string" ? test.id : null;
+    const issueCodes = [];
+    if (testId !== null && testIdCounts.get(testId) > 1) {
+      issueCodes.push("DUPLICATE_TEST_IDS");
+    }
     try {
       buildTrustedTestDefinition({ test, questions });
-      return { testId, compatible: true, issueCodes: [] };
     } catch (error) {
-      return { testId, compatible: false, issueCodes: [catalogIssueCode(error)] };
+      issueCodes.push(catalogIssueCode(error));
     }
+    return {
+      testId,
+      compatible: issueCodes.length === 0,
+      issueCodes,
+    };
   });
 
   const compatibleCount = results.filter(item => item.compatible).length;
