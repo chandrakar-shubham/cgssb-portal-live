@@ -73,3 +73,30 @@ A targeted review of `src/components/TestPassSection.tsx`, `src/utils/devicePass
 4. **Legacy pass expiry semantics differ.** `isUserPassActive` in the browser treats `hasProPass === true` with no `passExpiresAt` as active for legacy compatibility. The trusted worker requires a future parseable expiry for a profile pass. This is a deliberate fail-closed difference, but it needs a data inventory and explicit migration decision so legitimate legacy users are not silently locked out or granted indefinite access.
 
 These findings are from source inspection only. They do not prove the current production records or payment-provider configuration. No production data, access rules, credentials, or deployment were changed.
+
+
+## Entitlement policy boundary and migration decision (2026-11-01)
+
+Until the production entitlement schema and campaign-grant writer are verified, the worker retains a deliberately narrow, fail-closed policy:
+
+| Access case | Trusted decision | Evidence required to change it |
+|---|---|---|
+| Published non-premium test | Allow active, identity-matched, non-blocked profile | Existing catalog record |
+| Profile pass | Allow only hasProPass === true and a parseable passExpiresAt strictly after server time | Authoritative profile record |
+| User entitlement | Allow only status === ACTIVE and expiresAt strictly after server time | Authoritative entitlement record |
+| Free-launch signup grant | Not inferred from UI/campaign labels | Server-side grant record with campaign ID, grant timestamp, expiry, and immutable grant source |
+| Five-test milestone bonus | Not inferred from client completedTestsCount or unlockedMilestoneBonus | Server-verified qualifying attempts and idempotent server-side bonus grant |
+| Legacy pass without expiry | Deny premium access pending explicit migration | Audited record inventory plus approved finite expiry/backfill policy |
+| Device binding / transfer | Not represented as entitlement; not claimed to be enforced by worker | Server-verifiable device registration, transfer authorization, replay protection and recovery policy |
+| Paid pass | No client assertion is accepted as proof of payment | Provider-verified webhook/reconciliation record linked to the user and plan |
+
+The policy deliberately does not invent a Firestore campaign collection or entitlement field schema. Those records and their writer must be discovered and verified before implementation. A campaign bonus should be a server-issued entitlement with a unique grant key so retries cannot extend validity repeatedly. The source of qualifying test completions must be the trusted attempt store after migration, not browser counters or client-writable attempts documents.
+
+### Added regression tests
+
+The eligibility test suite now explicitly proves that:
+- Client-supplied campaign IDs, claimed 90-day grants, completedTestsCount, and unlockedMilestoneBonus do not grant premium access.
+- Client device IDs and transfer flags do not grant premium access.
+- Legacy hasProPass values with missing, null, empty, or malformed expiry remain denied.
+
+These tests protect the current fail-closed boundary. They do not implement campaign grants, device binding, or payment verification. No production access behavior has been broadened.
