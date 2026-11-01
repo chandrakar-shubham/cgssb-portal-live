@@ -39,3 +39,31 @@ Even after separating collections, if the browser receives an answer key to grad
 - [ ] Emulator tests enforce canonical-read denial and projection-read access.
 - [ ] Build, rules tests, emulator tests, and end-to-end student journey tests pass.
 - [ ] No production migration or rules deployment occurs without an explicit release decision.
+
+## Latest source audit — 2026-11-01
+
+The migration gate remains **BLOCKED**. A source review of the current branch confirms the following concrete blockers:
+
+| Surface | Current implementation | Required disposition |
+|---|---|---|
+| `src/app/examSessionQuestions.ts` | Legacy live loader calls `fetchQuestionsByIdsFromFirestore`, then expands to program questions, then may use local catalog fallback. | Replace only after the exam renderer, session persistence, and submission contracts are switched to `StudentQuestion`; do not silently change the live loader in isolation. |
+| `src/firebase/firestoreService.ts` | Canonical readers remain available: explicit-ID, program-wide, full collection, and realtime subscription functions. | Classify each call site as admin-only or student-facing; remove student access before canonical rules are tightened. |
+| `src/utils/apiClient.ts` `submitAttempt` | Reads the full canonical `questions` collection, resolves incomplete papers using exam/category/global fallbacks, computes marks in the browser, and writes a client-computed attempt with merge semantics. | Replace with the trusted Worker contract. Do not treat this client score as verified, and do not return answer-bearing review data. |
+| `src/utils/apiClient.ts` public `GET /api/questions` | Uses `studentQuestions`, not the canonical collection. | Keep this projection-only behavior and retain its regression coverage. |
+| `src/app/studentExamSessionQuestions.ts` | Strict projection-only loader exists and is tested for exact IDs/order, identity, schema, and answer-key rejection. | Suitable as a migration component, not proof that the production exam journey has switched. |
+| `src/utils/offlineExamManager.ts` | Offline cache is a convenience layer and is not an authorization boundary. | Ensure it receives only projection DTOs after the live journey is migrated; clear/expire legacy cached canonical payloads as part of the separately tested client migration. |
+| `firestore.rules` | Both `questions` and `studentQuestions` currently allow public reads; projection writes are admin-restricted. | Canonical public reads remain a critical exposure. Tightening them now would break the still-active legacy exam and client-scoring paths. Perform only after all student canonical reads are removed and emulator/end-to-end tests prove parity. |
+
+### Explicit release blockers
+
+1. The student exam launch path is still wired to the legacy canonical loader.
+2. The browser submission path still reads canonical answer keys and computes its own score.
+3. Firestore still permits public reads of canonical question documents.
+4. The trusted Worker client exists but is not wired to the live Firebase Auth/session UI, and no deployed Worker endpoint or isolated non-production end-to-end evidence is established.
+5. Review/solution UI still has a legacy question-based contract; it must consume the Worker review DTO and enforce release/ownership state before cutover.
+
+### Safe next implementation boundary
+
+Continue building and testing the projection-only student journey as an isolated path. The next integration must be an end-to-end adapter change behind a non-production-only feature configuration, with no fallback to canonical reads or browser scoring when enabled. Keep the current production path unchanged until Worker deployment, isolated Firestore/IAM validation, review parity, and explicit release approval are complete.
+
+This audit is source-level evidence only. It does not assert that production rules, data, hosting, or traffic have changed.
