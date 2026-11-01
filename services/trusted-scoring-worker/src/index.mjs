@@ -76,7 +76,8 @@ export function createTrustedScoringWorker({
         ? /^\/v1\/attempts\/([A-Za-z0-9_-]{1,128})\/review$/.exec(url.pathname)
         : null;
       const isSubmission = request.method === "POST" && url.pathname === "/v1/attempts:submit";
-      if (!isSubmission && !reviewMatch) return respond({ error: "NOT_FOUND" }, 404);
+      const isHistory = request.method === "GET" && url.pathname === "/v1/attempts";
+      if (!isSubmission && !reviewMatch && !isHistory) return respond({ error: "NOT_FOUND" }, 404);
 
       const token = readBearer(request);
       if (!token) return respond({ error: "UNAUTHENTICATED" }, 401);
@@ -91,7 +92,6 @@ export function createTrustedScoringWorker({
         return respond({ error: "UNAUTHENTICATED" }, 401);
       }
 
-      const isHistory = request.method === "GET" && url.pathname === "/v1/attempts";
       if (isHistory) {
         const rawLimit = url.searchParams.get("limit");
         const pageSize = rawLimit === null ? 25 : Number(rawLimit);
