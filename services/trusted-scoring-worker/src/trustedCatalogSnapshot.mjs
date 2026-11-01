@@ -1,5 +1,8 @@
 const NON_PRODUCTION_SUFFIX = /-(?:dev|test|qa|staging|sandbox)$/;
 const PRODUCTION_PROJECT_ID = "gen-lang-client-0783153446";
+const MAX_SNAPSHOT_TESTS = 5_000;
+const MAX_SNAPSHOT_QUESTIONS = 25_000;
+const SYNTHETIC_ID_PATTERN = /^synthetic-[A-Za-z0-9_-]{1,119}$/;
 
 function snapshotError(code, message) {
   const error = new TypeError(message);
@@ -53,13 +56,16 @@ export function validateTrustedCatalogSnapshot({
   if (!Array.isArray(snapshot.tests) || !Array.isArray(snapshot.questions)) {
     throw snapshotError("INVALID_SNAPSHOT_RECORDS", "snapshot tests and questions must be arrays");
   }
+  if (snapshot.tests.length > MAX_SNAPSHOT_TESTS || snapshot.questions.length > MAX_SNAPSHOT_QUESTIONS) {
+    throw snapshotError("SNAPSHOT_RECORD_LIMIT_EXCEEDED", "snapshot exceeds the offline audit record limits");
+  }
   if (snapshot.tests.some(record => !record || typeof record !== "object" || Array.isArray(record))
       || snapshot.questions.some(record => !record || typeof record !== "object" || Array.isArray(record))) {
     throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must be objects");
   }
-  if (snapshot.tests.some(record => typeof record.id !== "string" || !record.id.startsWith("synthetic-"))
-      || snapshot.questions.some(record => typeof record.id !== "string" || !record.id.startsWith("synthetic-"))) {
-    throw snapshotError("NON_SYNTHETIC_RECORD_ID", "offline audit snapshots may contain synthetic records only");
+  if (snapshot.tests.some(record => typeof record.id !== "string" || !SYNTHETIC_ID_PATTERN.test(record.id))
+      || snapshot.questions.some(record => typeof record.id !== "string" || !SYNTHETIC_ID_PATTERN.test(record.id))) {
+    throw snapshotError("NON_SYNTHETIC_RECORD_ID", "offline audit snapshots require bounded synthetic record IDs");
   }
 
   return Object.freeze({
