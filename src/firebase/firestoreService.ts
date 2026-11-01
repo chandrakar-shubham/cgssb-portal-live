@@ -1638,23 +1638,6 @@ export async function purgeFirestoreDemoData(): Promise<string[]> {
   return deleted;
 }
 
-  if (!db || questionIds.length === 0) return [];
-  const uniqueIds = Array.from(new Set(questionIds.map(String).filter(Boolean)));
-  const chunks: string[][] = [];
-  for (let i = 0; i < uniqueIds.length; i += 30) chunks.push(uniqueIds.slice(i, i + 30));
-
-  const snapshots = await Promise.all(chunks.map(chunk =>
-    withTimeout(
-      getDocs(query(collection(db, 'studentQuestions'), where(documentId(), 'in', chunk))),
-      5000
-    )
-  ));
-  const byId = new Map<string, StudentQuestion>();
-  snapshots.forEach(snap => snap.docs.forEach(d =>
-    byId.set(d.id, { ...d.data(), id: d.id } as StudentQuestion)
-  ));
-  return uniqueIds.map(id => byId.get(id)).filter((q): q is StudentQuestion => Boolean(q));
-}
 
 export async function fetchStudentQuestionsByProgramFromFirestore(programId: string, limitCount = 500): Promise<StudentQuestion[]> {
   if (!db || !programId) return [];
