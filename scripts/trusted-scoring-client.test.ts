@@ -179,3 +179,34 @@ test('released review validates the per-question result structure', async () => 
   );
 });
 
+test('submission rejects top-level getters without invoking them', async () => {
+  let getterCalls = 0;
+  const unsafe = { ...submission };
+  Object.defineProperty(unsafe, 'testId', {
+    enumerable: true,
+    get() { getterCalls += 1; return 'test-1'; },
+  });
+  let calls = 0;
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://scoring.example.workers.dev',
+    getIdToken: async () => 'token',
+    fetchImpl: async () => { calls += 1; return response({ ok: true, replayed: false, attempt: {} }); },
+  });
+  await assert.rejects(client.submitAttempt(unsafe));
+  assert.equal(getterCalls, 0);
+  assert.equal(calls, 0);
+});
+
+test('submission rejects non-enumerable response properties rather than silently omitting them', async () => {
+  const responses = { q1: 'A' } as Record<string, string | null>;
+  Object.defineProperty(responses, 'q2', { value: 'B', enumerable: false });
+  let calls = 0;
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://scoring.example.workers.dev',
+    getIdToken: async () => 'token',
+    fetchImpl: async () => { calls += 1; return response({ ok: true, replayed: false, attempt: {} }); },
+  });
+  await assert.rejects(client.submitAttempt({ ...submission, responses }));
+  assert.equal(calls, 0);
+});
+
