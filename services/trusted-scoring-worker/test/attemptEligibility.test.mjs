@@ -143,3 +143,60 @@ test("legacy hasProPass without a valid expiry remains fail-closed", () => {
     }).reason, "PREMIUM_ACCESS_REQUIRED");
   }
 });
+
+test("student-created welcome entitlements are bound to the UID and capped at 30 days", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  const valid = {
+    userId: "student-1",
+    planType: "WELCOME_FREE",
+    source: "WELCOME_FREE",
+    status: "ACTIVE",
+    durationDays: 30,
+    issuedAt: "2026-10-29T10:00:00.000Z",
+    expiresAt: "2026-11-28T10:00:00.000Z",
+  };
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest, entitlement: valid,
+  }).reason, "ACTIVE_PASS");
+
+  const invalidEntitlements = [
+    { ...valid, userId: "student-victim" },
+    { ...valid, expiresAt: "2027-10-29T10:00:00.000Z" },
+    { ...valid, issuedAt: "2026-10-29T10:00:01.000Z" },
+    { ...valid, durationDays: 365 },
+    { ...valid, planType: "YEARLY" },
+    { ...valid, source: "PAYMENT" },
+    { ...valid, issuedAt: undefined },
+  ];
+  for (const entitlement of invalidEntitlements) {
+    assert.equal(authorizeStudentAttempt({
+      ...base, test: premiumTest, entitlement,
+    }).reason, "PREMIUM_ACCESS_REQUIRED");
+  }
+});
+
+test("server-managed paid entitlements remain valid when scoped to the student", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  assert.equal(authorizeStudentAttempt({
+    ...base,
+    test: premiumTest,
+    entitlement: {
+      userId: "student-1",
+      planType: "YEARLY",
+      source: "PAYMENT",
+      status: "ACTIVE",
+      expiresAt: "2027-10-29T10:00:00.000Z",
+    },
+  }).reason, "ACTIVE_PASS");
+  assert.equal(authorizeStudentAttempt({
+    ...base,
+    test: premiumTest,
+    entitlement: {
+      userId: "student-victim",
+      planType: "YEARLY",
+      source: "PAYMENT",
+      status: "ACTIVE",
+      expiresAt: "2027-10-29T10:00:00.000Z",
+    },
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+});
