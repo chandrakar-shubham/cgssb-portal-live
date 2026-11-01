@@ -45,6 +45,8 @@ jobs:
         run: npm run test:student-exam-resolver
       - name: Student exam projection session loader tests
         run: npm run test:student-exam-session-questions
+      - name: Trusted attempt receipt validation tests
+        run: npx tsx scripts/trusted-attempt-receipt.test.ts
       - name: Test strict student exam adapter
         run: npm run test:student-exam-adapter
 
