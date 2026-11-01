@@ -140,6 +140,46 @@ export function createFirestoreRestClient({ projectId, databaseId = "(default)",
       return documents;
     },
 
+    async queryDocuments({ collectionId, filters, orderBy, limit, cursor }) {
+      if (typeof collectionId !== "string" || !/^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(collectionId) ||
+          !Array.isArray(filters) || !filters.length || !Array.isArray(orderBy) ||
+          !Number.isInteger(limit) || limit < 1 || limit > 100) {
+        throw new TypeError("invalid Firestore structured query");
+      }
+      const fieldFilters = filters.map(filter => {
+        if (!filter || typeof filter.field !== "string" || filter.op !== "EQUAL" || typeof filter.value !== "string") {
+          throw new TypeError("invalid Firestore query filter");
+        }
+        return { fieldFilter: { field: { fieldPath: filter.field }, op: "EQUAL", value: { stringValue: filter.value } } };
+      });
+      const structuredQuery = {
+        from: [{ collectionId }],
+        where: fieldFilters.length === 1 ? fieldFilters[0] : { compositeFilter: { op: "AND", filters: fieldFilters } },
+        orderBy: orderBy.map(field => {
+          if (!field || typeof field.field !== "string" || !["ASCENDING", "DESCENDING"].includes(field.direction)) {
+            throw new TypeError("invalid Firestore query ordering");
+          }
+          return { field: { fieldPath: field.field }, direction: field.direction };
+        }),
+        limit,
+        ...(cursor ? { startAt: { values: [
+          { stringValue: cursor.submittedAt },
+          { referenceValue: `projects/${projectId}/databases/${databaseId}/documents/${collectionId}/${cursor.id}` },
+        ], before: false } } : {}),
+      };
+      const response = await request(`${base}:runQuery`, { method: "POST", body: JSON.stringify({ structuredQuery }) });
+      const rows = await response.json();
+      if (!Array.isArray(rows)) throw new TypeError("invalid Firestore query response");
+      return rows.filter(row => row?.document).map(row => {
+        const document = row.document;
+        const prefix = `projects/${projectId}/databases/${databaseId}/documents/`;
+        if (typeof document.name !== "string" || !document.name.startsWith(prefix)) return null;
+        const path = document.name.slice(prefix.length);
+        if (!path.startsWith(collectionId + "/") || path.split("/").length !== 2) return null;
+        return decodeDocument(document, path);
+      }).filter(Boolean);
+    },
+
     async commitWrites(writes) {
       if (!Array.isArray(writes) || writes.length === 0 || writes.length > 500) {
         throw new TypeError("invalid Firestore commit writes");
