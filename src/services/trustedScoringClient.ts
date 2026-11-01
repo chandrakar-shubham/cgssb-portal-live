@@ -51,40 +51,53 @@ function validateBaseUrl(value: string): string {
   return url.origin;
 }
 
-function validateSubmission(value: TrustedAttemptSubmission): void {
+function copyPlainDataRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('A trusted attempt submission is required.');
+    throw new Error(label + ' must be a plain object.');
   }
-  if (!ID_PATTERN.test(value.testId) || !ID_PATTERN.test(value.clientAttemptId)) {
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error(label + ' must be a plain object.');
+  }
+  const copy: Record<string, unknown> = Object.create(null);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (typeof key !== 'string' || !descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new Error(label + ' must contain only enumerable data properties.');
+    }
+    copy[key] = descriptor.value;
+  }
+  return copy;
+}
+
+function validateSubmission(value: TrustedAttemptSubmission): TrustedAttemptSubmission {
+  const input = copyPlainDataRecord(value, 'A trusted attempt submission');
+  const responses = copyPlainDataRecord(input.responses, 'Attempt responses');
+  const testId = input.testId;
+  const clientAttemptId = input.clientAttemptId;
+  const timeTakenSeconds = input.timeTakenSeconds;
+  if (typeof testId !== 'string' || !ID_PATTERN.test(testId) ||
+      typeof clientAttemptId !== 'string' || !ID_PATTERN.test(clientAttemptId)) {
     throw new Error('Test ID and client attempt ID must be valid identifiers.');
   }
-  if (!Number.isInteger(value.timeTakenSeconds) || value.timeTakenSeconds < 0 || value.timeTakenSeconds > 86400) {
+  if (typeof timeTakenSeconds !== 'number' || !Number.isInteger(timeTakenSeconds) ||
+      timeTakenSeconds < 0 || timeTakenSeconds > 86400) {
     throw new Error('Time taken must be an integer between 0 and 86400 seconds.');
   }
-  if (!value.responses || typeof value.responses !== 'object' || Array.isArray(value.responses)) {
-    throw new Error('Attempt responses must be an object.');
-  }
-  // Accept only inert JSON-style records. This prevents inherited values,
-  // symbol properties, and getters from entering the signed request payload.
-  const prototype = Object.getPrototypeOf(value.responses);
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new Error('Attempt responses must be a plain object.');
-  }
-  if (Object.getOwnPropertySymbols(value.responses).length > 0) {
-    throw new Error('Attempt responses must not contain symbol properties.');
-  }
-  const keys = Object.keys(value.responses);
+  const keys = Object.keys(responses);
   if (keys.length > 500) throw new Error('A submission cannot contain more than 500 responses.');
   for (const questionId of keys) {
-    const descriptor = Object.getOwnPropertyDescriptor(value.responses, questionId);
-    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
-      throw new Error('Attempt responses must contain only enumerable data properties.');
-    }
-    const answer: unknown = descriptor.value;
+    const answer: unknown = responses[questionId];
     if (!ID_PATTERN.test(questionId) || !ANSWERS.has(answer as string | null)) {
       throw new Error('Attempt responses contain an invalid question ID or answer value.');
     }
   }
+  return {
+    testId,
+    clientAttemptId,
+    timeTakenSeconds,
+    responses: responses as TrustedAttemptSubmission['responses'],
+  };
 }
 
 export function createTrustedScoringClient(options: TrustedScoringClientOptions) {
@@ -146,14 +159,14 @@ export function createTrustedScoringClient(options: TrustedScoringClientOptions)
 
   return {
     async submitAttempt(submission: TrustedAttemptSubmission) {
-      validateSubmission(submission);
+      const safeSubmission = validateSubmission(submission);
       const payload = await request('/v1/attempts:submit', {
         method: 'POST',
         body: JSON.stringify({
-          testId: submission.testId,
-          clientAttemptId: submission.clientAttemptId,
-          timeTakenSeconds: submission.timeTakenSeconds,
-          responses: submission.responses,
+          testId: safeSubmission.testId,
+          clientAttemptId: safeSubmission.clientAttemptId,
+          timeTakenSeconds: safeSubmission.timeTakenSeconds,
+          responses: safeSubmission.responses,
         }),
       });
       if (!payload.attempt || typeof payload.attempt !== 'object' || Array.isArray(payload.attempt) ||
