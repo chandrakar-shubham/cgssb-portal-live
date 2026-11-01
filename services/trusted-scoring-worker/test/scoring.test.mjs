@@ -101,6 +101,7 @@ test("scores matching, assertion-reason, and multi-statement questions with one 
   const result = scoreAttempt({
     questions: structuredQuestions,
     responses: { "match-1": "C", "assert-1": "B", "statement-1": "D" },
+    supportedQuestionTypes: ["single", "single-choice", "mcq", "multiple-choice", "matching", "assertion_reason", "multi_statement", ""],
   });
   assert.equal(result.correctCount, 2);
   assert.equal(result.incorrectCount, 1);
