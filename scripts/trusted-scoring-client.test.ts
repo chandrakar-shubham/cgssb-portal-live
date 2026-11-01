@@ -100,3 +100,31 @@ test('network failure is retryable with the same idempotency key', async () => {
     (error: unknown) => error instanceof TrustedScoringApiError && error.code === 'NETWORK_ERROR',
   );
 });
+
+test('rejects response objects with custom prototypes, symbol keys, or accessors', async () => {
+  let calls = 0;
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://scoring.example.workers.dev',
+    getIdToken: async () => 'token',
+    fetchImpl: async () => { calls += 1; return response({ ok: true, replayed: false, attempt: {} }); },
+  });
+
+  const inherited = Object.assign(Object.create({ q2: 'B' }), { q1: 'A' });
+  await assert.rejects(client.submitAttempt({ ...submission, responses: inherited }));
+
+  const symbolKey = { q1: 'A', [Symbol('hidden')]: 'B' } as Record<string, string | null>;
+  await assert.rejects(client.submitAttempt({ ...submission, responses: symbolKey }));
+
+  let getterCalls = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'q1', {
+    enumerable: true,
+    get() { getterCalls += 1; return 'A'; },
+  });
+  await assert.rejects(client.submitAttempt({
+    ...submission,
+    responses: accessor as Record<string, string | null>,
+  }));
+  assert.equal(getterCalls, 0);
+  assert.equal(calls, 0);
+});
