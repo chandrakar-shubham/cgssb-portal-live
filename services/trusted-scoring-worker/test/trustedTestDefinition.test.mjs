@@ -26,6 +26,45 @@ test("resolves only explicitly assigned canonical questions", () => {
   assert.equal(result.defaultNegativeMarks, 0.25);
 });
 
+test("returns detached deeply immutable canonical questions", () => {
+  const sourceQuestion = {
+    id: "q1",
+    correctOption: "A",
+    options: [{ id: "A", text: "Option A" }],
+    metadata: { tags: ["trusted"] },
+  };
+  const result = buildTrustedTestDefinition({
+    test: { ...definition, sections: [{ id: "s1", questionIds: ["q1"] }], questionCount: 1 },
+    questions: [sourceQuestion],
+  });
+
+  assert.notEqual(result.questions[0], sourceQuestion);
+  assert.notEqual(result.questions[0].options, sourceQuestion.options);
+  assert.equal(Object.isFrozen(result.questions[0]), true);
+  assert.equal(Object.isFrozen(result.questions[0].options), true);
+  assert.equal(Object.isFrozen(result.questions[0].options[0]), true);
+  assert.equal(Object.isFrozen(result.questions[0].metadata.tags), true);
+  sourceQuestion.options[0].text = "tampered";
+  sourceQuestion.metadata.tags.push("injected");
+  assert.equal(result.questions[0].options[0].text, "Option A");
+  assert.deepEqual(result.questions[0].metadata.tags, ["trusted"]);
+  assert.throws(() => result.questions[0].options[0].text = "tampered", TypeError);
+});
+
+test("rejects circular and non-JSON canonical question values", () => {
+  const circular = { id: "q1", correctOption: "A", metadata: {} };
+  circular.metadata.parent = circular;
+  assert.throws(() => buildTrustedTestDefinition({
+    test: { ...definition, sections: [{ id: "s1", questionIds: ["q1"] }], questionCount: 1 },
+    questions: [circular],
+  }), error => error.code === "INVALID_QUESTION_SNAPSHOT");
+
+  assert.throws(() => buildTrustedTestDefinition({
+    test: { ...definition, sections: [{ id: "s1", questionIds: ["q1"] }], questionCount: 1 },
+    questions: [{ id: "q1", correctOption: "A", metadata: new Map([["unsafe", true]]) }],
+  }), error => error.code === "INVALID_QUESTION_SNAPSHOT");
+});
+
 test("rejects unpublished tests", () => {
   assert.throws(() => buildTrustedTestDefinition({ test: { ...definition, isPublished: false }, questions }), /TEST_NOT_PUBLISHED/);
 });
