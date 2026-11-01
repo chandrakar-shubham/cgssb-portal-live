@@ -126,3 +126,62 @@ test("surfaces typed Firestore REST errors without returning response bodies", a
     error => error instanceof FirestoreRestError && error.status === 403 && !error.message.includes("sensitive"),
   );
 });
+
+
+test("runs bounded owner-filtered trusted history queries with a stable cursor", async () => {
+  let requestBody;
+  const client = createFirestoreRestClient({
+    projectId: "project-test", databaseId: "(default)",
+    getAccessToken: async () => "server-token",
+    fetchImpl: async (url, init) => {
+      assert.match(url, /documents:runQuery$/);
+      requestBody = JSON.parse(init.body);
+      return response([{
+        document: {
+          name: "projects/project-test/databases/(default)/documents/trustedAttempts/a1",
+          fields: {
+            id: { stringValue: "a1" },
+            userId: { stringValue: "student-1" },
+            submittedAt: { stringValue: "2026-11-01T10:00:00.000Z" },
+          },
+        },
+      }]);
+    },
+  });
+  const rows = await client.queryDocuments({
+    collectionId: "trustedAttempts",
+    filters: [{ field: "userId", op: "EQUAL", value: "student-1" }],
+    orderBy: [
+      { field: "submittedAt", direction: "DESCENDING" },
+      { field: "__name__", direction: "DESCENDING" },
+    ],
+    limit: 10,
+    cursor: { submittedAt: "2026-10-31T10:00:00.000Z", id: "a0" },
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].userId, "student-1");
+  const query = requestBody.structuredQuery;
+  assert.equal(query.where.fieldFilter.field.fieldPath, "userId");
+  assert.equal(query.where.fieldFilter.value.stringValue, "student-1");
+  assert.equal(query.limit, 10);
+  assert.equal(query.orderBy[0].field.fieldPath, "submittedAt");
+  assert.equal(query.startAt.values[0].stringValue, "2026-10-31T10:00:00.000Z");
+  assert.match(query.startAt.values[1].referenceValue, /trustedAttempts\/a0$/);
+});
+
+test("rejects unsafe Firestore query definitions before network access", async () => {
+  let calls = 0;
+  const client = createFirestoreRestClient({
+    projectId: "project-test", getAccessToken: async () => "token",
+    fetchImpl: async () => { calls += 1; return response([]); },
+  });
+  await assert.rejects(() => client.queryDocuments({
+    collectionId: "trustedAttempts", filters: [{ field: "userId", op: "GREATER_THAN", value: "u1" }],
+    orderBy: [], limit: 10,
+  }), /invalid Firestore query filter/);
+  await assert.rejects(() => client.queryDocuments({
+    collectionId: "trustedAttempts", filters: [{ field: "userId", op: "EQUAL", value: "u1" }],
+    orderBy: [], limit: 101,
+  }), /invalid Firestore structured query/);
+  assert.equal(calls, 0);
+});
