@@ -29,7 +29,7 @@ function toSubmissionReceipt(attempt) {
         if (field === "responses" && [null, "A", "B", "C", "D"].includes(entry ?? null)) {
           projected[questionId] = entry ?? null;
         } else if (field === "questionStatuses" &&
-            ["unanswered", "answered", "markedForReview", "marked_for_review"].includes(entry)) {
+            ["unanswered", "answered", "not_visited", "unanswered", "answered", "marked_for_review", "answered_and_marked"].includes(entry)) {
           projected[questionId] = entry;
         }
       }
@@ -82,7 +82,7 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
   try {
     idempotency = await buildAttemptIdempotency({
       uid, testId: submission.testId, clientAttemptId: submission.clientAttemptId,
-      responses: submission.responses, timeTakenSeconds: submission.timeTakenSeconds,
+      responses: submission.responses, questionStatuses: submission.questionStatuses || {}, timeTakenSeconds: submission.timeTakenSeconds,
     });
   } catch {
     return { ok: false, status: 400, error: "INVALID_SUBMISSION" };
@@ -128,10 +128,29 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       test, questions: await repository.loadCanonicalQuestions(questionIds),
     });
     const score = scoreTrustedTestDefinition(definition, submission.responses);
-    const questionStatuses = Object.fromEntries(definition.questionIds.map(questionId => [
-      questionId,
-      submission.responses[questionId] == null ? "unanswered" : "answered",
-    ]));
+    const suppliedStatuses = submission.questionStatuses || {};
+    const allowedQuestionIds = new Set(definition.questionIds);
+    for (const [questionId, status] of Object.entries(suppliedStatuses)) {
+      if (!allowedQuestionIds.has(questionId) ||
+          !["not_visited", "unanswered", "answered", "marked_for_review", "answered_and_marked"].includes(status)) {
+        throw new TypeError("INVALID_QUESTION_STATUS");
+      }
+      const hasAnswer = submission.responses[questionId] != null;
+      if ((hasAnswer && status !== "answered" && status !== "answered_and_marked") ||
+          (!hasAnswer && (status === "answered" || status === "answered_and_marked"))) {
+        throw new TypeError("QUESTION_STATUS_RESPONSE_MISMATCH");
+      }
+    }
+    const questionStatuses = Object.fromEntries(definition.questionIds.map(questionId => {
+      const hasAnswer = submission.responses[questionId] != null;
+      const status = Object.prototype.hasOwnProperty.call(suppliedStatuses, questionId)
+        ? suppliedStatuses[questionId]
+        : (hasAnswer ? "answered" : "not_visited");
+      return [questionId, status];
+    }));
+    const markedForReviewCount = Object.values(questionStatuses).filter(status =>
+      status === "marked_for_review" || status === "answered_and_marked"
+    ).length;
     const sectorMap = new Map();
     for (const result of score.questionResults) {
       const current = sectorMap.get(result.subject) || {
@@ -177,7 +196,7 @@ export async function submitTrustedAttempt({ uid, submission, repository, now = 
       incorrectCount: score.incorrectCount,
       unattemptedCount: score.unattemptedCount,
       attemptedCount: score.attemptedCount,
-      markedForReviewCount: 0,
+      markedForReviewCount,
       negativeMarksDeducted: score.negDeduction,
       sectorAnalysis,
       submissionId: submission.clientAttemptId,
