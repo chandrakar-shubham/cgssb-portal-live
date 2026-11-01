@@ -14,7 +14,7 @@ assert.equal('correctOption' in hidden[0], false);
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: false,
   attempt: { ...base, scoreBreakdown: { questionResults: [] } },
-}), 'attempt-1'), /must not contain solution data/);
+}, 'attempt-1'), /must not contain solution data/);
 
 const released = buildTrustedReviewQuestions(questions, {
   canViewSolutions: true,
@@ -34,18 +34,20 @@ assert.equal(released[1].explanation, 'Second explanation');
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: true,
   attempt: { ...base, scoreBreakdown: { questionResults: [{ questionId: 'q1', correctOption: 'B' }] } },
-}), 'attempt-1'), /incomplete question breakdown/);
+}, 'attempt-1'), /incomplete question breakdown/);
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: true,
   attempt: { ...base, scoreBreakdown: { questionResults: [
     { questionId: 'q1', correctOption: 'B' }, { questionId: 'q1', correctOption: 'A' },
   ] } },
-}), 'attempt-1'), /invalid question result/);
+}, 'attempt-1'), /invalid question result/);
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: false,
   attempt: { id: 'attempt-1', responses: { q1: 'B' } },
-}), 'attempt-1'), /do not match/);
+}, 'attempt-1'), /do not match/);
+assert.throws(() => buildTrustedReviewQuestions(questions, {
+  canViewSolutions: false,
+  attempt: base,
+}, 'other-attempt'), /incomplete/);
 
-console.log('PASS trusted review adapter: release gating, exact question scope, order, and result validation');
-
-assert.throws(() => buildTrustedReviewQuestions(questions, { canViewSolutions: false, attempt: base }, 'other-attempt'), /incomplete/);
+console.log('PASS trusted review adapter: release gating, exact question scope, order, identity, and result validation');
