@@ -168,6 +168,45 @@ test("returns detached, deeply immutable test and question records", () => {
 });
 
 
+test("rejects non-JSON primitives, sparse arrays, and accessors without executing getters", () => {
+  for (const invalidValue of [undefined, Number.NaN, Number.POSITIVE_INFINITY, 1n]) {
+    const snapshot = {
+      ...validSnapshot,
+      questions: [{ id: "synthetic-question-invalid", metadata: { value: invalidValue } }],
+    };
+    assert.throws(
+      () => validateTrustedCatalogSnapshot({ snapshot, ...target }),
+      error => error.code === "INVALID_SNAPSHOT_RECORD",
+    );
+  }
+
+  const sparse = [];
+  sparse.length = 1;
+  const sparseSnapshot = {
+    ...validSnapshot,
+    questions: [{ id: "synthetic-question-sparse", options: sparse }],
+  };
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: sparseSnapshot, ...target }),
+    error => error.code === "INVALID_SNAPSHOT_RECORD",
+  );
+
+  let getterCalled = false;
+  const question = { id: "synthetic-question-getter" };
+  Object.defineProperty(question, "metadata", {
+    enumerable: true,
+    get() { getterCalled = true; return { value: "unsafe" }; },
+  });
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({
+      snapshot: { ...validSnapshot, questions: [question] },
+      ...target,
+    }),
+    error => error.code === "INVALID_SNAPSHOT_RECORD",
+  );
+  assert.equal(getterCalled, false);
+});
+
 test("rejects circular and non-JSON nested snapshot values safely", () => {
   const cyclicQuestion = { id: "synthetic-question-cycle" };
   cyclicQuestion.self = cyclicQuestion;
