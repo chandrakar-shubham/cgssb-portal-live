@@ -91,12 +91,15 @@ export function createTrustedScoringClient(options: TrustedScoringClientOptions)
     try {
       response = await fetchImpl(new URL(path, baseUrl), {
         ...init,
-        headers: {
-          accept: 'application/json',
-          authorization: `Bearer ${token}`,
-          ...(init.body ? { 'content-type': 'application/json' } : {}),
-          ...init.headers,
-        },
+        headers: (() => {
+          const headers = new Headers(init.headers);
+          headers.set('accept', 'application/json');
+          headers.set('authorization', `Bearer ${token}`);
+          if (init.body && !headers.has('content-type')) {
+            headers.set('content-type', 'application/json');
+          }
+          return headers;
+        })(),
         cache: 'no-store',
         credentials: 'omit',
         redirect: 'error',
