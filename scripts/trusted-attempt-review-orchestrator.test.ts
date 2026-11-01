@@ -3,7 +3,7 @@ import type { MockTest } from '../src/types';
 import type { StudentQuestion } from '../src/utils/studentQuestionProjection';
 import { loadTrustedAttemptReview } from '../src/app/trustedAttemptReviewOrchestrator';
 
-const test = { id: 'test-1', sections: [{ questionIds: ['q1', 'q2'] }] } as unknown as MockTest;
+const test = { id: 'test-1', isPublished: true, questionCount: 2, sections: [{ questionIds: ['q1', 'q2'] }] } as unknown as MockTest;
 const docs = [
   { id: 'q2', data: { id: 'q2', category: 'CGSSB', subject: 'GS', topic: 'Geo', difficulty: 'Easy', marks: 1, negativeMarks: 0.25, questionText: 'Q2', options: [] } },
   { id: 'q1', data: { id: 'q1', category: 'CGSSB', subject: 'GS', topic: 'History', difficulty: 'Easy', marks: 1, negativeMarks: 0.25, questionText: 'Q1', options: [] } },
