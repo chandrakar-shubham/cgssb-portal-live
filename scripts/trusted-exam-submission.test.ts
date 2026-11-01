@@ -52,3 +52,26 @@ await assert.rejects(() => submitTrustedExamAttempt({
 }, client), /outside the active test/);
 
 console.log('PASS trusted exam submission orchestration: exact question scope, unanswered normalization, and server receipt validation');
+
+const inheritedResponses = Object.assign(Object.create({ foreign: 'A' }), { q1: 'B' });
+await assert.rejects(() => submitTrustedExamAttempt({
+  test, userId: 'student-1',
+  submission: { testId: 'test-1', timeTakenSeconds: 45, submissionId: 'session-123', responses: inheritedResponses },
+}, client), /plain object/);
+
+let getterCalls = 0;
+const accessorResponses = {};
+Object.defineProperty(accessorResponses, 'q1', {
+  enumerable: true,
+  get() { getterCalls += 1; return 'B'; },
+});
+await assert.rejects(() => submitTrustedExamAttempt({
+  test, userId: 'student-1',
+  submission: { testId: 'test-1', timeTakenSeconds: 45, submissionId: 'session-123', responses: accessorResponses },
+}, client), /data properties/);
+assert.equal(getterCalls, 0);
+
+await assert.rejects(() => submitTrustedExamAttempt({
+  test, userId: 'student-1',
+  submission: { testId: 'test-1', timeTakenSeconds: 45, submissionId: 'session-123', responses: { q1: 'Z' as any } },
+}, client), /invalid answer/);
