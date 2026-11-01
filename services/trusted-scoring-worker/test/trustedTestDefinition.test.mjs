@@ -141,6 +141,22 @@ test("catalog audit rejects non-array snapshots instead of guessing", () => {
   assert.throws(() => auditTrustedTestCatalog({ tests: null, questions }), /must be arrays/);
 });
 
+test("catalog audit rejects every occurrence of a duplicated test ID", () => {
+  const duplicate = { ...definition, id: "same-test" };
+  const report = auditTrustedTestCatalog({
+    tests: [duplicate, { ...duplicate, title: "Second copy" }, definition],
+    questions,
+  });
+
+  assert.equal(report.compatibleCount, 1);
+  assert.equal(report.incompatibleCount, 2);
+  assert.deepEqual(report.results.map(item => item.issueCodes), [
+    ["DUPLICATE_TEST_IDS"],
+    ["DUPLICATE_TEST_IDS"],
+    [],
+  ]);
+});
+
 test("catalog audit maps validation failures to stable typed issue codes", () => {
   const cases = [
     [{ ...definition, isPublished: false }, questions, "TEST_NOT_PUBLISHED"],
