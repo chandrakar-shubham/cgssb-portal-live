@@ -130,6 +130,11 @@ test("catalog audit reports compatibility counts and safe issue codes without an
   ]);
   assert.equal(JSON.stringify(report).includes("secret explanation"), false);
   assert.equal(JSON.stringify(report).includes("correctOption"), false);
+  assert.equal(Object.isFrozen(report), true);
+  assert.equal(Object.isFrozen(report.results), true);
+  assert.equal(Object.isFrozen(report.results[0]), true);
+  assert.equal(Object.isFrozen(report.results[0].issueCodes), true);
+  assert.throws(() => report.results[0].issueCodes.push("INJECTED"), TypeError);
 });
 
 test("catalog audit rejects non-array snapshots instead of guessing", () => {
