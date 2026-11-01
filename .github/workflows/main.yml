@@ -57,6 +57,9 @@ jobs:
       - name: Test strict student exam adapter
         run: npm run test:student-exam-adapter
 
+      - name: Published student exam definition audit tests
+        run: npm run test:student-exam-definition-audit
+
       - name: 🧪 Phase 8.5 Student Journey Safety Guard
         run: npm run test:phase8:5-journey-guard
 
