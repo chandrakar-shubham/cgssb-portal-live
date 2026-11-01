@@ -173,9 +173,35 @@ export function createTrustedScoringClient(options: TrustedScoringClientOptions)
           !payload.attempt || typeof payload.attempt !== 'object' || Array.isArray(payload.attempt)) {
         throw new TrustedScoringApiError('Trusted review response is incomplete.', 502, 'INVALID_RESPONSE');
       }
+      const attempt = payload.attempt as Record<string, unknown>;
+      if (attempt.id !== attemptId) {
+        throw new TrustedScoringApiError('Trusted review response does not match the requested attempt.', 502, 'INVALID_RESPONSE');
+      }
+      // The Worker must not return per-question correctness before release.
+      if (!payload.canViewSolutions && Object.prototype.hasOwnProperty.call(attempt, 'scoreBreakdown')) {
+        throw new TrustedScoringApiError('Trusted review response exposed unreleased solutions.', 502, 'INVALID_RESPONSE');
+      }
+      if (Object.prototype.hasOwnProperty.call(attempt, 'scoreBreakdown')) {
+        const breakdown = attempt.scoreBreakdown;
+        if (!breakdown || typeof breakdown !== 'object' || Array.isArray(breakdown) ||
+            !Array.isArray((breakdown as Record<string, unknown>).questionResults)) {
+          throw new TrustedScoringApiError('Trusted review response contains an invalid score breakdown.', 502, 'INVALID_RESPONSE');
+        }
+        for (const result of (breakdown as { questionResults: unknown[] }).questionResults) {
+          if (!result || typeof result !== 'object' || Array.isArray(result)) {
+            throw new TrustedScoringApiError('Trusted review response contains an invalid question result.', 502, 'INVALID_RESPONSE');
+          }
+          const questionResult = result as Record<string, unknown>;
+          if (typeof questionResult.questionId !== 'string' ||
+              (questionResult.correctOption !== undefined &&
+               !['A', 'B', 'C', 'D'].includes(questionResult.correctOption as string))) {
+            throw new TrustedScoringApiError('Trusted review response contains an invalid question result.', 502, 'INVALID_RESPONSE');
+          }
+        }
+      }
       return {
         canViewSolutions: payload.canViewSolutions,
-        attempt: payload.attempt as Record<string, unknown>,
+        attempt,
       };
     },
   };
