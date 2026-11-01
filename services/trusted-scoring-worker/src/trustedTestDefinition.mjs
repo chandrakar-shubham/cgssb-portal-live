@@ -1,10 +1,29 @@
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const SUPPORTED_SINGLE_ANSWER_TYPES = new Set([
+  "", "single", "single-choice", "mcq", "multiple-choice",
+]);
 
 function finiteRange(value, name, { min = 0, max = 100 } = {}) {
   if (!Number.isFinite(value) || value < min || value > max) {
     throw new TypeError(`invalid trusted test ${name}`);
   }
   return value;
+}
+
+function validateScorableQuestion(question) {
+  const type = String(question.questionType || question.type || "single").toLowerCase();
+  if (!SUPPORTED_SINGLE_ANSWER_TYPES.has(type)) {
+    throw new Error("TRUSTED_TEST_UNSUPPORTED_QUESTION_TYPE");
+  }
+  if (!["A", "B", "C", "D"].includes(question.correctOption)) {
+    throw new Error("TRUSTED_TEST_INVALID_CORRECT_OPTION");
+  }
+  if (question.marks != null) {
+    finiteRange(Number(question.marks), "question marks");
+  }
+  if (question.negativeMarks != null) {
+    finiteRange(Number(question.negativeMarks), "question negative marks");
+  }
 }
 
 /**
@@ -58,6 +77,7 @@ export function buildTrustedTestDefinition({ test, questions }) {
   const resolved = ids.map(id => {
     const question = byId.get(id);
     if (!question) throw new Error("TRUSTED_TEST_QUESTION_MISSING");
+    validateScorableQuestion(question);
     return question;
   });
 
