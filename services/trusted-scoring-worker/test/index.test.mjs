@@ -36,3 +36,35 @@ test("review endpoint rejects malformed attempt identifiers as an unknown route"
   const response = await worker.fetch(new Request("https://worker.example/v1/attempts/invalid%2Fid/review"), {});
   assert.equal(response.status, 404);
 });
+
+test("browser preflight allows only the configured CGSSB origin and headers", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/v1/attempts:submit", {
+    method: "OPTIONS",
+    headers: {
+      origin: "https://cgtest.in",
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "authorization,content-type",
+    },
+  }), { ALLOWED_ORIGINS: "https://cgtest.in" });
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("access-control-allow-origin"), "https://cgtest.in");
+  assert.match(response.headers.get("access-control-allow-methods") || "", /POST/);
+  assert.match(response.headers.get("access-control-allow-headers") || "", /Authorization/i);
+  assert.equal(response.headers.get("vary"), "Origin");
+});
+
+test("browser requests from unconfigured origins are rejected", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/healthz", {
+    headers: { origin: "https://attacker.example" },
+  }), { ALLOWED_ORIGINS: "https://cgtest.in" });
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "CORS_ORIGIN_NOT_ALLOWED" });
+});
+
+test("allowed browser origin receives CORS headers on API responses", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/healthz", {
+    headers: { origin: "https://cgtest.in" },
+  }), { ALLOWED_ORIGINS: "https://cgtest.in" });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), "https://cgtest.in");
+});
