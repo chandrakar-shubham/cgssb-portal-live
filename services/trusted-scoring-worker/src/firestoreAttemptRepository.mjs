@@ -141,7 +141,26 @@ export function createFirestoreAttemptRepository({ firestore, now = () => Date.n
     };
   }
 
-  return Object.freeze({
+  async function listAttemptsForStudent({ uid, pageSize = 25, cursor }) {
+    if (typeof uid !== "string" || !uid || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 51) {
+      throw new TypeError("invalid trusted attempt history query");
+    }
+    if (typeof firestore.queryDocuments !== "function") throw new Error("TRUSTED_HISTORY_QUERY_UNAVAILABLE");
+    const rows = await firestore.queryDocuments({
+      collectionId: "trustedAttempts",
+      filters: [{ field: "userId", op: "EQUAL", value: uid }],
+      orderBy: [
+        { field: "submittedAt", direction: "DESCENDING" },
+        { field: "__name__", direction: "DESCENDING" },
+      ],
+      limit: pageSize,
+      cursor,
+    });
+    return rows.filter(row => row?.userId === uid && typeof row.id === "string" &&
+      typeof row.submittedAt === "string" && Number.isFinite(Date.parse(row.submittedAt)));
+  }
+
+  return Object.freeze({\n    listAttemptsForStudent,
     findAttemptByIdempotencyKey,
     loadPublishedTest,
     loadCanonicalQuestions,
