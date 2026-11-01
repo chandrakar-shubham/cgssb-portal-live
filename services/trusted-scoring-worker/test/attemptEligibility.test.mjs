@@ -165,7 +165,7 @@ test("student-created welcome entitlements are bound to the UID and capped at 30
     { ...valid, issuedAt: "2026-10-29T10:00:01.000Z" },
     { ...valid, durationDays: 365 },
     { ...valid, planType: "YEARLY" },
-    { ...valid, source: "PAYMENT" },
+    { ...valid, source: "FREE_CAMPAIGN" },
     { ...valid, issuedAt: undefined },
   ];
   for (const entitlement of invalidEntitlements) {
