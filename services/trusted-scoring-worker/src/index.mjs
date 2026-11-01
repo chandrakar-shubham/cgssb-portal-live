@@ -91,6 +91,53 @@ export function createTrustedScoringWorker({
         return respond({ error: "UNAUTHENTICATED" }, 401);
       }
 
+      const isHistory = request.method === "GET" && url.pathname === "/v1/attempts";
+      if (isHistory) {
+        const rawLimit = url.searchParams.get("limit");
+        const pageSize = rawLimit === null ? 25 : Number(rawLimit);
+        if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50 ||
+            [...url.searchParams.keys()].some(key => !["limit", "cursor"].includes(key))) {
+          return respond({ error: "INVALID_HISTORY_QUERY" }, 400);
+        }
+        let cursor;
+        const encodedCursor = url.searchParams.get("cursor");
+        if (encodedCursor) {
+          try {
+            const normalized = encodedCursor.replace(/-/g, "+").replace(/_/g, "/");
+            const decoded = JSON.parse(atob(normalized));
+            if (!decoded || typeof decoded.submittedAt !== "string" ||
+                !Number.isFinite(Date.parse(decoded.submittedAt)) ||
+                typeof decoded.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(decoded.id) ||
+                Object.keys(decoded).some(key => !["submittedAt", "id"].includes(key))) throw new Error("bad cursor");
+            cursor = decoded;
+          } catch { return respond({ error: "INVALID_HISTORY_CURSOR" }, 400); }
+        }
+        let repository;
+        try { repository = await getRepository(env); }
+        catch { return respond({ error: "SCORING_BACKEND_NOT_CONFIGURED" }, 503); }
+        if (typeof repository.listAttemptsForStudent !== "function") return respond({ error: "HISTORY_BACKEND_NOT_CONFIGURED" }, 503);
+        try {
+          const rows = await repository.listAttemptsForStudent({ uid: identity.uid, pageSize: pageSize + 1, cursor });
+          const hasMore = rows.length > pageSize;
+          const page = rows.slice(0, pageSize);
+          const fields = ["id", "userId", "userName", "testId", "testTitle", "category",
+            "submittedAt", "timeTakenSeconds", "totalDurationSeconds", "responses", "questionStatuses",
+            "score", "maxScore", "percentage", "accuracy", "correctCount", "incorrectCount",
+            "unattemptedCount", "attemptedCount", "markedForReviewCount", "negativeMarksDeducted",
+            "sectorAnalysis", "submissionId", "seriesId", "targetKey", "targetExam"];
+          const attempts = page.map(attempt => {
+            const safe = {};
+            for (const field of fields) if (Object.prototype.hasOwnProperty.call(attempt, field)) safe[field] = attempt[field];
+            return safe;
+          });
+          const last = page[page.length - 1];
+          const nextCursor = hasMore && last
+            ? btoa(JSON.stringify({ submittedAt: last.submittedAt, id: last.id })).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "")
+            : null;
+          return respond({ ok: true, attempts, nextCursor });
+        } catch { return respond({ error: "ATTEMPT_HISTORY_UNAVAILABLE" }, 503); }
+      }
+
       if (reviewMatch) {
         let repository;
         try {
