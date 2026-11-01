@@ -103,9 +103,7 @@ export function createTrustedScoringWorker({
         const encodedCursor = url.searchParams.get("cursor");
         if (encodedCursor) {
           try {
-            const normalized = encodedCursor.replace(/-/g, "+").replace(/_/g, "/");
-            const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
-            const decoded = JSON.parse(atob(padded));
+            const decoded = JSON.parse(decodeURIComponent(encodedCursor));
             if (!decoded || typeof decoded.submittedAt !== "string" ||
                 !Number.isFinite(Date.parse(decoded.submittedAt)) ||
                 typeof decoded.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(decoded.id) ||
@@ -133,7 +131,7 @@ export function createTrustedScoringWorker({
           });
           const last = page[page.length - 1];
           const nextCursor = hasMore && last
-            ? btoa(JSON.stringify({ submittedAt: last.submittedAt, id: last.id })).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "")
+            ? encodeURIComponent(JSON.stringify({ submittedAt: last.submittedAt, id: last.id }))
             : null;
           return respond({ ok: true, attempts, nextCursor });
         } catch { return respond({ error: "ATTEMPT_HISTORY_UNAVAILABLE" }, 503); }
