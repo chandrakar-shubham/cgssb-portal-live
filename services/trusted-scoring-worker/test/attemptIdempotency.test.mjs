@@ -78,3 +78,19 @@ test("rejects invalid IDs and answer values before a repository key can be built
     /too many responses/,
   );
 });
+
+
+test("question palette metadata participates in the idempotency fingerprint", async () => {
+  const first = await buildAttemptIdempotency({
+    ...base, questionStatuses: { q1: "answered", q2: "unanswered" },
+  });
+  const reordered = await buildAttemptIdempotency({
+    ...base, questionStatuses: { q2: "unanswered", q1: "answered" },
+  });
+  const changed = await buildAttemptIdempotency({
+    ...base, questionStatuses: { q1: "answered_and_marked", q2: "unanswered" },
+  });
+  assert.equal(first.documentId, reordered.documentId);
+  assert.equal(first.fingerprint, reordered.fingerprint);
+  assert.notEqual(first.fingerprint, changed.fingerprint);
+});
