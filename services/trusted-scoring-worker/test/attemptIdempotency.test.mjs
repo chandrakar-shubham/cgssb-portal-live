@@ -94,3 +94,11 @@ test("question palette metadata participates in the idempotency fingerprint", as
   assert.equal(first.fingerprint, reordered.fingerprint);
   assert.notEqual(first.fingerprint, changed.fingerprint);
 });
+
+
+test("omitted and empty palette metadata preserve the legacy request fingerprint", async () => {
+  const omitted = await buildAttemptIdempotency(base);
+  const empty = await buildAttemptIdempotency({ ...base, questionStatuses: {} });
+  assert.equal(omitted.documentId, empty.documentId);
+  assert.equal(omitted.fingerprint, empty.fingerprint);
+});
