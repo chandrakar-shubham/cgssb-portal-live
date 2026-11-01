@@ -55,6 +55,8 @@ jobs:
         run: npx tsx scripts/trusted-scoring-feature-gate.test.ts
       - name: Trusted attempt review orchestration tests
         run: npx tsx scripts/trusted-attempt-review-orchestrator.test.ts
+      - name: Trusted attempt history merge tests
+        run: npx tsx scripts/trusted-attempt-history.test.ts
       - name: Test strict student exam adapter
         run: npm run test:student-exam-adapter
 
