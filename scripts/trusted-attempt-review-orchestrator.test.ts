@@ -41,6 +41,7 @@ assert.equal(apiCalls, 1);
 assert.deepEqual(hidden.questions.map((question: StudentQuestion) => question.id), ['q1', 'q2']);
 assert.equal('correctOption' in hidden.questions[0], false);
 
+const readsBeforeUnauthorizedReview = reads;
 await assert.rejects(loadTrustedAttemptReview({
   test, attemptId: 'attempt-1', identity, config, readQuestions,
   client: { async getAttemptReview() {
@@ -50,6 +51,7 @@ await assert.rejects(loadTrustedAttemptReview({
     } };
   } },
 }), /identity does not match/);
+assert.equal(reads, readsBeforeUnauthorizedReview, 'unauthorized attempt must be rejected before projection reads');
 
 await assert.rejects(loadTrustedAttemptReview({
   test, attemptId: 'attempt-1', identity, config, readQuestions,
