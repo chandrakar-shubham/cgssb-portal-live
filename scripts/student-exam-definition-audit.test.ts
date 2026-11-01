@@ -67,6 +67,34 @@ assert.equal(budgetSummary.questionIdsDeferred, 2);
 assert.equal(budgetSummary.results[1].issueCode, 'AUDIT_READ_BUDGET_EXCEEDED');
 assert.equal(budgetReadCalls, 1, 'deferred tests must not trigger Firestore reads');
 
+let activeReaders = 0;
+let peakReaders = 0;
+const concurrentSummary = await auditPublishedStudentExamDefinitions(
+  Array.from({ length: 8 }, (_, index) => testDefinition(`parallel-${index}`, [`parallel-q-${index}`])),
+  async ids => {
+    activeReaders += 1;
+    peakReaders = Math.max(peakReaders, activeReaders);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    activeReaders -= 1;
+    return docs(ids);
+  },
+  { concurrency: 3, maxQuestionIds: 8 },
+);
+assert.equal(concurrentSummary.ready, 8);
+assert.equal(concurrentSummary.questionIdsAttempted, 8);
+assert.ok(peakReaders > 1, 'independent definitions should be audited concurrently');
+assert.ok(peakReaders <= 3, 'audit concurrency must respect configured upper bound');
+assert.deepEqual(
+  concurrentSummary.results.map(result => result.testId),
+  Array.from({ length: 8 }, (_, index) => `parallel-${index}`),
+  'parallel execution must preserve deterministic result order',
+);
+
+await assert.rejects(
+  () => auditPublishedStudentExamDefinitions([], async () => [], { concurrency: 11 }),
+  /concurrency must be an integer between 1 and 10/,
+);
+
 await assert.rejects(
   () => auditPublishedStudentExamDefinitions([], async () => [], { maxQuestionIds: 25001 }),
   /between 1 and 25000/,
