@@ -133,7 +133,7 @@ export function createTrustedScoringWorker({
           });
           const last = page[page.length - 1];
           const nextCursor = hasMore && last
-            ? btoa(JSON.stringify({ submittedAt: last.submittedAt, id: last.id })).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "")
+            ? btoa(JSON.stringify({ submittedAt: last.submittedAt, id: last.id })).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "")
             : null;
           return respond({ ok: true, attempts, nextCursor });
         } catch { return respond({ error: "ATTEMPT_HISTORY_UNAVAILABLE" }, 503); }
