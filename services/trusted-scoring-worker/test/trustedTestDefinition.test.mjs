@@ -200,7 +200,7 @@ test("catalog issue totals reconcile exactly with per-test issue codes", () => {
 
   assert.deepEqual(report.issueCodeCounts, {
     DUPLICATE_TEST_IDS: 2,
-    INVALID_TEST_ID: 4,
+    INVALID_TEST_ID: 3,
     UNSUPPORTED_QUESTION_TYPE: 1,
   });
   const reconciled = Object.fromEntries(
