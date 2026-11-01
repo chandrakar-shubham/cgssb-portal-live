@@ -99,3 +99,47 @@ test("premium entitlement expiry must be strictly in the future", () => {
     entitlement: { status: "ACTIVE", expiresAt: "2026-10-29T10:00:00.001Z" },
   }).reason, "ACTIVE_PASS");
 });
+
+test("client campaign and milestone fields never grant premium access", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  const clientClaimedCampaign = {
+    id: "student-1",
+    status: "active",
+    freeAccessCampaignId: "free-launch-1plus2-2026",
+    campaignDaysGranted: 90,
+    completedTestsCount: 5,
+    unlockedMilestoneBonus: true,
+    hasProPass: false,
+  };
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest, user: clientClaimedCampaign,
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+});
+
+test("client device identifiers and transfer claims are not trusted entitlement grants", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  const user = {
+    id: "student-1",
+    status: "active",
+    boundDeviceId: "device-authorized",
+    boundDeviceName: "Android Smartphone",
+    currentDeviceId: "device-other",
+    deviceTransferApproved: true,
+  };
+  // Device binding requires a separate server-verifiable protocol. These
+  // client/profile labels must not accidentally grant premium access.
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest, user,
+    deviceId: "device-other",
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+});
+
+test("legacy hasProPass without a valid expiry remains fail-closed", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  for (const passExpiresAt of [undefined, null, "", "invalid-date"]) {
+    assert.equal(authorizeStudentAttempt({
+      ...base, test: premiumTest,
+      user: { id: "student-1", hasProPass: true, passExpiresAt },
+    }).reason, "PREMIUM_ACCESS_REQUIRED");
+  }
+});
