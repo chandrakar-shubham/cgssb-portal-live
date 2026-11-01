@@ -59,3 +59,46 @@ test("rejects duplicate canonical IDs", () => {
     test: definition, questions: [...questions, { id: "q1", correctOption: "B" }],
   }), /canonical question IDs are not unique/);
 });
+
+test("rejects question types without an approved single-answer scoring contract", () => {
+  for (const questionType of ["matching", "assertion_reason", "multi_statement", "essay"]) {
+    assert.throws(() => buildTrustedTestDefinition({
+      test: definition,
+      questions: [{ id: "q1", questionType, correctOption: "A" }, questions[1]],
+    }), /TRUSTED_TEST_UNSUPPORTED_QUESTION_TYPE/);
+  }
+});
+
+test("rejects canonical questions with missing or invalid answer keys", () => {
+  for (const correctOption of [undefined, null, "", "E", 1]) {
+    assert.throws(() => buildTrustedTestDefinition({
+      test: definition,
+      questions: [{ id: "q1", correctOption }, questions[1]],
+    }), /TRUSTED_TEST_INVALID_CORRECT_OPTION/);
+  }
+});
+
+test("rejects malformed per-question scoring values before scoring", () => {
+  for (const question of [
+    { id: "q1", correctOption: "A", marks: -1 },
+    { id: "q1", correctOption: "A", marks: 101 },
+    { id: "q1", correctOption: "A", marks: "not-a-number" },
+    { id: "q1", correctOption: "A", negativeMarks: -0.1 },
+    { id: "q1", correctOption: "A", negativeMarks: 101 },
+  ]) {
+    assert.throws(() => buildTrustedTestDefinition({
+      test: definition,
+      questions: [question, questions[1]],
+    }), /invalid trusted test question/);
+  }
+});
+
+test("accepts the known single-answer type aliases used by the trusted scorer", () => {
+  for (const questionType of ["single", "single-choice", "mcq", "multiple-choice"]) {
+    const result = buildTrustedTestDefinition({
+      test: { ...definition, sections: [{ id: "s1", questionIds: ["q1"] }], questionCount: 1 },
+      questions: [{ id: "q1", type: questionType, correctOption: "B" }],
+    });
+    assert.deepEqual(result.questionIds, ["q1"]);
+  }
+});
