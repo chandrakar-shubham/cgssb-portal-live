@@ -1,4 +1,4 @@
-import { scoreAttempt } from "./scoring.mjs";
+import { scoreAttempt, TRUSTED_SINGLE_KEY_QUESTION_TYPES } from "./scoring.mjs";
 
 /**
  * Score a validated trusted definition, never request-provided question data.
@@ -29,5 +29,6 @@ export function scoreTrustedTestDefinition(definition, responses) {
     responses,
     defaultMarks: definition.defaultMarks,
     defaultNegativeMarks: definition.defaultNegativeMarks,
+    supportedQuestionTypes: TRUSTED_SINGLE_KEY_QUESTION_TYPES,
   });
 }
