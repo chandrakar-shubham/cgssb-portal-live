@@ -94,6 +94,11 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
       marks,
       negativeMarks: deduction,
       score,
+      // Solution fields remain in the server-only score breakdown. The review
+      // endpoint must enforce release policy before projecting them to a client.
+      correctOption: question.correctOption,
+      ...(typeof question.explanation === "string" ? { explanation: question.explanation.slice(0, 12000) } : {}),
+      ...(typeof question.explanationHindi === "string" ? { explanationHindi: question.explanationHindi.slice(0, 12000) } : {}),
     });
   }
 
