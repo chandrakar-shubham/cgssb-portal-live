@@ -79,9 +79,19 @@ export async function submitTrustedExamAttempt(
   )) {
     throw new Error('Trusted submission question statuses must be a plain object.');
   }
-  const suppliedStatusIds = sourceStatuses ? Object.keys(sourceStatuses) : [];
-  if (suppliedStatusIds.some(id => !expectedIds.has(id))) {
+  const statusKeys = sourceStatuses ? Reflect.ownKeys(sourceStatuses) : [];
+  if (statusKeys.some(key => typeof key !== 'string')) {
+    throw new Error('Trusted submission statuses must not contain symbol properties.');
+  }
+  const suppliedStatusIds = statusKeys as string[];
+  if (suppliedStatusIds.length > 500 || suppliedStatusIds.some(id => !expectedIds.has(id))) {
     throw new Error('Trusted submission contains statuses outside the active test.');
+  }
+  for (const id of suppliedStatusIds) {
+    const descriptor = Object.getOwnPropertyDescriptor(sourceStatuses, id);
+    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new Error('Trusted submission statuses must contain only enumerable data properties.');
+    }
   }
   const questionStatuses: NonNullable<TrustedAttemptSubmission['questionStatuses']> = Object.create(null);
   for (const id of questionIds) {
