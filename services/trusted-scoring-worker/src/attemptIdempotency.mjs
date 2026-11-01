@@ -38,7 +38,11 @@ export async function buildAttemptIdempotency({ uid, testId, clientAttemptId, re
   assertIdentifier(testId, "test id");
   assertIdentifier(clientAttemptId, "client attempt id");
   if (!Number.isInteger(timeTakenSeconds) || timeTakenSeconds < 0 || timeTakenSeconds > 86400) throw new TypeError("invalid timeTakenSeconds");
-  const canonical = JSON.stringify({ uid, testId, responses: canonicalResponses(responses), questionStatuses: canonicalQuestionStatuses(questionStatuses), timeTakenSeconds });
+  const canonicalPayload = { uid, testId, responses: canonicalResponses(responses), timeTakenSeconds };
+  const canonicalStatuses = canonicalQuestionStatuses(questionStatuses);
+  // Preserve the pre-metadata fingerprint for legacy requests that omit palette state.
+  if (canonicalStatuses.length > 0) canonicalPayload.questionStatuses = canonicalStatuses;
+  const canonical = JSON.stringify(canonicalPayload);
   const scope = await sha256Hex(JSON.stringify([uid, testId, clientAttemptId]));
   return { documentId: `attempt_${scope}`, fingerprint: await sha256Hex(canonical) };
 }
