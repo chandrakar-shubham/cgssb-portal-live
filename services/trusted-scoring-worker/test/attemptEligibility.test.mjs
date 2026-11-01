@@ -37,14 +37,14 @@ test("premium test requires an unexpired profile pass or active entitlement", ()
     ...base, test, user: { id: "student-1", hasProPass: true, passExpiresAt: "2026-10-29T11:00:00Z" },
   }).reason, "ACTIVE_PASS");
   assert.equal(authorizeStudentAttempt({
-    ...base, test, entitlement: { status: "ACTIVE", expiresAt: "2026-10-29T11:00:00Z" },
+    ...base, test, entitlement: { userId: "student-1", status: "ACTIVE", expiresAt: "2026-10-29T11:00:00Z" },
   }).allowed, true);
 });
 
 test("expired, pending, or malformed passes do not authorize premium tests", () => {
   const test = { ...base.test, isPro: true };
   assert.equal(authorizeStudentAttempt({
-    ...base, test, entitlement: { status: "ACTIVE", expiresAt: "2026-10-29T10:00:00Z" },
+    ...base, test, entitlement: { userId: "student-1", status: "ACTIVE", expiresAt: "2026-10-29T10:00:00Z" },
   }).allowed, false);
   assert.equal(authorizeStudentAttempt({
     ...base, test, entitlement: { status: "PENDING", expiresAt: "2026-10-29T11:00:00Z" },
@@ -96,7 +96,7 @@ test("premium entitlement expiry must be strictly in the future", () => {
   }).reason, "PREMIUM_ACCESS_REQUIRED");
   assert.equal(authorizeStudentAttempt({
     ...base, test: premiumTest,
-    entitlement: { status: "ACTIVE", expiresAt: "2026-10-29T10:00:00.001Z" },
+    entitlement: { userId: "student-1", status: "ACTIVE", expiresAt: "2026-10-29T10:00:00.001Z" },
   }).reason, "ACTIVE_PASS");
 });
 
