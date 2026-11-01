@@ -3,6 +3,37 @@ const SUPPORTED_SINGLE_ANSWER_TYPES = new Set([
   "", "single", "single-choice", "mcq", "multiple-choice",
 ]);
 
+function cloneAndFreezeQuestion(question) {
+  let clone;
+  try {
+    clone = structuredClone(question);
+  } catch {
+    throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must contain cloneable JSON data", TypeError);
+  }
+
+  const active = new WeakSet();
+  function freezeRecursively(value) {
+    if (!value || typeof value !== "object") return value;
+    if (active.has(value)) {
+      throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must not contain circular references", TypeError);
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+      throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must contain only plain JSON objects and arrays", TypeError);
+    }
+    if (Object.getOwnPropertySymbols(value).length > 0) {
+      throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must not contain symbol properties", TypeError);
+    }
+
+    active.add(value);
+    for (const child of Object.values(value)) freezeRecursively(child);
+    active.delete(value);
+    return Object.freeze(value);
+  }
+
+  return freezeRecursively(clone);
+}
+
 function trustedDefinitionError(code, message, ErrorType = Error) {
   const error = new ErrorType(message);
   error.code = code;
@@ -107,7 +138,7 @@ export function buildTrustedTestDefinition({ test, questions }) {
     defaultMarks,
     defaultNegativeMarks,
     questionIds: Object.freeze([...ids]),
-    questions: Object.freeze(resolved.map(question => Object.freeze({ ...question }))),
+    questions: Object.freeze(resolved.map(cloneAndFreezeQuestion)),
   });
 }
 
