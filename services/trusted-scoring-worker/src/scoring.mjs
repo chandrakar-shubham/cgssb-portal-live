@@ -51,7 +51,7 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
     questionIds.add(question.id);
 
     const type = String(question.questionType || question.type || "single").toLowerCase();
-    if (!["single", "single-choice", "mcq", "multiple-choice", ""].includes(type)) {
+    if (!["single", "single-choice", "mcq", "multiple-choice", "matching", "assertion_reason", "multi_statement", ""].includes(type)) {
       throw new TypeError("unsupported question type requires an explicit scoring policy");
     }
     if (!VALID_SINGLE_OPTIONS.has(question.correctOption)) {
