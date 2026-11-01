@@ -77,8 +77,20 @@ function projectScoreBreakdown(value) {
   const questionResults = value.questionResults.map(item => {
     if (!item || typeof item !== "object") return null;
     const projected = {};
-    for (const field of ["questionId", "subject", "status", "marks", "negativeMarks", "score"]) {
-      if (Object.prototype.hasOwnProperty.call(item, field)) projected[field] = item[field];
+    for (const field of [
+      "questionId", "subject", "status", "marks", "negativeMarks", "score",
+      "correctOption", "explanation", "explanationHindi",
+    ]) {
+      if (!Object.prototype.hasOwnProperty.call(item, field)) continue;
+      const fieldValue = item[field];
+      if (field === "correctOption" && ["A", "B", "C", "D"].includes(fieldValue)) {
+        projected[field] = fieldValue;
+      } else if ((field === "explanation" || field === "explanationHindi") &&
+          typeof fieldValue === "string") {
+        projected[field] = fieldValue.slice(0, 12000);
+      } else if (["questionId", "subject", "status", "marks", "negativeMarks", "score"].includes(field)) {
+        projected[field] = fieldValue;
+      }
     }
     return projected;
   }).filter(Boolean);
