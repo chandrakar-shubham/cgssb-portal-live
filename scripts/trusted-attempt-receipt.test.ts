@@ -46,6 +46,16 @@ assert.throws(() => parseTrustedAttemptReceipt(
 ), /count invariants/);
 
 assert.throws(() => parseTrustedAttemptReceipt(
+  { ...receipt, responses: { q1: 'Z', q2: null } },
+  { userId: 'student-1', test, clientAttemptId: 'client-attempt-1' },
+), /invalid responses/);
+
+assert.throws(() => parseTrustedAttemptReceipt(
+  { ...receipt, responses: { q1: 'A' } },
+  { userId: 'student-1', test, clientAttemptId: 'client-attempt-1' },
+), /do not match the test question set/);
+
+assert.throws(() => parseTrustedAttemptReceipt(
   { ...receipt, score: '1' },
   { userId: 'student-1', test, clientAttemptId: 'client-attempt-1' },
 ), /invalid score/);
