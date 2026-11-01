@@ -11,6 +11,36 @@ export interface TrustedAttemptReview {
   attempt: Record<string, unknown>;
 }
 
+
+export interface TrustedAttemptHistoryPage {
+  attempts: Record<string, unknown>[];
+  nextCursor: string | null;
+}
+
+const HISTORY_FIELDS = new Set([
+  'id', 'userId', 'userName', 'testId', 'testTitle', 'category', 'submittedAt',
+  'timeTakenSeconds', 'totalDurationSeconds', 'responses', 'questionStatuses',
+  'score', 'maxScore', 'percentage', 'accuracy', 'correctCount', 'incorrectCount',
+  'unattemptedCount', 'attemptedCount', 'markedForReviewCount', 'negativeMarksDeducted',
+  'sectorAnalysis', 'submissionId', 'seriesId', 'targetKey', 'targetExam',
+]);
+
+function validateHistoryAttempt(value: unknown): Record<string, unknown> {
+  const attempt = copyPlainDataRecord(value, 'A trusted history attempt');
+  if (Object.keys(attempt).some(key => !HISTORY_FIELDS.has(key)) ||
+      typeof attempt.id !== 'string' || !ID_PATTERN.test(attempt.id) ||
+      typeof attempt.userId !== 'string' || !attempt.userId ||
+      typeof attempt.testId !== 'string' || !ID_PATTERN.test(attempt.testId) ||
+      typeof attempt.submittedAt !== 'string' || !Number.isFinite(Date.parse(attempt.submittedAt))) {
+    throw new TrustedScoringApiError('Trusted history contains an invalid attempt.', 502, 'INVALID_RESPONSE');
+  }
+  if (Object.prototype.hasOwnProperty.call(attempt, 'scoreBreakdown') ||
+      Object.prototype.hasOwnProperty.call(attempt, 'correctOption')) {
+    throw new TrustedScoringApiError('Trusted history exposed solution data.', 502, 'INVALID_RESPONSE');
+  }
+  return attempt;
+}
+
 export interface TrustedScoringClientOptions {
   /** HTTPS Worker origin, e.g. https://cgssb-trusted-scoring.<account>.workers.dev */
   baseUrl: string;
@@ -192,6 +222,26 @@ export function createTrustedScoringClient(options: TrustedScoringClientOptions)
       return {
         replayed: payload.replayed,
         attempt: payload.attempt as Record<string, unknown>,
+      };
+    },
+
+    async listMyAttempts(options: { limit?: number; cursor?: string | null } = {}): Promise<TrustedAttemptHistoryPage> {
+      const limit = options.limit ?? 25;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 50 ||
+          (options.cursor !== undefined && options.cursor !== null &&
+           (typeof options.cursor !== 'string' || options.cursor.length > 2048))) {
+        throw new Error('Attempt history pagination options are invalid.');
+      }
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (options.cursor) params.set('cursor', options.cursor);
+      const payload = await request('/v1/attempts?' + params.toString());
+      if (!Array.isArray(payload.attempts) ||
+          !(payload.nextCursor === null || (typeof payload.nextCursor === 'string' && payload.nextCursor.length <= 2048))) {
+        throw new TrustedScoringApiError('Trusted history response is incomplete.', 502, 'INVALID_RESPONSE');
+      }
+      return {
+        attempts: payload.attempts.map(validateHistoryAttempt),
+        nextCursor: payload.nextCursor as string | null,
       };
     },
 
