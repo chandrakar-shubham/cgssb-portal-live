@@ -210,3 +210,30 @@ test('submission rejects non-enumerable response properties rather than silently
   assert.equal(calls, 0);
 });
 
+
+
+test('submission sends question palette metadata only after validating its values', async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  let calls = 0;
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://scoring.example.workers.dev',
+    getIdToken: async () => 'token',
+    fetchImpl: async (_input, init) => {
+      calls += 1;
+      capturedBody = JSON.parse(String(init?.body));
+      return response({ ok: true, replayed: false, attempt: { id: 'attempt-1' } }, 201);
+    },
+  });
+  await client.submitAttempt({
+    ...submission,
+    questionStatuses: { q1: 'answered_and_marked', q2: 'not_visited' },
+  });
+  assert.deepEqual(capturedBody?.questionStatuses, {
+    q1: 'answered_and_marked', q2: 'not_visited',
+  });
+  await assert.rejects(client.submitAttempt({
+    ...submission,
+    questionStatuses: { q1: 'solution_revealed' as any },
+  }));
+  assert.equal(calls, 1, 'invalid palette metadata must be rejected before transport');
+});
