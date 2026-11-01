@@ -36,7 +36,8 @@ assert.equal(summary.scanned, 4);
 assert.equal(summary.published, 3);
 assert.equal(summary.ready, 1);
 assert.equal(summary.blocked, 2);
-assert.equal(summary.questionIdsAttempted, 4);
+assert.equal(summary.questionIdsAttempted, 2, 'only IDs passed to the document reader count as attempted');
+assert.equal(summary.questionIdsReserved, 6, 'invalid definitions conservatively consume reserved budget');
 assert.equal(summary.questionIdsDeferred, 0);
 assert.equal(readCalls, 1, 'invalid definitions must be rejected before reading projections');
 assert.deepEqual(summary.results.map(result => result.status), ['ready', 'blocked', 'blocked']);
@@ -50,6 +51,7 @@ const readFailure = await auditPublishedStudentExamDefinitions(
 assert.equal(readFailure.blocked, 1);
 assert.equal(readFailure.results[0].issueCode, 'PROJECTION_READ_FAILED');
 assert.equal(readFailure.questionIdsAttempted, 1);
+assert.equal(readFailure.questionIdsReserved, 1);
 
 let budgetReadCalls = 0;
 const budgetSummary = await auditPublishedStudentExamDefinitions(
@@ -60,6 +62,7 @@ const budgetSummary = await auditPublishedStudentExamDefinitions(
 assert.equal(budgetSummary.ready, 1);
 assert.equal(budgetSummary.blocked, 1);
 assert.equal(budgetSummary.questionIdsAttempted, 2);
+assert.equal(budgetSummary.questionIdsReserved, 2);
 assert.equal(budgetSummary.questionIdsDeferred, 2);
 assert.equal(budgetSummary.results[1].issueCode, 'AUDIT_READ_BUDGET_EXCEEDED');
 assert.equal(budgetReadCalls, 1, 'deferred tests must not trigger Firestore reads');
