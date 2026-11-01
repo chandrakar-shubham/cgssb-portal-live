@@ -1,11 +1,11 @@
 import {
   collection,
   documentId,
-  Firestore,
   getDocs,
   query,
   where,
 } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 
 export interface StudentQuestionDocument {
   id: string;
