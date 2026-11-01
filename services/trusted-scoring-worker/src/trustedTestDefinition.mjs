@@ -3,7 +3,54 @@ const SUPPORTED_SINGLE_ANSWER_TYPES = new Set([
   "", "single", "single-choice", "mcq", "multiple-choice",
 ]);
 
+function assertJsonQuestionValue(value) {
+  const active = new WeakSet();
+  function visit(item) {
+    if (item === null || typeof item === "string" || typeof item === "boolean") return;
+    if (typeof item === "number" && Number.isFinite(item)) return;
+    if (!item || typeof item !== "object") {
+      throw trustedDefinitionError(INVALID_QUESTION_SNAPSHOT, "snapshot values must be valid JSON primitives, objects, or arrays", TypeError);
+    }
+    if (active.has(item)) {
+      throw trustedDefinitionError(INVALID_QUESTION_SNAPSHOT, "snapshot records must not contain circular references", TypeError);
+    }
+    const prototype = Object.getPrototypeOf(item);
+    if (!Array.isArray(item) && prototype !== Object.prototype && prototype !== null) {
+      throw trustedDefinitionError(INVALID_QUESTION_SNAPSHOT, "snapshot records must contain only plain JSON objects and arrays", TypeError);
+    }
+    if (Object.getOwnPropertySymbols(item).length > 0) {
+      throw trustedDefinitionError(INVALID_QUESTION_SNAPSHOT, "snapshot records must not contain symbol properties", TypeError);
+    }
+
+    active.add(item);
+    const descriptors = Object.getOwnPropertyDescriptors(item);
+    if (Array.isArray(item)) {
+      if (Reflect.ownKeys(descriptors).length !== item.length + 1) {
+        throw trustedDefinitionError(INVALID_QUESTION_SNAPSHOT, "snapshot arrays must be dense and have no custom properties", TypeError);
+      }
+      for (let index = 0; index < item.length; index += 1) {
+        const descriptor = descriptors[String(index)];
+        if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+          throw trustedDefinitionError(INVALID_QUESTION_SNAPSHOT, "snapshot arrays must contain only dense data values", TypeError);
+        }
+        visit(descriptor.value);
+      }
+    } else {
+      for (const key of Reflect.ownKeys(descriptors)) {
+        const descriptor = descriptors[key];
+        if (!descriptor.enumerable || !("value" in descriptor)) {
+          throw trustedDefinitionError(INVALID_QUESTION_SNAPSHOT, "snapshot objects must contain only enumerable data properties", TypeError);
+        }
+        visit(descriptor.value);
+      }
+    }
+    active.delete(item);
+  }
+  visit(value);
+}
+
 function cloneAndFreezeQuestion(question) {
+  assertJsonQuestionValue(question);
   let clone;
   try {
     clone = structuredClone(question);
@@ -11,23 +58,9 @@ function cloneAndFreezeQuestion(question) {
     throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must contain cloneable JSON data", TypeError);
   }
 
-  const active = new WeakSet();
   function freezeRecursively(value) {
     if (!value || typeof value !== "object") return value;
-    if (active.has(value)) {
-      throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must not contain circular references", TypeError);
-    }
-    const prototype = Object.getPrototypeOf(value);
-    if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
-      throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must contain only plain JSON objects and arrays", TypeError);
-    }
-    if (Object.getOwnPropertySymbols(value).length > 0) {
-      throw trustedDefinitionError("INVALID_QUESTION_SNAPSHOT", "canonical questions must not contain symbol properties", TypeError);
-    }
-
-    active.add(value);
     for (const child of Object.values(value)) freezeRecursively(child);
-    active.delete(value);
     return Object.freeze(value);
   }
 
