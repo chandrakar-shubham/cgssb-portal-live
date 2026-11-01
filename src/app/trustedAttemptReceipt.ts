@@ -17,7 +17,7 @@ function ownDataRecord(value: unknown, label: string): Record<string, unknown> {
   if (Object.getOwnPropertySymbols(value).length) {
     throw new Error('Trusted attempt receipt has invalid symbol properties.');
   }
-  const copy: Record<string, unknown> = {};
+  const copy: Record<string, unknown> = Object.create(null);
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (typeof key !== 'string' || !descriptor || !descriptor.enumerable || !('value' in descriptor)) {
