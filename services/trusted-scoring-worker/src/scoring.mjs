@@ -1,10 +1,11 @@
 const VALID_SINGLE_OPTIONS = new Set(["A", "B", "C", "D"]);
+export const TRUSTED_SINGLE_KEY_QUESTION_TYPES = Object.freeze(["single", "single-choice", "mcq", "multiple-choice", "matching", "assertion_reason", "multi_statement", ""]);
 
 /**
  * Pure authoritative-scoring primitive. Inputs must come from trusted records.
  * Supports only the verified single-choice contract; unknown types fail closed.
  */
-export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNegativeMarks = null }) {
+export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNegativeMarks = null, supportedQuestionTypes = ["single", "single-choice", "mcq", "multiple-choice", ""] }) {
   if (!Array.isArray(questions) || questions.length === 0 || questions.length > 500) {
     throw new TypeError("questions must contain 1..500 trusted questions");
   }
@@ -51,7 +52,7 @@ export function scoreAttempt({ questions, responses, defaultMarks = 1, defaultNe
     questionIds.add(question.id);
 
     const type = String(question.questionType || question.type || "single").toLowerCase();
-    if (!["single", "single-choice", "mcq", "multiple-choice", "matching", "assertion_reason", "multi_statement", ""].includes(type)) {
+    if (!Array.isArray(supportedQuestionTypes) || !supportedQuestionTypes.includes(type)) {
       throw new TypeError("unsupported question type requires an explicit scoring policy");
     }
     if (!VALID_SINGLE_OPTIONS.has(question.correctOption)) {
