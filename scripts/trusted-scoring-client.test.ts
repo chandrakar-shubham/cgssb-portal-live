@@ -237,3 +237,43 @@ test('submission sends question palette metadata only after validating its value
   }));
   assert.equal(calls, 1, 'invalid palette metadata must be rejected before transport');
 });
+
+
+test('lists trusted attempt history with a bounded encoded cursor and validates DTOs', async () => {
+  const calls: Array<{ url: URL; init: RequestInit }> = [];
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://worker.example',
+    getIdToken: async () => 'fresh-token',
+    fetchImpl: async (input, init = {}) => {
+      calls.push({ url: new URL(String(input)), init });
+      return new Response(JSON.stringify({
+        ok: true,
+        attempts: [{
+          id: 'attempt-1', userId: 'student-1', testId: 'test-1',
+          submittedAt: '2026-11-01T10:00:00.000Z', score: 8,
+        }],
+        nextCursor: 'opaque-cursor',
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+  const page = await client.listMyAttempts({ limit: 10, cursor: 'cursor + /' });
+  assert.equal(page.attempts[0].id, 'attempt-1');
+  assert.equal(page.nextCursor, 'opaque-cursor');
+  assert.equal(calls[0].url.pathname, '/v1/attempts');
+  assert.equal(calls[0].url.searchParams.get('limit'), '10');
+  assert.equal(calls[0].url.searchParams.get('cursor'), 'cursor + /');
+  assert.equal(new Headers(calls[0].init.headers).get('authorization'), 'Bearer fresh-token');
+});
+
+test('rejects history DTOs containing solution internals or malformed identity', async () => {
+  for (const attempt of [
+    { id: 'attempt-1', userId: 'student-1', testId: 'test-1', submittedAt: '2026-11-01T10:00:00Z', scoreBreakdown: {} },
+    { id: '../bad', userId: 'student-1', testId: 'test-1', submittedAt: '2026-11-01T10:00:00Z' },
+  ]) {
+    const client = createTrustedScoringClient({
+      baseUrl: 'https://worker.example', getIdToken: async () => 'token',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true, attempts: [attempt], nextCursor: null }), { status: 200 }),
+    });
+    await assert.rejects(() => client.listMyAttempts(), /invalid attempt|solution data/i);
+  }
+});
