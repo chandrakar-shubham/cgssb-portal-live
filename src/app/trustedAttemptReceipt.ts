@@ -118,7 +118,7 @@ export function parseTrustedAttemptReceipt(
     attemptedCount: raw.attemptedCount as number,
     markedForReviewCount: raw.markedForReviewCount as number,
     negativeMarksDeducted: raw.negativeMarksDeducted as number,
-    sectorAnalysis: sectorAnalysis as TestAttempt['sectorAnalysis'],
+    sectorAnalysis: sectorAnalysis as unknown as TestAttempt['sectorAnalysis'],
     submissionId: expected.clientAttemptId,
     seriesId: expected.test.seriesId,
     targetKey: expected.test.targetKey,
