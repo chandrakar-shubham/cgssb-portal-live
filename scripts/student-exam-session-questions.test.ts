@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { MockTest } from '../src/types';
 import type { StudentQuestion } from '../src/utils/studentQuestionProjection';
+import type { ExamRenderableQuestion } from '../src/components/QuestionRenderer';
 import {
   loadPublishedStudentExamQuestions,
   type StudentExamQuestionReader,
@@ -43,6 +44,9 @@ const resolved = await loadPublishedStudentExamQuestions(testDefinition, {
 });
 assert.deepEqual(requestedIds, ['q-2', 'q-1']);
 assert.deepEqual(resolved.map(item => item.id), ['q-2', 'q-1']);
+// Compile-time contract: the renderer accepts the student-safe type without answer keys.
+const renderableQuestions: ExamRenderableQuestion[] = resolved;
+assert.equal(renderableQuestions.length, 2);
 assert.equal('correctOption' in resolved[0], false);
 assert.equal('explanation' in resolved[0], false);
 
