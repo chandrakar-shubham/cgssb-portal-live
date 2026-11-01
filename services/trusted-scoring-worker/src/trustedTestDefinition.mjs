@@ -163,6 +163,9 @@ export function auditTrustedTestCatalog({ tests, questions }) {
     totalTests: results.length,
     compatibleCount,
     incompatibleCount: results.length - compatibleCount,
-    results: Object.freeze(results.map(item => Object.freeze(item))),
+    results: Object.freeze(results.map(item => Object.freeze({
+      ...item,
+      issueCodes: Object.freeze([...item.issueCodes]),
+    }))),
   });
 }
