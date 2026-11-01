@@ -38,6 +38,9 @@ jobs:
       - name: Student question projection security tests
         run: npm run test:student-question-projection
 
+      - name: Strict student exam question resolver tests
+        run: npm run test:student-exam-resolver
+
       - name: Firestore trusted-collection emulator authorization tests
         run: npm run test:rules
 
