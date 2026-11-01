@@ -135,3 +135,34 @@ test("rejects duplicate test IDs and duplicate question IDs", () => {
     error => error.code === "DUPLICATE_SNAPSHOT_RECORD_ID",
   );
 });
+
+
+test("returns detached, deeply immutable test and question records", () => {
+  const snapshot = {
+    ...validSnapshot,
+    tests: [{
+      id: "synthetic-test-nested",
+      sections: [{ id: "section-1", questionIds: ["synthetic-question-nested"] }],
+    }],
+    questions: [{
+      id: "synthetic-question-nested",
+      options: [{ id: "A", text: "Synthetic option" }],
+    }],
+  };
+
+  const result = validateTrustedCatalogSnapshot({ snapshot, ...target });
+
+  assert.notEqual(result.tests, snapshot.tests);
+  assert.notEqual(result.tests[0], snapshot.tests[0]);
+  assert.equal(Object.isFrozen(result.tests), true);
+  assert.equal(Object.isFrozen(result.tests[0]), true);
+  assert.equal(Object.isFrozen(result.tests[0].sections), true);
+  assert.equal(Object.isFrozen(result.tests[0].sections[0]), true);
+  assert.equal(Object.isFrozen(result.tests[0].sections[0].questionIds), true);
+  assert.equal(Object.isFrozen(result.questions[0].options[0]), true);
+
+  snapshot.tests[0].sections[0].questionIds[0] = "synthetic-question-mutated";
+  snapshot.questions[0].options[0].text = "Mutated by caller";
+  assert.equal(result.tests[0].sections[0].questionIds[0], "synthetic-question-nested");
+  assert.equal(result.questions[0].options[0].text, "Synthetic option");
+});
