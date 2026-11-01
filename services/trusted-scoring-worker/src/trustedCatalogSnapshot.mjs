@@ -11,12 +11,33 @@ function snapshotError(code, message) {
 }
 
 function cloneAndFreeze(value) {
-  const clone = structuredClone(value);
+  let clone;
+  try {
+    clone = structuredClone(value);
+  } catch {
+    throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must contain cloneable JSON data");
+  }
+
+  const active = new WeakSet();
   function freezeRecursively(item) {
-    if (!item || typeof item !== "object" || Object.isFrozen(item)) return item;
+    if (!item || typeof item !== "object") return item;
+    if (active.has(item)) {
+      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must not contain circular references");
+    }
+    const prototype = Object.getPrototypeOf(item);
+    if (!Array.isArray(item) && prototype !== Object.prototype && prototype !== null) {
+      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must contain only plain JSON objects and arrays");
+    }
+    if (Object.getOwnPropertySymbols(item).length > 0) {
+      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must not contain symbol properties");
+    }
+
+    active.add(item);
     for (const child of Object.values(item)) freezeRecursively(child);
+    active.delete(item);
     return Object.freeze(item);
   }
+
   return freezeRecursively(clone);
 }
 
