@@ -1,4 +1,4 @@
-import type { MockTest, TestAttempt } from '../types';
+import type { MockTest, TestAttempt, QuestionPaletteStatus } from '../types';
 import type { TrustedAttemptSubmission } from '../services/trustedScoringClient';
 import { parseTrustedAttemptReceipt } from './trustedAttemptReceipt';
 
@@ -16,6 +16,7 @@ export interface TrustedExamSubmissionInput {
     testId: string;
     timeTakenSeconds: number;
     responses: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
+    questionStatuses?: Record<string, QuestionPaletteStatus>;
     submissionId: string;
   };
 }
@@ -67,11 +68,45 @@ export async function submitTrustedExamAttempt(
     responses[id] = descriptor ? descriptor.value as 'A' | 'B' | 'C' | 'D' | null : null;
   }
 
+  const allowedStatuses = new Set<QuestionPaletteStatus>([
+    'not_visited', 'unanswered', 'answered', 'marked_for_review', 'answered_and_marked',
+  ]);
+  const sourceStatuses: unknown = submission.questionStatuses;
+  if (sourceStatuses !== undefined && (
+    !sourceStatuses || typeof sourceStatuses !== 'object' || Array.isArray(sourceStatuses) ||
+    (Object.getPrototypeOf(sourceStatuses) !== Object.prototype && Object.getPrototypeOf(sourceStatuses) !== null) ||
+    Object.getOwnPropertySymbols(sourceStatuses).length > 0
+  )) {
+    throw new Error('Trusted submission question statuses must be a plain object.');
+  }
+  const suppliedStatusIds = sourceStatuses ? Object.keys(sourceStatuses) : [];
+  if (suppliedStatusIds.some(id => !expectedIds.has(id))) {
+    throw new Error('Trusted submission contains statuses outside the active test.');
+  }
+  const questionStatuses: NonNullable<TrustedAttemptSubmission['questionStatuses']> = Object.create(null);
+  for (const id of questionIds) {
+    const descriptor = sourceStatuses ? Object.getOwnPropertyDescriptor(sourceStatuses, id) : undefined;
+    if (descriptor && (!descriptor.enumerable || !('value' in descriptor))) {
+      throw new Error('Trusted submission statuses must contain only enumerable data properties.');
+    }
+    const answer = responses[id];
+    const status = descriptor
+      ? descriptor.value as QuestionPaletteStatus
+      : (answer == null ? 'not_visited' : 'answered');
+    if (!allowedStatuses.has(status) ||
+        (answer != null && status !== 'answered' && status !== 'answered_and_marked') ||
+        (answer == null && (status === 'answered' || status === 'answered_and_marked'))) {
+      throw new Error('Trusted submission contains an invalid question status or answer mismatch.');
+    }
+    questionStatuses[id] = status;
+  }
+
   const result = await client.submitAttempt({
     testId: test.id,
     clientAttemptId: submission.submissionId,
     timeTakenSeconds: submission.timeTakenSeconds,
     responses,
+    questionStatuses,
   });
   const attempt = parseTrustedAttemptReceipt(result.attempt, {
     userId,
