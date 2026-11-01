@@ -14,7 +14,7 @@ const baseAttempt = {
   sectorAnalysis: [{ subject: "Maths", score: 2, total: 1, internal: "must not leak" }],
   scoreBreakdown: {
     rawScore: 10,
-    questionResults: [{ questionId: "q1", status: "correct", score: 2, correctOption: "A", internal: "must not leak" }],
+    questionResults: [{ questionId: "q1", status: "correct", score: 2, correctOption: "A", explanation: "Trusted explanation", explanationHindi: "विश्वसनीय व्याख्या", internal: "must not leak" }],
     internalScoringField: "must not leak",
   },
   internalRepositoryField: "must not leak",
@@ -69,7 +69,9 @@ test("reveals per-question breakdown only after trusted manual release", async (
   });
   assert.equal(result.canViewSolutions, true);
   assert.equal(result.result.scoreBreakdown.questionResults[0].status, "correct");
-  assert.equal("correctOption" in result.result.scoreBreakdown.questionResults[0], false);
+  assert.equal(result.result.scoreBreakdown.questionResults[0].correctOption, "A");
+  assert.equal(result.result.scoreBreakdown.questionResults[0].explanation, "Trusted explanation");
+  assert.equal(result.result.scoreBreakdown.questionResults[0].explanationHindi, "विश्वसनीय व्याख्या");
   assert.equal("internal" in result.result.scoreBreakdown.questionResults[0], false);
   assert.equal("internalScoringField" in result.result.scoreBreakdown, false);
 });
