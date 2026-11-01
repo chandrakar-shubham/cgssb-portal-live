@@ -47,6 +47,7 @@ The Worker implementation contains token verification, request validation, eligi
 
 - `createTrustedScoringWorker` requires a configured repository and Firebase project environment; missing repository configuration returns 503.
 - The current app's `apiClient.ts` still uses Firestore-native browser submission. It does not call the Worker endpoints.
+- `src/services/trustedScoringClient.ts` now provides a typed, dependency-injected HTTP client for the Worker submission and review routes. Its contract tests cover the allowlisted payload, Firebase bearer token, idempotent retry receipt, hidden/released review state, invalid input, and network failure. It is deliberately not wired into `apiClient.ts` yet; no Worker endpoint has been deployed or configured, so the production submission path remains unchanged.
 - No client integration, deployed endpoint origin, production secrets, Worker health evidence, or live non-production Firestore/IAM proof is established by this source audit.
 - The worker's single-answer scoring model must not be assumed to support every existing question format. Match-the-following, multi-select, assertion-reason, statement sets, integer/numeric, and image-based questions need an explicit compatibility decision before such tests are admitted to trusted scoring.
 - The actual entitlement/pass/device policy and published test schema must be validated against isolated non-production data, not inferred from UI state.
@@ -55,7 +56,7 @@ The Worker implementation contains token verification, request validation, eligi
 
 1. Add explicit DTO types: `StudentExamQuestion`, `AttemptSubmissionRequest`, `AttemptReceipt`, `AttemptReviewResponse`. Keep canonical/admin `Question` separate.
 2. Add a strict resolver that verifies exact section IDs and exact counts, preserving configured section/order. Unit-test missing IDs, duplicate IDs, count mismatch, unpublished test, and empty paper. No broad fallback.
-3. Add a Worker HTTP client that obtains a fresh Firebase ID token with `getIdToken()`, sends only the allowlisted submission fields, uses an idempotency key, and never logs bearer tokens or response maps.
+3. ~~Add a Worker HTTP client~~ **Transport client implemented:** `src/services/trustedScoringClient.ts` obtains a fresh Firebase ID token through an injected `getIdToken()` function, sends only allowlisted submission fields, preserves idempotent retry semantics, and never logs bearer tokens or response maps. Remaining: wire it to Firebase Auth and the UI behind an explicit non-production endpoint configuration, then test the full app journey.
 4. Add a non-production feature flag/configuration for the Worker endpoint. Fail closed for authoritative submissions if the endpoint is unavailable; do not silently fall back to browser scoring and call the result verified. Keep the existing production path unchanged until explicit cutover.
 5. Adapt the result UI to consume only `AttemptReceipt`. Do not fabricate review data from safe question projections.
 6. Add a dedicated review client and `SolutionsScreen` adapter for the review DTO, including pending-release, denied, not-found, and retry states.
