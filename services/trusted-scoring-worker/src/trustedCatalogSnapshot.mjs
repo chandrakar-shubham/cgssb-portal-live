@@ -10,7 +10,54 @@ function snapshotError(code, message) {
   return error;
 }
 
+function assertJsonSnapshotValue(value) {
+  const active = new WeakSet();
+  function visit(item) {
+    if (item === null || typeof item === "string" || typeof item === "boolean") return;
+    if (typeof item === "number" && Number.isFinite(item)) return;
+    if (!item || typeof item !== "object") {
+      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot values must be valid JSON primitives, objects, or arrays");
+    }
+    if (active.has(item)) {
+      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot records must not contain circular references");
+    }
+    const prototype = Object.getPrototypeOf(item);
+    if (!Array.isArray(item) && prototype !== Object.prototype && prototype !== null) {
+      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot records must contain only plain JSON objects and arrays");
+    }
+    if (Object.getOwnPropertySymbols(item).length > 0) {
+      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot records must not contain symbol properties");
+    }
+
+    active.add(item);
+    const descriptors = Object.getOwnPropertyDescriptors(item);
+    if (Array.isArray(item)) {
+      if (Reflect.ownKeys(descriptors).length !== item.length + 1) {
+        throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot arrays must be dense and have no custom properties");
+      }
+      for (let index = 0; index < item.length; index += 1) {
+        const descriptor = descriptors[String(index)];
+        if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+          throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot arrays must contain only dense data values");
+        }
+        visit(descriptor.value);
+      }
+    } else {
+      for (const key of Reflect.ownKeys(descriptors)) {
+        const descriptor = descriptors[key];
+        if (!descriptor.enumerable || !("value" in descriptor)) {
+          throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot objects must contain only enumerable data properties");
+        }
+        visit(descriptor.value);
+      }
+    }
+    active.delete(item);
+  }
+  visit(value);
+}
+
 function cloneAndFreeze(value) {
+  assertJsonSnapshotValue(value);
   let clone;
   try {
     clone = structuredClone(value);
@@ -18,23 +65,9 @@ function cloneAndFreeze(value) {
     throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must contain cloneable JSON data");
   }
 
-  const active = new WeakSet();
   function freezeRecursively(item) {
     if (!item || typeof item !== "object") return item;
-    if (active.has(item)) {
-      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must not contain circular references");
-    }
-    const prototype = Object.getPrototypeOf(item);
-    if (!Array.isArray(item) && prototype !== Object.prototype && prototype !== null) {
-      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must contain only plain JSON objects and arrays");
-    }
-    if (Object.getOwnPropertySymbols(item).length > 0) {
-      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must not contain symbol properties");
-    }
-
-    active.add(item);
     for (const child of Object.values(item)) freezeRecursively(child);
-    active.delete(item);
     return Object.freeze(item);
   }
 
