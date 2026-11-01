@@ -10,6 +10,15 @@ function snapshotError(code, message) {
   return error;
 }
 
+function hasDuplicateIds(records) {
+  const ids = new Set();
+  for (const record of records) {
+    if (ids.has(record.id)) return true;
+    ids.add(record.id);
+  }
+  return false;
+}
+
 /**
  * Validate an operator-supplied catalog export before passing it to the
  * read-only trusted catalog audit. This function performs no I/O and never
@@ -78,6 +87,9 @@ export function validateTrustedCatalogSnapshot({
   if (snapshot.tests.some(record => typeof record.id !== "string" || !SYNTHETIC_ID_PATTERN.test(record.id))
       || snapshot.questions.some(record => typeof record.id !== "string" || !SYNTHETIC_ID_PATTERN.test(record.id))) {
     throw snapshotError("NON_SYNTHETIC_RECORD_ID", "offline audit snapshots require bounded synthetic record IDs");
+  }
+  if (hasDuplicateIds(snapshot.tests) || hasDuplicateIds(snapshot.questions)) {
+    throw snapshotError("DUPLICATE_SNAPSHOT_RECORD_ID", "snapshot test and question IDs must be unique within their collections");
   }
 
   return Object.freeze({
