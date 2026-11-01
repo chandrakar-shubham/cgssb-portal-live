@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - master
+      - security/student-question-api-projection
   pull_request:
     branches:
       - main
       - master
+    types: [opened, reopened]
   workflow_dispatch:
     inputs:
       reason:
@@ -72,7 +74,7 @@ jobs:
       - name: 🔐 Phase 8.5 Firestore Emulator Student Journey Tests
         run: npm run test:phase8:5:firestore-emulator
 
-      - name: Student question Firestore reader emulator test
+      - name: Firestore Emulator: published-exam audit + student question reader test
         run: npm run test:rules
 
       - name: 🔍 Static Type Check & Linting
