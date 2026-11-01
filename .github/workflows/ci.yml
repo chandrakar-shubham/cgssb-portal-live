@@ -2,10 +2,9 @@ name: CGSSB Firebase Spark CI
 
 on:
   push:
-    branches: [main, security/student-question-api-projection]
+    branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, reopened]
 
 jobs:
   validate:
@@ -47,7 +46,7 @@ jobs:
       - name: Published student exam definition audit tests
         run: npm run test:student-exam-definition-audit
 
-      - name: "Firestore Emulator: published-exam audit + trusted-collection authorization"
+      - name: Firestore trusted-collection emulator authorization tests
         run: npm run test:rules
 
       # Validate the canonical Authority -> Recruitment -> Post -> Test Series architecture.
