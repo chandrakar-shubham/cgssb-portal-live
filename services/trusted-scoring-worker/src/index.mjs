@@ -104,7 +104,8 @@ export function createTrustedScoringWorker({
         if (encodedCursor) {
           try {
             const normalized = encodedCursor.replace(/-/g, "+").replace(/_/g, "/");
-            const decoded = JSON.parse(atob(normalized));
+            const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+            const decoded = JSON.parse(atob(padded));
             if (!decoded || typeof decoded.submittedAt !== "string" ||
                 !Number.isFinite(Date.parse(decoded.submittedAt)) ||
                 typeof decoded.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(decoded.id) ||
