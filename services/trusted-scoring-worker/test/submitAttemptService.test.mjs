@@ -232,13 +232,13 @@ test("preserves validated palette state and counts marked-for-review questions",
     uid: "student-1",
     submission: {
       ...submission,
-      questionStatuses: { q1: "answered_and_marked", q2: "unanswered" },
+      questionStatuses: { q1: "answered_and_marked", q2: "answered" },
     },
     repository,
   });
   assert.equal(result.status, 201);
   assert.equal(result.result.questionStatuses.q1, "answered_and_marked");
-  assert.equal(result.result.questionStatuses.q2, "unanswered");
+  assert.equal(result.result.questionStatuses.q2, "answered");
   assert.equal(result.result.markedForReviewCount, 1);
 });
 
