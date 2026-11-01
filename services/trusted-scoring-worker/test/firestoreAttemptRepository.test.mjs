@@ -165,3 +165,33 @@ test("does not overwrite a mismatched stored profile ID with the authenticated U
     uid: "student-1", test: testDefinition, now: Date.now(),
   }), false);
 });
+
+
+test("lists trusted attempts through owner-filtered stable pagination", async () => {
+  const firestore = makeFirestore();
+  let query;
+  firestore.queryDocuments = async input => {
+    query = input;
+    return [
+      { id: "a2", userId: "student-1", submittedAt: "2026-11-01T10:00:00.000Z" },
+      { id: "foreign", userId: "other-user", submittedAt: "2026-11-01T09:00:00.000Z" },
+    ];
+  };
+  const repository = createFirestoreAttemptRepository({ firestore });
+  const rows = await repository.listAttemptsForStudent({
+    uid: "student-1", pageSize: 20,
+    cursor: { id: "a1", submittedAt: "2026-10-31T10:00:00.000Z" },
+  });
+  assert.equal(query.filters[0].field, "userId");
+  assert.equal(query.filters[0].value, "student-1");
+  assert.equal(query.orderBy[0].field, "submittedAt");
+  assert.equal(query.orderBy[1].field, "__name__");
+  assert.equal(query.limit, 20);
+  assert.equal(query.cursor.id, "a1");
+  assert.deepEqual(rows.map(row => row.id), ["a2"]);
+});
+
+test("fails closed when trusted history query capability is unavailable", async () => {
+  const repository = createFirestoreAttemptRepository({ firestore: makeFirestore() });
+  await assert.rejects(() => repository.listAttemptsForStudent({ uid: "student-1" }), /TRUSTED_HISTORY_QUERY_UNAVAILABLE/);
+});
