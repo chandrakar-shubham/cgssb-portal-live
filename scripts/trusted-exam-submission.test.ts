@@ -11,7 +11,7 @@ const receipt = {
   id: 'attempt-1', userId: 'student-1', userName: 'Student', testId: 'test-1',
   testTitle: 'Mock', submittedAt: '2026-11-01T10:00:00.000Z',
   timeTakenSeconds: 45, totalDurationSeconds: 600,
-  responses: { q1: 'B', q2: null }, questionStatuses: { q1: 'answered', q2: 'unanswered' },
+  responses: Object.assign(Object.create(null), { q1: 'B', q2: null }), questionStatuses: { q1: 'answered', q2: 'unanswered' },
   score: 1, maxScore: 2, percentage: 50, accuracy: 100,
   correctCount: 1, incorrectCount: 0, unattemptedCount: 1, attemptedCount: 1,
   markedForReviewCount: 0, negativeMarksDeducted: 0, sectorAnalysis: [],
