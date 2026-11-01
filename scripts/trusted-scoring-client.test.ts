@@ -128,3 +128,54 @@ test('rejects response objects with custom prototypes, symbol keys, or accessors
   assert.equal(getterCalls, 0);
   assert.equal(calls, 0);
 });
+
+test('review rejects a receipt for a different attempt ID', async () => {
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://scoring.example.workers.dev',
+    getIdToken: async () => 'token',
+    fetchImpl: async () => response({ ok: true, canViewSolutions: false, attempt: { id: 'other-attempt' } }),
+  });
+  await assert.rejects(
+    client.getAttemptReview('attempt-1'),
+    (error: unknown) => error instanceof TrustedScoringApiError &&
+      error.status === 502 && error.code === 'INVALID_RESPONSE',
+  );
+});
+
+test('review rejects solution data before the trusted release flag', async () => {
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://scoring.example.workers.dev',
+    getIdToken: async () => 'token',
+    fetchImpl: async () => response({
+      ok: true,
+      canViewSolutions: false,
+      attempt: { id: 'attempt-1', scoreBreakdown: { questionResults: [] } },
+    }),
+  });
+  await assert.rejects(
+    client.getAttemptReview('attempt-1'),
+    /unreleased solutions/,
+  );
+});
+
+test('released review validates the per-question result structure', async () => {
+  const client = createTrustedScoringClient({
+    baseUrl: 'https://scoring.example.workers.dev',
+    getIdToken: async () => 'token',
+    fetchImpl: async () => response({
+      ok: true,
+      canViewSolutions: true,
+      attempt: {
+        id: 'attempt-1',
+        scoreBreakdown: {
+          questionResults: [{ questionId: 'q1', correctOption: 'Z' }],
+        },
+      },
+    }),
+  });
+  await assert.rejects(
+    client.getAttemptReview('attempt-1'),
+    /invalid question result/,
+  );
+});
+
