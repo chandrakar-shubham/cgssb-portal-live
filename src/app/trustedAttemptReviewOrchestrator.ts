@@ -25,9 +25,7 @@ export async function loadTrustedAttemptReview(input: TrustedAttemptReviewInput)
     throw new Error('Trusted attempt review requires a valid test and attempt ID.');
   }
 
-  const questions = await loadPublishedStudentExamQuestions(input.test, {
-    readDocuments: input.readQuestions,
-  });
+  // Authorize and bind the attempt before reading even the student projection.
   const review = await input.client.getAttemptReview(input.attemptId);
   const attempt = review?.attempt;
   if (!attempt || attempt.id !== input.attemptId ||
@@ -36,6 +34,9 @@ export async function loadTrustedAttemptReview(input: TrustedAttemptReviewInput)
     throw new Error('Trusted attempt review identity does not match the active student and test.');
   }
 
+  const questions = await loadPublishedStudentExamQuestions(input.test, {
+    readDocuments: input.readQuestions,
+  });
   const payload = {
     canViewSolutions: review.canViewSolutions,
     attempt: {
