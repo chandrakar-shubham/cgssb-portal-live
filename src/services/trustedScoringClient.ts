@@ -245,6 +245,36 @@ export function createTrustedScoringClient(options: TrustedScoringClientOptions)
       };
     },
 
+    async listAllMyAttempts(): Promise<Record<string, unknown>[]> {
+      const all: Record<string, unknown>[] = [];
+      const seenIds = new Set<string>();
+      const seenCursors = new Set<string>();
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        if (++pages > 10000) {
+          throw new TrustedScoringApiError('Trusted history exceeded the safe pagination boundary.', 502, 'INVALID_RESPONSE');
+        }
+        const page = await this.listMyAttempts({ limit: 50, cursor });
+        for (const attempt of page.attempts) {
+          const id = attempt.id as string;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            all.push(attempt);
+          }
+        }
+        cursor = page.nextCursor;
+        if (cursor && seenCursors.has(cursor)) {
+          throw new TrustedScoringApiError('Trusted history pagination cursor did not advance.', 502, 'INVALID_RESPONSE');
+        }
+        if (cursor) seenCursors.add(cursor);
+      } while (cursor);
+      return all.sort((a, b) =>
+        String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')) ||
+        String(b.id || '').localeCompare(String(a.id || ''))
+      );
+    },
+
     async getAttemptReview(attemptId: string): Promise<TrustedAttemptReview> {
       if (!ID_PATTERN.test(attemptId)) throw new Error('Attempt ID is invalid.');
       const payload = await request(`/v1/attempts/${encodeURIComponent(attemptId)}/review`);
