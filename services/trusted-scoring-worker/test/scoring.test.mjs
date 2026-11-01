@@ -91,3 +91,20 @@ test("uses the current app's one-third default penalty when a question omits neg
   assert.equal(result.negDeduction, 1);
   assert.equal(result.netScore, 0);
 });
+
+test("scores matching, assertion-reason, and multi-statement questions with one keyed option", () => {
+  const structuredQuestions = [
+    { id: "match-1", questionType: "matching", correctOption: "C", marks: 2, negativeMarks: 0.5 },
+    { id: "assert-1", questionType: "assertion_reason", correctOption: "A", marks: 2, negativeMarks: 0.5 },
+    { id: "statement-1", questionType: "multi_statement", correctOption: "D", marks: 2, negativeMarks: 0.5 },
+  ];
+  const result = scoreAttempt({
+    questions: structuredQuestions,
+    responses: { "match-1": "C", "assert-1": "B", "statement-1": "D" },
+  });
+  assert.equal(result.correctCount, 2);
+  assert.equal(result.incorrectCount, 1);
+  assert.equal(result.unattemptedCount, 0);
+  assert.equal(result.netScore, 3.5);
+  assert.deepEqual(result.questionResults.map(item => item.status), ["correct", "incorrect", "correct"]);
+});
