@@ -135,3 +135,28 @@ test("catalog audit reports compatibility counts and safe issue codes without an
 test("catalog audit rejects non-array snapshots instead of guessing", () => {
   assert.throws(() => auditTrustedTestCatalog({ tests: null, questions }), /must be arrays/);
 });
+
+test("catalog audit maps validation failures to stable typed issue codes", () => {
+  const cases = [
+    [{ ...definition, isPublished: false }, questions, "TEST_NOT_PUBLISHED"],
+    [{ ...definition, sections: [] }, questions, "MISSING_EXPLICIT_SECTIONS"],
+    [{ ...definition, sections: [{ id: "s1" }] }, questions, "MISSING_EXPLICIT_QUESTION_IDS"],
+    [{ ...definition, sections: [{ id: "s1", questionIds: ["bad id"] }] }, questions, "INVALID_QUESTION_ID"],
+    [{ ...definition, sections: [{ id: "s1", questionIds: ["q1", "q1"] }], questionCount: 2 }, questions, "DUPLICATE_QUESTION_IDS"],
+    [{ ...definition, durationMinutes: 0 }, questions, "INVALID_DURATION"],
+    [{ ...definition, marksPerQuestion: 101 }, questions, "INVALID_DEFAULT_MARKS"],
+    [{ ...definition, negativeMarksPerQuestion: 101 }, questions, "INVALID_DEFAULT_NEGATIVE_MARKS"],
+    [definition, [...questions, { id: "q1", correctOption: "B" }], "DUPLICATE_CANONICAL_QUESTION_IDS"],
+    [definition, [{ id: "q1", correctOption: "A", marks: 101 }, questions[1]], "INVALID_QUESTION_MARKS"],
+    [definition, [{ id: "q1", correctOption: "A", negativeMarks: 101 }, questions[1]], "INVALID_QUESTION_NEGATIVE_MARKS"],
+    [definition, [{ id: "q1", questionType: "matching", correctOption: "A" }, questions[1]], "UNSUPPORTED_QUESTION_TYPE"],
+    [definition, [{ id: "q1", correctOption: "E" }, questions[1]], "INVALID_CORRECT_OPTION"],
+  ];
+
+  for (const [candidate, snapshot, expectedCode] of cases) {
+    const report = auditTrustedTestCatalog({ tests: [candidate], questions: snapshot });
+    assert.deepEqual(report.results[0].issueCodes, [expectedCode], expectedCode);
+    assert.equal(report.results[0].compatible, false);
+  }
+});
+
