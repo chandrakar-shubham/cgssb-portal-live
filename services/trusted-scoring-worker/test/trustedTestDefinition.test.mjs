@@ -150,6 +150,8 @@ test("catalog audit rejects every occurrence of a duplicated test ID", () => {
 
   assert.equal(report.compatibleCount, 1);
   assert.equal(report.incompatibleCount, 2);
+  assert.deepEqual(report.issueCodeCounts, { DUPLICATE_TEST_IDS: 2 });
+  assert.equal(Object.isFrozen(report.issueCodeCounts), true);
   assert.deepEqual(report.results.map(item => item.issueCodes), [
     ["DUPLICATE_TEST_IDS"],
     ["DUPLICATE_TEST_IDS"],
