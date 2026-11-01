@@ -16,29 +16,29 @@ function assertJsonSnapshotValue(value) {
     if (item === null || typeof item === "string" || typeof item === "boolean") return;
     if (typeof item === "number" && Number.isFinite(item)) return;
     if (!item || typeof item !== "object") {
-      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot values must be valid JSON primitives, objects, or arrays");
+      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot values must be valid JSON primitives, objects, or arrays");
     }
     if (active.has(item)) {
-      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot records must not contain circular references");
+      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must not contain circular references");
     }
     const prototype = Object.getPrototypeOf(item);
     if (!Array.isArray(item) && prototype !== Object.prototype && prototype !== null) {
-      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot records must contain only plain JSON objects and arrays");
+      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must contain only plain JSON objects and arrays");
     }
     if (Object.getOwnPropertySymbols(item).length > 0) {
-      throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot records must not contain symbol properties");
+      throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot records must not contain symbol properties");
     }
 
     active.add(item);
     const descriptors = Object.getOwnPropertyDescriptors(item);
     if (Array.isArray(item)) {
       if (Reflect.ownKeys(descriptors).length !== item.length + 1) {
-        throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot arrays must be dense and have no custom properties");
+        throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot arrays must be dense and have no custom properties");
       }
       for (let index = 0; index < item.length; index += 1) {
         const descriptor = descriptors[String(index)];
         if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
-          throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot arrays must contain only dense data values");
+          throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot arrays must contain only dense data values");
         }
         visit(descriptor.value);
       }
@@ -46,7 +46,7 @@ function assertJsonSnapshotValue(value) {
       for (const key of Reflect.ownKeys(descriptors)) {
         const descriptor = descriptors[key];
         if (!descriptor.enumerable || !("value" in descriptor)) {
-          throw snapshotError(INVALID_SNAPSHOT_RECORD, "snapshot objects must contain only enumerable data properties");
+          throw snapshotError("INVALID_SNAPSHOT_RECORD", "snapshot objects must contain only enumerable data properties");
         }
         visit(descriptor.value);
       }
