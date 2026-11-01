@@ -27,6 +27,7 @@
     "test:student-question-projection": "tsx scripts/student-question-projection.test.ts",
     "test:student-exam-resolver": "tsx scripts/student-exam-question-resolver.test.ts",
     "test:student-exam-adapter": "tsx scripts/student-exam-question-adapter.test.ts",
+    "test:student-exam-definition-audit": "tsx scripts/student-exam-definition-audit.test.ts",
     "check:trusted-firestore-smoke": "node --check scripts/trusted-firestore-smoke.mjs"
   },
   "dependencies": {
