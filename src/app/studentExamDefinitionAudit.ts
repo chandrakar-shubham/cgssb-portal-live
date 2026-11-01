@@ -39,6 +39,8 @@ export interface PublishedExamAuditSummary {
 export interface PublishedExamAuditOptions {
   /** Maximum number of question documents the audit may request in total. */
   maxQuestionIds?: number;
+  /** Number of independent test definitions audited concurrently (1–10). Defaults to 4. */
+  concurrency?: number;
 }
 
 /**
@@ -61,13 +63,22 @@ export async function auditPublishedStudentExamDefinitions(
     throw new Error('Audit question-read budget must be an integer between 1 and 25000.');
   }
 
+  const concurrency = options.concurrency ?? 4;
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 10) {
+    throw new Error('Audit concurrency must be an integer between 1 and 10.');
+  }
+
   const publishedTests = tests.filter(test => test?.isPublished === true);
-  const results: PublishedExamAuditResult[] = [];
+  const results: PublishedExamAuditResult[] = new Array(publishedTests.length);
+  let nextIndex = 0;
   let questionIdsAttempted = 0;
   let questionIdsReserved = 0;
   let questionIdsDeferred = 0;
 
-  for (const test of publishedTests) {
+  const auditNext = async (): Promise<void> => {
+    const index = nextIndex++;
+    if (index >= publishedTests.length) return;
+    const test = publishedTests[index];
     const requestedCount = Array.isArray(test.sections)
       ? (test.sections as unknown[]).reduce<number>((total: number, section: unknown) => {
           const questionIds = section && typeof section === 'object'
@@ -79,14 +90,14 @@ export async function auditPublishedStudentExamDefinitions(
 
     if (requestedCount > maxQuestionIds - questionIdsReserved) {
       questionIdsDeferred += requestedCount;
-      results.push({
+      results[index] = {
         testId: String(test.id ?? ''),
         title: String(test.title ?? ''),
         status: 'blocked',
         issueCode: 'AUDIT_READ_BUDGET_EXCEEDED',
         message: 'Skipped to stay within the configured total question-document read budget.',
-      });
-      continue;
+      };
+      return;
     }
 
     // Reserve conservatively before validation/read. Invalid definitions may
@@ -99,24 +110,31 @@ export async function auditPublishedStudentExamDefinitions(
     };
     try {
       await loadPublishedStudentExamQuestions(test, countedReader);
-      results.push({
+      results[index] = {
         testId: String(test.id ?? ''),
         title: String(test.title ?? ''),
         status: 'ready',
-      });
+      };
     } catch (error) {
       const issueCode: PublishedExamAuditIssueCode = error instanceof StudentExamResolutionError
         ? error.code as PublishedExamAuditIssueCode
         : 'PROJECTION_READ_FAILED';
-      results.push({
+      results[index] = {
         testId: String(test?.id ?? ''),
         title: String(test?.title ?? ''),
         status: 'blocked',
         issueCode,
         message: error instanceof Error ? error.message : 'Unknown projection audit failure.',
-      });
+      };
     }
-  }
+  };
+
+  // A small bounded worker pool reduces audit latency without creating an
+  // unbounded Firestore burst. Budget reservation happens synchronously before
+  // each worker awaits Firestore, and result order remains deterministic.
+  await Promise.all(Array.from({ length: Math.min(concurrency, publishedTests.length) }, async () => {
+    while (nextIndex < publishedTests.length) await auditNext();
+  }));
 
   const ready = results.filter(result => result.status === 'ready').length;
   return {
