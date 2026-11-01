@@ -14,7 +14,8 @@ export type PublishedExamAuditIssueCode =
   | 'DUPLICATE_PROJECTED_QUESTION'
   | 'UNEXPECTED_PROJECTED_QUESTION'
   | 'UNSAFE_STUDENT_QUESTION'
-  | 'PROJECTION_READ_FAILED';
+  | 'PROJECTION_READ_FAILED'
+  | 'AUDIT_READ_BUDGET_EXCEEDED';
 
 export interface PublishedExamAuditResult {
   testId: string;
@@ -29,27 +30,64 @@ export interface PublishedExamAuditSummary {
   published: number;
   ready: number;
   blocked: number;
+  questionIdsAttempted: number;
+  questionIdsDeferred: number;
   results: PublishedExamAuditResult[];
+}
+
+export interface PublishedExamAuditOptions {
+  /** Maximum number of question documents the audit may request in total. */
+  maxQuestionIds?: number;
 }
 
 /**
  * Read-only, bounded pre-cutover audit. It validates published definitions
  * against their actual student projection documents using the same strict
  * adapter used by the isolated production data source. Tests are processed
- * sequentially to avoid a burst of Firestore reads.
+ * sequentially and a total document-read budget prevents unexpectedly large
+ * Firestore bills during a pre-cutover audit.
  */
 export async function auditPublishedStudentExamDefinitions(
   tests: readonly Pick<MockTest, 'id' | 'title' | 'isPublished' | 'sections' | 'questionCount'>[],
   readDocuments: StudentQuestionDocumentReader,
+  options: PublishedExamAuditOptions = {},
 ): Promise<PublishedExamAuditSummary> {
   if (!Array.isArray(tests) || tests.length > 500) {
     throw new Error('Audit accepts at most 500 test definitions per run.');
   }
+  const maxQuestionIds = options.maxQuestionIds ?? 5000;
+  if (!Number.isInteger(maxQuestionIds) || maxQuestionIds < 1 || maxQuestionIds > 25000) {
+    throw new Error('Audit question-read budget must be an integer between 1 and 25000.');
+  }
 
   const publishedTests = tests.filter(test => test?.isPublished === true);
   const results: PublishedExamAuditResult[] = [];
+  let questionIdsAttempted = 0;
+  let questionIdsDeferred = 0;
 
   for (const test of publishedTests) {
+    const requestedCount = Array.isArray(test.sections)
+      ? test.sections.reduce(
+          (total, section) => total + (Array.isArray(section?.questionIds) ? section.questionIds.length : 0),
+          0,
+        )
+      : 0;
+
+    if (requestedCount > maxQuestionIds - questionIdsAttempted) {
+      questionIdsDeferred += requestedCount;
+      results.push({
+        testId: String(test.id ?? ''),
+        title: String(test.title ?? ''),
+        status: 'blocked',
+        issueCode: 'AUDIT_READ_BUDGET_EXCEEDED',
+        message: 'Skipped to stay within the configured total question-document read budget.',
+      });
+      continue;
+    }
+
+    // Reserve the budget before the read. A failed read still consumes budget,
+    // preventing repeated attempts from bypassing the cap.
+    questionIdsAttempted += requestedCount;
     try {
       await loadPublishedStudentExamQuestions(test, readDocuments);
       results.push({
@@ -77,6 +115,8 @@ export async function auditPublishedStudentExamDefinitions(
     published: publishedTests.length,
     ready,
     blocked: results.length - ready,
+    questionIdsAttempted,
+    questionIdsDeferred,
     results,
   };
 }
