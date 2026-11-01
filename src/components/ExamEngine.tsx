@@ -38,14 +38,14 @@ import {
   X,
   HardDrive
 } from 'lucide-react';
-import { QuestionRenderer } from './QuestionRenderer';
+import { QuestionRenderer, type ExamRenderableQuestion } from './QuestionRenderer';
 import { LanguageToggle } from './LanguageToggle';
 import { useLanguage } from '../context/LanguageContext';
 import { isQuestionBookmarked, toggleBookmark, BOOKMARKS_CHANGED_EVENT } from '../utils/bookmarkStorage';
 
 interface ExamEngineProps {
   test: MockTest;
-  questions: Question[];
+  questions: ExamRenderableQuestion[];
   onExit: () => void;
   onSubmit: (attemptData: {
     testId: string;
@@ -1094,7 +1094,7 @@ export const ExamEngine: React.FC<ExamEngineProps> = ({
                   </div>
 
                   <div className="grid grid-cols-5 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
-                    {sectionQuestions.map((q: Question, idx: number) => {
+                    {sectionQuestions.map((q: ExamRenderableQuestion, idx: number) => {
                       const status = questionStatuses[q.id] || 'not_visited';
                       const isCurrent = idx === currentQuestionIndex;
 
