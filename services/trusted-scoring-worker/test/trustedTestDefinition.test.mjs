@@ -107,7 +107,7 @@ test("accepts the known single-answer type aliases used by the trusted scorer", 
 test("catalog audit reports compatibility counts and safe issue codes without answer-key data", () => {
   const catalog = [
     definition,
-    { ...definition, id: "test-unsupported", sections: [{ id: "s1", questionIds: ["q1"] }], questionCount: 1 },
+    { ...definition, id: "test-unsupported", sections: [{ id: "s1", questionIds: ["q1-structured"] }], questionCount: 1 },
     { ...definition, id: "test-missing", sections: [{ id: "s1", questionIds: ["q404"] }], questionCount: 1 },
     { ...definition, id: "test-count", questionCount: 99 },
   ];
@@ -124,7 +124,7 @@ test("catalog audit reports compatibility counts and safe issue codes without an
   assert.equal(report.incompatibleCount, 3);
   assert.deepEqual(report.results.map(item => item.issueCodes), [
     [],
-    ["QUESTION_MISSING"],
+    ["UNSUPPORTED_QUESTION_TYPE"],
     ["QUESTION_MISSING"],
     ["QUESTION_COUNT_MISMATCH"],
   ]);
