@@ -50,7 +50,7 @@ export function validateTrustedCatalogSnapshot({
     throw snapshotError("PRODUCTION_OR_UNISOLATED_DATABASE", "catalog snapshots require an isolated named non-production database");
   }
   const timestampMatch = typeof exportedAt === "string"
-    ? /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?Z$/.exec(exportedAt)
+    ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(exportedAt)
     : null;
   const parsedTimestamp = timestampMatch ? Date.parse(exportedAt) : NaN;
   const parsedDate = Number.isFinite(parsedTimestamp) ? new Date(parsedTimestamp) : null;
