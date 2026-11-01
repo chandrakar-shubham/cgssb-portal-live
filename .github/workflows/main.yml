@@ -54,6 +54,8 @@ jobs:
 
       - name: Strict student exam question resolver tests
         run: npm run test:student-exam-resolver
+      - name: Test strict student exam adapter
+        run: npm run test:student-exam-adapter
 
       - name: 🧪 Phase 8.5 Student Journey Safety Guard
         run: npm run test:phase8:5-journey-guard
