@@ -74,7 +74,7 @@ jobs:
       - name: 🔐 Phase 8.5 Firestore Emulator Student Journey Tests
         run: npm run test:phase8:5:firestore-emulator
 
-      - name: Firestore Emulator: published-exam audit + student question reader test
+      - name: "Firestore Emulator: published-exam audit + student question reader test"
         run: npm run test:rules
 
       - name: 🔍 Static Type Check & Linting
