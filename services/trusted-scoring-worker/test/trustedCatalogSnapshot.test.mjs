@@ -81,6 +81,8 @@ test("rejects malformed version, timestamp, metadata, and record arrays", () => 
     [{ ...validSnapshot, metadata: { ...validSnapshot.metadata, exportedAt: "yesterday" } }, "INVALID_EXPORT_TIMESTAMP"],
     [{ ...validSnapshot, tests: null }, "INVALID_SNAPSHOT_RECORDS"],
     [{ ...validSnapshot, questions: [null] }, "INVALID_SNAPSHOT_RECORD"],
+    [{ ...validSnapshot, tests: [{ id: "copied-production-test" }] }, "NON_SYNTHETIC_RECORD_ID"],
+    [{ ...validSnapshot, questions: [{ id: "copied-production-question" }] }, "NON_SYNTHETIC_RECORD_ID"],
     [null, "INVALID_SNAPSHOT"],
   ];
   for (const [snapshot, code] of cases) {
