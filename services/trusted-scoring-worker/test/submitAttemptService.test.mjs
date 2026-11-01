@@ -224,3 +224,35 @@ test("rejects mismatched student profile before loading canonical questions", as
   assert.equal(canonicalQuestionReads, 0);
   assert.equal(repository.records.size, 0);
 });
+
+
+test("preserves validated palette state and counts marked-for-review questions", async () => {
+  const repository = makeRepository();
+  const result = await submitTrustedAttempt({
+    uid: "student-1",
+    submission: {
+      ...submission,
+      questionStatuses: { q1: "answered_and_marked", q2: "unanswered" },
+    },
+    repository,
+  });
+  assert.equal(result.status, 201);
+  assert.equal(result.result.questionStatuses.q1, "answered_and_marked");
+  assert.equal(result.result.questionStatuses.q2, "unanswered");
+  assert.equal(result.result.markedForReviewCount, 1);
+});
+
+test("rejects palette status that conflicts with the submitted answer", async () => {
+  const repository = makeRepository();
+  const result = await submitTrustedAttempt({
+    uid: "student-1",
+    submission: {
+      ...submission,
+      questionStatuses: { q1: "unanswered", q2: "answered" },
+    },
+    repository,
+  });
+  assert.equal(result.status, 400);
+  assert.equal(result.error, "QUESTION_STATUS_RESPONSE_MISMATCH");
+  assert.equal(repository.records.size, 0);
+});
