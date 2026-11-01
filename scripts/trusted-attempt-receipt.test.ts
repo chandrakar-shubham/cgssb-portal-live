@@ -61,3 +61,40 @@ assert.throws(() => parseTrustedAttemptReceipt(
 ), /invalid score/);
 
 console.log('PASS trusted attempt receipt: validates server identity, submission scope, numeric fields, and exam count invariants');
+
+let receiptGetterCalls = 0;
+const accessorReceipt = { ...receipt };
+Object.defineProperty(accessorReceipt, 'score', {
+  enumerable: true,
+  get() { receiptGetterCalls += 1; return 1; },
+});
+assert.throws(() => parseTrustedAttemptReceipt(accessorReceipt, {
+  userId: 'student-1', test, clientAttemptId: 'client-attempt-1',
+}), /property descriptors/);
+assert.equal(receiptGetterCalls, 0);
+
+const inheritedReceipt = Object.assign(Object.create({ userId: 'student-1' }), receipt);
+assert.throws(() => parseTrustedAttemptReceipt(inheritedReceipt, {
+  userId: 'student-1', test, clientAttemptId: 'client-attempt-1',
+}), /invalid receipt/);
+
+let responseGetterCalls = 0;
+const accessorResponses = { q2: null } as Record<string, unknown>;
+Object.defineProperty(accessorResponses, 'q1', {
+  enumerable: true,
+  get() { responseGetterCalls += 1; return 'A'; },
+});
+assert.throws(() => parseTrustedAttemptReceipt({ ...receipt, responses: accessorResponses }, {
+  userId: 'student-1', test, clientAttemptId: 'client-attempt-1',
+}), /property descriptors/);
+assert.equal(responseGetterCalls, 0);
+
+const accessorSector = {};
+Object.defineProperty(accessorSector, 'subject', {
+  enumerable: true,
+  get() { throw new Error('sector getter must not run'); },
+});
+assert.throws(() => parseTrustedAttemptReceipt({ ...receipt, sectorAnalysis: [accessorSector] }, {
+  userId: 'student-1', test, clientAttemptId: 'client-attempt-1',
+}), /property descriptors/);
+
