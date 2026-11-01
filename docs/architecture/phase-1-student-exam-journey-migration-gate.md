@@ -75,6 +75,12 @@ The Worker implementation contains token verification, request validation, eligi
 - The app never silently falls back from trusted scoring to client scoring while displaying a verified result.
 - Existing production exam launch, submission, history, leaderboard and review behavior remains unchanged until a complete migration is verified.
 
+## Read-only published-definition audit utility
+
+`src/firebase/studentExamDefinitionAuditFirestore.ts` exposes a read-only Firestore entry point for a controlled audit. It queries `mockTests` where `isPublished == true`, limits the scan to 501 records to detect overflow, validates Firestore document ID against the embedded `id`, then checks explicit IDs in `studentQuestions`. It never reads canonical `/questions` and never writes. The audit has a default 5,000-question-ID budget (maximum 25,000) and a bounded worker pool (default concurrency 4, maximum 10). Results retain source order. A run exceeding 500 published tests fails closed and must be explicitly scoped rather than silently truncating.
+
+This utility is not invoked automatically and has not been run against production data. Run only after the operator authorizes the live read; use a controlled environment and retain the summary without exposing question content or student information. It is a readiness audit, not proof that the student client has migrated to trusted scoring.
+
 ## Gate result
 
 **NOT READY FOR STUDENT CLIENT CUTOVER.** The source audit confirms a Worker foundation but the browser journey still reads canonical answers and computes/writes the score itself. This is an intentional stop, not a production failure. Keep PR #10 draft and do not merge or deploy until the above invariants are proven by integrated tests.
