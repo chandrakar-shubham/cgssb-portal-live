@@ -98,3 +98,56 @@ export function buildTrustedTestDefinition({ test, questions }) {
     questions: Object.freeze(resolved.map(question => Object.freeze({ ...question }))),
   });
 }
+
+
+const ISSUE_CODES = [
+  ["TEST_NOT_PUBLISHED", "TEST_NOT_PUBLISHED"],
+  ["TRUSTED_TEST_QUESTION_MISSING", "QUESTION_MISSING"],
+  ["TRUSTED_TEST_UNSUPPORTED_QUESTION_TYPE", "UNSUPPORTED_QUESTION_TYPE"],
+  ["TRUSTED_TEST_INVALID_CORRECT_OPTION", "INVALID_CORRECT_OPTION"],
+  ["invalid trusted test question marks", "INVALID_QUESTION_MARKS"],
+  ["invalid trusted test question negative marks", "INVALID_QUESTION_NEGATIVE_MARKS"],
+  ["questionCount does not match", "QUESTION_COUNT_MISMATCH"],
+  ["duplicate question IDs", "DUPLICATE_QUESTION_IDS"],
+  ["canonical question IDs are not unique", "DUPLICATE_CANONICAL_QUESTION_IDS"],
+  ["durationMinutes", "INVALID_DURATION"],
+  ["marksPerQuestion", "INVALID_DEFAULT_MARKS"],
+  ["negativeMarksPerQuestion", "INVALID_DEFAULT_NEGATIVE_MARKS"],
+  ["explicit sections", "MISSING_EXPLICIT_SECTIONS"],
+  ["explicit questionIds", "MISSING_EXPLICIT_QUESTION_IDS"],
+  ["invalid question ID", "INVALID_QUESTION_ID"],
+  ["1..500 explicitly assigned", "QUESTION_COUNT_OUT_OF_RANGE"],
+];
+
+function catalogIssueCode(error) {
+  const message = String(error?.message || "");
+  return ISSUE_CODES.find(([fragment]) => message.includes(fragment))?.[1] || "INVALID_TEST_DEFINITION";
+}
+
+/**
+ * Read-only compatibility report for caller-supplied catalog snapshots.
+ * The report intentionally contains no question text, answer keys, or explanations.
+ */
+export function auditTrustedTestCatalog({ tests, questions }) {
+  if (!Array.isArray(tests) || !Array.isArray(questions)) {
+    throw new TypeError("tests and canonical questions must be arrays");
+  }
+
+  const results = tests.map(test => {
+    const testId = typeof test?.id === "string" ? test.id : null;
+    try {
+      buildTrustedTestDefinition({ test, questions });
+      return { testId, compatible: true, issueCodes: [] };
+    } catch (error) {
+      return { testId, compatible: false, issueCodes: [catalogIssueCode(error)] };
+    }
+  });
+
+  const compatibleCount = results.filter(item => item.compatible).length;
+  return Object.freeze({
+    totalTests: results.length,
+    compatibleCount,
+    incompatibleCount: results.length - compatibleCount,
+    results: Object.freeze(results.map(item => Object.freeze(item))),
+  });
+}
