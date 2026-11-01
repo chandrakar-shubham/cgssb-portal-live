@@ -35,6 +35,9 @@ jobs:
       - name: Trusted scoring worker security scaffold tests
         run: npm --prefix services/trusted-scoring-worker test
 
+      - name: Trusted scoring client contract tests
+        run: npm run test:trusted-scoring-client
+
       - name: Student question projection security tests
         run: npm run test:student-question-projection
 
