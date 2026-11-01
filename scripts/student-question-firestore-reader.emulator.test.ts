@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { readFile } from 'node:fs/promises';
 import { fetchStudentQuestionDocumentsByIds } from '../src/firebase/studentQuestionFirestoreReader';
 
@@ -21,7 +22,9 @@ try {
     })));
   });
 
-  const studentDb = env.authenticatedContext('synthetic-student').firestore();
+  // rules-unit-testing exposes the compat Firestore facade; the reader uses the
+  // modular SDK, which unwraps this facade at runtime via getModularInstance.
+  const studentDb = env.authenticatedContext('synthetic-student').firestore() as unknown as Firestore;
   const requested = [...ids].reverse();
   const documents = await fetchStudentQuestionDocumentsByIds(studentDb, requested);
   assert.equal(documents.length, 31, 'reader must span the 30-ID Firestore query boundary');
