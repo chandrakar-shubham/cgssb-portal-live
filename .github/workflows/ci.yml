@@ -43,6 +43,9 @@ jobs:
       - name: Test strict student exam adapter
         run: npm run test:student-exam-adapter
 
+      - name: Published student exam definition audit tests
+        run: npm run test:student-exam-definition-audit
+
       - name: Firestore trusted-collection emulator authorization tests
         run: npm run test:rules
 
