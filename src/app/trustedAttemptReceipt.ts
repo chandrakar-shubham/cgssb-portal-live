@@ -80,12 +80,17 @@ export function parseTrustedAttemptReceipt(
   const questionIds = expected.test.sections.flatMap(section => section.questionIds);
   const responses = validateQuestionMap(raw.responses, questionIds, 'responses') as TestAttempt['responses'];
   const questionStatuses = validateQuestionMap(raw.questionStatuses, questionIds, 'questionStatuses') as TestAttempt['questionStatuses'];
-  if (!Array.isArray(raw.sectorAnalysis) || raw.sectorAnalysis.some((item: any) =>
-    !item || typeof item !== 'object' || typeof item.subject !== 'string' ||
-    !['total', 'correct', 'incorrect', 'unattempted', 'accuracy', 'score', 'maxScore'].every(field => finite(item[field]))
-  )) {
+  if (!Array.isArray(raw.sectorAnalysis)) {
     throw new Error('Trusted attempt receipt has invalid sector analysis.');
   }
+  const sectorAnalysis = raw.sectorAnalysis.map((item: unknown) => {
+    const sector = ownDataRecord(item, 'sector analysis');
+    if (typeof sector.subject !== 'string' ||
+        !['total', 'correct', 'incorrect', 'unattempted', 'accuracy', 'score', 'maxScore'].every(field => finite(sector[field]))) {
+      throw new Error('Trusted attempt receipt has invalid sector analysis.');
+    }
+    return sector;
+  });
   const totalQuestions = questionIds.length;
   if ((raw.attemptedCount as number) !== (raw.correctCount as number) + (raw.incorrectCount as number) ||
       (raw.attemptedCount as number) + (raw.unattemptedCount as number) !== totalQuestions) {
@@ -113,7 +118,7 @@ export function parseTrustedAttemptReceipt(
     attemptedCount: raw.attemptedCount as number,
     markedForReviewCount: raw.markedForReviewCount as number,
     negativeMarksDeducted: raw.negativeMarksDeducted as number,
-    sectorAnalysis: raw.sectorAnalysis as TestAttempt['sectorAnalysis'],
+    sectorAnalysis: sectorAnalysis as TestAttempt['sectorAnalysis'],
     submissionId: expected.clientAttemptId,
     seriesId: expected.test.seriesId,
     targetKey: expected.test.targetKey,
