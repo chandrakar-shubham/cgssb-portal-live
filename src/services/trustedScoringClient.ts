@@ -3,6 +3,7 @@ export interface TrustedAttemptSubmission {
   clientAttemptId: string;
   timeTakenSeconds: number;
   responses: Record<string, string | null>;
+  questionStatuses?: Record<string, 'not_visited' | 'unanswered' | 'answered' | 'marked_for_review' | 'answered_and_marked'>;
 }
 
 export interface TrustedAttemptReview {
@@ -33,6 +34,7 @@ export class TrustedScoringApiError extends Error {
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const ANSWERS = new Set(['A', 'B', 'C', 'D', null]);
+const PALETTE_STATUSES = new Set(['not_visited', 'unanswered', 'answered', 'marked_for_review', 'answered_and_marked']);
 
 function validateBaseUrl(value: string): string {
   let url: URL;
@@ -73,6 +75,9 @@ function copyPlainDataRecord(value: unknown, label: string): Record<string, unkn
 function validateSubmission(value: TrustedAttemptSubmission): TrustedAttemptSubmission {
   const input = copyPlainDataRecord(value, 'A trusted attempt submission');
   const responses = copyPlainDataRecord(input.responses, 'Attempt responses');
+  const questionStatuses = input.questionStatuses === undefined
+    ? undefined
+    : copyPlainDataRecord(input.questionStatuses, 'Question palette statuses');
   const testId = input.testId;
   const clientAttemptId = input.clientAttemptId;
   const timeTakenSeconds = input.timeTakenSeconds;
@@ -92,11 +97,21 @@ function validateSubmission(value: TrustedAttemptSubmission): TrustedAttemptSubm
       throw new Error('Attempt responses contain an invalid question ID or answer value.');
     }
   }
+  if (questionStatuses) {
+    const statusKeys = Object.keys(questionStatuses);
+    if (statusKeys.length > 500) throw new Error('A submission cannot contain more than 500 question statuses.');
+    for (const questionId of statusKeys) {
+      if (!ID_PATTERN.test(questionId) || !PALETTE_STATUSES.has(questionStatuses[questionId] as string)) {
+        throw new Error('Question palette statuses contain an invalid question ID or status.');
+      }
+    }
+  }
   return {
     testId,
     clientAttemptId,
     timeTakenSeconds,
     responses: responses as TrustedAttemptSubmission['responses'],
+    ...(questionStatuses ? { questionStatuses: questionStatuses as TrustedAttemptSubmission['questionStatuses'] } : {}),
   };
 }
 
@@ -167,6 +182,7 @@ export function createTrustedScoringClient(options: TrustedScoringClientOptions)
           clientAttemptId: safeSubmission.clientAttemptId,
           timeTakenSeconds: safeSubmission.timeTakenSeconds,
           responses: safeSubmission.responses,
+          ...(safeSubmission.questionStatuses ? { questionStatuses: safeSubmission.questionStatuses } : {}),
         }),
       });
       if (!payload.attempt || typeof payload.attempt !== 'object' || Array.isArray(payload.attempt) ||
