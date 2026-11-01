@@ -37,6 +37,7 @@ const result = await submitTrustedExamAttempt({
 assert.deepEqual(captured, {
   testId: 'test-1', clientAttemptId: 'session-123', timeTakenSeconds: 45,
   responses: Object.assign(Object.create(null), { q1: 'B', q2: null }),
+  questionStatuses: Object.assign(Object.create(null), { q1: 'answered', q2: 'not_visited' }),
 });
 assert.equal(Object.getPrototypeOf(captured.responses), null);
 assert.equal(result.attempt.score, 1);
