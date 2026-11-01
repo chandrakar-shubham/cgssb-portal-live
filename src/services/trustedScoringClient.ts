@@ -64,10 +64,24 @@ function validateSubmission(value: TrustedAttemptSubmission): void {
   if (!value.responses || typeof value.responses !== 'object' || Array.isArray(value.responses)) {
     throw new Error('Attempt responses must be an object.');
   }
-  const entries = Object.entries(value.responses);
-  if (entries.length > 500) throw new Error('A submission cannot contain more than 500 responses.');
-  for (const [questionId, answer] of entries) {
-    if (!ID_PATTERN.test(questionId) || !ANSWERS.has(answer)) {
+  // Accept only inert JSON-style records. This prevents inherited values,
+  // symbol properties, and getters from entering the signed request payload.
+  const prototype = Object.getPrototypeOf(value.responses);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error('Attempt responses must be a plain object.');
+  }
+  if (Object.getOwnPropertySymbols(value.responses).length > 0) {
+    throw new Error('Attempt responses must not contain symbol properties.');
+  }
+  const keys = Object.keys(value.responses);
+  if (keys.length > 500) throw new Error('A submission cannot contain more than 500 responses.');
+  for (const questionId of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value.responses, questionId);
+    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new Error('Attempt responses must contain only enumerable data properties.');
+    }
+    const answer: unknown = descriptor.value;
+    if (!ID_PATTERN.test(questionId) || !ANSWERS.has(answer as string | null)) {
       throw new Error('Attempt responses contain an invalid question ID or answer value.');
     }
   }
