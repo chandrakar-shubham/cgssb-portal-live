@@ -69,10 +69,12 @@ export async function auditPublishedStudentExamDefinitions(
 
   for (const test of publishedTests) {
     const requestedCount = Array.isArray(test.sections)
-      ? test.sections.reduce(
-          (total, section) => total + (Array.isArray(section?.questionIds) ? section.questionIds.length : 0),
-          0,
-        )
+      ? (test.sections as unknown[]).reduce<number>((total: number, section: unknown) => {
+          const questionIds = section && typeof section === 'object'
+            ? (section as { questionIds?: unknown }).questionIds
+            : undefined;
+          return total + (Array.isArray(questionIds) ? questionIds.length : 0);
+        }, 0)
       : 0;
 
     if (requestedCount > maxQuestionIds - questionIdsReserved) {
