@@ -34,9 +34,9 @@ test('submission sends only the allowlisted payload with a fresh Firebase bearer
   assert.equal(result.replayed, false);
   assert.equal(result.attempt.score, 2);
   assert.equal(captured?.url.pathname, '/v1/attempts:submit');
-  assert.equal((captured?.init.headers as Record<string, string>).authorization, 'Bearer firebase-id-token');
+  assert.equal(new Headers(captured?.init.headers).get('authorization'), 'Bearer firebase-id-token');
   assert.deepEqual(JSON.parse(String(captured?.init.body)), submission);
-  assert.equal((captured?.init.headers as Record<string, string>).authorization.includes('score'), false);
+  assert.equal(new Headers(captured?.init.headers).has('x-score'), false);
   assert.equal(captured?.init.credentials, 'omit');
   assert.equal(captured?.init.cache, 'no-store');
 });
