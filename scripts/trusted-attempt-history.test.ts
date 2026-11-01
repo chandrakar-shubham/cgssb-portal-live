@@ -14,7 +14,9 @@ test('merges complete legacy and trusted histories, preferring trusted duplicate
   const legacy = [attempt('same', 'student-1', '2026-10-30T10:00:00.000Z'), attempt('legacy')];
   const trusted = [attempt('same', 'student-1', '2026-11-01T10:00:00.000Z'), attempt('trusted', 'student-1', '2026-10-31T10:00:00.000Z')];
   const result = mergeStudentAttemptHistory(legacy, trusted, 'student-1');
-  assert.deepEqual(result.map(item => item.id), ['same', 'trusted', 'legacy']);
+  // The duplicate takes the trusted timestamp (Nov 1); legacy is Nov 1 too,
+  // and the ID tie-break is descending, so "same" precedes "legacy".
+  assert.deepEqual(result.map(item => item.id), ['same', 'legacy', 'trusted']);
   assert.equal(result[0].submittedAt, '2026-11-01T10:00:00.000Z');
 });
 
