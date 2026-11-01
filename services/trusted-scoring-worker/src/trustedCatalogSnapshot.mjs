@@ -10,6 +10,16 @@ function snapshotError(code, message) {
   return error;
 }
 
+function cloneAndFreeze(value) {
+  const clone = structuredClone(value);
+  function freezeRecursively(item) {
+    if (!item || typeof item !== "object" || Object.isFrozen(item)) return item;
+    for (const child of Object.values(item)) freezeRecursively(child);
+    return Object.freeze(item);
+  }
+  return freezeRecursively(clone);
+}
+
 function hasDuplicateIds(records) {
   const ids = new Set();
   for (const record of records) {
@@ -96,7 +106,7 @@ export function validateTrustedCatalogSnapshot({
     projectId,
     databaseId,
     exportedAt,
-    tests: snapshot.tests,
-    questions: snapshot.questions,
+    tests: cloneAndFreeze(snapshot.tests),
+    questions: cloneAndFreeze(snapshot.questions),
   });
 }
