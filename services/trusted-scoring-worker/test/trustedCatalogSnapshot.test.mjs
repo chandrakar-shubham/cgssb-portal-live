@@ -115,3 +115,23 @@ test("bounds snapshot sizes and synthetic record identifier lengths", () => {
     error => error.code === "NON_SYNTHETIC_RECORD_ID",
   );
 });
+
+test("rejects duplicate test IDs and duplicate question IDs", () => {
+  const duplicateTests = {
+    ...validSnapshot,
+    tests: [{ id: "synthetic-test-duplicate" }, { id: "synthetic-test-duplicate" }],
+  };
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: duplicateTests, ...target }),
+    error => error.code === "DUPLICATE_SNAPSHOT_RECORD_ID",
+  );
+
+  const duplicateQuestions = {
+    ...validSnapshot,
+    questions: [{ id: "synthetic-question-duplicate" }, { id: "synthetic-question-duplicate" }],
+  };
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: duplicateQuestions, ...target }),
+    error => error.code === "DUPLICATE_SNAPSHOT_RECORD_ID",
+  );
+});
