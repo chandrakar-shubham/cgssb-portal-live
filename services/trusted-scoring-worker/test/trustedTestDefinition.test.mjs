@@ -183,3 +183,32 @@ test("catalog audit maps validation failures to stable typed issue codes", () =>
   }
 });
 
+test("catalog issue totals reconcile exactly with per-test issue codes", () => {
+  const repeatedInvalid = { ...definition, id: "bad id" };
+  const report = auditTrustedTestCatalog({
+    tests: [
+      repeatedInvalid,
+      { ...repeatedInvalid, title: "Repeated invalid ID" },
+      { ...definition, id: "unsupported", sections: [{ id: "s1", questionIds: ["q1"] }], questionCount: 1 },
+      { ...definition, id: 42 },
+    ],
+    questions: [
+      { id: "q1", questionType: "matching", correctOption: "A" },
+      questions[1],
+    ],
+  });
+
+  assert.deepEqual(report.issueCodeCounts, {
+    DUPLICATE_TEST_IDS: 2,
+    INVALID_TEST_ID: 4,
+    UNSUPPORTED_QUESTION_TYPE: 1,
+  });
+  const reconciled = Object.fromEntries(
+    report.results.flatMap(result => result.issueCodes).reduce((counts, code) => {
+      counts.set(code, (counts.get(code) || 0) + 1);
+      return counts;
+    }, new Map()),
+  );
+  assert.deepEqual(reconciled, report.issueCodeCounts);
+  assert.equal(report.incompatibleCount, report.totalTests);
+});
