@@ -51,6 +51,39 @@ test("returns detached deeply immutable canonical questions", () => {
   assert.throws(() => result.questions[0].options[0].text = "tampered", TypeError);
 });
 
+test("rejects non-JSON primitives, sparse arrays, and accessors without executing getters", () => {
+  const testDefinition = {
+    ...definition,
+    sections: [{ id: "s1", questionIds: ["q1"] }],
+    questionCount: 1,
+  };
+  for (const invalidValue of [undefined, Number.NaN, Number.POSITIVE_INFINITY, 1n]) {
+    assert.throws(() => buildTrustedTestDefinition({
+      test: testDefinition,
+      questions: [{ id: "q1", correctOption: "A", metadata: { value: invalidValue } }],
+    }), error => error.code === "INVALID_QUESTION_SNAPSHOT");
+  }
+
+  const sparse = [];
+  sparse.length = 1;
+  assert.throws(() => buildTrustedTestDefinition({
+    test: testDefinition,
+    questions: [{ id: "q1", correctOption: "A", options: sparse }],
+  }), error => error.code === "INVALID_QUESTION_SNAPSHOT");
+
+  let getterCalled = false;
+  const question = { id: "q1", correctOption: "A" };
+  Object.defineProperty(question, "metadata", {
+    enumerable: true,
+    get() { getterCalled = true; return { value: "unsafe" }; },
+  });
+  assert.throws(() => buildTrustedTestDefinition({
+    test: testDefinition,
+    questions: [question],
+  }), error => error.code === "INVALID_QUESTION_SNAPSHOT");
+  assert.equal(getterCalled, false);
+});
+
 test("rejects circular and non-JSON canonical question values", () => {
   const circular = { id: "q1", correctOption: "A", metadata: {} };
   circular.metadata.parent = circular;
