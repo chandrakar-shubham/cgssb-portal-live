@@ -51,7 +51,7 @@ export function createTrustedScoringWorker({
       );
 
       if (origin && !allowedOrigins.has(origin)) {
-        return respond({ error: "CORS_ORIGIN_NOT_ALLOWED" }, 403);
+        return json({ error: "CORS_ORIGIN_NOT_ALLOWED" }, 403);
       }
 
       const corsHeaders = origin ? {
