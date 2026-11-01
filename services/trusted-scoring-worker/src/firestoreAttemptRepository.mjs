@@ -160,7 +160,8 @@ export function createFirestoreAttemptRepository({ firestore, now = () => Date.n
       typeof row.submittedAt === "string" && Number.isFinite(Date.parse(row.submittedAt)));
   }
 
-  return Object.freeze({\n    listAttemptsForStudent,
+  return Object.freeze({
+    listAttemptsForStudent,
     findAttemptByIdempotencyKey,
     loadPublishedTest,
     loadCanonicalQuestions,
