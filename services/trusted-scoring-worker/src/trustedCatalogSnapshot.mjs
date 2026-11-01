@@ -49,8 +49,20 @@ export function validateTrustedCatalogSnapshot({
   if (databaseId === "(default)" || !NON_PRODUCTION_SUFFIX.test(databaseId)) {
     throw snapshotError("PRODUCTION_OR_UNISOLATED_DATABASE", "catalog snapshots require an isolated named non-production database");
   }
-  if (typeof exportedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(exportedAt)
-      || !Number.isFinite(Date.parse(exportedAt))) {
+  const timestampMatch = typeof exportedAt === "string"
+    ? /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?Z$/.exec(exportedAt)
+    : null;
+  const parsedTimestamp = timestampMatch ? Date.parse(exportedAt) : NaN;
+  const parsedDate = Number.isFinite(parsedTimestamp) ? new Date(parsedTimestamp) : null;
+  const timestampIsCalendarValid = Boolean(parsedDate && timestampMatch
+    && parsedDate.getUTCFullYear() === Number(timestampMatch[1])
+    && parsedDate.getUTCMonth() + 1 === Number(timestampMatch[2])
+    && parsedDate.getUTCDate() === Number(timestampMatch[3])
+    && parsedDate.getUTCHours() === Number(timestampMatch[4])
+    && parsedDate.getUTCMinutes() === Number(timestampMatch[5])
+    && parsedDate.getUTCSeconds() === Number(timestampMatch[6])
+    && parsedDate.getUTCMilliseconds() === Number((timestampMatch[7] || "").padEnd(3, "0") || 0));
+  if (!timestampIsCalendarValid) {
     throw snapshotError("INVALID_EXPORT_TIMESTAMP", "snapshot exportedAt must be a valid UTC ISO timestamp");
   }
   if (!Array.isArray(snapshot.tests) || !Array.isArray(snapshot.questions)) {
