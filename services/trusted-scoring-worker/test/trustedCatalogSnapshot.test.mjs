@@ -166,3 +166,24 @@ test("returns detached, deeply immutable test and question records", () => {
   assert.equal(result.tests[0].sections[0].questionIds[0], "synthetic-question-nested");
   assert.equal(result.questions[0].options[0].text, "Synthetic option");
 });
+
+
+test("rejects circular and non-JSON nested snapshot values safely", () => {
+  const cyclicQuestion = { id: "synthetic-question-cycle" };
+  cyclicQuestion.self = cyclicQuestion;
+  const cyclicSnapshot = { ...validSnapshot, questions: [cyclicQuestion] };
+
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: cyclicSnapshot, ...target }),
+    error => error.code === "INVALID_SNAPSHOT_RECORD",
+  );
+
+  const nonJsonSnapshot = {
+    ...validSnapshot,
+    questions: [{ id: "synthetic-question-map", metadata: new Map([["secret", "value"]]) }],
+  };
+  assert.throws(
+    () => validateTrustedCatalogSnapshot({ snapshot: nonJsonSnapshot, ...target }),
+    error => error.code === "INVALID_SNAPSHOT_RECORD",
+  );
+});
