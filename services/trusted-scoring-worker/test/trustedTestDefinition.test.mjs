@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildTrustedTestDefinition } from "../src/trustedTestDefinition.mjs";
+import { auditTrustedTestCatalog, buildTrustedTestDefinition } from "../src/trustedTestDefinition.mjs";
 
 const questions = [
   { id: "q1", correctOption: "A", marks: 2 },
@@ -101,4 +101,37 @@ test("accepts the known single-answer type aliases used by the trusted scorer", 
     });
     assert.deepEqual(result.questionIds, ["q1"]);
   }
+});
+
+
+test("catalog audit reports compatibility counts and safe issue codes without answer-key data", () => {
+  const catalog = [
+    definition,
+    { ...definition, id: "test-unsupported", sections: [{ id: "s1", questionIds: ["q1"] }], questionCount: 1 },
+    { ...definition, id: "test-missing", sections: [{ id: "s1", questionIds: ["q404"] }], questionCount: 1 },
+    { ...definition, id: "test-count", questionCount: 99 },
+  ];
+  const report = auditTrustedTestCatalog({
+    tests: catalog,
+    questions: [
+      ...questions,
+      { id: "q1-structured", questionType: "matching", correctOption: "A", explanation: "secret explanation" },
+    ],
+  });
+
+  assert.equal(report.totalTests, 4);
+  assert.equal(report.compatibleCount, 1);
+  assert.equal(report.incompatibleCount, 3);
+  assert.deepEqual(report.results.map(item => item.issueCodes), [
+    [],
+    ["QUESTION_MISSING"],
+    ["QUESTION_MISSING"],
+    ["QUESTION_COUNT_MISMATCH"],
+  ]);
+  assert.equal(JSON.stringify(report).includes("secret explanation"), false);
+  assert.equal(JSON.stringify(report).includes("correctOption"), false);
+});
+
+test("catalog audit rejects non-array snapshots instead of guessing", () => {
+  assert.throws(() => auditTrustedTestCatalog({ tests: null, questions }), /must be arrays/);
 });
