@@ -147,3 +147,29 @@ test("accepts identical clientAttemptId and idempotencyKey aliases", async () =>
   assert.equal(result.ok, true);
   assert.equal(result.value.clientAttemptId, "attempt_same");
 });
+
+
+test("accepts canonical question palette statuses", async () => {
+  const result = await parseAttemptSubmission(request({
+    testId: "test_1", responses: { q1: "A", q2: null },
+    questionStatuses: { q1: "answered_and_marked", q2: "marked_for_review" },
+    clientAttemptId: "attempt_123", timeTakenSeconds: 1,
+  }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.questionStatuses, {
+    q1: "answered_and_marked", q2: "marked_for_review",
+  });
+});
+
+test("rejects invalid question palette status values and IDs", async () => {
+  for (const questionStatuses of [
+    { q1: "correct" },
+    { "../q1": "answered" },
+  ]) {
+    const result = await parseAttemptSubmission(request({
+      testId: "test_1", responses: {}, questionStatuses,
+      clientAttemptId: "attempt_123", timeTakenSeconds: 1,
+    }));
+    assert.equal(result.ok, false);
+  }
+});
