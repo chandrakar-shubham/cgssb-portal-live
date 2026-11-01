@@ -12,11 +12,35 @@ function isFutureDate(value, now) {
   return Number.isFinite(timestamp) && timestamp > now;
 }
 
-function hasValidPass(user, entitlement, now) {
+function hasValidEntitlementPass(uid, entitlement, now) {
+  if (!entitlement || entitlement.status !== "ACTIVE" ||
+      entitlement.userId !== uid || !isFutureDate(entitlement.expiresAt, now)) {
+    return false;
+  }
+
+  // Students may create only a 30-day welcome/campaign entitlement. Do not
+  // let a client-supplied far-future expiry turn that bootstrap grant into a
+  // perpetual premium pass. Paid/admin entitlements remain server-managed.
+  if (entitlement.source === "WELCOME_FREE" || entitlement.source === "FREE_CAMPAIGN") {
+    if (entitlement.planType !== entitlement.source || entitlement.durationDays !== 30) {
+      return false;
+    }
+    const issuedAt = typeof entitlement.issuedAt === "string"
+      ? Date.parse(entitlement.issuedAt)
+      : Number.NaN;
+    const expiresAt = Date.parse(entitlement.expiresAt);
+    const maxDurationMs = 30 * 24 * 60 * 60 * 1000;
+    return Number.isFinite(issuedAt) && issuedAt <= now &&
+      Number.isFinite(expiresAt) && expiresAt > now &&
+      expiresAt <= issuedAt + maxDurationMs;
+  }
+
+  return true;
+}
+
+function hasValidPass(uid, user, entitlement, now) {
   const profilePass = user?.hasProPass === true && isFutureDate(user.passExpiresAt, now);
-  const activeEntitlement = entitlement?.status === "ACTIVE" &&
-    isFutureDate(entitlement.expiresAt, now);
-  return profilePass || activeEntitlement;
+  return profilePass || hasValidEntitlementPass(uid, entitlement, now);
 }
 
 /**
@@ -49,7 +73,7 @@ export function authorizeStudentAttempt({ uid, test, user, entitlement = null, n
   // The live rules document says series enrollments organize My Tests; the
   // active pass/entitlement is authoritative for access. Do not grant premium
   // access merely because a student can create or mutate enrollment metadata.
-  if (hasValidPass(user, entitlement, now)) {
+  if (hasValidPass(uid, user, entitlement, now)) {
     return { allowed: true, status: 200, reason: "ACTIVE_PASS" };
   }
   return { allowed: false, status: 403, reason: "PREMIUM_ACCESS_REQUIRED" };
