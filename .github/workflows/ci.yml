@@ -51,6 +51,8 @@ jobs:
         run: npx tsx scripts/trusted-exam-submission.test.ts
       - name: Trusted attempt review DTO adapter tests
         run: npx tsx scripts/trusted-attempt-review-adapter.test.ts
+      - name: Trusted scoring feature gate tests
+        run: npx tsx scripts/trusted-scoring-feature-gate.test.ts
       - name: Test strict student exam adapter
         run: npm run test:student-exam-adapter
 
