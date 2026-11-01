@@ -61,7 +61,7 @@ export async function submitTrustedExamAttempt(
       throw new Error('Trusted submission contains an invalid answer value.');
     }
   }
-  const responses: TrustedAttemptSubmission['responses'] = {};
+  const responses: TrustedAttemptSubmission['responses'] = Object.create(null);
   for (const id of questionIds) {
     const descriptor = Object.getOwnPropertyDescriptor(sourceResponses, id);
     responses[id] = descriptor ? descriptor.value as 'A' | 'B' | 'C' | 'D' | null : null;
