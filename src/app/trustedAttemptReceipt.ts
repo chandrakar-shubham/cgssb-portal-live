@@ -4,7 +4,7 @@ const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 const ALLOWED_ANSWERS = new Set(['A', 'B', 'C', 'D', null]);
-const ALLOWED_STATUSES = new Set(['unanswered', 'answered', 'marked_for_review', 'answered_and_marked']);
+const ALLOWED_STATUSES = new Set(['not_visited', 'unanswered', 'answered', 'marked_for_review', 'answered_and_marked']);
 
 function ownDataRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
