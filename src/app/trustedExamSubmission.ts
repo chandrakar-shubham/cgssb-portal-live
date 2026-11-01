@@ -37,11 +37,35 @@ export async function submitTrustedExamAttempt(
     throw new Error('Trusted submission requires a valid, unique published question set.');
   }
   const expectedIds = new Set(questionIds);
-  if (Object.keys(submission.responses).some(id => !expectedIds.has(id))) {
+  const sourceResponses: unknown = submission.responses;
+  if (!sourceResponses || typeof sourceResponses !== 'object' || Array.isArray(sourceResponses)) {
+    throw new Error('Trusted submission responses must be a plain object.');
+  }
+  const prototype = Object.getPrototypeOf(sourceResponses);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error('Trusted submission responses must be a plain object.');
+  }
+  if (Object.getOwnPropertySymbols(sourceResponses).length > 0) {
+    throw new Error('Trusted submission responses must not contain symbol properties.');
+  }
+  const responseIds = Object.keys(sourceResponses);
+  if (responseIds.some(id => !expectedIds.has(id))) {
     throw new Error('Trusted submission contains answers outside the active test.');
   }
+  for (const id of responseIds) {
+    const descriptor = Object.getOwnPropertyDescriptor(sourceResponses, id);
+    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new Error('Trusted submission responses must contain only enumerable data properties.');
+    }
+    if (descriptor.value !== null && !['A', 'B', 'C', 'D'].includes(descriptor.value)) {
+      throw new Error('Trusted submission contains an invalid answer value.');
+    }
+  }
   const responses: TrustedAttemptSubmission['responses'] = {};
-  for (const id of questionIds) responses[id] = submission.responses[id] ?? null;
+  for (const id of questionIds) {
+    const descriptor = Object.getOwnPropertyDescriptor(sourceResponses, id);
+    responses[id] = descriptor ? descriptor.value as 'A' | 'B' | 'C' | 'D' | null : null;
+  }
 
   const result = await client.submitAttempt({
     testId: test.id,
