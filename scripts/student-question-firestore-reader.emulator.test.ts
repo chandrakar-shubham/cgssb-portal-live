@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { readFile } from 'node:fs/promises';
 import { fetchStudentQuestionDocumentsByIds } from '../src/firebase/studentQuestionFirestoreReader';
@@ -99,6 +99,38 @@ try {
   await env.withSecurityRulesDisabled(async context => {
     await deleteDoc(doc(context.firestore(), 'mockTests', 'identity-mismatch'));
   });
+
+  const budgetAudit = await auditPublishedStudentExamDefinitionsFromFirestore(studentDb, { maxQuestionIds: 1 });
+  assert.equal(budgetAudit.ready, 0);
+  assert.equal(budgetAudit.blocked, 1);
+  assert.equal(budgetAudit.questionIdsAttempted, 0, 'budget-deferred test must not read student projections');
+  assert.equal(budgetAudit.questionIdsDeferred, 2);
+
+  await env.withSecurityRulesDisabled(async context => {
+    const firestore = context.firestore();
+    let batch = writeBatch(firestore);
+    let pending = 0;
+    for (let index = 0; index < 501; index += 1) {
+      batch.set(doc(firestore, 'mockTests', `published-overflow-${String(index).padStart(3, '0')}`), {
+        id: `published-overflow-${String(index).padStart(3, '0')}`,
+        title: 'Synthetic overflow definition',
+        isPublished: true,
+        questionCount: 0,
+        sections: [],
+      });
+      pending += 1;
+      if (pending === 500) {
+        await batch.commit();
+        batch = writeBatch(firestore);
+        pending = 0;
+      }
+    }
+    if (pending > 0) await batch.commit();
+  });
+  await assert.rejects(
+    () => auditPublishedStudentExamDefinitionsFromFirestore(studentDb),
+    /More than 500 published tests/,
+  );
 
   console.log('PASS student question Firestore reader: emulator read, 30-ID chunking, and fail-closed input validation');
 } finally {
