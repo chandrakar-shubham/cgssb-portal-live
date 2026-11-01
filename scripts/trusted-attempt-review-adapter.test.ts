@@ -8,13 +8,13 @@ const questions = [
 ] as StudentQuestion[];
 const base = { id: 'attempt-1', responses: { q1: 'B' as const, q2: null } };
 
-const hidden = buildTrustedReviewQuestions(questions, { canViewSolutions: false, attempt: base });
+const hidden = buildTrustedReviewQuestions(questions, { canViewSolutions: false, attempt: base }, 'attempt-1');
 assert.equal(hidden.length, 2);
 assert.equal('correctOption' in hidden[0], false);
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: false,
   attempt: { ...base, scoreBreakdown: { questionResults: [] } },
-}), /must not contain solution data/);
+}), 'attempt-1'), /must not contain solution data/);
 
 const released = buildTrustedReviewQuestions(questions, {
   canViewSolutions: true,
@@ -25,7 +25,7 @@ const released = buildTrustedReviewQuestions(questions, {
       { questionId: 'q1', correctOption: 'B', explanationHindi: 'पहला स्पष्टीकरण' },
     ] },
   },
-});
+}, 'attempt-1');
 assert.deepEqual(released.map(question => question.id), ['q1', 'q2']);
 assert.equal(released[0].correctOption, 'B');
 assert.equal(released[0].explanationHindi, 'पहला स्पष्टीकरण');
@@ -34,16 +34,18 @@ assert.equal(released[1].explanation, 'Second explanation');
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: true,
   attempt: { ...base, scoreBreakdown: { questionResults: [{ questionId: 'q1', correctOption: 'B' }] } },
-}), /incomplete question breakdown/);
+}), 'attempt-1'), /incomplete question breakdown/);
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: true,
   attempt: { ...base, scoreBreakdown: { questionResults: [
     { questionId: 'q1', correctOption: 'B' }, { questionId: 'q1', correctOption: 'A' },
   ] } },
-}), /invalid question result/);
+}), 'attempt-1'), /invalid question result/);
 assert.throws(() => buildTrustedReviewQuestions(questions, {
   canViewSolutions: false,
   attempt: { id: 'attempt-1', responses: { q1: 'B' } },
-}), /do not match/);
+}), 'attempt-1'), /do not match/);
 
 console.log('PASS trusted review adapter: release gating, exact question scope, order, and result validation');
+
+assert.throws(() => buildTrustedReviewQuestions(questions, { canViewSolutions: false, attempt: base }, 'other-attempt'), /incomplete/);
