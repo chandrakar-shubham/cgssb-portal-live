@@ -31,6 +31,7 @@ export interface PublishedExamAuditSummary {
   ready: number;
   blocked: number;
   questionIdsAttempted: number;
+  questionIdsReserved: number;
   questionIdsDeferred: number;
   results: PublishedExamAuditResult[];
 }
@@ -63,6 +64,7 @@ export async function auditPublishedStudentExamDefinitions(
   const publishedTests = tests.filter(test => test?.isPublished === true);
   const results: PublishedExamAuditResult[] = [];
   let questionIdsAttempted = 0;
+  let questionIdsReserved = 0;
   let questionIdsDeferred = 0;
 
   for (const test of publishedTests) {
@@ -73,7 +75,7 @@ export async function auditPublishedStudentExamDefinitions(
         )
       : 0;
 
-    if (requestedCount > maxQuestionIds - questionIdsAttempted) {
+    if (requestedCount > maxQuestionIds - questionIdsReserved) {
       questionIdsDeferred += requestedCount;
       results.push({
         testId: String(test.id ?? ''),
@@ -85,11 +87,16 @@ export async function auditPublishedStudentExamDefinitions(
       continue;
     }
 
-    // Reserve the budget before the read. A failed read still consumes budget,
-    // preventing repeated attempts from bypassing the cap.
-    questionIdsAttempted += requestedCount;
+    // Reserve conservatively before validation/read. Invalid definitions may
+    // consume reserved budget without reaching Firestore; this prevents a
+    // malformed batch from bypassing the configured cap.
+    questionIdsReserved += requestedCount;
+    const countedReader: StudentQuestionDocumentReader = async ids => {
+      questionIdsAttempted += ids.length;
+      return readDocuments(ids);
+    };
     try {
-      await loadPublishedStudentExamQuestions(test, readDocuments);
+      await loadPublishedStudentExamQuestions(test, countedReader);
       results.push({
         testId: String(test.id ?? ''),
         title: String(test.title ?? ''),
@@ -116,6 +123,7 @@ export async function auditPublishedStudentExamDefinitions(
     ready,
     blocked: results.length - ready,
     questionIdsAttempted,
+    questionIdsReserved,
     questionIdsDeferred,
     results,
   };
