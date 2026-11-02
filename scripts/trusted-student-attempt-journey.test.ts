@@ -47,7 +47,7 @@ const readQuestions = async (_db: unknown, ids: readonly string[]) => {
   return questions.map(question => ({ id: question.id, data: question as unknown as Record<string, unknown> }));
 };
 
-const disabled = await assert.rejects(() => submitAndLoadTrustedAttemptReview({
+await assert.rejects(() => submitAndLoadTrustedAttemptReview({
   test, identity, config: { ...config, enabled: 'false' },
   submission: { testId: 'test-1', timeTakenSeconds: 45, submissionId: 'client-session-1', responses: { q1: 'B' } },
   client, readQuestions,
