@@ -102,8 +102,13 @@ export function parseTrustedAttemptHistoryRecord(value: unknown, authenticatedUi
   }
   const sectorAnalysis = raw.sectorAnalysis.map(item => {
     const sector = plainRecord(item, 'sector analysis');
-    for (const field of ['subject']) {
-      if (typeof sector[field] !== 'string') throw new Error('Trusted history sector analysis is invalid.');
+    const sectorFields = new Set([
+      'subject', 'total', 'correct', 'incorrect', 'unattempted',
+      'accuracy', 'score', 'maxScore', 'timeSpentSeconds',
+    ]);
+    if (Object.keys(sector).some(key => !sectorFields.has(key)) ||
+        typeof sector.subject !== 'string' || !sector.subject.trim()) {
+      throw new Error('Trusted history sector analysis is invalid.');
     }
     for (const field of ['total', 'correct', 'incorrect', 'unattempted', 'accuracy', 'score', 'maxScore']) {
       if (typeof sector[field] !== 'number' || !Number.isFinite(sector[field])) {
