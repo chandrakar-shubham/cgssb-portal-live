@@ -72,6 +72,8 @@ jobs:
         run: npx tsx scripts/trusted-student-attempt-journey.test.ts
       - name: Trusted attempt history merge tests
         run: npx tsx scripts/trusted-attempt-history.test.ts
+      - name: Trusted attempt history DTO adapter tests
+        run: npx tsx scripts/trusted-attempt-history-adapter.test.ts
 
       - name: 🧪 Phase 8.5 Student Journey Safety Guard
         run: npm run test:phase8:5-journey-guard
