@@ -47,6 +47,9 @@ assert.throws(() => parseTrustedAttemptHistoryRecord({
 assert.throws(() => parseTrustedAttemptHistoryRecord({
   ...trusted, scoreBreakdown: {},
 }, 'student-1'), /outside the approved DTO/);
+assert.throws(() => parseTrustedAttemptHistoryRecord({
+  ...trusted, sectorAnalysis: [{ subject: 'GS', total: 2, correct: 1, incorrect: 0, unattempted: 1, accuracy: 100, score: 1, maxScore: 2, answerKey: 'B' }],
+}, 'student-1'), /sector analysis is invalid/);
 
 await assert.rejects(() => loadMergedStudentAttemptHistory({
   legacyAttempts: [legacy],
