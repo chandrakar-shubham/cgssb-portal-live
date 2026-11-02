@@ -48,7 +48,8 @@ assert.throws(() => parseTrustedAttemptHistoryRecord({
   ...trusted, scoreBreakdown: {},
 }, 'student-1'), /outside the approved DTO/);
 assert.throws(() => {
-  const { submissionId: _submissionId, ...withoutSubmissionId } = trusted;
+  const withoutSubmissionId: Record<string, unknown> = { ...trusted };
+  delete withoutSubmissionId.submissionId;
   parseTrustedAttemptHistoryRecord(withoutSubmissionId, 'student-1');
 }, /invalid submissionId/);
 assert.throws(() => parseTrustedAttemptHistoryRecord({
