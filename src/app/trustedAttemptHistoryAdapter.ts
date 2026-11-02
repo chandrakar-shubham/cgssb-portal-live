@@ -1,5 +1,4 @@
 import type { ExamCategory, QuestionPaletteStatus, SectorAnalysis, TestAttempt } from '../types';
-import type { TrustedAttemptHistoryPage } from '../services/trustedScoringClient';
 import { mergeStudentAttemptHistory } from './trustedAttemptHistory';
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -79,10 +78,22 @@ export function parseTrustedAttemptHistoryRecord(value: unknown, authenticatedUi
       Object.values(statuses).some(status => !STATUSES.has(status as QuestionPaletteStatus))) {
     throw new Error('Trusted history response and palette maps are invalid or inconsistent.');
   }
-  const attemptedCount = raw.attemptedCount as number | undefined ??
+  for (const id of questionIds) {
+    const answer = responses[id];
+    const status = statuses[id] as QuestionPaletteStatus;
+    if ((answer !== null && status !== 'answered' && status !== 'answered_and_marked') ||
+        (answer === null && (status === 'answered' || status === 'answered_and_marked'))) {
+      throw new Error('Trusted history response and palette status disagree.');
+    }
+  }
+  const attemptedCount = (raw.attemptedCount as number | undefined) ??
     (raw.correctCount as number) + (raw.incorrectCount as number);
+  const markedCount = Object.values(statuses).filter(status =>
+    status === 'marked_for_review' || status === 'answered_and_marked',
+  ).length;
   if (attemptedCount !== (raw.correctCount as number) + (raw.incorrectCount as number) ||
-      attemptedCount + (raw.unattemptedCount as number) !== questionIds.length) {
+      attemptedCount + (raw.unattemptedCount as number) !== questionIds.length ||
+      markedCount !== (raw.markedForReviewCount as number)) {
     throw new Error('Trusted history attempt violates question-count invariants.');
   }
 
