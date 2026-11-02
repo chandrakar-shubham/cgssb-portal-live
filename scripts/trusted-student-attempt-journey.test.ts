@@ -80,7 +80,7 @@ await assert.rejects(() => submitAndLoadTrustedAttemptReview({
   test, identity: { ...identity, uid: 'other-student' }, config,
   submission: { testId: 'test-1', timeTakenSeconds: 45, submissionId: 'client-session-1', responses: { q1: 'B' } },
   client, readQuestions,
-}), /identity does not match/);
+}), /does not match the current student/);
 
 const inconsistentClient = {
   async submitAttempt() { return { replayed: false, attempt: receipt }; },
