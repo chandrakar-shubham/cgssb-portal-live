@@ -122,15 +122,14 @@ export function parseTrustedAttemptHistoryRecord(value: unknown, authenticatedUi
     return sector as unknown as SectorAnalysis;
   });
 
-  for (const field of ['submissionId', 'seriesId', 'targetKey', 'targetExam'] as const) {
+  if (typeof raw.submissionId !== 'string' || !ID.test(raw.submissionId)) {
+    throw new Error('Trusted history attempt has invalid submissionId.');
+  }
+  for (const field of ['seriesId', 'targetKey', 'targetExam'] as const) {
     if (raw[field] !== undefined && typeof raw[field] !== 'string') {
       throw new Error('Trusted history attempt has invalid ' + field + '.');
     }
   }
-  if (raw.submissionId !== undefined && !ID.test(raw.submissionId as string)) {
-    throw new Error('Trusted history attempt has invalid submissionId.');
-  }
-
   return {
     id: raw.id as string,
     userId: authenticatedUid,
@@ -154,7 +153,7 @@ export function parseTrustedAttemptHistoryRecord(value: unknown, authenticatedUi
     markedForReviewCount: raw.markedForReviewCount as number,
     negativeMarksDeducted: raw.negativeMarksDeducted as number,
     sectorAnalysis,
-    ...(typeof raw.submissionId === 'string' ? { submissionId: raw.submissionId } : {}),
+    submissionId: raw.submissionId as string,
     ...(typeof raw.seriesId === 'string' ? { seriesId: raw.seriesId } : {}),
     ...(typeof raw.targetKey === 'string' ? { targetKey: raw.targetKey } : {}),
     ...(typeof raw.targetExam === 'string' ? { targetExam: raw.targetExam } : {}),
