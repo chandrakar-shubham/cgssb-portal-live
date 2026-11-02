@@ -124,3 +124,12 @@ CI initially caught an incorrect expected order in the new merge test: the fixtu
 - Keep the live history state on the legacy path until the full trusted submission/review journey and side effects are proven in isolated non-production infrastructure.
 
 No live UI, Firestore rules, indexes, Worker deployment, production data, or hosting configuration changed.
+
+
+## Integrated trusted student submission and review journey — 2026-11-02
+
+A new isolated orchestration boundary now coordinates the existing trusted submission and review components in one operation. It fails closed unless the trusted-scoring gate is explicitly enabled for a non-anonymous authenticated Firebase identity; submits only the validated answer/palette payload; obtains the server-authored attempt ID; requests the owner-scoped Worker review; loads only the published student-safe question projections; and verifies that the submission and review receipts agree on attempt identity, idempotency ID, score aggregates, and every submitted answer.
+
+The adapter returns a single trusted attempt aggregate, solution-release state, projection-backed review questions, and the idempotent replay indicator. It has no legacy canonical-question fallback and does not write a client-authored attempt, leaderboard profile, milestone, or analytics event. Dedicated regression coverage checks the disabled gate, exact student/test scope, submit-to-review sequencing, projection-only question loading, withheld solutions, and receipt mismatch rejection. Both CI workflows now run this integration test.
+
+This is an isolated integration milestone, not a live cutover. App.tsx still uses the legacy browser-scored submit and review route. Before any UI switch, the remaining work includes a non-production Worker deployment and Firebase/IAM validation, trusted review screen adaptation, leaderboard/profile/milestone/analytics reconciliation, complete history source merging with outage-state semantics, offline cache migration, and full student-journey end-to-end tests. No production deployment, rules/index deployment, data write, hosting change, or feature enablement was performed.
