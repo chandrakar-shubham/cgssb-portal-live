@@ -396,6 +396,15 @@ service cloud.firestore {
       allow write: if hasManageSystem();
     }
 
+    // Trusted scoring records are server-owned. Client SDK access is denied
+    // explicitly; the Worker uses a separate server OAuth identity and IAM.
+    match /trustedAttempts/{attemptId} {
+      allow read, write: if false;
+    }
+    match /trustedAttemptIdempotency/{idempotencyId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

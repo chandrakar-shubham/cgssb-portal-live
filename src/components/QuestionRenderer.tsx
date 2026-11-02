@@ -5,8 +5,10 @@ import { Table, CheckCircle2, SplitSquareVertical, HelpCircle, FileText, Check, 
 import { extractStatementsFromStem, ParsedStemSegments } from '../utils/statementParser';
 import { FormattedMathText } from '../utils/mathRenderer';
 
+export type ExamRenderableQuestion = Omit<Question, 'correctOption' | 'explanation'> & Partial<Pick<Question, 'correctOption' | 'explanation' | 'explanationHindi' | 'correctAnswer' | 'modelKey' | 'finalAmendedKey' | 'isCancelled'>>;
+
 interface QuestionRendererProps {
-  question: Question;
+  question: ExamRenderableQuestion;
   selectedOption: 'A' | 'B' | 'C' | 'D' | string | null;
   onSelectOption?: (opt: any) => void;
   showSolution?: boolean;

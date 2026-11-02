@@ -52,6 +52,29 @@ jobs:
       - name: 🛡️ Firestore Security Rules Regression Tests
         run: npx tsx scripts/firestore-rules.test.ts
 
+      - name: Strict student exam question resolver tests
+        run: npm run test:student-exam-resolver
+      - name: Test strict student exam adapter
+        run: npm run test:student-exam-adapter
+
+      - name: Published student exam definition audit tests
+        run: npm run test:student-exam-definition-audit
+
+      - name: Trusted scoring client contract tests
+        run: npm run test:trusted-scoring-client
+      - name: Trusted attempt review DTO adapter tests
+        run: npx tsx scripts/trusted-attempt-review-adapter.test.ts
+      - name: Trusted scoring feature gate tests
+        run: npx tsx scripts/trusted-scoring-feature-gate.test.ts
+      - name: Trusted attempt review orchestration tests
+        run: npx tsx scripts/trusted-attempt-review-orchestrator.test.ts
+      - name: Integrated trusted student attempt journey tests
+        run: npx tsx scripts/trusted-student-attempt-journey.test.ts
+      - name: Trusted attempt history merge tests
+        run: npx tsx scripts/trusted-attempt-history.test.ts
+      - name: Trusted attempt history DTO adapter tests
+        run: npx tsx scripts/trusted-attempt-history-adapter.test.ts
+
       - name: 🧪 Phase 8.5 Student Journey Safety Guard
         run: npm run test:phase8:5-journey-guard
 
@@ -63,6 +86,9 @@ jobs:
 
       - name: 🔐 Phase 8.5 Firestore Emulator Student Journey Tests
         run: npm run test:phase8:5:firestore-emulator
+
+      - name: Student question Firestore reader emulator test
+        run: npm run test:rules
 
       - name: 🔍 Static Type Check & Linting
         run: |

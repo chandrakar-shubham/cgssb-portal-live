@@ -20,18 +20,62 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps --package-lock=false --no-audit --no-fund
 
       - name: Domain helper regression tests
         run: npm run test:domain
 
+      - name: Trusted scoring worker security scaffold tests
+        run: npm --prefix services/trusted-scoring-worker test
+
+      - name: Trusted scoring client contract tests
+        run: npm run test:trusted-scoring-client
+
       - name: Student question projection security tests
         run: npm run test:student-question-projection
+
+      - name: Strict student exam question resolver tests
+        run: npm run test:student-exam-resolver
+      - name: Student exam projection session loader tests
+        run: npm run test:student-exam-session-questions
+      - name: Trusted attempt receipt validation tests
+        run: npx tsx scripts/trusted-attempt-receipt.test.ts
+      - name: Trusted exam submission orchestration tests
+        run: npx tsx scripts/trusted-exam-submission.test.ts
+      - name: Trusted attempt review DTO adapter tests
+        run: npx tsx scripts/trusted-attempt-review-adapter.test.ts
+      - name: Trusted scoring feature gate tests
+        run: npx tsx scripts/trusted-scoring-feature-gate.test.ts
+      - name: Trusted attempt review orchestration tests
+        run: npx tsx scripts/trusted-attempt-review-orchestrator.test.ts
+      - name: Integrated trusted student attempt journey tests
+        run: npx tsx scripts/trusted-student-attempt-journey.test.ts
+      - name: Trusted attempt history merge tests
+        run: npx tsx scripts/trusted-attempt-history.test.ts
+      - name: Trusted attempt history DTO adapter tests
+        run: npx tsx scripts/trusted-attempt-history-adapter.test.ts
+      - name: Test strict student exam adapter
+        run: npm run test:student-exam-adapter
+
+      - name: Published student exam definition audit tests
+        run: npm run test:student-exam-definition-audit
+
+      - name: Firestore trusted-collection emulator authorization tests
+        run: npm run test:rules
 
       # Validate the canonical Authority -> Recruitment -> Post -> Test Series architecture.
       - name: TypeScript validation
         run: npm run lint
+
+      - name: Trusted Firestore smoke-test syntax check
+        run: npm run check:trusted-firestore-smoke
 
       - name: Phase 8.3 student read-bound regression guard
         run: npm run test:phase8:read-bound

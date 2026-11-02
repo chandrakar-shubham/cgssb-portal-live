@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { toStudentQuestion, toStudentQuestions } from '../src/utils/studentQuestionProjection';
+import { containsForbiddenStudentField, stableSerializeProjection, toStudentQuestion, toStudentQuestions } from '../src/utils/studentQuestionProjection';
 
 const canonical = {
   id: 'q-1',
@@ -56,4 +56,11 @@ assert.equal(many.length, 2);
 assert.equal(many[1].id, 'q-2');
 assert.equal(Object.prototype.hasOwnProperty.call(many[0], 'correctOption'), false);
 
-console.log('PASS student question projection allowlist and answer-key exclusion');
+assert.equal(stableSerializeProjection({ a: 1, b: { d: 2, c: 3 } }), stableSerializeProjection({ b: { c: 3, d: 2 }, a: 1 }));
+assert.notEqual(stableSerializeProjection({ a: undefined }), stableSerializeProjection({}));
+assert.notEqual(stableSerializeProjection([1, 2]), stableSerializeProjection([2, 1]));
+assert.equal(containsForbiddenStudentField({ options: [{ text: 'The answer is unknown' }] }), false);
+assert.equal(containsForbiddenStudentField({ options: [{ metadata: { is_correct: true } }] }), true);
+assert.equal(containsForbiddenStudentField([{ nested: { final_amended_key: 'B' } }]), true);
+assert.equal(containsForbiddenStudentField({ explanationHindi: 'private' }), true);
+console.log('PASS student question projection allowlist, verifier comparison, and nested leak detection');

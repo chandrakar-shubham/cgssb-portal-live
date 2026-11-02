@@ -1,0 +1,202 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { authorizeStudentAttempt } from "../src/attemptEligibility.mjs";
+
+const now = Date.parse("2026-10-29T10:00:00Z");
+const base = {
+  uid: "student-1",
+  test: { id: "test-1", isPublished: true, isPro: false },
+  user: { id: "student-1", status: "active" },
+  now,
+};
+
+test("allows a published free test for an active student", () => {
+  assert.deepEqual(authorizeStudentAttempt(base), {
+    allowed: true, status: 200, reason: "FREE_TEST",
+  });
+});
+
+test("rejects unpublished or missing tests", () => {
+  assert.equal(authorizeStudentAttempt({ ...base, test: { isPublished: false } }).status, 404);
+  assert.equal(authorizeStudentAttempt({ ...base, test: null }).reason, "TEST_NOT_FOUND");
+});
+
+test("rejects blocked and suspended student profiles", () => {
+  assert.equal(authorizeStudentAttempt({ ...base, user: { id: "student-1", isBlocked: true } }).reason, "STUDENT_BLOCKED");
+  assert.equal(authorizeStudentAttempt({ ...base, user: { id: "student-1", status: "suspended" } }).status, 403);
+});
+
+test("rejects a mismatched trusted student profile", () => {
+  assert.equal(authorizeStudentAttempt({ ...base, user: { id: "student-victim" } }).reason, "STUDENT_PROFILE_UNAVAILABLE");
+});
+
+test("premium test requires an unexpired profile pass or active entitlement", () => {
+  const test = { ...base.test, isPro: true };
+  assert.equal(authorizeStudentAttempt({ ...base, test }).reason, "PREMIUM_ACCESS_REQUIRED");
+  assert.equal(authorizeStudentAttempt({
+    ...base, test, user: { id: "student-1", hasProPass: true, passExpiresAt: "2026-10-29T11:00:00Z" },
+  }).reason, "ACTIVE_PASS");
+  assert.equal(authorizeStudentAttempt({
+    ...base, test, entitlement: { userId: "student-1", status: "ACTIVE", expiresAt: "2026-10-29T11:00:00Z" },
+  }).allowed, true);
+});
+
+test("expired, pending, or malformed passes do not authorize premium tests", () => {
+  const test = { ...base.test, isPro: true };
+  assert.equal(authorizeStudentAttempt({
+    ...base, test, entitlement: { userId: "student-1", status: "ACTIVE", expiresAt: "2026-10-29T10:00:00Z" },
+  }).allowed, false);
+  assert.equal(authorizeStudentAttempt({
+    ...base, test, entitlement: { status: "PENDING", expiresAt: "2026-10-29T11:00:00Z" },
+  }).allowed, false);
+  assert.equal(authorizeStudentAttempt({
+    ...base, test, user: { id: "student-1", hasProPass: true, passExpiresAt: "not-a-date" },
+  }).allowed, false);
+});
+
+test("series enrollment metadata alone cannot grant premium access", () => {
+  const test = { ...base.test, isPro: true, seriesId: "series-1" };
+  const enrollment = {
+    id: "enroll-1", userId: "student-1", seriesId: "series-1",
+    status: "active", accessType: "PURCHASED",
+  };
+  assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [enrollment] }).reason, "PREMIUM_ACCESS_REQUIRED");
+  assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [{ ...enrollment, userId: "student-victim" }] }).allowed, false);
+  assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [{ ...enrollment, seriesId: "other-series" }] }).allowed, false);
+});
+
+test("expired and cancelled enrollment metadata does not grant access", () => {
+  const test = { ...base.test, isPro: true, seriesId: "series-1" };
+  const enrollment = {
+    userId: "student-1", seriesId: "series-1", status: "active",
+    accessType: "PASS", accessExpiresAt: "2026-10-29T09:59:59Z",
+  };
+  assert.equal(authorizeStudentAttempt({ ...base, test, enrollments: [enrollment] }).allowed, false);
+  assert.equal(authorizeStudentAttempt({
+    ...base, test, enrollments: [{ ...enrollment, status: "cancelled", accessExpiresAt: undefined }],
+  }).allowed, false);
+});
+
+test("rejects missing identity and invalid policy clock", () => {
+  assert.equal(authorizeStudentAttempt({ ...base, uid: "" }).status, 401);
+  assert.equal(authorizeStudentAttempt({ ...base, now: Number.NaN }).reason, "INVALID_POLICY_CLOCK");
+});
+
+
+test("fails closed when a trusted student profile is missing its required identity", () => {
+  assert.equal(authorizeStudentAttempt({ ...base, user: { status: "active" } }).reason, "STUDENT_PROFILE_UNAVAILABLE");
+  assert.equal(authorizeStudentAttempt({ ...base, user: { id: "" } }).reason, "STUDENT_PROFILE_UNAVAILABLE");
+});
+
+test("premium entitlement expiry must be strictly in the future", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest,
+    entitlement: { status: "ACTIVE", expiresAt: "2026-10-29T10:00:00Z" },
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest,
+    entitlement: { userId: "student-1", status: "ACTIVE", expiresAt: "2026-10-29T10:00:00.001Z" },
+  }).reason, "ACTIVE_PASS");
+});
+
+test("client campaign and milestone fields never grant premium access", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  const clientClaimedCampaign = {
+    id: "student-1",
+    status: "active",
+    freeAccessCampaignId: "free-launch-1plus2-2026",
+    campaignDaysGranted: 90,
+    completedTestsCount: 5,
+    unlockedMilestoneBonus: true,
+    hasProPass: false,
+  };
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest, user: clientClaimedCampaign,
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+});
+
+test("client device identifiers and transfer claims are not trusted entitlement grants", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  const user = {
+    id: "student-1",
+    status: "active",
+    boundDeviceId: "device-authorized",
+    boundDeviceName: "Android Smartphone",
+    currentDeviceId: "device-other",
+    deviceTransferApproved: true,
+  };
+  // Device binding requires a separate server-verifiable protocol. These
+  // client/profile labels must not accidentally grant premium access.
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest, user,
+    deviceId: "device-other",
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+});
+
+test("legacy hasProPass without a valid expiry remains fail-closed", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  for (const passExpiresAt of [undefined, null, "", "invalid-date"]) {
+    assert.equal(authorizeStudentAttempt({
+      ...base, test: premiumTest,
+      user: { id: "student-1", hasProPass: true, passExpiresAt },
+    }).reason, "PREMIUM_ACCESS_REQUIRED");
+  }
+});
+
+test("student-created welcome entitlements are bound to the UID and capped at 30 days", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  const valid = {
+    userId: "student-1",
+    planType: "WELCOME_FREE",
+    source: "WELCOME_FREE",
+    status: "ACTIVE",
+    durationDays: 30,
+    issuedAt: "2026-10-29T10:00:00.000Z",
+    expiresAt: "2026-11-28T10:00:00.000Z",
+  };
+  assert.equal(authorizeStudentAttempt({
+    ...base, test: premiumTest, entitlement: valid,
+  }).reason, "ACTIVE_PASS");
+
+  const invalidEntitlements = [
+    { ...valid, userId: "student-victim" },
+    { ...valid, expiresAt: "2027-10-29T10:00:00.000Z" },
+    { ...valid, issuedAt: "2026-10-29T10:00:01.000Z" },
+    { ...valid, durationDays: 365 },
+    { ...valid, planType: "YEARLY" },
+    { ...valid, source: "FREE_CAMPAIGN" },
+    { ...valid, issuedAt: undefined },
+  ];
+  for (const entitlement of invalidEntitlements) {
+    assert.equal(authorizeStudentAttempt({
+      ...base, test: premiumTest, entitlement,
+    }).reason, "PREMIUM_ACCESS_REQUIRED");
+  }
+});
+
+test("server-managed paid entitlements remain valid when scoped to the student", () => {
+  const premiumTest = { ...base.test, isPro: true };
+  assert.equal(authorizeStudentAttempt({
+    ...base,
+    test: premiumTest,
+    entitlement: {
+      userId: "student-1",
+      planType: "YEARLY",
+      source: "PAYMENT",
+      status: "ACTIVE",
+      expiresAt: "2027-10-29T10:00:00.000Z",
+    },
+  }).reason, "ACTIVE_PASS");
+  assert.equal(authorizeStudentAttempt({
+    ...base,
+    test: premiumTest,
+    entitlement: {
+      userId: "student-victim",
+      planType: "YEARLY",
+      source: "PAYMENT",
+      status: "ACTIVE",
+      expiresAt: "2027-10-29T10:00:00.000Z",
+    },
+  }).reason, "PREMIUM_ACCESS_REQUIRED");
+});

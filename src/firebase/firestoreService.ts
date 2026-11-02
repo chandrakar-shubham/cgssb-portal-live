@@ -614,6 +614,42 @@ export async function fetchQuestionsByIdsFromFirestore(questionIds: string[]): P
  * content and intentionally do not return answer keys or explanations.
  * Keep canonical question readers below for admin-only workflows.
  */
+/**
+ * Raw student projection document reader for the strict published-exam adapter.
+ * It deliberately returns Firestore document IDs separately from payload data.
+ * No canonical questions collection or fallback source is consulted.
+ */
+export async function fetchStudentQuestionDocumentsByIdsFromFirestore(
+  questionIds: readonly string[],
+): Promise<Array<{ id: string; data: Record<string, unknown> }>> {
+  if (!db) throw new Error('Firestore is not configured');
+  if (!Array.isArray(questionIds) || questionIds.length === 0 || questionIds.length > 500) {
+    throw new Error('A non-empty list of at most 500 explicit question IDs is required');
+  }
+  const ids = new Set<string>();
+  for (const id of questionIds) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) {
+      throw new Error('Invalid student question document ID');
+    }
+    if (ids.has(id)) throw new Error('Duplicate student question document ID');
+    ids.add(id);
+  }
+
+  const orderedIds = [...questionIds];
+  const chunks: string[][] = [];
+  for (let i = 0; i < orderedIds.length; i += 30) chunks.push(orderedIds.slice(i, i + 30));
+  const snapshots = await Promise.all(chunks.map(chunk =>
+    withTimeout(
+      getDocs(query(collection(db, 'studentQuestions'), where(documentId(), 'in', chunk))),
+      5000,
+    )
+  ));
+  return snapshots.flatMap(snapshot => snapshot.docs.map(document => ({
+    id: document.id,
+    data: document.data() as Record<string, unknown>,
+  })));
+}
+
 export async function fetchStudentQuestionsByIdsFromFirestore(questionIds: string[]): Promise<StudentQuestion[]> {
   if (!db || questionIds.length === 0) return [];
   const uniqueIds = Array.from(new Set(questionIds.map(String).filter(Boolean)));
